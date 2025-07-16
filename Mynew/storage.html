@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Storage - TIFI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .sidebar { border-right: 1px solid #e2e8f0; }
+        .sidebar-item { color: #475569; }
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        .modal-overlay { z-index: 50; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+        .th-sortable { cursor: pointer; }
+        .th-sortable:hover { background-color: #f1f5f9; }
+        /* Transitions for modal */
+        .modal-content {
+            transition: all 0.3s ease-out;
+            transform: translateY(0);
+            opacity: 1;
+        }
+        .modal-content.opacity-0 {
+            opacity: 0;
+        }
+        .modal-content.-translate-y-10 {
+            transform: translateY(-2.5rem); /* Equivalent to -translate-y-10 in Tailwind */
+        }
+
+        /* Styles for filter/sort in table headers */
+        .sortable-header { cursor: pointer; user-select: none; }
+        .sortable-header:hover { background-color: #e2e8f0; }
+        .sort-icon { display: inline-block; width: 16px; height: 16px; vertical-align: middle; margin-left: 4px; }
+        .filter-input, .filter-select {
+            width: calc(100% - 10px); /* Adjust width to fit within header */
+            padding: 4px;
+            margin-top: 4px;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.25rem;
+            font-size: 0.75rem; /* text-xs */
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+    <div id="main-app">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI</span></div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
+                <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="box" class="w-5 h-5 mr-3"></i><span>Storage Box</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="Printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+            </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t"></div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+        
+        <div id="main-content" class="ml-64 p-8">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-3xl font-bold text-gray-800">Storage Inventory</h1>
+                <div class="flex space-x-2">
+                    <button id="new-room-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow"><i data-lucide="home" class="w-5 h-5 mr-2"></i>New Room</button>
+                    <button id="new-storage-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow"><i data-lucide="plus" class="w-5 h-5 mr-2"></i>New Storage Unit</button>
+                </div>
+            </div>
+
+            <div class="card p-4">
+                    <div class="overflow-y-auto h-[75vh]"> <table class="min-w-full text-sm">
+                            <thead class="bg-gray-50 sticky top-0">
+                                <tr>
+                                    <th data-sort-key="item_id" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
+                                        <div class="flex items-center justify-between">
+                                            <span class="sortable-header" data-column="item_id">Item ID
+                                                <i data-lucide="${sortState.column === 'item_id' ? (sortState.direction === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon w-4 h-4 text-gray-400"></i>
+                                            </span>
+                                        </div>
+                                        <input type="text" placeholder="Filter..." class="filter-input" data-column="item_id" value="">
+                                    </th>
+                                    <th data-sort-key="item_type" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
+                                        <div class="flex items-center justify-between">
+                                            <span class="sortable-header" data-column="item_type">Item Type
+                                                <i data-lucide="${sortState.column === 'item_type' ? (sortState.direction === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon w-4 h-4 text-gray-400"></i>
+                                            </span>
+                                        </div>
+                                        <select class="filter-select" data-column="item_type" id="filter-item-type-header">
+                                            <option value="">All Types</option>
+                                        </select>
+                                    </th>
+                                    <th data-sort-key="classification" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
+                                        <div class="flex items-center justify-between">
+                                            <span class="sortable-header" data-column="classification">Classification
+                                                <i data-lucide="${sortState.column === 'classification' ? (sortState.direction === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon w-4 h-4 text-gray-400"></i>
+                                            </span>
+                                        </div>
+                                        <select class="filter-select" data-column="classification" id="filter-classification-header">
+                                            <option value="">All Classifications</option>
+                                        </select>
+                                    </th>
+                                    <th data-sort-key="room" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
+                                        <div class="flex items-center justify-between">
+                                            <span class="sortable-header" data-column="room">Room
+                                                <i data-lucide="${sortState.column === 'room' ? (sortState.direction === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon w-4 h-4 text-gray-400"></i>
+                                            </span>
+                                        </div>
+                                        <input type="text" placeholder="Filter..." class="filter-input" data-column="room" value="">
+                                    </th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Freezer / Box</th>
+                                    <th data-sort-key="position" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
+                                        <div class="flex items-center justify-between">
+                                            <span class="sortable-header" data-column="position">Position
+                                                <i data-lucide="${sortState.column === 'position' ? (sortState.direction === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon w-4 h-4 text-gray-400"></i>
+                                            </span>
+                                        </div>
+                                        <input type="text" placeholder="Filter..." class="filter-input" data-column="position" value="">
+                                    </th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
+                                        Actions
+                                        <select class="filter-select" data-column="is_assigned" id="filter-status-header">
+                                            <option value="">All Items</option>
+                                            <option value="true">Assigned</option>
+                                            <option value="false">Unassigned</option>
+                                        </select>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="storage-table-body" class="divide-y divide-gray-200"></tbody>
+                        </table>
+                    </div>
+            </div>
+        </div>
+        <div id="modal-container"></div>
+    </div>
+
+    <script>
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') window.location.href = './login.html';
+        
+        const API_BASE_URL = '/mymglab/api';
+        let masterInventoryList = [];
+        let storageCache = [];
+        let sortState = { column: 'item_id', direction: 'asc' };
+        let columnFilters = {}; // To store filter values for each column
+
+        // Define storable item tables and their primary/display ID columns
+        const storableItemTables = [
+            { schema: 'Lab', table: 'Fish', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'Tissue', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'Water', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'Sediments', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'DNA', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'RNA', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'Library', idColumn: 'Library_id', pk: 'Library_id' }, // Library_id is unique, better PK
+            { schema: 'Lab', table: 'PCR', idColumn: 'nr', pk: 'nr' }, 
+            { schema: 'Lims', table: 'Reagents', idColumn: 'Reagent_Name', pk: 'Reagent_Name' }, // Reagent_Name is unique, better PK
+            // Add other tables that can be stored and have a unique identifier if needed for full inventory listing
+            // For tables like Extraction, Nanodrop, Qubit etc. where 'nr' is the PK but the primary identifier
+            // is usually a linked sample_id, you might still want to use 'nr' for the PK to ensure updates work correctly.
+            // If you want to display sample_id from these, that's a display concern in renderStorageTable
+        ];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.person}</p>`;
+            document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href = './login.html'; });
+            initializeStoragePage();
+        });
+
+        async function apiFetch(endpoint, options = {}) {
+            try {
+                if (!(options.body instanceof FormData)) {
+                    options.headers = { 'Content-Type': 'application/json', ...options.headers };
+                    if(options.body) options.body = JSON.stringify(options.body);
+                }
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                if (!response.ok) { const err = await response.json().catch(()=>({error: 'Server error'})); throw new Error(err.error); }
+                return response.status === 204 ? { success: true } : response.json();
+            } catch (error) { console.error("API Error:", error); return { error: error.message }; }
+        }
+
+        function showModal(content) {
+            const container = document.getElementById('modal-container');
+            container.innerHTML = content;
+            const modal = container.querySelector('.modal-overlay');
+            const modalContent = container.querySelector('.modal-content');
+            setTimeout(() => modalContent.classList.remove('opacity-0', '-translate-y-10'), 10);
+            const closeModal = () => {
+                modalContent.classList.add('opacity-0', '-translate-y-10');
+                setTimeout(() => container.innerHTML = '', 300);
+            };
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+            container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+            return { closeModal };
+        }
+
+        function processInventoryData(allItems, storage, rooms) {
+            if (!allItems || !storage || !rooms) return [];
+            const storageMap = new Map(storage.map(s => [s.storage_id, s]));
+            const roomMap = new Map(rooms.map(r => [r.room_id, r]));
+            return allItems.map(item => {
+                const storageInfo = storageMap.get(item.storage_id);
+                const roomInfo = storageInfo ? roomMap.get(storageInfo.room_id) : null;
+
+                // Determine classification (e.g., Species for Samples, or just itemType for others)
+                let classification = 'N/A';
+                if (item.Species) { // For Sample-related items (Fish, Tissue, DNA, RNA, Water, Sediments)
+                    classification = item.Species;
+                } else if (item.item_type === 'Reagents') {
+                    classification = item.category || 'Reagent'; // Use category for reagents
+                } else if (item.item_type === 'Library' || item.item_type === 'PCR') {
+                    classification = item.type; // e.g., "Library", "PCR"
+                }
+                // Add more specific classification logic if needed for other item types
+
+                return {
+                    item_id: item.id, 
+                    item_type: item.type, 
+                    source_table: item.table, 
+                    pk_value: item.pk,
+                    classification: classification, 
+                    is_assigned: !!item.storage_id, // true or false based on if storage_id is present
+                    room: roomInfo ? (roomInfo.description || roomInfo.room_id) : '',
+                    freezer: storageInfo ? storageInfo.Freezer : '',
+                    box: storageInfo ? storageInfo.Box : '',
+                    position: item.storage_position || '' // Uses storage_position from the item
+                };
+            });
+        }
+
+        function renderStorageTable(inventory) {
+            const tableBody = document.getElementById('storage-table-body');
+            if (!tableBody) return;
+            if (inventory.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-gray-500 py-8">No items match the current filters.</td></tr>`;
+                return;
+            }
+            tableBody.innerHTML = inventory.map(item => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 font-medium">${item.item_id}</td>
+                    <td class="px-4 py-3">${item.item_type}</td>
+                    <td class="px-4 py-3">${item.classification}</td>
+                    <td class="px-4 py-3">${item.room}</td>
+                    <td class="px-4 py-3">${item.freezer} / ${item.box}</td>
+                    <td class="px-4 py-3">${item.position}</td>
+                    <td class="px-4 py-3">
+                        ${item.is_assigned 
+                            ? `<button class="text-red-600 hover:text-red-800 font-semibold" onclick="unassignItem('${item.pk_value}', '${item.source_table}')">Unassign</button>`
+                            : `<button class="text-green-600 hover:text-green-800 font-semibold" onclick="showAssignStorageModal('${item.pk_value}', '${item.source_table}')">Assign</button>`
+                        }
+                    </td>
+                </tr>`).join('');
+        }
+        
+        function sortData(data, column, direction) {
+            const sortedData = [...data];
+            const isAsc = direction === 'asc';
+            
+            sortedData.sort((a, b) => {
+                const valA = a[column] === null || a[column] === undefined ? '' : a[column];
+                const valB = b[column] === null || b[column] === undefined ? '' : b[column];
+
+                const comparison = String(valA).localeCompare(String(valB), undefined, { numeric: true, sensitivity: 'base' });
+                return isAsc ? comparison : -comparison;
+            });
+            return sortedData;
+        }
+
+        function updateSortIcons() {
+            document.querySelectorAll('th[data-sort-key]').forEach(th => {
+                const sortableHeaderSpan = th.querySelector('.sortable-header');
+                if (!sortableHeaderSpan) return;
+
+                const icon = sortableHeaderSpan.querySelector('.sort-icon');
+                if (icon) {
+                    const column = sortableHeaderSpan.dataset.column;
+                    if (column === sortState.column) {
+                        icon.setAttribute('data-lucide', sortState.direction === 'asc' ? 'chevron-up' : 'chevron-down');
+                    } else {
+                        icon.setAttribute('data-lucide', 'chevrons-up-down');
+                    }
+                    lucide.createIcons(); // Re-render Lucide icons
+                }
+            });
+        }
+
+        function applyFilters() {
+            let filtered = masterInventoryList;
+
+            // Apply filters from header inputs/selects
+            document.querySelectorAll('.filter-input, .filter-select').forEach(filterElement => {
+                const column = filterElement.dataset.column;
+                let filterValue = filterElement.value;
+
+                if (filterValue === '') {
+                    delete columnFilters[column]; // Remove filter if empty
+                    return;
+                }
+
+                columnFilters[column] = filterValue;
+
+                // Handle 'is_assigned' (boolean) filter specifically
+                if (column === 'is_assigned') {
+                    // filterValue from select will be "true" or "false" string
+                    const boolValue = filterValue === 'true';
+                    filtered = filtered.filter(item => item.is_assigned === boolValue);
+                } else if (filterElement.classList.contains('filter-select')) {
+                    // For select filters, perform exact match
+                    filtered = filtered.filter(item => String(item[column] || '') === filterValue);
+                } else {
+                    // For text inputs, perform includes match (case-insensitive)
+                    filtered = filtered.filter(item => String(item[column] || '').toLowerCase().includes(filterValue.toLowerCase()));
+                }
+            });
+            
+            // Sort the filtered data before rendering
+            const sorted = sortData(filtered, sortState.column, sortState.direction);
+            
+            renderStorageTable(sorted);
+            updateSortIcons(); // Update visual indicators
+        }
+
+        async function unassignItem(pkValue, sourceTable) {
+            if (!confirm(`Are you sure you want to remove this item from its storage position?`)) return;
+            const itemConfig = storableItemTables.find(t => t.table === sourceTable);
+            if (!itemConfig) {
+                alert(`Configuration error: No rules found for table ${sourceTable}`);
+                return;
+            }
+            // All tables can have storage_position in your DB schema, so no specific list needed here
+            const payload = { storage_id: null, storage_position: null }; // Set both to null on unassign
+            const result = await apiFetch(`table/${itemConfig.schema}/${sourceTable}/${pkValue}`, { method: 'PUT', body: payload });
+            if (result && !result.error) initializeStoragePage();
+            else alert('Failed to unassign item: ' + (result ? result.error : 'Unknown error'));
+        }
+        
+        async function showAssignStorageModal(pkValue, sourceTable) {
+            const modalHTML = `<div class="modal-overlay fixed inset-0 flex items-center justify-center p-4"><div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl transform transition-all -translate-y-10 opacity-0"><div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold">Assign Storage</h2><button id="close-modal-btn">&times;</button></div><form id="assign-storage-form" class="space-y-4"><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-700">Room</label><select id="modal-room" class="w-full mt-1 p-2 border border-gray-300 rounded-md"></select></div><div><label class="block text-sm font-medium text-gray-700">Freezer/Unit</label><select id="modal-freezer" class="w-full mt-1 p-2 border border-gray-300 rounded-md" disabled></select></div><div id="position-container" class="md:col-span-2 grid grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-700">Box</label><select name="storage_id" id="modal-box" class="w-full mt-1 p-2 border border-gray-300 rounded-md" disabled></select></div><div id="position-input-wrapper"><label class="block text-sm font-medium text-gray-700">Position (1-100)</label><input type="number" name="storage_position" min="1" max="100" class="w-full mt-1 p-2 border border-gray-300 rounded-md"></div></div></div><div class="pt-4 flex justify-end"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Assign</button></div></form></div></div>`;
+            const { closeModal } = showModal(modalHTML);
+            const rooms = await apiFetch('table/Reference/Room');
+            const roomSelect = document.getElementById('modal-room');
+            const freezerSelect = document.getElementById('modal-freezer');
+            const boxSelect = document.getElementById('modal-box');
+            if(rooms && !rooms.error) roomSelect.innerHTML = `<option value="">Select Room</option>${rooms.map(r => `<option value="${r.room_id}">${r.description || r.room_id}</option>`).join('')}`;
+            roomSelect.onchange = () => {
+                const selectedRoom = roomSelect.value;
+                freezerSelect.innerHTML = `<option value="">Select Freezer</option>`;
+                boxSelect.innerHTML = `<option value="">Select Box</option>`;
+                freezerSelect.disabled = true;
+                boxSelect.disabled = true;
+                if (!selectedRoom || !storageCache) return;
+                const freezers = [...new Set(storageCache.filter(s => s.room_id === selectedRoom).map(s => s.Freezer))];
+                freezers.forEach(f => freezerSelect.innerHTML += `<option value="${f}">${f}</option>`);
+                freezerSelect.disabled = false;
+            };
+            freezerSelect.onchange = () => {
+                const selectedRoom = roomSelect.value;
+                const selectedFreezer = freezerSelect.value;
+                boxSelect.innerHTML = `<option value="">Select Box</option>`;
+                boxSelect.disabled = true;
+                if (!selectedFreezer) return;
+                const boxes = storageCache.filter(s => s.room_id === selectedRoom && s.Freezer === selectedFreezer);
+                boxes.forEach(b => boxSelect.innerHTML += `<option value="${b.storage_id}">${b.Box}</option>`);
+                boxSelect.disabled = false;
+            };
+
+            document.getElementById('assign-storage-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const data = Object.fromEntries(new FormData(e.target).entries());
+                const itemConfig = storableItemTables.find(t => t.table === sourceTable);
+                if (!data.storage_id) { alert("Please select a box."); return; }
+                const result = await apiFetch(`table/${itemConfig.schema}/${sourceTable}/${pkValue}`, { method: 'PUT', body: data });
+                if (result && !result.error) { closeModal(); initializeStoragePage(); }
+                else { alert('Failed to assign storage: ' + (result ? result.error : 'Unknown error')); }
+            };
+        }
+
+        async function showNewStorageModal() { /* ...omitted for brevity, no changes needed here... */ }
+        async function showNewRoomModal() { /* ...omitted for brevity, no changes needed here... */ }
+
+        async function initializeStoragePage() {
+            const tableBody = document.getElementById('storage-table-body');
+            if (tableBody) tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-gray-500 py-8">Loading all inventory data...</td></tr>`;
+
+            const promises = [
+                apiFetch('table/Lab/Storage'),
+                apiFetch('table/Reference/Room'),
+                ...storableItemTables.map(itemType => 
+                    apiFetch(`table/${itemType.schema}/${itemType.table}`).then(response => {
+                        if (response.error || !Array.isArray(response)) { console.error(`Failed to load ${itemType.table} data`); return []; }
+                        return response.map(item => {
+                            // --- MODIFIED ID LOGIC ---
+                            let itemIdValue = '';
+                            if (item.sample_id) { // Priority 1: Check for sample_id (common for many Lab items)
+                                itemIdValue = item.sample_id;
+                            } else if (item.Library_id) { // Specific for Library
+                                itemIdValue = item.Library_id;
+                            } else if (item.Reagent_Name) { // Specific for Reagents
+                                itemIdValue = item.Reagent_Name;
+                            } else if (item.nr) { // Fallback to 'nr' for others like PCR
+                                itemIdValue = item.nr;
+                            } else { // Fallback if no specific ID or nr is found
+                                itemIdValue = `ID missing (${itemType.table})`; 
+                            }
+                            // --- END OF MODIFIED ID LOGIC ---
+
+                            return {
+                                ...item,
+                                type: itemType.table, // e.g., 'Fish', 'DNA'
+                                table: itemType.table, // original table name
+                                id: itemIdValue, // The determined display ID
+                                pk: item[itemType.pk] // The actual primary key value for API calls
+                            };
+                        });
+                    })
+                )
+            ];
+
+            const [storageData, roomData, ...allItemArrays] = await Promise.all(promises);
+            storageCache = (storageData && !storageData.error) ? storageData : [];
+            const rooms = (roomData && !roomData.error) ? roomData : [];
+            const allItems = allItemArrays.flat();
+            masterInventoryList = processInventoryData(allItems, storageCache, rooms);
+            
+            // Populate Filters in Header
+            const itemTypeSelect = document.getElementById('filter-item-type-header');
+            itemTypeSelect.innerHTML = '<option value="">All Types</option>';
+            [...new Set(masterInventoryList.map(item => item.item_type))].sort().forEach(type => {
+                itemTypeSelect.innerHTML += `<option value="${type}">${type}</option>`;
+            });
+
+            const classificationSelect = document.getElementById('filter-classification-header');
+            classificationSelect.innerHTML = '<option value="">All Classifications</option>';
+            // Filter out empty/N/A classifications before sorting and adding to dropdown
+            [...new Set(masterInventoryList.map(item => item.classification).filter(c => c && c !== 'N/A'))].sort().forEach(c => {
+                classificationSelect.innerHTML += `<option value="${c}">${c}</option>`;
+            });
+
+            // Re-apply any saved filter values
+            document.querySelectorAll('.filter-input, .filter-select').forEach(filterElement => {
+                const column = filterElement.dataset.column;
+                if (columnFilters[column] !== undefined) {
+                    filterElement.value = columnFilters[column];
+                }
+            });
+
+            // Add Event Listeners for filters (now including new header inputs/selects)
+            document.querySelectorAll('.filter-input').forEach(input => {
+                input.removeEventListener('input', applyFilters); // Prevent duplicate listeners
+                input.addEventListener('input', applyFilters);
+            });
+            document.querySelectorAll('.filter-select').forEach(select => {
+                select.removeEventListener('change', applyFilters); // Prevent duplicate listeners
+                select.addEventListener('change', applyFilters);
+            });
+            
+            // Add Event Listeners for table header sorting
+            document.querySelectorAll('.sortable-header').forEach(header => {
+                header.removeEventListener('click', handleSortClick); // Prevent duplicate listeners
+                header.addEventListener('click', handleSortClick);
+            });
+
+            // Initial render
+            applyFilters();
+        }
+
+        function handleSortClick(e) {
+            const column = e.currentTarget.dataset.column;
+            if (sortState.column === column) {
+                sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortState.column = column;
+                sortState.direction = 'asc';
+            }
+            applyFilters(); // Re-apply filters and sorting
+        }
+    </script>
+</body>
+</html>
