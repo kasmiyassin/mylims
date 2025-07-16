@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIMS Label Designer</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f7f6;
+        }
+        header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        .toolbar {
+            width: 250px;
+            padding: 20px;
+            background-color: #ffffff;
+            border-right: 1px solid #dfe3e6;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .toolbar h3 {
+            margin-top: 0;
+            color: #34495e;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+        .toolbar label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        .toolbar select, .toolbar button {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #bdc3c7;
+            background-color: #ecf0f1;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .toolbar button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            transition: background-color 0.2s;
+        }
+        .toolbar button:hover {
+            background-color: #2980b9;
+        }
+        .print-button {
+            background-color: #27ae60 !important;
+        }
+        .print-button:hover {
+            background-color: #229954 !important;
+        }
+        .canvas-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            background-color: #e4e8eb;
+        }
+        #label-canvas {
+            border: 2px dashed #95a5a6;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+        }
+
+        /* Styles for printing */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            .canvas-container, .canvas-container * {
+                visibility: visible;
+            }
+            #label-canvas {
+                border: none !important;
+                box-shadow: none !important;
+            }
+            .canvas-container {
+                position: absolute;
+                left: 0;
+                top: 0;
+                padding: 0;
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>LIMS Label Designer</h1>
+    </header>
+
+    <div class="main-container">
+        <div class="toolbar">
+            <h3>1. Select Label Size</h3>
+            <label for="herma-size">Herma Label Type:</label>
+            <select id="herma-size">
+                <option value="4379" data-width="48.3" data-height="25.4">HERMA 4379 (48.3 x 25.4 mm)</option>
+                <option value="4464" data-width="63.5" data-height="38.1" selected>HERMA 4464 (63.5 x 38.1 mm)</option>
+                <option value="4428" data-width="105" data-height="148">HERMA 4428 (105 x 148 mm)</option>
+            </select>
+
+            <h3>2. Add Elements</h3>
+            <button id="add-text">Add Text</button>
+            <button id="add-barcode">Add Barcode</button>
+            
+            <h3>3. Print</h3>
+            <button id="print-label" class="print-button">Print Preview</button>
+            <p style="font-size:12px; color: #7f8c8d;">This will open your browser's print dialog.</p>
+        </div>
+
+        <div class="canvas-container">
+            <canvas id="label-canvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function() {
+            const DPI = 96; // Standard screen DPI
+            const MM_PER_INCH = 25.4;
+
+            const canvasElement = document.getElementById('label-canvas');
+            const hermaSelect = document.getElementById('herma-size');
+            
+            let fabricCanvas = new fabric.Canvas('label-canvas');
+
+            function mmToPx(mm) {
+                return (mm / MM_PER_INCH) * DPI;
+            }
+
+            function updateCanvasSize() {
+                const selectedOption = hermaSelect.options[hermaSelect.selectedIndex];
+                const widthMm = parseFloat(selectedOption.getAttribute('data-width'));
+                const heightMm = parseFloat(selectedOption.getAttribute('data-height'));
+
+                const widthPx = mmToPx(widthMm);
+                const heightPx = mmToPx(heightMm);
+
+                fabricCanvas.setWidth(widthPx);
+                fabricCanvas.setHeight(heightPx);
+                fabricCanvas.renderAll();
+            }
+
+            // Event Listeners
+            hermaSelect.addEventListener('change', updateCanvasSize);
+
+            document.getElementById('add-text').addEventListener('click', () => {
+                const sampleText = new fabric.Textbox('Sample Text\n$SampleID', {
+                    left: 20,
+                    top: 20,
+                    width: 150,
+                    fontSize: 16,
+                    fill: '#000000',
+                    fontFamily: 'Arial'
+                });
+                fabricCanvas.add(sampleText);
+            });
+
+            document.getElementById('add-barcode').addEventListener('click', () => {
+                const barcodeValue = prompt("Enter barcode data (e.g., a Sample ID):", "S-2025-12345");
+                if (barcodeValue) {
+                    // Create a temporary SVG element to generate the barcode
+                    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                    svg.id = "temp-barcode";
+                    document.body.appendChild(svg); // Temporarily add to DOM
+
+                    JsBarcode("#temp-barcode", barcodeValue, {
+                        format: "CODE128",
+                        displayValue: true,
+                        fontSize: 14,
+                        margin: 0,
+                        height: 40
+                    });
+
+                    // Convert SVG to a data URL and add to canvas
+                    const svgString = new XMLSerializer().serializeToString(svg);
+                    const dataUrl = 'data:image/svg+xml;base64,' + window.btoa(svgString);
+                    
+                    fabric.Image.fromURL(dataUrl, (img) => {
+                        img.set({ left: 20, top: 50 });
+                        fabricCanvas.add(img);
+                    });
+                    
+                    document.body.removeChild(svg); // Clean up
+                }
+            });
+
+            document.getElementById('print-label').addEventListener('click', () => {
+                window.print();
+            });
+
+            // Initial setup
+            updateCanvasSize();
+        };
+    </script>
+</body>
+</html>
