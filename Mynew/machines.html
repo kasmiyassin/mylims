@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laboratory Machines - TIFI MG</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.0/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .sidebar { border-right: 1px solid #e2e8f0; }
+        .sidebar-item { color: #475569; }
+        /* Ensure the Laboratory item is active when on this page */
+        .sidebar-item[href="laboratory.html"].active, .sidebar-item[href="laboratory.html"].active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        .modal-overlay { z-index: 50; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+        /* Adjusted the page-container height slightly for the new interface design */
+        #page-container { min-height: 70vh; display: flex; align-items: center; justify-content: center; text-align: center; }
+        #page-container > div { width: 100%; } /* Ensure content fills width */
+
+        /* Styles for filter/sort in table headers (will be used within details view/edit forms) */
+        .sortable-header { cursor: pointer; user-select: none; }
+        .sortable-header:hover { background-color: #e2e8f0; }
+        .sort-icon { display: inline-block; width: 16px; height: 16px; vertical-align: middle; margin-left: 4px; }
+        .filter-input, .filter-select {
+            width: calc(100% - 10px); /* Adjust width to fit within header */
+            padding: 4px;
+            margin-top: 4px;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.25rem;
+            font-size: 0.75rem; /* text-xs */
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+    <div id="main-app">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI MG</span></div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
+                <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="box" class="w-5 h-5 mr-3"></i><span>Storage Box</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="Printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+                <a href="machines.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Machines</span></a>
+            </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t"></div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+        
+        <div id="main-content" class="ml-64 p-8">
+            <div class="flex justify-between items-center mb-2">
+                <h1 class="text-3xl font-bold text-gray-800">Laboratory Machines</h1>
+                </div>
+            
+            <div id="sub-nav-menu" class="mb-6 flex items-center space-x-2 border-b pb-2 overflow-x-auto">
+                <a href="#" class="sub-nav-link whitespace-nowrap" data-machine="Qubit">Qubit 4</a>
+                <a href="#" class="sub-nav-link whitespace-nowrap" data-machine="PCR">BioRad PCR</a>
+                <a href="#" class="sub-nav-link whitespace-nowrap" data-machine="qPCR">q3 Analytics qPCR</a>
+                <a href="#" class="sub-nav-link whitespace-nowrap" data-machine="Tapestation">Tapestation 4200</a>
+                </div>
+
+            <div id="page-container">
+                <div class="card p-6 text-gray-500">
+                    <i data-lucide="server" class="mx-auto h-12 w-12 mb-4 text-blue-400"></i>
+                    <p class="text-lg font-semibold mb-2">Select a machine from the menu above to start.</p>
+                    <p class="text-sm">This page simulates interaction with laboratory equipment and streamlines data capture.</p>
+                    <p class="text-xs text-red-500 mt-4">Note: Direct physical machine control requires a backend server and specialized APIs, which are not part of this frontend application.</p>
+                </div>
+            </div>
+        </div>
+        <div id="modal-container"></div>
+    </div>
+
+    <script>
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') window.location.href = './login.html';
+        
+        const API_BASE_URL = '/mymglab/api'; // `http://${window.location.hostname}:5200/api`;
+        let referenceDataCache = {};
+        let currentMachine = ''; // Will store the selected machine name (e.g., 'Qubit', 'PCR')
+        let latestRunData = {}; // Stores data from the 'simulated' run for pre-filling forms
+
+        // Mapping of machine names to their corresponding Lab table names
+        const machineTableMap = {
+            'Qubit': 'Qubit',
+            'PCR': 'PCR',
+            'qPCR': 'qPCR',
+            'Tapestation': 'Tapestation'
+        };
+
+        // Mapping of table names to their primary key column names (for saving/deleting data)
+        const primaryKeyMap = {
+            'Qubit': 'nr',
+            'PCR': 'nr',
+            'qPCR': 'nr',
+            'Tapestation': 'nr',
+            // Add other Lab tables if their PK is not 'nr' or if they are in this 'machines' context
+            // e.g., 'Bioinformatics': 'bioinfo_id'
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.person}</p>`;
+            document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href = './login.html'; });
+            initializePage();
+        });
+
+        async function apiFetch(endpoint, options = {}) {
+            try {
+                const isJson = !(options.body instanceof FormData);
+                if (isJson && options.body) {
+                    options.headers = { ...options.headers, 'Content-Type': 'application/json' };
+                    options.body = JSON.stringify(options.body);
+                }
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                if (!response.ok) { 
+                    const errText = await response.text();
+                    try { const errJson = JSON.parse(errText); throw new Error(errJson.error || 'API request failed'); }
+                    catch { throw new Error(errText); }
+                }
+                if (response.status === 204 || response.headers.get('content-length') === '0') return { success: true };
+                return response.json();
+            } catch (error) { console.error("API Error:", error); return { error: error.message }; }
+        }
+
+        async function getReferenceData(tableName, schema='Reference') {
+            const cacheKey = `${schema}.${tableName}`;
+            if (referenceDataCache[cacheKey]) return referenceDataCache[cacheKey];
+            const data = await apiFetch(`table/${schema}/${tableName}`);
+            if(data && !data.error) referenceDataCache[cacheKey] = data;
+            return data;
+        }
+
+        function showModal(content) {
+            const container = document.getElementById('modal-container');
+            container.innerHTML = content;
+            const modal = container.querySelector('.modal-overlay');
+            const modalContent = container.querySelector('.modal-content');
+            setTimeout(() => modalContent.classList.remove('opacity-0', '-translate-y-10'), 10);
+            const closeModal = () => {
+                modalContent.classList.add('opacity-0', '-translate-y-10');
+                setTimeout(() => { container.innerHTML = ''; }, 300); // No parsedUploadData reset here
+            };
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+            container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+            return { closeModal };
+        }
+
+        async function loadMachineInterface(machineName) {
+            currentMachine = machineName;
+            latestRunData = {}; // Clear previous run data
+            document.querySelectorAll('.sub-nav-link').forEach(link => link.classList.toggle('active', link.dataset.machine === machineName));
+            
+            const pageContainer = document.getElementById('page-container');
+            pageContainer.innerHTML = ''; // Clear previous content
+
+            let machineHtml = '';
+            let defaultSampleId = ''; // For pre-filling sample_id
+
+            // Fetch recent samples for dropdowns and suggestions
+            const recentSamples = await apiFetch('table/Lab/Samples?limit=100'); // Fetch more recent samples
+            const sampleOptions = (recentSamples && !recentSamples.error) ? recentSamples.map(s => `<option value="${s.sample_id}">${s.sample_id}</option>`).join('') : '<option value="">Error loading samples</option>';
+
+            // Get current user for Person field
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            const currentUser = user ? user.person : '';
+
+            // Common fields for experiment data entry
+            const commonFieldsHtml = `
+                <div class="col-span-1">
+                    <label for="exp_nr" class="block text-sm font-medium text-gray-700">Experiment Nr.</label>
+                    <select id="exp_nr" name="Experiment_Nr" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                        <option value="">Select Experiment</option>
+                        ${(await getReferenceData('Experiments', 'Lab')).map(exp => `<option value="${exp.Experiment_Nr}">${exp.Experiment_Nr} - ${exp.Experiment_title || ''}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="col-span-1">
+                    <label for="sample_id" class="block text-sm font-medium text-gray-700">Sample ID</label>
+                    <select id="sample_id" name="sample_id" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                        <option value="">Select Sample</option>
+                        ${sampleOptions}
+                    </select>
+                </div>
+                <div class="col-span-1">
+                    <label for="person" class="block text-sm font-medium text-gray-700">Person</label>
+                    <select id="person" name="Person" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                        <option value="">Select Person</option>
+                        ${(await getReferenceData('Personal')).map(p => `<option value="${p.person}" ${p.person === currentUser ? 'selected' : ''}>${p.person}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="col-span-1">
+                    <label for="date" class="block text-sm font-medium text-gray-700">Date</label>
+                    <input type="date" id="date" name="date" value="${new Date().toISOString().split('T')[0]}" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                </div>
+            `;
+
+            switch (machineName) {
+                case 'Qubit':
+                    machineHtml = `
+                        <div class="card p-6 w-full max-w-4xl mx-auto">
+                            <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center"><i data-lucide="flask-conical" class="w-7 h-7 mr-3 text-blue-600"></i>Qubit 4 Interface</h2>
+                            <form id="qubit-run-form" class="space-y-4">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    ${commonFieldsHtml}
+                                    <div class="col-span-1">
+                                        <label for="assay_kit" class="block text-sm font-medium text-gray-700">Assay Kit</label>
+                                        <input type="text" id="assay_kit" name="Assay_Kit" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" placeholder="e.g., dsDNA HS Assay">
+                                    </div>
+                                    <div class="col-span-1">
+                                        <label for="sample_volume_ul" class="block text-sm font-medium text-gray-700">Sample Volume (µL)</label>
+                                        <input type="number" step="0.01" id="sample_volume_ul" name="Sample_volume_ul" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" placeholder="e.g., 2">
+                                    </div>
+                                    <div class="col-span-1">
+                                        <label for="elution_volume_ul" class="block text-sm font-medium text-gray-700">Elution Volume (µL)</label>
+                                        <input type="number" step="0.01" id="elution_volume_ul" name="Elution_volume_ul" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" placeholder="e.g., 20">
+                                    </div>
+                                    <div class="col-span-1">
+                                        <label for="notes" class="block text-sm font-medium text-gray-700">Notes</label>
+                                        <textarea id="notes" name="Notes" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm h-24"></textarea>
+                                    </div>
+                                </div>
+                                <div class="mt-6 pt-4 border-t flex justify-between items-center">
+                                    <span id="qubit-status" class="text-gray-600 font-medium">Ready to start.</span>
+                                    <button type="button" id="start-qubit-run-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg flex items-center shadow">
+                                        <i data-lucide="play" class="w-5 h-5 mr-2"></i>Start Qubit Run
+                                    </button>
+                                </div>
+                            </form>
+                            <div id="qubit-results-section" class="hidden mt-8 p-4 bg-gray-50 rounded-md border border-dashed border-gray-300">
+                                <h3 class="text-xl font-bold text-gray-800 mb-4">Run Results</h3>
+                                <p class="text-gray-700 mb-4">Please manually enter the results obtained from the Qubit machine into the form below.</p>
+                                <button type="button" id="record-qubit-results-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg flex items-center shadow">
+                                    <i data-lucide="save" class="w-5 h-5 mr-2"></i>Record Qubit Results
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                case 'PCR':
+                    machineHtml = `
+                        <div class="card p-6 w-full max-w-4xl mx-auto">
+                            <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center"><i data-lucide="thermometer" class="w-7 h-7 mr-3 text-red-600"></i>BioRad PCR Interface</h2>
+                            <form id="pcr-run-form" class="space-y-4">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    ${commonFieldsHtml}
+                                    <div class="col-span-1">
+                                        <label for="gene_id" class="block text-sm font-medium text-gray-700">Primer Set / Gene</label>
+                                        <select id="gene_id" name="gene_id" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                                            <option value="">Select Primer</option>
+                                            ${(await getReferenceData('Genes')).map(gene => `<option value="${gene.primer_id}">${gene.TargetGene} (${gene.primer_id})</option>`).join('')}
+                                        </select>
+                                    </div>
+                                    <div class="col-span-1">
+                                        <label for="cycles" class="block text-sm font-medium text-gray-700">Cycles</label>
+                                        <input type="number" id="cycles" name="cycles" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" placeholder="e.g., 35" value="35">
+                                    </div>
+                                    <div class="col-span-1">
+                                        <label for="kit" class="block text-sm font-medium text-gray-700">PCR Kit</label>
+                                        <input type="text" id="kit" name="kit" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" placeholder="e.g., HotStarTaq">
+                                    </div>
+                                    <div class="col-span-1">
+                                        <label for="volume" class="block text-sm font-medium text-gray-700">Reaction Volume (µL)</label>
+                                        <input type="number" step="0.1" id="volume" name="Volume" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" placeholder="e.g., 25">
+                                    </div>
+                                    <div class="col-span-2">
+                                        <label for="notes" class="block text-sm font-medium text-gray-700">Notes</label>
+                                        <textarea id="notes" name="Notes" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm h-24"></textarea>
+                                    </div>
+                                </div>
+                                <div class="mt-6 pt-4 border-t flex justify-between items-center">
+                                    <span id="pcr-status" class="text-gray-600 font-medium">Ready to start.</span>
+                                    <button type="button" id="start-pcr-run-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg flex items-center shadow">
+                                        <i data-lucide="play" class="w-5 h-5 mr-2"></i>Start PCR Run
+                                    </button>
+                                </div>
+                            </form>
+                            <div id="pcr-results-section" class="hidden mt-8 p-4 bg-gray-50 rounded-md border border-dashed border-gray-300">
+                                <h3 class="text-xl font-bold text-gray-800 mb-4">Run Results</h3>
+                                <p class="text-gray-700 mb-4">After the run, please record the visual result (e.g., positive/negative on gel) or concentration if measured elsewhere.</p>
+                                <button type="button" id="record-pcr-results-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg flex items-center shadow">
+                                    <i data-lucide="save" class="w-5 h-5 mr-2"></i>Record PCR Results
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                case 'qPCR':
+                    machineHtml = `
+                        <div class="card p-6 w-full max-w-4xl mx-auto">
+                            <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center"><i data-lucide="activity" class="w-7 h-7 mr-3 text-purple-600"></i>q3 Analytics qPCR Interface</h2>
+                            <form id="qpcr-run-form" class="space-y-4">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    ${commonFieldsHtml}
+                                    <div class="col-span-1">
+                                        <label for="gene_id" class="block text-sm font-medium text-gray-700">Primer Set / Gene</label>
+                                        <select id="gene_id" name="gene_id" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                                            <option value="">Select Primer</option>
+                                            ${(await getReferenceData('Genes')).map(gene => `<option value="${gene.primer_id}">${gene.TargetGene} (${gene.primer_id})</option>`).join('')}
+                                        </select>
+                                    </div>
+                                    <div class="col-span-1">
+                                        <label for="ct_value" class="block text-sm font-medium text-gray-700">Ct Value (Optional for start)</label>
+                                        <input type="number" step="0.01" id="ct_value" name="CtValue" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" placeholder="e.g., 25.3">
+                                    </div>
+                                    <div class="col-span-1">
+                                        <label for="inhibitor_test" class="block text-sm font-medium text-gray-700">Inhibitor Test Result</label>
+                                        <input type="text" id="inhibitor_test" name="InhibitorTestResult" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" placeholder="e.g., Pass/Fail">
+                                    </div>
+                                    <div class="col-span-1">
+                                        <label for="kit" class="block text-sm font-medium text-gray-700">qPCR Kit</label>
+                                        <input type="text" id="kit" name="kit" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" placeholder="e.g., Luna Universal qPCR">
+                                    </div>
+                                    <div class="col-span-2">
+                                        <label for="notes" class="block text-sm font-medium text-gray-700">Notes</label>
+                                        <textarea id="notes" name="Notes" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm h-24"></textarea>
+                                    </div>
+                                </div>
+                                <div class="mt-6 pt-4 border-t flex justify-between items-center">
+                                    <span id="qpcr-status" class="text-gray-600 font-medium">Ready to start.</span>
+                                    <button type="button" id="start-qpcr-run-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg flex items-center shadow">
+                                        <i data-lucide="play" class="w-5 h-5 mr-2"></i>Start qPCR Run
+                                    </button>
+                                </div>
+                            </form>
+                            <div id="qpcr-results-section" class="hidden mt-8 p-4 bg-gray-50 rounded-md border border-dashed border-gray-300">
+                                <h3 class="text-xl font-bold text-gray-800 mb-4">Run Results</h3>
+                                <p class="text-gray-700 mb-4">Please manually enter the Ct Value and other results obtained from the qPCR machine.</p>
+                                <button type="button" id="record-qpcr-results-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg flex items-center shadow">
+                                    <i data-lucide="save" class="w-5 h-5 mr-2"></i>Record qPCR Results
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                case 'Tapestation':
+                    machineHtml = `
+                        <div class="card p-6 w-full max-w-4xl mx-auto">
+                            <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center"><i data-lucide="waveform" class="w-7 h-7 mr-3 text-teal-600"></i>Tapestation 4200 Interface</h2>
+                            <form id="tapestation-run-form" class="space-y-4">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    ${commonFieldsHtml}
+                                    <div class="col-span-1">
+                                        <label for="kit" class="block text-sm font-medium text-gray-700">Tapestation Kit</label>
+                                        <input type="text" id="kit" name="kit" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" placeholder="e.g., DNA ScreenTape">
+                                    </div>
+                                    <div class="col-span-1">
+                                        <label for="rin" class="block text-sm font-medium text-gray-700">RIN (Optional for start)</label>
+                                        <input type="number" step="0.1" id="rin" name="RIN" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" placeholder="e.g., 8.5">
+                                    </div>
+                                    <div class="col-span-2">
+                                        <label for="notes" class="block text-sm font-medium text-gray-700">Notes</label>
+                                        <textarea id="notes" name="Notes" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm h-24"></textarea>
+                                    </div>
+                                </div>
+                                <div class="mt-6 pt-4 border-t flex justify-between items-center">
+                                    <span id="tapestation-status" class="text-gray-600 font-medium">Ready to start.</span>
+                                    <button type="button" id="start-tapestation-run-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg flex items-center shadow">
+                                        <i data-lucide="play" class="w-5 h-5 mr-2"></i>Start Tapestation Run
+                                    </button>
+                                </div>
+                            </form>
+                            <div id="tapestation-results-section" class="hidden mt-8 p-4 bg-gray-50 rounded-md border border-dashed border-gray-300">
+                                <h3 class="text-xl font-bold text-gray-800 mb-4">Run Results</h3>
+                                <p class="text-gray-700 mb-4">Please manually enter the RIN and other results from the Tapestation report.</p>
+                                <button type="button" id="record-tapestation-results-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg flex items-center shadow">
+                                    <i data-lucide="save" class="w-5 h-5 mr-2"></i>Record Tapestation Results
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                default:
+                    machineHtml = `
+                        <div class="card p-6 text-gray-500 w-full max-w-xl mx-auto">
+                            <i data-lucide="info" class="mx-auto h-12 w-12 mb-4 text-orange-400"></i>
+                            <p class="text-lg font-semibold mb-2">Interface not designed for ${machineName}.</p>
+                            <p class="text-sm">Please select an available machine from the menu above.</p>
+                        </div>
+                    `;
+                    break;
+            }
+
+            pageContainer.innerHTML = machineHtml;
+            lucide.createIcons(); // Re-render icons after adding new HTML
+
+            // Add event listeners for the "Start Run" and "Record Results" buttons
+            if (machineName === 'Qubit') {
+                document.getElementById('start-qubit-run-btn').addEventListener('click', () => simulateRun('Qubit'));
+                document.getElementById('record-qubit-results-btn').addEventListener('click', () => showNewItemModal(machineTableMap['Qubit'], 'Qubit'));
+            } else if (machineName === 'PCR') {
+                document.getElementById('start-pcr-run-btn').addEventListener('click', () => simulateRun('PCR'));
+                document.getElementById('record-pcr-results-btn').addEventListener('click', () => showNewItemModal(machineTableMap['PCR'], 'PCR'));
+            } else if (machineName === 'qPCR') {
+                document.getElementById('start-qpcr-run-btn').addEventListener('click', () => simulateRun('qPCR'));
+                document.getElementById('record-qpcr-results-btn').addEventListener('click', () => showNewItemModal(machineTableMap['qPCR'], 'qPCR'));
+            } else if (machineName === 'Tapestation') {
+                document.getElementById('start-tapestation-run-btn').addEventListener('click', () => simulateRun('Tapestation'));
+                document.getElementById('record-tapestation-results-btn').addEventListener('click', () => showNewItemModal(machineTableMap['Tapestation'], 'Tapestation'));
+            }
+        }
+
+        function simulateRun(machineName) {
+            const form = document.getElementById(`${machineName.toLowerCase()}-run-form`);
+            const statusSpan = document.getElementById(`${machineName.toLowerCase()}-status`);
+            const resultsSection = document.getElementById(`${machineName.toLowerCase()}-results-section`);
+
+            // Basic form validation
+            if (!form.reportValidity()) {
+                alert('Please fill in all required fields to simulate the run.');
+                return;
+            }
+
+            const formData = Object.fromEntries(new FormData(form).entries());
+            latestRunData = formData; // Store for pre-filling the next modal
+
+            statusSpan.innerHTML = `<i data-lucide="loader-2" class="animate-spin w-4 h-4 inline-block mr-2"></i>Simulating run...`;
+            lucide.createIcons();
+            
+            // Simulate a delay
+            setTimeout(() => {
+                statusSpan.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 inline-block mr-2 text-green-500"></i>Run simulation complete.`;
+                lucide.createIcons();
+                resultsSection.classList.remove('hidden'); // Show results section
+            }, 3000); // 3-second delay
+        }
+
+        async function showNewItemModal(tableName, machineContext = null) {
+            // Reusing the modal from other pages, but adapting for this new context
+            // In this specific page, we are ONLY creating new entries, not editing.
+            // So `isEditing` will always be `false`.
+            const isEditing = false; 
+            
+            const modalHTML = `<div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-2xl transform transition-all -translate-y-10 opacity-0">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold">${isEditing ? `Edit Entry in ${tableName}` : `New Entry for ${tableName}`}</h2>
+                        <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700">&times;</button>
+                    </div>
+                    <form id="item-form" class="space-y-4">
+                        <div id="dynamic-fields-container" class="max-h-[60vh] overflow-y-auto p-4 rounded-md bg-gray-50 border"></div>
+                    </form>
+                    <div class="pt-6 flex justify-end border-t mt-6">
+                        <button id="save-item-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Create Entry</button>
+                    </div>
+                </div>
+            </div>`;
+            const { closeModal } = showModal(modalHTML);
+            
+            await renderMachineFormFields(tableName, latestRunData); // Pass latestRunData for pre-filling
+
+            document.getElementById('save-item-btn').onclick = async () => {
+                const form = document.getElementById('item-form');
+                if (!form.reportValidity()) {
+                    alert('Please fill out all required fields.');
+                    return;
+                }
+                
+                const data = Object.fromEntries(new FormData(form).entries());
+                // The API call for saving data
+                const result = await apiFetch(`table/Lab/${tableName}`, { method: 'POST', body: data });
+
+                if(result && !result.error) {
+                    alert(`Successfully recorded new ${tableName} entry.`);
+                    closeModal();
+                    latestRunData = {}; // Clear after successful save
+                    // Optionally, re-render the machine interface to reset it or show a "success" state
+                    // loadMachineInterface(machineContext || tableName); 
+                } else {
+                    alert('Failed to save item: ' + (result ? result.error : 'Unknown error'));
+                }
+            };
+        }
+
+        async function renderMachineFormFields(tableName, dataToPreload = null) {
+            const container = document.getElementById('dynamic-fields-container');
+            container.innerHTML = `<p class="text-center text-gray-500 p-4">Loading form fields...</p>`;
+
+            let columns = [];
+            // This is the manualColumns part from the Experiments page, adapted for machines.
+            // These specify which fields should appear in the form, in what order.
+            const manualColumns = {
+                'Qubit': ['Experiment_Nr', 'sample_id', 'date', 'Person', 'Assay_Kit', 'Run_id', 'Qubit_tube_conc', 'tube_unity', 'QubitOriginal_sample_conc', 'QubitOriginal_units', 'Sample_volume_ul', 'Elution_volume_ul', 'Notes', 'status_id', 'storage_id', 'storage_position', 'ResultDate'],
+                'PCR': ['Experiment_Nr', 'sample_id', 'date', 'Person', 'gene_id', 'cycles', 'Volume', 'kit', 'position', 'result', 'PCRBlankID', 'Notes', 'status_id', 'storage_id', 'storage_position'],
+                'qPCR': ['Experiment_Nr', 'sample_id', 'date', 'Person', 'gene_id', 'CtValue', 'InhibitorTestResult', 'Volume', 'kit', 'position', 'PCRBlankID', 'Notes', 'status_id', 'storage_id', 'storage_position'],
+                'Tapestation': ['Experiment_Nr', 'sample_id', 'date', 'Person', 'kit', 'RIN', 'Position', 'Notes', 'status_id', 'storage_id', 'storage_position', 'ResultDate']
+            };
+            columns = manualColumns[tableName] || [];
+
+            // Fetch schema as a fallback or for type info, but prioritize manualColumns for order and inclusion
+            const schemaResponse = await apiFetch(`table/Lab/${tableName}?limit=1`);
+            let schemaColumns = {};
+            if(schemaResponse && !schemaResponse.error && schemaResponse.length > 0) {
+                Object.keys(schemaResponse[0]).forEach(key => schemaColumns[key] = true);
+            } else if (schemaResponse.error) {
+                console.warn(`Could not fetch schema for ${tableName}: ${schemaResponse.error}. Using only manual columns.`);
+            }
+
+            // Ensure 'nr' (PK) is not editable if it's auto-generated, and exclude 'attachment', generated columns.
+            const filteredColumns = columns.filter(colName => {
+                const isGenerated = colName.endsWith('_ug'); // From your DB schema
+                const isAttachment = colName === 'attachment';
+                const isAutoIncrementPk = colName === 'nr'; // Assuming 'nr' is auto-incrementing PK
+                
+                // If editing, and it's an auto-incrementing PK, don't show it in the form
+                if (dataToPreload && isAutoIncrementPk) return false;
+                
+                return !isGenerated && !isAttachment;
+            });
+            
+            const foreignKeyMap = {
+                'Experiment_Nr': () => getReferenceData('Experiments', 'Lab').then(data => ({ data, valueCol: 'Experiment_Nr', displayCol: 'Experiment_Nr' })),
+                'sample_id': () => getReferenceData('Samples', 'Lab').then(data => ({ data, valueCol: 'sample_id', displayCol: 'sample_id' })),
+                'Person': () => getReferenceData('Personal').then(data => ({ data, valueCol: 'person', displayCol: 'person' })),
+                'gene_id': () => getReferenceData('Genes').then(data => ({ data, valueCol: 'primer_id', displayCol: 'TargetGene' })), 
+                'status_id': () => getReferenceData('Status').then(data => ({ data, valueCol: 'status_id', displayCol: 'status_id' })),
+                'storage_id': () => getReferenceData('Storage', 'Lab').then(data => ({ data, valueCol: 'storage_id', displayCol: 'storage_id' }))
+            };
+
+            let fieldsHtml = '<div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">';
+            for (const colName of filteredColumns) {
+                const value = dataToPreload ? (dataToPreload[colName] || '') : '';
+                const formattedLabel = colName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                let field = '';
+                let isRequired = false; // Add validation if needed
+
+                // Determine field type and attributes
+                if (foreignKeyMap[colName]) {
+                    try {
+                        const ref = await foreignKeyMap[colName]();
+                        if (ref.data && !ref.data.error) {
+                            field = `<select name="${colName}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" ${isRequired ? 'required' : ''}><option value="">-- Select --</option>${ref.data.map(r => `<option value="${r[ref.valueCol]}" ${value == r[ref.valueCol] ? 'selected' : ''}>${r[ref.displayCol] || r[ref.valueCol]}</option>`).join('')}</select>`;
+                        } else { throw new Error('Failed to load reference data.'); }
+                    } catch (e) {
+                        field = `<input type="text" name="${colName}" value="${value}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm bg-red-100" placeholder="Error loading options" ${isRequired ? 'required' : ''}>`;
+                    }
+                } else if (colName.toLowerCase().includes('date')) {
+                    field = `<input type="date" name="${colName}" value="${value ? String(value).split('T')[0] : ''}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" ${isRequired ? 'required' : ''}>`;
+                } else if (['Notes', 'Run_id', 'Assay_Kit', 'tube_unity', 'QubitOriginal_units', 'Position', 'Ladder', 'GelType', 'InhibitorTestResult', 'PCRBlankID', 'kit', 'result'].includes(colName)) { // Textarea or specific text fields
+                    // 'result' for PCR results if it's a text description
+                    field = `<textarea name="${colName}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm h-24" ${isRequired ? 'required' : ''}>${value}</textarea>`;
+                } else if (['Qubit_tube_conc', 'QubitOriginal_sample_conc', 'Sample_volume_ul', 'Elution_volume_ul', 'Volume', 'CtValue', 'BandSize_bp', 'Voltage', 'RunTimeMinutes', 'concentration', 'purity', 'RIN', 'cycles', 'storage_position'].includes(colName)) { // Numeric fields
+                    field = `<input type="number" step="any" name="${colName}" value="${value}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" ${isRequired ? 'required' : ''}>`;
+                }
+                else { // Default to text input
+                    field = `<input type="text" name="${colName}" value="${value}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" ${isRequired ? 'required' : ''}>`;
+                }
+                fieldsHtml += `<div><label class="font-medium text-sm text-gray-700">${formattedLabel}</label>${field}</div>`;
+            }
+            fieldsHtml += '</div>';
+            container.innerHTML = fieldsHtml;
+        }
+
+        // The bulk upload feature might still be useful for initial data entry
+        // or importing legacy data, even with the new machine interfaces.
+        // I will retain the existing bulk upload modal logic.
+
+        // Note: For a "machines" page, direct bulk upload functionality might be less intuitive
+        // than for a "samples" or "experiments" page, as machine data is often specific.
+        // Consider if 'Bulk Import' button at the top is still desired for this page.
+        // For now, it will function as it did previously, expecting a table name.
+        async function showBulkUploadModal() {
+            // Reusing the modal from experiments.html
+            parsedUploadData = [];
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-4xl transform transition-all -translate-y-10 opacity-0">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-2xl font-bold">Bulk Import for <span class="text-blue-600">${currentMachine ? machineTableMap[currentMachine] : 'Selected Table'}</span></h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700">&times;</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <h3 class="font-semibold text-lg mb-2">1. Get Your Template</h3>
+                                <p class="text-sm text-gray-600 mb-3">Download the template to ensure your column headers match the database.</p>
+                                <button id="download-template-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow-sm">
+                                    <i data-lucide="download" class="w-4 h-4 mr-2"></i>Download Template (.csv)
+                                </button>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-lg mb-2">2. Upload Your File</h3>
+                                <p class="text-sm text-gray-600 mb-3">Select a .csv or .xlsx file to upload.</p>
+                                <input type="file" id="file-input" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                            </div>
+                        </div>
+                        <div class="mt-6">
+                            <h3 class="font-semibold text-lg mb-2">3. Preview Data</h3>
+                            <div id="preview-container" class="border rounded-lg p-2 bg-gray-50 h-64 overflow-auto text-xs">
+                                <p class="text-gray-500 text-center p-4">Select a file to see a preview of the data.</p>
+                            </div>
+                        </div>
+                        <div class="pt-6 flex justify-end border-t mt-6">
+                            <button id="upload-data-btn" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg flex items-center" disabled>
+                                <i data-lucide="upload-cloud" class="w-5 h-5 mr-2"></i>Upload to Database
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            showModal(modalHTML);
+            lucide.createIcons();
+
+            document.getElementById('download-template-btn').addEventListener('click', generateAndDownloadTemplate);
+            document.getElementById('file-input').addEventListener('change', handleFileSelect);
+            document.getElementById('upload-data-btn').addEventListener('click', handleUpload);
+        }
+
+        async function generateAndDownloadTemplate() {
+            let headers = [];
+            const targetTable = currentMachine ? machineTableMap[currentMachine] : 'UnknownTable'; // Use mapped table name
+
+            if (currentMachine) {
+                // Fetch schema for the selected machine's table
+                const result = await apiFetch(`table/Lab/${targetTable}?limit=1`);
+                if(result && !result.error && result.length > 0) {
+                    headers = Object.keys(result[0]);
+                } else {
+                    // Fallback to manual columns if table is empty or schema cannot be fetched
+                    const manualColumnsForTemplate = {
+                        'Qubit': ['Experiment_Nr', 'Run_id', 'Assay_Kit', 'sample_id', 'date', 'Qubit_tube_conc', 'tube_unity', 'QubitOriginal_sample_conc', 'QubitOriginal_units', 'Sample_volume_ul', 'Elution_volume_ul', 'Person', 'Notes', 'status_id', 'storage_id', 'storage_position', 'ResultDate'],
+                        'PCR': ['Experiment_Nr', 'sample_id', 'position', 'gene_id', 'PCRBlankID', 'Date', 'Person', 'Notes', 'kit', 'storage_id', 'storage_position', 'status_id', 'Volume'],
+                        'qPCR': ['Experiment_Nr', 'sample_id', 'position', 'Date', 'Person', 'gene_id', 'CtValue', 'InhibitorTestResult', 'PCRBlankID', 'kit', 'Volume', 'storage_id', 'storage_position', 'status_id', 'Notes'],
+                        'Tapestation': ['Experiment_Nr', 'date', 'kit', 'Person', 'Notes', 'sample_id', 'Position', 'status_id', 'storage_id', 'storage_position', 'ResultDate']
+                    };
+                    headers = manualColumnsForTemplate[targetTable] || [];
+                }
+            } else {
+                alert('Please select a machine first to generate a template.');
+                return;
+            }
+
+            if (headers.length === 0) {
+                alert(`Could not determine schema for '${targetTable}' to generate template. Table might be truly empty or not properly configured.`);
+                return;
+            }
+            
+            const filteredHeaders = headers.filter(key => key !== 'nr' && key !== 'attachment' && !key.endsWith('_ug') && key !== 'bioinfo_id');
+            const csvContent = filteredHeaders.join(',');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `${targetTable}_template.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const previewContainer = document.getElementById('preview-container');
+            previewContainer.innerHTML = '<p class="text-gray-500 text-center p-4">Parsing file...</p>';
+            document.getElementById('upload-data-btn').disabled = true;
+            
+            const onParseComplete = (results) => {
+                if(results.errors.length > 0) {
+                    previewContainer.innerHTML = `<p class="text-red-500 p-4">Error parsing file: ${results.errors[0].message}</p>`;
+                    return;
+                }
+                parsedUploadData = results.data;
+                displayPreview(parsedUploadData);
+            };
+
+            if (file.name.endsWith('.csv')) {
+                Papa.parse(file, { header: true, skipEmptyLines: true, complete: onParseComplete });
+            } else {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, {type: 'array'});
+                        const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                        parsedUploadData = jsonData;
+                        displayPreview(parsedUploadData);
+                    } catch (err) {
+                        previewContainer.innerHTML = `<p class="text-red-500 text-center p-4">Error processing Excel file: ${err.message}</p>`;
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        }
+
+        function displayPreview(data) {
+            if (!data || data.length === 0) {
+                document.getElementById('preview-container').innerHTML = '<p class="text-red-500 text-center p-4">No data found in file.</p>';
+                return;
+            }
+            const headers = Object.keys(data[0]);
+            const previewHtml = `
+                <p class="text-sm font-medium p-2">Found ${data.length} records. Showing preview:</p>
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-100"><tr>${headers.map(h => `<th class="px-2 py-1 text-left font-medium text-gray-600">${h}</th>`).join('')}</tr></thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        ${data.slice(0, 5).map(row => `<tr>${headers.map(h => `<td class="px-2 py-1 whitespace-nowrap truncate max-w-[100px]">${row[h] || ''}</td>`).join('')}</tr>`).join('')}
+                    </tbody>
+                </table>`;
+            document.getElementById('preview-container').innerHTML = previewHtml;
+            document.getElementById('upload-data-btn').disabled = false;
+        }
+
+        async function handleUpload() {
+            if (parsedUploadData.length === 0) { alert('No data to upload.'); return; }
+            if (!currentMachine) { alert('Please select a machine type before uploading.'); return; }
+
+            const uploadBtn = document.getElementById('upload-data-btn');
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = '<i data-lucide="loader-2" class="animate-spin w-5 h-5 mr-2"></i>Uploading...';
+            lucide.createIcons();
+            
+            const targetTable = machineTableMap[currentMachine];
+            const result = await apiFetch(`table/Lab/${targetTable}/batch_upload`, { method: 'POST', body: parsedUploadData });
+            if (result.success) {
+                alert(`Successfully inserted ${result.inserted_rows} records into ${targetTable}.`);
+                document.querySelector('#modal-container #close-modal-btn').click();
+                // No need to reload the whole interface after bulk upload, just confirmation
+            } else {
+                alert(`Upload failed: ${result.error}`);
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = '<i data-lucide="upload-cloud" class="w-5 h-5 mr-2"></i>Upload to Database';
+                lucide.createIcons();
+            }
+        }
+
+        function initializePage() {
+            const menu = document.getElementById('sub-nav-menu');
+            menu.querySelectorAll('.sub-nav-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    loadMachineInterface(e.currentTarget.dataset.machine); // Use data-machine attribute
+                });
+            });
+            // Load the first machine's interface by default
+            menu.querySelector('.sub-nav-link[data-machine="Qubit"]').click(); // Load Qubit interface initially
+            
+            // These buttons now apply to the selected machine's data operations
+            document.getElementById('bulk-import-btn').addEventListener('click', () => {
+                if (!currentMachine) { alert('Please select a machine type first.'); return; }
+                showBulkUploadModal();
+            });
+            // The 'New Entry' button is not explicitly used here as 'Record Results' replaces it
+            // but for consistency, you might link it to showNewItemModal for the currentMachine
+            // For now, it's not hooked up as the workflow is "Simulate Run -> Record Results"
+            document.getElementById('new-item-btn').style.display = 'none'; // Hide if not directly used
+        }
+    </script>
+</body>
+</html
