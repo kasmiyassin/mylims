@@ -13,11 +13,11 @@ CREATE SCHEMA IF NOT EXISTS "bioinformatics";
 
 CREATE TABLE IF NOT EXISTS "reference"."personal" (
     "person_id" text PRIMARY KEY, -- User to fill manually
-    "Full Name" text,
+    "Full Name" text NOT NULL,
     "room" text,
     "telephone" text,
     "mail" text,
-    "password" TEXT NOT NULL,
+    "password_hash" TEXT NOT NULL,
     "description" text,
     "attachment" bytea,
     "modified_by" text REFERENCES "reference"."personal"("person_id"),
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS "reference"."category" (
 
 CREATE TABLE IF NOT EXISTS "reference"."samplesType" (
     "sample_type" text PRIMARY KEY, -- to fill  manually
-    "sample_typeAbrv" text UNIQUE NOT NULL,
+    "sampletype_abrv" text UNIQUE NOT NULL,
     "description" text,
     "attachment" bytea,
     "modified_by" text REFERENCES "reference"."personal"("person_id"),
@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS "reference"."species" (
 -- Table Lims.customers
 
 CREATE TABLE IF NOT EXISTS "Lims"."customers" (
-    "customer_id" text PRIMARY KEY, -- automatically K000000
+    "customer_id" serial PRIMARY KEY, -- automatically K000000
     "customer_name" text NOT NULL,
     "customer_abrv" text UNIQUE NOT NULL,
     "address" text NOT NULL,
@@ -143,38 +143,12 @@ CREATE TABLE IF NOT EXISTS "Lims"."customers" (
     "time_modification" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- ======================================================================
--- ID Generation for Lims.customers
--- The sequence must be created BEFORE the function that uses it.
-
--- 1. Sequence for customer_id
-DROP SEQUENCE IF EXISTS "Lims".customer_id_seq;
-CREATE SEQUENCE IF NOT EXISTS "Lims".customer_id_seq START 1;
-
--- 2. Trigger function to generate the customer_id from the sequence
-CREATE OR REPLACE FUNCTION "Lims".generate_customer_id()
-RETURNS TRIGGER AS $$
-BEGIN
-    -- Concatenate 'K' with a 6-digit, zero-padded number from the sequence
-    NEW.customer_id := 'K' || LPAD(NEXTVAL('"Lims".customer_id_seq')::TEXT, 6, '0');
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- 3. Trigger that executes the function before an insert
-DROP TRIGGER IF EXISTS trg_generate_customer_id ON "Lims"."customers";
-CREATE TRIGGER trg_generate_customer_id
-BEFORE INSERT ON "Lims"."customers"
-FOR EACH ROW
-EXECUTE FUNCTION "Lims".generate_customer_id();
-
--- ======================================================================
 
 -- ============================
 
 CREATE TABLE IF NOT EXISTS "Lims"."projects" (
-    "project_id" text PRIMARY KEY, -- to fill manually
-    "Title" text,
+    "project_id" text PRIMARY KEY, -- to fill manually project Akronym
+    "title" text,
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "PI" text REFERENCES "reference"."personal"("person_id"),
     "Funder" text,
@@ -255,9 +229,9 @@ CREATE TABLE IF NOT EXISTS "Lims"."Primers" (
 
 
 CREATE TABLE IF NOT EXISTS "Lims"."sop" (
-    "sop_id" text PRIMARY KEY, -- automatically SopId_Origin_vversionnumber
-    "Title" text,
-    "SopId_Origin" text NOT NULL,
+    "sop_id" text PRIMARY KEY, -- automatically sop_nr_vversionnumber
+    "title" text,
+    "sop_nr" text NOT NULL,
     "version" text NOT NULL,
     "author" text REFERENCES "reference"."personal"("person_id"),
     "reviewer1" text REFERENCES "reference"."personal"("person_id"),
@@ -274,7 +248,7 @@ CREATE TABLE IF NOT EXISTS "Lims"."sop" (
 CREATE OR REPLACE FUNCTION "Lims".generate_sop_id()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.sop_id := NEW."SopId_Origin" || '_v' || REPLACE(NEW.version, '.', '');
+    NEW.sop_id := NEW."sop_nr" || '_v' || REPLACE(NEW.version, '.', '');
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -635,7 +609,7 @@ DECLARE
     temp_sampling_id_exists TEXT; -- To check if NEW.sampling_id exists
 BEGIN
     -- Get sample type abbreviation
-    SELECT st."sample_typeAbrv" INTO sample_type_abrv
+    SELECT st."sampletype_abrv" INTO sample_type_abrv
     FROM "reference"."samplesType" st
     WHERE st."sample_type" = NEW.sample_type;
 
@@ -777,8 +751,8 @@ BEGIN
         RAISE EXCEPTION 'Parentsample_id % does not exist in "Lab"."samples" table.', NEW."Parentsample_id";
     END IF;
 
-    -- Get sample_typeAbrv for 'Fish'
-    SELECT "sample_typeAbrv" INTO fish_abrv FROM "reference"."samplesType" WHERE "sample_type" = 'Fish';
+    -- Get sampletype_abrv for 'Fish'
+    SELECT "sampletype_abrv" INTO fish_abrv FROM "reference"."samplesType" WHERE "sample_type" = 'Fish';
 
     id_prefix := NEW."Parentsample_id" || LOWER(fish_abrv);
 
@@ -846,8 +820,8 @@ BEGIN
         RAISE EXCEPTION 'Parentsample_id % does not exist in "Lab"."samples" table.', NEW."Parentsample_id";
     END IF;
 
-    -- Get sample_typeAbrv for 'Tissue'
-    SELECT "sample_typeAbrv" INTO tissue_abrv FROM "reference"."samplesType" WHERE "sample_type" = 'Tissue';
+    -- Get sampletype_abrv for 'Tissue'
+    SELECT "sampletype_abrv" INTO tissue_abrv FROM "reference"."samplesType" WHERE "sample_type" = 'Tissue';
 
     id_prefix := NEW."Parentsample_id" || LOWER(tissue_abrv);
 
@@ -935,8 +909,8 @@ BEGIN
         RAISE EXCEPTION 'Parentsample_id % does not exist in "Lab"."samples" table.', NEW."Parentsample_id";
     END IF;
 
-    -- Get sample_typeAbrv for 'DNA'
-    SELECT "sample_typeAbrv" INTO dna_abrv FROM "reference"."samplesType" WHERE "sample_type" = 'DNA';
+    -- Get sampletype_abrv for 'DNA'
+    SELECT "sampletype_abrv" INTO dna_abrv FROM "reference"."samplesType" WHERE "sample_type" = 'DNA';
 
     id_prefix := NEW."Parentsample_id" || LOWER(dna_abrv);
 
@@ -1009,8 +983,8 @@ BEGIN
         RAISE EXCEPTION 'Parentsample_id % does not exist in "Lab"."samples" table.', NEW."Parentsample_id";
     END IF;
 
-    -- Get sample_typeAbrv for 'RNA'
-    SELECT "sample_typeAbrv" INTO rna_abrv FROM "reference"."samplesType" WHERE "sample_type" = 'RNA';
+    -- Get sampletype_abrv for 'RNA'
+    SELECT "sampletype_abrv" INTO rna_abrv FROM "reference"."samplesType" WHERE "sample_type" = 'RNA';
 
     id_prefix := NEW."Parentsample_id" || LOWER(rna_abrv);
 
@@ -1083,8 +1057,8 @@ BEGIN
         RAISE EXCEPTION 'Parentsample_id % does not exist in "Lab"."samples" table.', NEW."Parentsample_id";
     END IF;
 
-    -- Get sample_typeAbrv for 'Sediments'
-    SELECT "sample_typeAbrv" INTO sediments_abrv FROM "reference"."samplesType" WHERE "sample_type" = 'Sediments';
+    -- Get sampletype_abrv for 'Sediments'
+    SELECT "sampletype_abrv" INTO sediments_abrv FROM "reference"."samplesType" WHERE "sample_type" = 'Sediments';
 
     id_prefix := NEW."Parentsample_id" || LOWER(sediments_abrv);
 
@@ -1157,8 +1131,8 @@ BEGIN
         RAISE EXCEPTION 'Parentsample_id % does not exist in "Lab"."samples" table.', NEW."Parentsample_id";
     END IF;
 
-    -- Get sample_typeAbrv for 'Water'
-    SELECT "sample_typeAbrv" INTO water_abrv FROM "reference"."samplesType" WHERE "sample_type" = 'Water';
+    -- Get sampletype_abrv for 'Water'
+    SELECT "sampletype_abrv" INTO water_abrv FROM "reference"."samplesType" WHERE "sample_type" = 'Water';
 
     id_prefix := NEW."Parentsample_id" || LOWER(water_abrv);
 
@@ -1722,7 +1696,7 @@ DECLARE
     id_prefix TEXT;
 BEGIN
     current_year := TO_CHAR(COALESCE(NEW.date, CURRENT_DATE), 'YY');
-    SELECT "sample_typeAbrv" INTO library_abrv FROM "reference"."samplesType" WHERE "sample_type" = 'Library';
+    SELECT "sampletype_abrv" INTO library_abrv FROM "reference"."samplesType" WHERE "sample_type" = 'Library';
     id_prefix := library_abrv || current_year;
 
     -- Find the maximum existing serial number for this prefix
@@ -1878,7 +1852,7 @@ DECLARE
     next_serial INTEGER;
 BEGIN
     current_year := TO_CHAR(COALESCE(NEW.reception_date, CURRENT_DATE), 'YY');
-    SELECT "sample_typeAbrv" INTO dataset_abrv FROM "reference"."samplesType" WHERE "sample_type" = 'Dataset';
+    SELECT "sampletype_abrv" INTO dataset_abrv FROM "reference"."samplesType" WHERE "sample_type" = 'Dataset';
 
     IF NEW.customer_id IS NOT NULL THEN
         SELECT c.customer_abrv INTO customer_abrv
@@ -2177,7 +2151,7 @@ INSERT INTO "reference"."status" ("status_id", "description") VALUES
 ('Unknown step', 'An unknown step has occurred in the workflow')
 ON CONFLICT ("status_id") DO NOTHING;
 
-INSERT INTO "reference"."samplesType" ("sample_type", "sample_typeAbrv", "description") VALUES
+INSERT INTO "reference"."samplesType" ("sample_type", "sampletype_abrv", "description") VALUES
 ('DNA', 'D', 'Deoxyribonucleic Acid sample'),
 ('RNA', 'R', 'Ribonucleic Acid sample'),
 ('Library', 'L', 'Sequencing Library sample'),
@@ -2519,7 +2493,7 @@ INSERT INTO "reference"."status" ("status_id", "description") VALUES
 ('Unknown step', 'An unknown step has occurred in the workflow')
 ON CONFLICT ("status_id") DO NOTHING;
 
-INSERT INTO "reference"."samplesType" ("sample_type", "sample_typeAbrv", "description") VALUES
+INSERT INTO "reference"."samplesType" ("sample_type", "sampletype_abrv", "description") VALUES
 ('DNA', 'D', 'Deoxyribonucleic Acid sample'),
 ('RNA', 'R', 'Ribonucleic Acid sample'),
 ('Library', 'L', 'Sequencing Library sample'),
@@ -2602,7 +2576,7 @@ RETURNS TEXT AS $$
 DECLARE
     abrv TEXT;
 BEGIN
-    SELECT "sample_typeAbrv" INTO abrv FROM "reference"."samplesType" WHERE "sample_type" = p_sample_type;
+    SELECT "sampletype_abrv" INTO abrv FROM "reference"."samplesType" WHERE "sample_type" = p_sample_type;
     RETURN abrv;
 END;
 $$ LANGUAGE plpgsql;
@@ -2738,7 +2712,7 @@ CREATE INDEX IF NOT EXISTS idx_cruises_project_id ON "Lims"."cruises" ("project_
 CREATE INDEX IF NOT EXISTS idx_cruises_region_id ON "Lims"."cruises" ("region_id");
 CREATE INDEX IF NOT EXISTS idx_cruises_ecosystem_id ON "Lims"."cruises" ("ecosystem_id");
 CREATE INDEX IF NOT EXISTS idx_workflow_steps_workflow_id ON "Lims"."workflow_steps" ("workflow_id");
-CREATE INDEX IF NOT EXISTS idx_sop_sopid_origin ON "Lims"."sop" ("SopId_Origin");
+CREATE INDEX IF NOT EXISTS idx_sop_sop_nr ON "Lims"."sop" ("sop_nr");
 CREATE INDEX IF NOT EXISTS idx_primers_targetgene ON "Lims"."Primers" ("TargetGene");
 CREATE INDEX IF NOT EXISTS idx_equipment_room_id ON "Lims"."Equipment" ("room_id");
 CREATE INDEX IF NOT EXISTS idx_orders_project_id ON "Lims"."orders" ("project_id");
@@ -2851,12 +2825,12 @@ SELECT
     s."Transport",
     s."Conservation/Buffer",
     s."sample_type",
-    stype."sample_typeAbrv",
+    stype."sampletype_abrv",
     s."sample_status_id",
     s."workflow_name",
     s."step_name",
     s."project_id",
-    p."Title" AS project_title,
+    p."title" AS project_title,
     s."customer_id",
     c."customer_name",
     c."customer_abrv",
@@ -2883,7 +2857,7 @@ LEFT JOIN
 CREATE OR REPLACE VIEW "Lims"."Project_Overview_View" AS
 SELECT
     p."project_id",
-    p."Title",
+    p."title",
     p."status_id",
     p."PI" AS pi_person_id, -- Corrected column name to "PI"
     ref_p."Full Name" AS pi_full_name,
@@ -2957,7 +2931,7 @@ SELECT
     e."aim",
     e."Method",
     e."sop_id",
-    sop."Title" AS sop_title,
+    sop."title" AS sop_title,
     e."date" AS experiment_date,
     e."person" AS experiment_person_id,
     ref_p."Full Name" AS experiment_person_name,
@@ -2976,7 +2950,7 @@ LEFT JOIN
 LEFT JOIN
     "Lab"."ExperimentsProjects" ep ON e."Experiment_id" = ep."Experiment_id"
 GROUP BY
-    e."Experiment_id", e."Experiment_title", e."aim", e."Method", e."sop_id", sop."Title",
+    e."Experiment_id", e."Experiment_title", e."aim", e."Method", e."sop_id", sop."title",
     e.date, e.person, ref_p."Full Name", e."LabBook", e."status_id";
 
 -- View: Bioinformatics_Results_Summary
@@ -3174,8 +3148,8 @@ EXECUTE FUNCTION "Lab".log_sample_storage_movement();
 -- The `trg_validate_sample_sampling_date` trigger above adds a more complex date constraint.
 
 -- Example: Check constraint for unique SOP version (already handled by unique on sop_id)
--- ALTER TABLE "Lims"."sop" ADD CONSTRAINT chk_sop_unique_version UNIQUE ("SopId_Origin", "version");
--- This is already implicitly handled by the sop_id generation logic if SopId_Origin and version are part of it.
+-- ALTER TABLE "Lims"."sop" ADD CONSTRAINT chk_sop_unique_version UNIQUE ("sop_nr", "version");
+-- This is already implicitly handled by the sop_id generation logic if sop_nr and version are part of it.
 
 -- Example: Exclusion constraint for overlapping cruises (requires btree_gist extension if not using PostGIS for spatial)
 -- CREATE EXTENSION IF NOT EXISTS btree_gist;
@@ -3487,7 +3461,7 @@ BEGIN;
     INSERT INTO "Lims"."customers" ("customer_name", "customer_abrv", "address", "mail", "phone")
     VALUES ('New Customer Inc.', 'NCI', '123 Main St', 'contact@newcustomer.com', '555-1234');
 
-    INSERT INTO "Lims"."projects" ("project_id", "Title", "customer_id", "PI")
+    INSERT INTO "Lims"."projects" ("project_id", "title", "customer_id", "PI")
     VALUES ('PROJ_NEW_001', 'New Research Project', (SELECT "customer_id" FROM "Lims"."customers" WHERE "customer_abrv" = 'NCI'), 'person_id_example'); -- Replace with actual person_id
 
 COMMIT;
@@ -3498,7 +3472,7 @@ BEGIN;
     VALUES ('Another Customer Ltd.', 'ACL', '456 Oak Ave', 'info@anothercustomer.com', '555-5678');
 
     -- This insert might fail if 'NonExistentPI' is not a valid person_id, triggering a rollback
-    INSERT INTO "Lims"."projects" ("project_id", "Title", "customer_id", "PI")
+    INSERT INTO "Lims"."projects" ("project_id", "title", "customer_id", "PI")
     VALUES ('PROJ_FAIL_001', 'Failing Project', (SELECT "customer_id" FROM "Lims"."customers" WHERE "customer_abrv" = 'ACL'), 'NonExistentPI');
 
 ROLLBACK; -- If the second insert fails, the first one is also rolled back.
@@ -3671,12 +3645,12 @@ BEFORE INSERT OR UPDATE ON "Lab"."samples"
 FOR EACH ROW
 EXECUTE FUNCTION "Lab".update_sample_search_vector();
 
--- Example for "Lims"."sop" Title and sop_protocol
+-- Example for "Lims"."sop" title and sop_protocol
 ALTER TABLE "Lims"."sop" ADD COLUMN IF NOT EXISTS sop_search_vector TSVECTOR;
 
 UPDATE "Lims"."sop"
 SET sop_search_vector =
-    TO_TSVECTOR('public.lims_english', COALESCE("Title", '')) ||
+    TO_TSVECTOR('public.lims_english', COALESCE("title", '')) ||
     TO_TSVECTOR('public.lims_english', COALESCE(sop_protocol, ''));
 
 CREATE INDEX IF NOT EXISTS idx_sop_gin_search ON "Lims"."sop" USING GIN (sop_search_vector);
@@ -3685,7 +3659,7 @@ CREATE OR REPLACE FUNCTION "Lims".update_sop_search_vector()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.sop_search_vector =
-        TO_TSVECTOR('public.lims_english', COALESCE(NEW."Title", '')) ||
+        TO_TSVECTOR('public.lims_english', COALESCE(NEW."title", '')) ||
         TO_TSVECTOR('public.lims_english', COALESCE(NEW.sop_protocol, ''));
     RETURN NEW;
 END;
@@ -3782,12 +3756,12 @@ BEFORE INSERT OR UPDATE ON "Lab"."samples"
 FOR EACH ROW
 EXECUTE FUNCTION "Lab".update_sample_search_vector();
 
--- Example for "Lims"."sop" Title and sop_protocol
+-- Example for "Lims"."sop" title and sop_protocol
 ALTER TABLE "Lims"."sop" ADD COLUMN IF NOT EXISTS sop_search_vector TSVECTOR;
 
 UPDATE "Lims"."sop"
 SET sop_search_vector =
-    TO_TSVECTOR('public.lims_english', COALESCE("Title", '')) ||
+    TO_TSVECTOR('public.lims_english', COALESCE("title", '')) ||
     TO_TSVECTOR('public.lims_english', COALESCE(sop_protocol, ''));
 
 CREATE INDEX IF NOT EXISTS idx_sop_gin_search ON "Lims"."sop" USING GIN (sop_search_vector);
@@ -3796,7 +3770,7 @@ CREATE OR REPLACE FUNCTION "Lims".update_sop_search_vector()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.sop_search_vector =
-        TO_TSVECTOR('public.lims_english', COALESCE(NEW."Title", '')) ||
+        TO_TSVECTOR('public.lims_english', COALESCE(NEW."title", '')) ||
         TO_TSVECTOR('public.lims_english', COALESCE(NEW.sop_protocol, ''));
     RETURN NEW;
 END;
@@ -3864,7 +3838,7 @@ OPTIONS (user 'foreign_user', password 'foreign_password');
 -- This creates a local representation of a table that exists on the foreign server.
 CREATE FOREIGN TABLE IF NOT EXISTS "Lims"."foreign_projects" (
     "project_id" text NOT NULL,
-    "Title" text,
+    "title" text,
     "Start_date" date,
     "End_date" date
 )
@@ -3872,7 +3846,7 @@ SERVER foreign_lims_server
 OPTIONS (schema_name 'Lims', table_name 'projects'); -- Assuming 'Lims.projects' exists on foreign_lims_db
 
 -- Example query on a foreign table
-SELECT * FROM "Lims"."foreign_projects" WHERE "Title" LIKE '%External%';
+SELECT * FROM "Lims"."foreign_projects" WHERE "title" LIKE '%External%';
 
 
 -- ======================================================================
@@ -4124,7 +4098,7 @@ CREATE INDEX IF NOT EXISTS idx_sop_gin_search ON "Lims"."sop" USING GIN (sop_sea
 DROP TRIGGER IF EXISTS trg_update_sop_search ON "Lims"."sop";
 CREATE TRIGGER trg_update_sop_search
 BEFORE INSERT OR UPDATE ON "Lims"."sop"
-FOR EACH ROW EXECUTE PROCEDURE "Lims".generate_tsvector('Title', 'sop_protocol', 'description', 'sop_search_vector');
+FOR EACH ROW EXECUTE PROCEDURE "Lims".generate_tsvector('title', 'sop_protocol', 'description', 'sop_search_vector');
 
 -- Apply full-text search to "Lab"."Experiments" table
 ALTER TABLE "Lab"."Experiments" ADD COLUMN IF NOT EXISTS experiment_search_vector TSVECTOR;
@@ -4299,7 +4273,7 @@ ORDER BY sample_id, process_date;
 CREATE OR REPLACE VIEW "Lims"."Project_Financial_Summary_View" AS
 SELECT
     p.project_id,
-    p."Title" AS project_title,
+    p."title" AS project_title,
     p."PI" AS pi_person_id,
     pers."Full Name" AS pi_name,
     SUM(o.price) AS total_cost,
@@ -4311,7 +4285,7 @@ FROM
 JOIN "Lims"."orders" o ON p.project_id = o.project_id
 LEFT JOIN "reference"."personal" pers ON p."PI" = pers.person_id
 GROUP BY
-    p.project_id, p."Title", p."PI", pers."Full Name"
+    p.project_id, p."title", p."PI", pers."Full Name"
 ORDER BY
     total_cost DESC;
 
@@ -4319,7 +4293,7 @@ ORDER BY
 CREATE OR REPLACE VIEW "bioinformatics"."Full_Analysis_Results_View" AS
 SELECT
     p.project_id,
-    p."Title" AS project_title,
+    p."title" AS project_title,
     samp.sampling_id,
     samp.sampling_date,
     samp."Location" AS sampling_location,
@@ -4797,7 +4771,7 @@ CREATE INDEX IF NOT EXISTS idx_sop_gin_search ON "Lims"."sop" USING GIN (sop_sea
 DROP TRIGGER IF EXISTS trg_update_sop_search ON "Lims"."sop";
 CREATE TRIGGER trg_update_sop_search
 BEFORE INSERT OR UPDATE ON "Lims"."sop"
-FOR EACH ROW EXECUTE PROCEDURE "Lims".generate_tsvector('Title', 'sop_protocol', 'description', 'sop_search_vector');
+FOR EACH ROW EXECUTE PROCEDURE "Lims".generate_tsvector('title', 'sop_protocol', 'description', 'sop_search_vector');
 
 -- Apply full-text search to "Lab"."Experiments" table
 ALTER TABLE "Lab"."Experiments" ADD COLUMN IF NOT EXISTS experiment_search_vector TSVECTOR;
@@ -4982,7 +4956,7 @@ ORDER BY sample_id, process_date;
 CREATE OR REPLACE VIEW "Lims"."Project_Financial_Summary_View" AS
 SELECT
     p.project_id,
-    p."Title" AS project_title,
+    p."title" AS project_title,
     p."PI" AS pi_person_id,
     pers."Full Name" AS pi_name,
     SUM(o.price) AS total_cost,
@@ -4994,7 +4968,7 @@ FROM
 JOIN "Lims"."orders" o ON p.project_id = o.project_id
 LEFT JOIN "reference"."personal" pers ON p."PI" = pers.person_id
 GROUP BY
-    p.project_id, p."Title", p."PI", pers."Full Name"
+    p.project_id, p."title", p."PI", pers."Full Name"
 ORDER BY
     total_cost DESC;
 
@@ -5002,7 +4976,7 @@ ORDER BY
 CREATE OR REPLACE VIEW "bioinformatics"."Full_Analysis_Results_View" AS
 SELECT
     p.project_id,
-    p."Title" AS project_title,
+    p."title" AS project_title,
     samp.sampling_id,
     samp.sampling_date,
     samp."Location" AS sampling_location,
@@ -5057,7 +5031,7 @@ ORDER BY
 CREATE OR REPLACE VIEW "Lims"."Project_Comprehensive_Summary_View" AS
 SELECT
     p.project_id,
-    p."Title" AS project_title,
+    p."title" AS project_title,
     stat.description AS project_status,
     p."Funder",
     p."Start_date",
@@ -5071,7 +5045,7 @@ LEFT JOIN "Lab"."Experiments" ex ON p.project_id = ex.project_id
 LEFT JOIN "Lab"."samples" s ON p.project_id = s.project_id
 LEFT JOIN "Lims"."orders" o ON p.project_id = o.project_id
 GROUP BY
-    p.project_id, p."Title", stat.description, p."Funder", p."Start_date", p."End_date"
+    p.project_id, p."title", stat.description, p."Funder", p."Start_date", p."End_date"
 ORDER BY p."Start_date" DESC;
 
 -- View 6 (New): Experiment Progress Overview
@@ -5081,7 +5055,7 @@ SELECT
     e."Experiment_id",
     e."Experiment_title",
     e.project_id,
-    p."Title" AS project_title,
+    p."title" AS project_title,
     stat.description AS experiment_status,
     e.date AS experiment_start_date,
     pers."Full Name" AS experiment_lead,
@@ -5102,7 +5076,7 @@ LEFT JOIN "Lab"."Library" lib ON es.sample_id = lib."sample_id"
 LEFT JOIN "Lab"."Sequencing" seq ON es.sample_id = seq.sample_id
 LEFT JOIN "Lab"."bioinformatics" bio ON es.sample_id = bio.sample_id
 GROUP BY
-    e."Experiment_id", e."Experiment_title", e.project_id, p."Title",
+    e."Experiment_id", e."Experiment_title", e.project_id, p."title",
     stat.description, e.date, pers."Full Name"
 ORDER BY e.date DESC;
 
@@ -5133,7 +5107,7 @@ SELECT
     s.sample_id,
     s."External_Name",
     s.project_id,
-    p."Title" AS project_title,
+    p."title" AS project_title,
     s.sample_type,
     s.sample_status_id,
     stat.description AS sample_status_description,

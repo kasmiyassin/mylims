@@ -1,0 +1,30 @@
+Ensure you run SELECT "reference".update_taxon_ltree_paths(); after you have loaded your initial taxonomic data into the reference.taxon table. This function populates the path column, which is essential for ltree's hierarchical queries. You might want to make this function part of your data migration script.
+Add units table. You have many columns like WindUnit, SalinityUnit, DepthUnit, TemperatureUnit, etc., that store units as free text. A central reference.units table (unit_id PK, unit_name, unit_abbreviation, unit_type (e.g., 'length', 'temperature'), conversion_factor_to_base_unit) would:
+For fields like Sex, MaturityStage, Weather, TideStage, tissue_type, preservation_method, GelType, GearType, fishing_method, etc., you currently use CHECK constraints (which is good). However, creating small lookup tables in reference (e.g., reference.sex_options, reference.maturity_stages) offers:
+ In your old schema, Lims.Workflow_steps had a Target_table_name column. This can be very useful for a UI to dynamically know which lab process table corresponds to a specific workflow step. Consider re-adding it if your UI benefits from this direct mapping.
+Consideration: For complex workflows, sometimes a next_step_id (self-referencing FK to workflow_steps) can explicitly define the flow, although this can be managed in application logic too.
+orders adding a Lims.suppliers table and making Company a foreign key to it. This would normalize supplier information.
+orders If you track inventory, item could be a foreign key to a Lims.InventoryItems table.
+Reagents If you track quantity, add a quantity_available NUMERIC column. You have a commented-out function for update_reagent_quantity_on_order that assumes this. Implementing this would be a significant inventory management feature.
+Protocol table is still a bit generic. As discussed, clarify its role. If it's for general experiment notes, description is fine. If it's meant to link to SOPs, protocol should be an sop_id FK. If it's for logging runs of a protocol, it needs more structure (e.g., sop_id, start_time, end_time, person_id, outcome).
+sampling  LonLat_Postgis_Lat and LonLat_Postgis_Lon should be consolidated into a single GEOMETRY or GEOGRAPHY column using PostGIS. This is a major missing piece for proper spatial analysis.
+Storage_log Consider adding old_storage_id, old_storage_position to capture the "from" location.
+For Otoliths, consider adding otolith_id as a primary key, and then a unique constraint on (sample_id, reader_id, side) if a sample can have multiple otolith readings by the same reader on the same side. Or, if (sample_id, reader_id, side) is truly the PK, then the sample_id column should not be the PK of the table.
+Improvement: For Nanodrop and Qubit, consider renaming nr to nanodrop_id and qubit_id respectively for consistency with other ID naming conventions.
+Consistency: The person column in these tables should be renamed to person_id to match the FK to reference.personal(person_id).
+Lab.bioinformatics : Remove the INHERITS clause. Merge its content into bioinformatics.analysis_runs if analysis_runs can fully accommodate all the specific columns. This would centralize all analysis execution records.
+referenceDatabase and DatabaseVersion (in Lab.bioinformatics / analysis_runs) are important and recurring, create a reference_databases table (db_id PK, db_name, db_version, description, url). This would allow you to standardize and track which reference databases are used.
+
+
+PostGIS (Crucial): As mentioned, this is the biggest missing piece for your sampling table's geographical data. Install it and use the GEOMETRY type.
+pg_stat_statements: Absolutely enable this. It's a must-have for monitoring and optimizing query performance in a production environment.
+Remember to configure shared_preload_libraries = 'pg_stat_statements' in postgresql.conf and restart PostgreSQL before CREATE EXTENSION.
+update_time_modification() Trigger: You have this function defined but commented out its application. Apply this trigger to ALL tables that have modified_by and time_modification columns. This ensures that these audit fields are automatically updated on every UPDATE operation, which is critical for data traceability.
+
+Generic generate_tsvector(): This is a very smart and efficient way to apply full-text search. Excellent work here.
+
+Lab.update_sample_status(): This generic trigger function is very good. Ensure that all relevant process tables have AFTER INSERT triggers calling this function with the correct status string.
+
+ID Generation Functions: Your custom ID generation functions are very robust and well-designed. They incorporate contextual information, which is great.
+
+Important: After migrating existing data, remember to update the sequences (Lims.customer_id_seq, Lab.fishing_serial_seq, etc.) to their maximum current value to avoid primary key conflicts on future inserts.
