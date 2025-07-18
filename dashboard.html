@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - TIFI MG</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        .sidebar {
+            transition: width 0.3s ease;
+            border-right: 1px solid #e2e8f0;
+        }
+        .sidebar-item {
+            transition: all 0.2s ease;
+            color: #475569;
+        }
+        .sidebar-item.active, .sidebar-item.active i {
+            background-color: #eef2ff;
+            color: #4f46e5;
+            font-weight: 600;
+        }
+        .sidebar-item:hover {
+            background-color: #f1f5f9;
+            color: #1e293b;
+        }
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .stat-card i {
+            transition: transform 0.3s ease;
+        }
+        .stat-card:hover i {
+            transform: scale(1.1);
+        }
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Accordion styles */
+        .accordion-item {
+            margin-bottom: 0.5rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        .accordion-header {
+            background-color: #f1f5f9;
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            width: 100%;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-weight: 600;
+            color: #475569;
+        }
+        .accordion-header:hover {
+            background-color: #e2e8f0;
+        }
+        .accordion-header .lucide {
+            transition: transform 0.3s ease;
+        }
+        .accordion-header.active .lucide {
+            transform: rotate(180deg);
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+            padding: 0 1rem; /* Initial padding, will expand */
+            background-color: white;
+            border-top: 1px solid #e2e8f0;
+        }
+        .accordion-content.open {
+            max-height: 500px; /* Adjust as needed for content height */
+            padding: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="main-app">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0">
+                <i data-lucide="flask-conical" class="inline-block mr-2 text-blue-600"></i><span>TIFI MG</span>
+            </div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
+                <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="box" class="w-5 h-5 mr-3"></i><span>Storage Box</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="Printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+            </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t flex items-center">
+                    </div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+
+        <div id="main-content" class="ml-64 p-8">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800">Dashboard</h1>
+                    <p class="mt-1 text-md text-gray-600">Overview</p>
+                </div>
+                <div class="relative w-1/3">
+                    <input type="text" id="global-search-input" placeholder="Search projects, samples, experiments, SOPs, reagents, personal..." class="w-full py-2 pl-10 pr-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <i data-lucide="search" class="absolute top-1/2 left-3 transform -translate-y-1/2 text-gray-400 w-5 h-5"></i>
+                </div>
+            </div>
+            <div id="global-search-results" class="mb-6"></div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-blue-100 rounded-full mr-4"><i data-lucide="folder-kanban" class="w-6 h-6 text-blue-600"></i></div><div><p class="text-sm text-gray-500">Active Projects</p><p id="stat-active-projects" class="text-2xl font-bold">0</p></div></div>
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-green-100 rounded-full mr-4"><i data-lucide="beaker" class="w-6 h-6 text-green-600"></i></div><div><p class="text-sm text-gray-500">Total Samples</p><p id="stat-total-samples" class="text-2xl font-bold">0</p></div></div>
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-yellow-100 rounded-full mr-4"><i data-lucide="flask-round" class="w-6 h-6 text-yellow-600"></i></div><div><p class="text-sm text-gray-500">Experiments (Month)</p><p id="stat-month-experiments" class="text-2xl font-bold">0</p></div></div>
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-red-100 rounded-full mr-4"><i data-lucide="calendar-x" class="w-6 h-6 text-red-600"></i></div><div><p class="text-sm text-gray-500">Reagents Expiring</p><p id="stat-expiring-reagents" class="text-2xl font-bold">0</p></div></div>
+                
+                <!-- NEW STAT CARDS -->
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-purple-100 rounded-full mr-4"><i data-lucide="flask-conical" class="w-6 h-6 text-purple-600"></i></div><div><p class="text-sm text-gray-500">Total Experiments</p><p id="stat-total-experiments" class="text-2xl font-bold">0</p></div></div>
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-indigo-100 rounded-full mr-4"><i data-lucide="book-text" class="w-6 h-6 text-indigo-600"></i></div><div><p class="text-sm text-gray-500">Total Protocols</p><p id="stat-total-protocols" class="text-2xl font-bold">0</p></div></div>
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-teal-100 rounded-full mr-4"><i data-lucide="archive" class="w-6 h-6 text-teal-600"></i></div><div><p class="text-sm text-gray-500">Total Storage Units</p><p id="stat-total-storage" class="text-2xl font-bold">0</p></div></div>
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-orange-100 rounded-full mr-4"><i data-lucide="users" class="w-6 h-6 text-orange-600"></i></div><div><p class="text-sm text-gray-500">Total Personnel</p><p id="stat-total-personnel" class="text-2xl font-bold">0</p></div></div>
+            </div>
+            
+            <div class="card p-6 mb-8">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Track a Sample</h2>
+                <div class="flex items-center space-x-2">
+                    <input type="text" id="track-sample-input" placeholder="Enter Sample ID (e.g., F25WeHB0000 or D25WeHB0000d1)..." class="w-full max-w-md py-2 px-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button id="track-sample-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg flex items-center"><i data-lucide="search" class="w-5 h-5 mr-2"></i>Track</button>
+                </div>
+                <div id="track-sample-results" class="mt-4"></div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-1">
+                    <div class="card p-6 h-full">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">Quick Actions</h2>
+                        <div class="space-y-3">
+                            <a href="projects.html" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center transition-all duration-200 shadow hover:shadow-lg"><i data-lucide="plus-circle" class="w-5 h-5 mr-2"></i>New Project</a>
+                            <a href="samples.html" class="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center transition-all duration-200 shadow hover:shadow-lg"><i data-lucide="plus-circle" class="w-5 h-5 mr-2"></i>New Sample</a>
+                            <a href="experiments.html" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center transition-all duration-200 shadow hover:shadow-lg"><i data-lucide="plus-circle" class="w-5 h-5 mr-2"></i>New Experiment</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="lg:col-span-2">
+                    <div class="card p-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">Data Explorer</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label for="chart-metric" class="text-sm font-medium text-gray-700">Show me the...</label>
+                                <select id="chart-metric" class="mt-1 w-full p-2 border rounded-md bg-white focus:outline-none">
+                                    <option value="samples">Count of Samples</option>
+                                    <option value="experiments">Count of Experiments</option>
+                                    <option value="reagents">Count of Reagents</option>
+                                    <option value="projects">Count of Projects</option> <!-- New Metric -->
+                                    <option value="personnel">Count of Personnel</option> <!-- New Metric -->
+                                    <option value="storage">Count of Storage Units</option> <!-- New Metric -->
+                                </select>
+                            </div>
+                            <div>
+                                <label for="chart-category" class="text-sm font-medium text-gray-700">Grouped by...</label>
+                                <select id="chart-category" class="mt-1 w-full p-2 border rounded-md bg-white focus:outline-none"></select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label for="chart-start-date" class="text-sm font-medium text-gray-700">Start Date (for charts):</label>
+                                <input type="date" id="chart-start-date" class="mt-1 w-full p-2 border rounded-md bg-white focus:outline-none">
+                            </div>
+                            <div>
+                                <label for="chart-end-date" class="text-sm font-medium text-gray-700">End Date (for charts):</label>
+                                <input type="date" id="chart-end-date" class="mt-1 w-full p-2 border rounded-md bg-white focus:outline-none">
+                            </div>
+                        </div>
+                        <div class="h-96">
+                            <canvas id="dynamic-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- NEW: Recent Activity Feed -->
+            <div class="card p-6 mt-8">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Recent System Activity <i data-lucide="activity" class="w-6 h-6 inline-block text-gray-500 ml-2"></i></h2>
+                <div id="activity-feed" class="space-y-4 max-h-80 overflow-y-auto pr-2">
+                    <p class="text-gray-500 text-center"><span class="loading-spinner mr-2"></span>Loading recent activities...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') {
+            localStorage.setItem('redirectUrl', window.location.href);
+            window.location.href = './login.html';
+        }
+        
+        const API_BASE_URL = '/mymglab/api'; 
+        let dataCache = {}; // Stores raw data for various tables
+        let dynamicChartInstance;
+
+        // Expanded category options for the Data Explorer chart
+        const categoryOptions = {
+            samples: [
+                { value: 'sample_type_id', text: 'Sample Type' }, // Corrected to sample_type_id
+                { value: 'sample_status_id', text: 'Status' },
+                { value: 'project_id', text: 'Project' },
+                { value: 'sampling_id', text: 'Sampling Event' },
+                { value: 'reception_date_month', text: 'Month (Received)' } // Corrected to reception_date
+            ],
+            experiments: [
+                { value: 'status_id', text: 'Status' },
+                { value: 'project_id', text: 'Project' },
+                { value: 'person_id', text: 'Person' }, // Corrected to person_id
+                { value: 'experiment_date_month', text: 'Month (Created)' } // Corrected to experiment_date
+            ],
+            reagents: [
+                { value: 'category_id', text: 'Category' }, // Corrected to category_id
+                { value: 'status_id', text: 'Status' },
+                { value: 'expire_date_month', text: 'Month (Expiry)' } // Corrected to expire_date
+            ],
+            projects: [ // New metric
+                { value: 'status_id', text: 'Status' },
+                { value: 'pi_person_id', text: 'Principal Investigator' }, // Corrected to pi_person_id
+                { value: 'funder', text: 'Funder' },
+                { value: 'start_date_year', text: 'Year (Start)' } // Corrected to start_date
+            ],
+            personnel: [ // New metric
+                { value: 'room_id', text: 'Room' }, // Corrected to room_id
+                { value: 'full_name', text: 'Full Name' }
+            ],
+            storage: [ // New metric
+                { value: 'room_id', text: 'Room' },
+                { value: 'freezer', text: 'Freezer' },
+                { value: 'box', text: 'Box' }
+            ]
+        };
+
+        async function apiFetch(endpoint, options={}) {
+            try {
+                const isJson = !(options.body instanceof FormData);
+                if (isJson && options.body) {
+                    options.headers = { ...options.headers, 'Content-Type': 'application/json' };
+                    options.body = JSON.stringify(options.body);
+                }
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                if (!response.ok) {
+                    if (response.status === 404 && endpoint.startsWith('global-search/')) {
+                        return { projects: [], samples: [], experiments: [], sops: [], reagents: [], personal: [] };
+                    }
+                    const errorBody = await response.json().catch(() => ({error: `Server error or HTTP ${response.status}`}));
+                    throw new Error(errorBody.error || `HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            } catch (error) {
+                console.error(`API Error on ${endpoint}:`, error);
+                return null;
+            }
+        }
+        
+        function updateCategoryOptions(metric) {
+            const select = document.getElementById('chart-category');
+            if (!select) return;
+            select.innerHTML = '';
+            const options = categoryOptions[metric] || [];
+            options.forEach(opt => {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.textContent = opt.text;
+                select.appendChild(option);
+            });
+        }
+
+        function drawChart() {
+            const metric = document.getElementById('chart-metric').value;
+            const category = document.getElementById('chart-category').value;
+            const startDate = document.getElementById('chart-start-date').value;
+            const endDate = document.getElementById('chart-end-date').value;
+
+            let data = dataCache[metric];
+            if (!data) {
+                console.warn(`Data for metric '${metric}' not loaded yet.`);
+                return;
+            }
+
+            // Apply date filtering based on relevant date fields for each metric
+            let filteredData = data.filter(item => {
+                let itemDate;
+                if (metric === 'samples' && item.reception_date) {
+                    itemDate = new Date(item.reception_date);
+                } else if (metric === 'experiments' && item.experiment_date) {
+                    itemDate = new Date(item.experiment_date);
+                } else if (metric === 'reagents' && item.expire_date) {
+                    itemDate = new Date(item.expire_date);
+                } else if (metric === 'projects' && item.start_date) {
+                    itemDate = new Date(item.start_date);
+                }
+                // Personnel and Storage don't typically have date ranges for their main entity
+                
+                if (itemDate && startDate && endDate) {
+                    const start = new Date(startDate);
+                    const end = new Date(endDate);
+                    return itemDate >= start && itemDate <= end;
+                } else if (itemDate && startDate) {
+                    const start = new Date(startDate);
+                    return itemDate >= start;
+                } else if (itemDate && endDate) {
+                    const end = new Date(endDate);
+                    return itemDate <= end;
+                }
+                return true; // No date filter applied or no date field for this metric
+            });
+
+            const groupedData = filteredData.reduce((acc, item) => {
+                let key;
+                if (category.endsWith('_month')) {
+                    const dateField = category.replace('_month', '');
+                    key = item[dateField] ? new Date(item[dateField]).toISOString().slice(0, 7) : 'N/A';
+                } else if (category.endsWith('_year')) {
+                    const dateField = category.replace('_year', '');
+                    key = item[dateField] ? new Date(item[dateField]).getFullYear().toString() : 'N/A';
+                } else if (category === 'full_name' && item.full_name) { // Specific for personnel
+                    key = item.full_name;
+                } else {
+                    key = item[category] || 'N/A';
+                }
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+            }, {});
+            
+            let labels = Object.keys(groupedData);
+            if(category.endsWith('_month') || category.endsWith('_year')) labels.sort(); // Sort date-based labels
+            const values = labels.map(label => groupedData[label]);
+            let chartType = (category.endsWith('_month') || category.endsWith('_year')) ? 'line' : (labels.length <= 7 && labels.length > 1 ? 'pie' : 'bar');
+
+            if (dynamicChartInstance) dynamicChartInstance.destroy();
+            
+            const ctx = document.getElementById('dynamic-chart').getContext('2d');
+            dynamicChartInstance = new Chart(ctx, {
+                type: chartType,
+                data: {
+                    labels,
+                    datasets: [{
+                        label: `Count of ${metric}`,
+                        data: values,
+                        backgroundColor: [
+                            '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b',
+                            '#06b6d4', '#a855f7', '#f43f5e', '#14b8a6', '#eab308', '#6b7280', '#fb923c'
+                        ],
+                        borderColor: chartType === 'line' ? '#3b82f6' : 'rgba(0,0,0,0)',
+                        borderWidth: 1,
+                        tension: 0.4,
+                        fill: chartType === 'line'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: chartType === 'pie' || labels.length <= 7
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            display: chartType !== 'pie'
+                        },
+                        x: {
+                            display: chartType !== 'pie'
+                        }
+                    }
+                }
+            });
+        }
+
+        // Function to display detailed sample information using accordions
+        async function displayDetailedSampleInfo(sampleId, resultsDiv) {
+            resultsDiv.innerHTML = `<div class="p-4 text-center"><div class="loading-spinner"></div> Loading sample details...</div>`;
+            try {
+                // Fetch from the comprehensive view for full details
+                const sampleResponse = await apiFetch(`table/Lab/Sample_Full_Details_View?filter_sample_id=${sampleId}`);
+                const sample = sampleResponse && sampleResponse.length > 0 ? sampleResponse[0] : null;
+
+                if (!sample) {
+                    resultsDiv.innerHTML = `<p class="text-red-500">No sample found with ID: ${sampleId}</p>`;
+                    return;
+                }
+                
+                // Helper to render a detail row if value exists
+                const renderDetailRow = (label, value) => {
+                    if (value === null || value === undefined || String(value).trim() === '' || value === 'N/A') {
+                        return '';
+                    }
+                    return `<div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100"><dt class="font-medium text-gray-500">${label}</dt><dd class="text-gray-900 break-all">${value}</dd></div>`;
+                };
+
+                // Helper to format date strings
+                const formatDate = (dateString) => {
+                    if (!dateString) return 'N/A';
+                    try {
+                        const date = new Date(dateString);
+                        return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString();
+                    } catch (e) {
+                        return 'N/A';
+                    }
+                };
+
+                // Helper to format date-time strings
+                const formatDateTime = (dateString) => {
+                    if (!dateString) return 'N/A';
+                    try {
+                        const date = new Date(dateString);
+                        return isNaN(date.getTime()) ? 'N/A' : date.toLocaleString();
+                    } catch (e) {
+                        return 'N/A';
+                    }
+                };
+
+                let html = `<div class="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+                    <h3 class="text-xl font-bold text-blue-800 mb-4">Sample: ${sample.sample_id}</h3>
+                    
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="core-info">
+                            <span class="flex items-center"><i data-lucide="info" class="w-5 h-5 mr-2"></i> Core Information</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content open">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('External Name', sample.external_name)}
+                                ${renderDetailRow('Type', sample.sample_type_id)}
+                                ${renderDetailRow('Current Status', sample.sample_status_id)}
+                                ${renderDetailRow('Project ID', sample.project_id)}
+                                ${renderDetailRow('Project Title', sample.project_title)}
+                                ${renderDetailRow('Reception Date', formatDate(sample.reception_date))}
+                                ${renderDetailRow('Last Modified', formatDateTime(sample.time_modification))}
+                                ${renderDetailRow('Parent Sample', sample.parent_sample_id)}
+                            </dl>
+                        </div>
+                    </div>
+                `;
+
+                // Sampling Details
+                if (sample.sampling_id) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="sampling-details">
+                            <span class="flex items-center"><i data-lucide="map-pin" class="w-5 h-5 mr-2"></i> Sampling Event Details (${sample.sampling_id})</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Date', formatDate(sample.sampling_event_date))}
+                                ${renderDetailRow('Location', sample.sampling_location)}
+                                ${renderDetailRow('Depth (m)', sample.sampling_depth_m)}
+                                ${renderDetailRow('Temperature (°C)', sample.temperature_atmospheric_c)}
+                                ${renderDetailRow('Weather', sample.weather)}
+                                ${renderDetailRow('Sampler', sample.sampler_full_name)}
+                                ${renderDetailRow('Receiver', sample.receiver_full_name)}
+                                ${renderDetailRow('Wind Speed', sample.wind_speed ? `${sample.wind_speed} ${sample.wind_unit || ''}` : 'N/A')}
+                                ${renderDetailRow('Salinity', sample.salinity ? `${sample.salinity} ${sample.salinity_unit || ''}` : 'N/A')}
+                                ${renderDetailRow('Oxygen', sample.oxygen ? `${sample.oxygen} ${sample.oxygen_unit || ''}` : 'N/A')}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // Storage Details
+                if (sample.storage_id) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="storage-details">
+                            <span class="flex items-center"><i data-lucide="archive" class="w-5 h-5 mr-2"></i> Storage Details (${sample.storage_id})</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Room', sample.room_id)}
+                                ${renderDetailRow('Freezer', sample.storage_freezer)}
+                                ${renderDetailRow('Box', sample.storage_box)}
+                                ${renderDetailRow('Position', sample.storage_position)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // Fish Details
+                if (sample.species_en_name) { // Assuming species_en_name indicates a fish sample
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="fish-details">
+                            <span class="flex items-center"><i data-lucide="fish" class="w-5 h-5 mr-2"></i> Fish Details</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Species', sample.species_en_name)}
+                                ${renderDetailRow('Total Length (mm)', sample.total_length_mm)}
+                                ${renderDetailRow('Weight (g)', sample.weight_g)}
+                                ${renderDetailRow('Sex', sample.sex)}
+                                ${renderDetailRow('Maturity Stage', sample.maturity_stage)}
+                                ${renderDetailRow('Stomach Contents', sample.stomach_contents)}
+                                ${renderDetailRow('Disease Info', sample.disease_info)}
+                                ${renderDetailRow('Tag ID', sample.tag_id)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // Tissue Details
+                if (sample.tissue_type) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="tissue-details">
+                            <span class="flex items-center"><i data-lucide="microscope" class="w-5 h-5 mr-2"></i> Tissue Details</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Weight (mg)', sample.tissue_weight_mg)}
+                                ${renderDetailRow('Tissue Type', sample.tissue_type)}
+                                ${renderDetailRow('Preservation Method', sample.tissue_preservation_method)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // DNA Details
+                if (sample.dna_volume_ul) { // Check for a key specific to DNA table
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="dna-details">
+                            <span class="flex items-center"><i data-lucide="dna" class="w-5 h-5 mr-2"></i> DNA Details</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Volume (µL)', sample.dna_volume_ul)}
+                                ${renderDetailRow('Concentration (ng/µL)', sample.dna_concentration_ng_ul)}
+                                ${renderDetailRow('A260/280', sample.dna_a260_280)}
+                                ${renderDetailRow('A260/230', sample.dna_a260_230)}
+                                ${renderDetailRow('Extraction Method', sample.dna_extraction_method)}
+                                ${renderDetailRow('Extraction Date', formatDate(sample.extraction_date))}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+                
+                // RNA Details
+                if (sample.rna_volume_ul) { // Check for a key specific to RNA table
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="rna-details">
+                            <span class="flex items-center"><i data-lucide="ribbon" class="w-5 h-5 mr-2"></i> RNA Details</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Volume (µL)', sample.rna_volume_ul)}
+                                ${renderDetailRow('Concentration (ng/µL)', sample.rna_concentration_ng_ul)}
+                                ${renderDetailRow('A260/280', sample.rna_a260_280)}
+                                ${renderDetailRow('A260/230', sample.rna_a260_230)}
+                                ${renderDetailRow('Extraction Method', sample.rna_extraction_method)}
+                                ${renderDetailRow('Extraction Date', formatDate(sample.extraction_date))}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // Extraction Details (if not covered by DNA/RNA directly)
+                if (sample.extraction_date && !sample.dna_volume_ul && !sample.rna_volume_ul) {
+                     html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="extraction-details">
+                            <span class="flex items-center"><i data-lucide="flask-conical" class="w-5 h-5 mr-2"></i> Extraction Details</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Date', formatDate(sample.extraction_date))}
+                                ${renderDetailRow('Kit', sample.extraction_kit)}
+                                ${renderDetailRow('Elution Volume (µL)', sample.extraction_elution_volume_ul)}
+                                ${renderDetailRow('Yield Qubit (ng/µL)', sample.yield_qubit_ng_ul)}
+                                ${renderDetailRow('Yield Nanodrop (ng/µL)', sample.yield_nanodrop_ng_ul)}
+                                ${renderDetailRow('A260/280', sample.extraction_a260_280)}
+                                ${renderDetailRow('A260/230', sample.extraction_a260_230)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // Nanodrop Details
+                if (sample.nanodrop_concentration) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="nanodrop-details">
+                            <span class="flex items-center"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-2"></i> Nanodrop Details</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Concentration', sample.nanodrop_concentration ? `${sample.nanodrop_concentration} ${sample.nanodrop_concentration_unit || ''}` : 'N/A')}
+                                ${renderDetailRow('A260', sample.nanodrop_a260)}
+                                ${renderDetailRow('A260/280', sample.nanodrop_a260_280)}
+                                ${renderDetailRow('A260/230', sample.nanodrop_a260_230)}
+                                ${renderDetailRow('Total DNA (µg)', sample.nanodrop_total_dna_ug)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // Qubit Details
+                if (sample.qubit_original_sample_conc) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="qubit-details">
+                            <span class="flex items-center"><i data-lucide="thermometer" class="w-5 h-5 mr-2"></i> Qubit Details</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Original Sample Conc.', sample.qubit_original_sample_conc ? `${sample.qubit_original_sample_conc} ${sample.qubit_original_sample_unit || ''}` : 'N/A')}
+                                ${renderDetailRow('Total DNA (µg)', sample.qubit_total_dna_ug)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // PCR Details
+                if (sample.pcr_primer_id) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="pcr-details">
+                            <span class="flex items-center"><i data-lucide="dna" class="w-5 h-5 mr-2"></i> PCR Details</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Date', formatDate(sample.pcr_date))}
+                                ${renderDetailRow('Primer ID', sample.pcr_primer_id)}
+                                ${renderDetailRow('Target Gene', sample.pcr_target_gene_id)}
+                                ${renderDetailRow('Reaction Volume (µL)', sample.volume_reaction_ul)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // qPCR Details
+                if (sample.ct_value) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="qpcr-details">
+                            <span class="flex items-center"><i data-lucide="activity" class="w-5 h-5 mr-2"></i> qPCR Details</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Date', formatDate(sample.qpcr_date))}
+                                ${renderDetailRow('Ct Value', sample.ct_value)}
+                                ${renderDetailRow('Inhibitor Test Result', sample.inhibitor_test_result)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // Library Details
+                if (sample.library_id) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="library-details">
+                            <span class="flex items-center"><i data-lucide="book" class="w-5 h-5 mr-2"></i> Library Details (${sample.library_id})</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Library Prep Kit', sample.library_prep_kit)}
+                                ${renderDetailRow('Index Sequence', sample.index_sequence)}
+                                ${renderDetailRow('Read Length (bp)', sample.library_read_length_bp)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // Sequencing Details
+                if (sample.sequencing_id) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="sequencing-details">
+                            <span class="flex items-center"><i data-lucide="dna-off" class="w-5 h-5 mr-2"></i> Sequencing Details (${sample.sequencing_id})</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Sequencer', sample.sequencer)}
+                                ${renderDetailRow('Flow Cell ID', sample.flow_cell_id)}
+                                ${renderDetailRow('Total Reads', sample.total_reads)}
+                                ${renderDetailRow('Raw Data Path', sample.raw_data_path)}
+                                ${renderDetailRow('Genbank Accession No.', sample.genbank_accession_number)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // Bioinformatics Details
+                if (sample.analysis_run_id) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="bioinformatics-details">
+                            <span class="flex items-center"><i data-lucide="cloud-cog" class="w-5 h-5 mr-2"></i> Bioinformatics Details (${sample.analysis_run_id})</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Pipeline Name', sample.pipeline_name)}
+                                ${renderDetailRow('Pipeline Version', sample.pipeline_version)}
+                                ${renderDetailRow('Reference DB', sample.bioinfo_reference_database)}
+                                ${renderDetailRow('DB Version', sample.bioinfo_database_version)}
+                                ${renderDetailRow('Clustering Threshold', sample.clustering_threshold)}
+                                ${renderDetailRow('Final Output Path', sample.final_output_path)}
+                                ${renderDetailRow('Assigned Taxon', sample.edna_assigned_taxon_name)}
+                                ${renderDetailRow('Read Count', sample.edna_read_count)}
+                                ${renderDetailRow('Confidence', sample.edna_confidence)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // Dissection History (if multiple, iterate)
+                // This requires fetching Dissections separately as Sample_Full_Details_View might flatten it
+                const dissectionsData = await apiFetch(`table/Lab/Dissections?filter_sample_id=${sampleId}`);
+                const dissections = dissectionsData && !dissectionsData.error ? dissectionsData : [];
+
+                if (dissections.length > 0) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="dissection-history">
+                            <span class="flex items-center"><i data-lucide="scissors" class="w-5 h-5 mr-2"></i> Dissection History (${dissections.length})</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">`;
+                    dissections.forEach(dis => {
+                        html += `<div class="mb-2 p-2 bg-gray-100 rounded-md">
+                            ${renderDetailRow('Dissection ID', dis.dissection_id)}
+                            ${renderDetailRow('Date', formatDate(dis.dissection_date))}
+                            ${renderDetailRow('Person', dis.person_id)}
+                            ${renderDetailRow('Gonad Weight (g)', dis.gonad_weight_g)}
+                            ${renderDetailRow('Liver Weight (g)', dis.liver_weight_g)}
+                            ${renderDetailRow('Stomach Contents', dis.stomach_contents_jsonb ? JSON.stringify(dis.stomach_contents_jsonb) : 'N/A')}
+                        </div>`;
+                    });
+                    html += `</div></div>`;
+                }
+
+                html += `</div>`; // Close main space-y-2 div
+                resultsDiv.innerHTML = html;
+
+                // Initialize accordions after content is loaded
+                document.querySelectorAll('.accordion-header').forEach(header => {
+                    header.addEventListener('click', () => {
+                        const content = header.nextElementSibling;
+                        header.classList.toggle('active');
+                        content.classList.toggle('open');
+                        lucide.createIcons(); // Re-render icons if they are inside toggled content
+                    });
+                });
+                lucide.createIcons(); // Initial render for all icons
+            } catch (error) {
+                console.error("Error fetching detailed sample info:", error);
+                resultsDiv.innerHTML = `<p class="text-red-500">Failed to load sample details. Error: ${error.message}</p>`;
+            }
+        }
+
+
+        async function setupDashboard() {
+            lucide.createIcons();
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.full_name || user.person_id}</p>`; // Use full_name if available
+            document.getElementById('logout-button').addEventListener('click', () => {
+                sessionStorage.clear();
+                localStorage.removeItem('redirectUrl');
+                window.location.href = './login.html';
+            });
+            
+            // Fetch all dashboard stats in one go
+            const statsPromises = {
+                active_projects: apiFetch('table/Lims/projects?filter_status_id=Active').then(res => res ? res.length : 0),
+                total_samples: apiFetch('table/Lab/samples').then(res => res ? res.length : 0),
+                experiments_this_month: apiFetch('table/Lab/experiments?filter_experiment_date_month=' + new Date().toISOString().slice(0, 7)).then(res => res ? res.length : 0),
+                reagents_expiring_soon: apiFetch('table/Lims/reagents?filter_expire_date_within_30_days=true').then(res => res ? res.length : 0), // Assuming backend can handle this filter
+                total_experiments: apiFetch('table/Lab/experiments').then(res => res ? res.length : 0),
+                total_protocols: apiFetch('table/Lims/sop').then(res => res ? res.length : 0),
+                total_storage: apiFetch('table/Lab/storage').then(res => res ? res.length : 0),
+                total_personnel: apiFetch('table/Reference/personal').then(res => res ? res.length : 0),
+            };
+
+            const stats = {};
+            for (const key in statsPromises) {
+                stats[key] = await statsPromises[key];
+            }
+
+            if (stats) {
+                document.getElementById('stat-active-projects').textContent = stats.active_projects || 0;
+                document.getElementById('stat-total-samples').textContent = stats.total_samples || 0;
+                document.getElementById('stat-month-experiments').textContent = stats.experiments_this_month || 0;
+                document.getElementById('stat-expiring-reagents').textContent = stats.reagents_expiring_soon || 0;
+                document.getElementById('stat-total-experiments').textContent = stats.total_experiments || 0; // New
+                document.getElementById('stat-total-protocols').textContent = stats.total_protocols || 0; // New
+                document.getElementById('stat-total-storage').textContent = stats.total_storage || 0; // New
+                document.getElementById('stat-total-personnel').textContent = stats.total_personnel || 0; // New
+            }
+
+            // Fetch data for charts
+            const [samples, experiments, reagents, projects, personnel, storage] = await Promise.all([
+                apiFetch('table/Lab/samples'),
+                apiFetch('table/Lab/experiments'),
+                apiFetch('table/Lims/reagents'),
+                apiFetch('table/Lims/projects'), // New
+                apiFetch('table/Reference/personal'), // New
+                apiFetch('table/Lab/storage') // New
+            ]);
+            dataCache.samples = samples || [];
+            dataCache.experiments = experiments || [];
+            dataCache.reagents = reagents || [];
+            dataCache.projects = projects || []; // New
+            dataCache.personnel = personnel || []; // New
+            dataCache.storage = storage || []; // New
+
+            const metricSelect = document.getElementById('chart-metric');
+            const categorySelect = document.getElementById('chart-category');
+            const startDateInput = document.getElementById('chart-start-date');
+            const endDateInput = document.getElementById('chart-end-date');
+
+            metricSelect.addEventListener('change', () => { updateCategoryOptions(metricSelect.value); drawChart(); });
+            categorySelect.addEventListener('change', drawChart);
+            startDateInput.addEventListener('change', drawChart);
+            endDateInput.addEventListener('change', drawChart);
+            
+            updateCategoryOptions(metricSelect.value);
+            drawChart();
+
+            document.getElementById('track-sample-btn').onclick = async () => {
+                const sampleId = document.getElementById('track-sample-input').value.trim();
+                const resultsDiv = document.getElementById('track-sample-results');
+                if (!sampleId) { resultsDiv.innerHTML = `<p class="text-red-500">Please enter a Sample ID.</p>`; return; }
+                
+                await displayDetailedSampleInfo(sampleId, resultsDiv);
+            };
+
+            const searchInput = document.getElementById('global-search-input');
+            const searchResultsDiv = document.getElementById('global-search-results');
+            searchInput.addEventListener('input', async (e) => {
+                const searchTerm = e.target.value.trim();
+                if (searchTerm.length < 2) { 
+                    searchResultsDiv.innerHTML = ''; 
+                    return; 
+                }
+
+                searchResultsDiv.innerHTML = `<div class="card p-4 shadow-lg absolute z-10 bg-white w-full max-h-60 overflow-y-auto text-center"><div class="loading-spinner"></div> Searching...</div>`;
+
+                const results = await apiFetch(`global-search/${searchTerm}`);
+                let html = '';
+
+                if(results && results.projects && results.projects.length > 0) {
+                    html += `<div><h3 class="font-bold text-gray-700">Projects</h3><div class="space-y-1">${results.projects.map(p => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${p.title} (<span class="font-mono text-sm">${p.project_id}</span>)</div>`).join('')}</div></div>`;
+                }
+                
+                if(results && results.samples && results.samples.length > 0) {
+                    html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Samples</h3><div class="space-y-1">${results.samples.map(s => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${s.sample_id} (<span class="text-sm text-gray-500">${s.sample_type}</span>)</div>`).join('')}</div></div>`;
+
+                }
+
+                if(results && results.experiments && results.experiments.length > 0) {
+                    html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Experiments</h3><div class="space-y-1">${results.experiments.map(ex => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${ex.experiment_title} (<span class="font-mono text-sm">${ex.experiment_id}</span>)</div>`).join('')}</div></div>`;
+
+                }
+
+                if(results && results.sops && results.sops.length > 0) {
+                    html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">SOPs</h3><div class="space-y-1">${results.sops.map(s => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${s.title} (<span class="font-mono text-sm">${s.sop_id}</span>)</div>`).join('')}</div></div>`;
+                }
+
+                if(results && results.reagents && results.reagents.length > 0) {
+                    html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Reagents</h3><div class="space-y-1">${results.reagents.map(r => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${r.reagent_complete_name} (<span class="font-mono text-sm">${r.reagent_id}</span>)</div>`).join('')}</div></div>`;
+                }
+
+                if(results && results.personal && results.personal.length > 0) {
+                    html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Personnel</h3><div class="space-y-1">${results.personal.map(p => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${p["Full Name"]} (<span class="font-mono text-sm">${p.person_id}</span>)</div>`).join('')}</div></div>`;
+                }
+
+
+                searchResultsDiv.innerHTML = html ? `<div class="card p-4 shadow-lg absolute z-10 bg-white w-full max-h-60 overflow-y-auto">${html}</div>` : (searchTerm.length >= 2 ? '<p class="p-2 text-gray-500">No results found.</p>' : '');
+            });
+
+            document.addEventListener('click', (event) => {
+                const searchContainer = document.querySelector('.relative.w-1\\/3');
+                if (searchContainer && !searchContainer.contains(event.target)) {
+                    searchResultsDiv.innerHTML = '';
+                }
+            });
+
+            // Load recent activity
+            loadRecentActivity();
+        }
+
+        // New function to load and display recent activity from audit log
+        async function loadRecentActivity() {
+            const activityFeedDiv = document.getElementById('activity-feed');
+            activityFeedDiv.innerHTML = `<p class="text-gray-500 text-center"><span class="loading-spinner mr-2"></span>Loading recent activities...</p>`;
+
+            try {
+                // Fetch last 10 audit log entries, ordered by timestamp descending
+                const auditLogs = await apiFetch('table/audit/log?order_by=action_timestamp&order_direction=desc&limit=10');
+
+                if (!auditLogs || auditLogs.error || auditLogs.length === 0) {
+                    activityFeedDiv.innerHTML = `<p class="text-gray-500 text-center">No recent activity found.</p>`;
+                    return;
+                }
+
+                let html = '';
+                auditLogs.forEach(log => {
+                    const actionMap = { 'I': 'created', 'U': 'updated', 'D': 'deleted' };
+                    const actionVerb = actionMap[log.action] || 'performed action on';
+                    const timestamp = new Date(log.action_timestamp).toLocaleString();
+                    const userName = log.user_id || 'System'; // Use user_id from audit log
+
+                    let details = '';
+                    if (log.table_name === 'samples' && log.new_data && log.new_data.sample_id) {
+                        details = `Sample <span class="font-semibold">${log.new_data.sample_id}</span>`;
+                        if (log.action === 'U' && log.new_data.sample_status_id) {
+                            details += ` status changed to <span class="font-semibold text-blue-600">${log.new_data.sample_status_id}</span>`;
+                        }
+                    } else if (log.table_name === 'projects' && log.new_data && log.new_data.project_id) {
+                        details = `Project <span class="font-semibold">${log.new_data.project_id}</span>`;
+                        if (log.action === 'U' && log.new_data.title) {
+                            details += ` title updated to "<span class="font-semibold">${log.new_data.title}</span>"`;
+                        }
+                    } else if (log.new_data && log.new_data.id) { // Generic ID fallback
+                        details = `Record <span class="font-semibold">${log.new_data.id}</span>`;
+                    } else if (log.original_data && log.original_data.id && log.action === 'D') {
+                        details = `Record <span class="font-semibold">${log.original_data.id}</span>`;
+                    } else {
+                        details = `a record`;
+                    }
+
+                    html += `
+                        <div class="p-3 bg-gray-50 rounded-md border border-gray-200">
+                            <p class="text-sm">
+                                <span class="font-medium text-gray-800">${userName}</span> ${actionVerb} ${details} in <span class="font-medium text-purple-600">${log.table_name}</span> table.
+                            </p>
+                            <p class="text-xs text-gray-500 mt-1">${timestamp}</p>
+                        </div>
+                    `;
+                });
+                activityFeedDiv.innerHTML = html;
+            } catch (error) {
+                console.error("Error loading recent activity:", error);
+                activityFeedDiv.innerHTML = `<p class="text-red-500 text-center">Failed to load recent activity. Error: ${error.message}</p>`;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', setupDashboard);
+    </script>
+</body>
+</html>

@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Storage (Box Layout) - TIFI LIMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .sidebar { border-right: 1px solid #e2e8f0; }
+        .sidebar-item { color: #475569; }
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        .modal-overlay { z-index: 50; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+        
+        /* Drag & Drop Styles */
+        .draggable-item { 
+            cursor: grab; 
+            background-color: #f0f4f8; /* Light blue-gray */
+            border: 1px solid #cbd5e1; /* Gray-300 */
+            border-radius: 0.375rem; /* rounded-md */
+            padding: 0.5rem; /* p-2 */
+            margin-bottom: 0.5rem; /* mb-2 */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.1s ease-in-out;
+            box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); /* shadow-sm */
+        }
+        .draggable-item:hover {
+            background-color: #e2e8f0; /* Gray-200 */
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); /* shadow-md */
+            transform: translateY(-1px);
+        }
+        .draggable-item.dragging { 
+            opacity: 0.5; 
+            border: 2px dashed #3b82f6; /* Blue-500 */
+            transform: scale(1.02);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+        }
+
+        /* Box Grid Styles */
+        .box-grid { 
+            display: grid; 
+            gap: 0.25rem; /* gap-1 */
+            background-color: #e2e8f0; /* gray-200 */
+            padding: 0.5rem; /* p-2 */
+            border-radius: 0.5rem; /* rounded-lg */
+        }
+        .box-grid-cell {
+            aspect-ratio: 1 / 1; /* Makes cells square */
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border-radius: 0.375rem; /* rounded-md */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0.25rem; /* p-1 */
+            border: 2px dashed #cbd5e1; /* gray-300 */
+            text-align: center;
+            overflow: hidden; /* For truncating text */
+            font-size: 0.65rem;
+            line-height: 1.2;
+            word-break: break-word; /* Allow long words to break */
+        }
+        .box-grid-cell.occupied { 
+            border-style: solid; 
+            color: white; 
+            font-weight: 600; /* font-semibold */
+            box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); /* shadow-sm */
+        }
+        .box-grid-cell.empty { 
+            background-color: #f9fafb; /* gray-50 */
+            color: #4b5563; /* gray-700 */
+        }
+        .box-grid-cell.drag-over { 
+            border-style: solid; 
+            border-color: #2563eb; /* blue-600 */
+            background-color: #dbeafe; /* blue-100 */
+            transform: scale(1.02);
+        }
+        .box-grid-cell:hover { 
+            transform: scale(1.05); 
+            z-index: 10; 
+            box-shadow: 0 0 15px rgba(0,0,0,0.2); 
+        }
+        .box-grid-cell.selected { 
+            box-shadow: 0 0 0 4px #3b82f6; /* blue-500 ring */
+            transform: scale(1.05); 
+            z-index: 20; 
+        }
+
+        /* Type Color Map for occupied cells */
+        .bg-type-samples { background-color: #3b82f6; } /* blue-500 */
+        .bg-type-reagents { background-color: #64748b; } /* slate-500 */
+        .bg-type-fish { background-color: #10b981; } /* green-500 */
+        .bg-type-tissue { background-color: #8b5cf6; } /* violet-500 */
+        .bg-type-water { background-color: #06b6d4; } /* cyan-500 */
+        .bg-type-sediments { background-color: #f59e0b; } /* amber-500 */
+        .bg-type-dna { background-color: #ef4444; } /* red-500 */
+        .bg-type-rna { background-color: #ec4899; } /* pink-500 */
+        .bg-type-library { background-color: #6366f1; } /* indigo-500 */
+        .bg-type-pcr { background-color: #f97316; } /* orange-500 */
+        .bg-type-qpcr { background-color: #14b8a6; } /* teal-500 */
+        .bg-type-gelelectrophoresis { background-color: #eab308; } /* yellow-500 */
+        .bg-type-extraction { background-color: #a855f7; } /* purple-500 */
+        .bg-type-nanodrop { background-color: #fb923c; } /* orange-400 */
+        .bg-type-qubit { background-color: #f43f5e; } /* rose-500 */
+        .bg-type-tapestation { background-color: #34d399; } /* emerald-500 */
+        .bg-type-sequencing { background-color: #84cc16; } /* lime-500 */
+        .bg-type-analysis_runs { background-color: #d946ef; } /* fuchsia-500 */
+        .bg-type-default { background-color: #94a3b8; } /* slate-400 */
+    </style>
+</head>
+<body>
+    <div id="main-app">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI LIMS</span></div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
+                <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="box" class="w-5 h-5 mr-3"></i><span>Storage Box</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="Printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+             </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t"></div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+        
+        <div id="main-content" class="ml-64 p-8">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-3xl font-bold text-gray-800">Storage Manager</h1>
+                <button id="new-storage-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all"><i data-lucide="plus" class="w-5 h-5 mr-2"></i>New Storage Unit</button>
+            </div>
+
+            <nav id="breadcrumb" class="flex items-center space-x-2 text-sm text-gray-500 mb-6"></nav>
+
+            <div id="explorer-container">
+                <div class="card p-4 mb-8">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">Select a Box</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div><label class="text-sm font-medium">Room</label><select id="filter-room" class="w-full mt-1 p-2 border rounded-md"></select></div>
+                        <div><label class="text-sm font-medium">Freezer / Unit</label><select id="filter-freezer" class="w-full mt-1 p-2 border rounded-md" disabled></select></div>
+                        <div><label class="text-sm font-medium">Box</label><select id="filter-box" class="w-full mt-1 p-2 border rounded-md" disabled></select></div>
+                    </div>
+                </div>
+
+                <div id="box-layout-section" class="grid grid-cols-1 lg:grid-cols-3 gap-8 hidden">
+                    <div class="lg:col-span-2">
+                        <h2 class="text-xl font-bold mb-4" id="current-box-title">Box Layout: Select a Box</h2>
+                        <div id="box-grid" class="box-grid p-2 bg-gray-200 rounded-lg">
+                            <p class="text-center text-gray-500 p-8 col-span-full">Select a box from the filters above.</p>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-1">
+                        <div id="side-panel-container" class="sticky top-8">
+                            <h2 class="text-xl font-bold mb-4">Unassigned Items</h2>
+                            <div class="card p-4 space-y-2 h-[60vh] overflow-y-auto" id="unassigned-items-list">
+                                <p class="text-center text-gray-500 p-4">Loading unassigned items...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="modal-container"></div>
+    </div>
+
+    <script>
+        if (!sessionStorage.getItem('isLoggedIn')) window.location.href = './login.html';
+        
+        const API_BASE_URL = '/mymglab/api'; 
+        let storageCache = { rooms: [], storageUnits: [] };
+        let allItemsCache = []; // All storable items, regardless of assignment
+        let currentSelectedBoxId = null; // Stores the storage_id of the currently viewed box
+
+        const primaryKeyMap = {
+            'storage': 'storage_id',
+            'samples': ['sample_id', 'sampling_date'], // Composite PK for samples
+            'reagents': 'reagent_id', // Reagents has reagent_id as PK
+            // Other storable items' PKs (consistent with app.py)
+            'fish': 'sample_id', 'tissue': 'sample_id', 'water': 'sample_id', 'sediments': 'sample_id',
+            'dna': 'sample_id', 'rna': 'sample_id', 'library': 'library_id', 'pcr': 'pcr_id',
+            'qpcr': 'qpcr_id', 'gelelectrophoresis': 'gelelectrophoresis_id', 'extraction': 'extraction_id',
+            'nanodrop': 'nanodrop_id', 'qubit': 'qubit_id', 'tapestation': 'tapestation_id',
+            'sequencing': 'sequencing_id', 'analysis_runs': 'run_id',
+        };
+
+        // Comprehensive Foreign Key Mapping for dynamic form generation
+        const foreignKeyMap = {
+            'room_id': { schema: 'Reference', table: 'room', valueCol: 'room_id', displayCol: 'room_id' },
+            'project_id': { schema: 'Lims', table: 'projects', valueCol: 'project_id', displayCol: 'title' },
+            'status_id': { schema: 'Reference', table: 'status', valueCol: 'status_id', displayCol: 'status_id' },
+            'temperature_unit_id': { schema: 'Reference', table: 'units', valueCol: 'unit_id', displayCol: 'unit_abbreviation' },
+            'notes': { type: 'textarea' }, // Explicitly define notes as textarea
+            'attachment': { type: 'file' }, // Attachment field
+        };
+
+        // Storable item types for listing and assignment
+        const storableItemTables = [
+            { schema: 'Lab', table: 'samples', idColumn: 'sample_id', pk: ['sample_id', 'sampling_date'] }, 
+            { schema: 'Lims', table: 'reagents', idColumn: 'reagent_id', pk: 'reagent_id' },
+            { schema: 'Lab', table: 'fish', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'tissue', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'water', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'sediments', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'dna', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'rna', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'library', idColumn: 'library_id', pk: 'library_id' },
+            { schema: 'Lab', table: 'pcr', idColumn: 'pcr_id', pk: 'pcr_id' },
+            { schema: 'Lab', table: 'qpcr', idColumn: 'qpcr_id', pk: 'qpcr_id' },
+            { schema: 'Lab', table: 'gelelectrophoresis', idColumn: 'gelelectrophoresis_id', pk: 'gelelectrophoresis_id' },
+            { schema: 'Lab', table: 'extraction', idColumn: 'extraction_id', pk: 'extraction_id' },
+            { schema: 'Lab', table: 'nanodrop', idColumn: 'nanodrop_id', pk: 'nanodrop_id' },
+            { schema: 'Lab', table: 'qubit', idColumn: 'qubit_id', pk: 'qubit_id' },
+            { schema: 'Lab', table: 'tapestation', idColumn: 'tapestation_id', pk: 'tapestation_id' },
+            { schema: 'Lab', table: 'sequencing', idColumn: 'sequencing_id', pk: 'sequencing_id' },
+            { schema: 'Bioinformatics', table: 'analysis_runs', idColumn: 'run_id', pk: 'run_id' },
+        ];
+
+        // Map item types to Tailwind CSS background colors for visual distinction in the grid
+        const typeColorMap = {
+            'samples': 'bg-type-samples', 
+            'reagents': 'bg-type-reagents',
+            'fish': 'bg-type-fish',
+            'tissue': 'bg-type-tissue',
+            'water': 'bg-type-water',
+            'sediments': 'bg-type-sediments',
+            'dna': 'bg-type-dna',
+            'rna': 'bg-type-rna',
+            'library': 'bg-type-library',
+            'pcr': 'bg-type-pcr',
+            'qpcr': 'bg-type-qpcr',
+            'gelelectrophoresis': 'bg-type-gelelectrophoresis',
+            'extraction': 'bg-type-extraction',
+            'nanodrop': 'bg-type-nanodrop',
+            'qubit': 'bg-type-qubit',
+            'tapestation': 'bg-type-tapestation',
+            'sequencing': 'bg-type-sequencing',
+            'analysis_runs': 'bg-type-analysis_runs',
+            'default': 'bg-type-default' 
+        };
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.full_name || user.person_id}</p>`;
+            document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href = './login.html'; });
+            initializePage();
+        });
+
+        async function apiFetch(endpoint, options = {}) {
+            try {
+                const isFormData = options.body instanceof FormData;
+                if (!isFormData && options.body !== undefined) {
+                    options.headers = { ...options.headers, 'Content-Type': 'application/json' };
+                    options.body = JSON.stringify(options.body);
+                }
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                if (!response.ok) { 
+                    const errText = await response.text();
+                    try { 
+                        const errJson = JSON.parse(errText); 
+                        throw new Error(errJson.error || `Server Error: ${response.status}`);
+                    } catch { 
+                        throw new Error(errText || `Server Error: ${response.status}`);
+                    }
+                }
+                if (response.status === 204 || response.headers.get('content-length') === '0') return { success: true };
+                return await response.json();
+            } catch (error) { 
+                console.error("API Error:", error); 
+                return { error: error.message }; 
+            }
+        }
+
+        async function getReferenceData(tableName, schema='Reference') {
+            const cacheKey = `${schema}.${tableName}`;
+            if (referenceDataCache[cacheKey]) return referenceDataCache[cacheKey];
+            const data = await apiFetch(`table/${schema}/${tableName}`);
+            if(data && !data.error) referenceDataCache[cacheKey] = data;
+            return data;
+        }
+
+        function getPkColumnName(tableName) {
+            return primaryKeyMap[tableName] || 'id';
+        }
+
+        function showModal(content) {
+            const container = document.getElementById('modal-container');
+            container.innerHTML = content;
+            const modal = container.querySelector('.modal-overlay');
+            const modalContent = container.querySelector('.modal-content');
+            setTimeout(() => modalContent.classList.remove('opacity-0', '-translate-y-10'), 10);
+            const closeModal = () => {
+                modalContent.classList.add('opacity-0', '-translate-y-10');
+                setTimeout(() => { container.innerHTML = ''; parsedUploadData = []; }, 300);
+            };
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+            container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+            return { closeModal };
+        }
+
+        function updateBreadcrumb(path) {
+            const breadcrumbEl = document.getElementById('breadcrumb');
+            let html = `<a href="#" class="hover:text-blue-600" onclick="renderRooms()">Rooms</a>`;
+            if (path.room) html += `<i data-lucide="chevron-right" class="w-4 h-4"></i><a href="#" class="hover:text-blue-600" onclick="renderFreezers('${path.room.room_id}')">${path.room.room_id}</a>`;
+            if (path.freezer) html += `<i data-lucide="chevron-right" class="w-4 h-4"></i><a href="#" class="hover:text-blue-600" onclick="renderBoxes('${path.room.room_id}', '${path.freezer}')">${path.freezer}</a>`;
+            if (path.box) html += `<i data-lucide="chevron-right" class="w-4 h-4"></i><span class="font-semibold text-gray-700">${path.box.box}</span>`;
+            breadcrumbEl.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        function renderRooms() {
+            const container = document.getElementById('explorer-container');
+            container.innerHTML = `<h2 class="text-2xl font-bold mb-4">Select a Room</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                ${storageCache.rooms.map(room => `<div class="item-card card p-6 text-center cursor-pointer" onclick="renderFreezers('${room.room_id}')"><i data-lucide="building-2" class="mx-auto h-12 w-12 text-gray-500"></i><p class="mt-2 font-semibold">${room.room_id}</p><p class="text-sm text-gray-500">${room.description || 'N/A'}</p></div>`).join('')}</div>`;
+            lucide.createIcons();
+            updateBreadcrumb({});
+            document.getElementById('box-layout-section').classList.add('hidden'); // Hide box layout
+        }
+        
+        function renderFreezers(roomId) {
+            const room = storageCache.rooms.find(r => r.room_id === roomId);
+            const freezers = [...new Set(storageCache.storageUnits.filter(s => s.room_id === roomId).map(s => s.freezer))];
+            const container = document.getElementById('explorer-container');
+            container.innerHTML = `<h2 class="text-2xl font-bold mb-4">Select a Unit in ${room.room_id}</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                ${freezers.map(freezer => `<div class="item-card card p-6 text-center cursor-pointer" onclick="renderBoxes('${roomId}', '${freezer}')"><i data-lucide="snowflake" class="mx-auto h-12 w-12 text-blue-500"></i><p class="mt-2 font-semibold">${freezer}</p></div>`).join('')}</div>`;
+            lucide.createIcons();
+            updateBreadcrumb({ room });
+            document.getElementById('box-layout-section').classList.add('hidden'); // Hide box layout
+        }
+
+        function renderBoxes(roomId, freezerId) {
+            const room = storageCache.rooms.find(r => r.room_id === roomId);
+            const boxes = storageCache.storageUnits.filter(s => s.room_id === roomId && s.freezer === freezerId);
+            const container = document.getElementById('explorer-container');
+            container.innerHTML = `<h2 class="text-2xl font-bold mb-4">Select a Box in ${freezerId}</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                ${boxes.map(box => `<div class="item-card card p-6 text-center cursor-pointer" onclick="renderBoxContents('${box.storage_id}')"><i data-lucide="box" class="mx-auto h-12 w-12 text-green-600"></i><p class="mt-2 font-semibold">${box.box}</p><p class="text-sm text-gray-500">${box.storage_id}</p></div>`).join('')}</div>`;
+            lucide.createIcons();
+            updateBreadcrumb({ room, freezer: freezerId });
+            document.getElementById('box-layout-section').classList.add('hidden'); // Hide box layout
+        }
+
+        function renderBoxContents(storageId) {
+            currentSelectedBoxId = storageId;
+            const box = storageCache.storageUnits.find(s => s.storage_id === storageId);
+            const room = storageCache.rooms.find(r => r.room_id === box.room_id);
+            
+            // Filter items that are in this specific box
+            const itemsInBox = allItemsCache.filter(s => s.storage_id === storageId);
+            const unassignedItems = allItemsCache.filter(s => !s.storage_id);
+
+            document.getElementById('explorer-container').innerHTML = ''; // Clear previous content
+            document.getElementById('box-layout-section').classList.remove('hidden'); // Show box layout section
+
+            const boxX = box.box_size_x || 10;
+            const boxY = box.box_size_y || 10;
+            const gridSize = boxX * boxY;
+
+            document.getElementById('current-box-title').textContent = `Box Layout: ${box.box} (${box.storage_id})`;
+            const gridEl = document.getElementById('box-grid');
+            gridEl.style.gridTemplateColumns = `repeat(${boxX}, minmax(0, 1fr))`;
+            
+            gridEl.innerHTML = Array.from({length: gridSize }, (_, i) => i + 1).map(pos => {
+                const item = itemsInBox.find(i => parseInt(i.storage_position) === pos);
+                // Use item_type for color mapping
+                const colorClass = item ? (typeColorMap[item.item_type] || typeColorMap['default']) : 'empty';
+                return `<div class="box-grid-cell ${item ? 'occupied ' + colorClass : 'empty'}" 
+                             id="pos-${pos}"
+                             onclick="showItemDetailsPanel(this, '${item ? item.display_id : ''}', '${item ? item.item_type : ''}')"
+                             data-position="${pos}" 
+                             draggable="${!!item}" 
+                             data-item-info="${item ? `${item.pk_value}|${item.item_type}|${item.item_schema}|${Array.isArray(item.pk_columns) ? item.pk_columns.map(col => item[col]).join(',') : ''}` : ''}">
+                            <span class="font-bold text-sm">${pos}</span>
+                            ${item ? `<span class="truncate text-xs w-full font-semibold">${item.display_id}</span><span class="truncate text-xs w-full text-gray-200 font-medium">${item.item_type}</span>` : ''}
+                        </div>`;
+            }).join('');
+            
+            renderUnassignedItemsPanel(unassignedItems);
+            updateBreadcrumb({ room, freezer: box.freezer, box });
+            addDragDropListeners(storageId);
+            lucide.createIcons();
+        }
+
+        function renderUnassignedItemsPanel(unassignedItems) {
+            const listContainer = document.getElementById('unassigned-items-list');
+            if (!listContainer) return;
+
+            if (unassignedItems.length === 0) {
+                listContainer.innerHTML = '<p class="text-center text-gray-500 p-4">No unassigned items.</p>';
+                return;
+            }
+
+            listContainer.innerHTML = unassignedItems.map(item => `
+                <div class="draggable-item" draggable="true" data-item-info="${item.pk_value}|${item.item_type}|${item.item_schema}|${Array.isArray(item.pk_columns) ? item.pk_columns.map(col => item[col]).join(',') : ''}">
+                    <div>
+                        <p class="font-semibold text-sm">${item.display_id}</p>
+                        <p class="text-xs text-gray-500">${item.item_type}</p>
+                    </div>
+                    <i data-lucide="grip-vertical" class="text-gray-400"></i>
+                </div>
+            `).join('');
+            lucide.createIcons();
+
+            const newDraggables = listContainer.querySelectorAll('.draggable-item');
+            newDraggables.forEach(el => {
+                el.addEventListener('dragstart', e => {
+                    e.target.classList.add('dragging');
+                    // data-item-info format: pk_value|item_type|item_schema|composite_pk_values_comma_separated (if composite)
+                    e.dataTransfer.setData('text/plain', e.target.dataset.itemInfo);
+                    // Set allowed drop effects
+                    e.dataTransfer.effectAllowed = "move";
+                });
+                el.addEventListener('dragend', e => e.target.classList.remove('dragging'));
+            });
+        }
+
+        async function showItemDetailsPanel(element, itemId, itemType) {
+            document.querySelectorAll('.box-grid-cell.selected').forEach(c => c.classList.remove('selected'));
+            if(element) element.classList.add('selected');
+
+            const sidePanelContainer = document.getElementById('side-panel-container');
+            if (!itemId) {
+                renderUnassignedItemsPanel(allItemsCache.filter(s => !s.storage_id));
+                return; 
+            }
+            
+            const item = allItemsCache.find(i => i.display_id === itemId && i.item_type === itemType);
+            if (!item) { sidePanelContainer.innerHTML = `<div class="card p-6"><p class="text-red-500">Error: Item details not found.</p></div>`; return; }
+            
+            const ignoreKeys = ['nr', 'id', 'pk_value', 'pk_columns', 'item_type', 'item_schema', 'display_id', 'storage_id', 'storage_position', 'attachment', 'box_size_x', 'box_size_y'];
+            let detailsHtml = '';
+            for (const [key, value] of Object.entries(item)) {
+                if (value && !ignoreKeys.includes(key)) {
+                    const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    detailsHtml += `<div class="py-1"><dt class="font-medium text-gray-600">${formattedKey}</dt><dd class="text-gray-900">${value}</dd></div>`;
+                }
+            }
+
+            sidePanelContainer.innerHTML = `
+                <h2 class="text-xl font-bold mb-4">Item Details</h2>
+                <div class="card p-4 h-[60vh] overflow-y-auto">
+                    <h3 class="text-lg font-bold mb-2 text-blue-600">${item.display_id}</h3>
+                    <div class="text-sm space-y-1 mb-4">
+                        <div><strong>Type:</strong> ${item.item_type}</div>
+                        <div><strong>Location:</strong> ${item.storage_id || 'N/A'} / Pos: ${item.storage_position || 'N/A'}</div>
+                    </div>
+                    <hr class="my-3">
+                    <dl class="text-xs space-y-1">${detailsHtml}</dl>
+                    <div class="mt-4 space-y-2">
+                        <button onclick="unassignItem('${item.pk_value}', '${item.item_type}', '${item.item_schema}', '${currentSelectedBoxId}', ${Array.isArray(item.pk_columns) ? `'${item.pk_columns.map(col => item[col]).join(',')}'` : 'null'})" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center">
+                            <i data-lucide="unlink-2" class="w-4 h-4 mr-2"></i>Remove From Position
+                        </button>
+                        <a href="samples.html?sample_id=${item.display_id}&table=${item.item_type}" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg flex items-center justify-center">
+                            <i data-lucide="external-link" class="w-4 h-4 mr-2"></i>View Full Details
+                        </a>
+                    </div>
+                </div>`;
+            lucide.createIcons();
+        }
+
+        async function unassignItem(pkValue, itemType, itemSchema, currentStorageId, compositePkValues = null) {
+            if (!confirm(`Are you sure you want to remove item ${pkValue} from its storage position? It will be moved to the "Unassigned Items" list.`)) return;
+            
+            const itemConfig = storableItemTables.find(t => t.table === itemType && t.schema === itemSchema);
+            if (!itemConfig) {
+                alert(`Configuration error: No rules found for table ${itemType}`);
+                return;
+            }
+
+            const payload = { storage_id: null, storage_position: null };
+            let endpoint = `table/${itemConfig.schema}/${itemConfig.table}/${pkValue}`;
+
+            if (Array.isArray(itemConfig.pk)) { // Handle composite PK
+                // For partitioned tables (samples), sampling_date is needed as query param
+                if (itemConfig.table === 'samples' && itemConfig.schema === 'Lab') {
+                    const originalItem = allItemsCache.find(i => i.pk_value === pkValue && i.item_type === itemType); // Find by original PK value
+                    if (originalItem && originalItem.sampling_date) {
+                        endpoint += `?sampling_date=${originalItem.sampling_date}`;
+                    } else {
+                        alert('Cannot unassign: Missing sampling_date for partitioned sample.');
+                        return;
+                    }
+                } else if (compositePkValues) { // For other composite PKs, pass parts as query params
+                    const pkParts = compositePkValues.split(',');
+                    for(let i = 1; i < itemConfig.pk.length; i++) {
+                        endpoint += `&${itemConfig.pk[i]}=${pkParts[i]}`;
+                    }
+                }
+            }
+
+            const result = await apiFetch(endpoint, { method: 'PUT', body: payload });
+            if (result && !result.error) {
+                await initializePage(false); // Full refresh of all data
+                renderBoxContents(currentStorageId); // Re-render the current box
+                showItemDetailsPanel(null, null, null); // Clear details panel
+            } else { alert('Failed to unassign item: ' + (result?.error || 'Unknown error')); }
+        }
+
+        function addDragDropListeners(currentStorageId) {
+            const draggables = document.querySelectorAll('.draggable-item');
+            const dropTargets = document.querySelectorAll('.box-grid-cell');
+            
+            draggables.forEach(el => {
+                el.addEventListener('dragstart', e => {
+                    e.target.classList.add('dragging');
+                    // data-item-info format: pk_value|item_type|item_schema|composite_pk_values_comma_separated (if composite)
+                    e.dataTransfer.setData('text/plain', e.target.dataset.itemInfo);
+                    e.dataTransfer.effectAllowed = "move";
+                });
+                el.addEventListener('dragend', e => e.target.classList.remove('dragging'));
+            });
+
+            dropTargets.forEach(el => {
+                el.addEventListener('dragover', e => {
+                    if (!el.classList.contains('occupied')) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                        el.classList.add('drag-over');
+                    } else {
+                        e.dataTransfer.dropEffect = "none";
+                    }
+                });
+                el.addEventListener('dragleave', e => el.classList.remove('drag-over'));
+                el.addEventListener('drop', async e => {
+                    e.preventDefault();
+                    el.classList.remove('drag-over');
+                    if (el.classList.contains('occupied')) return;
+
+                    const [pkValue, itemType, itemSchema, compositePkValuesString] = e.dataTransfer.getData('text/plain').split('|');
+                    const position = el.dataset.position;
+
+                    const itemConfig = storableItemTables.find(t => t.table === itemType && t.schema === itemSchema);
+                    if (!itemConfig) { alert('Invalid item type for assignment.'); return; }
+
+                    const payload = { storage_id: currentStorageId, storage_position: position };
+                    let endpoint = `table/${itemConfig.schema}/${itemConfig.table}/${pkValue}`;
+
+                    if (Array.isArray(itemConfig.pk)) { // Handle composite PK for PUT
+                        // For partitioned tables (samples), sampling_date is needed as query param
+                        if (itemConfig.table === 'samples' && itemConfig.schema === 'Lab') {
+                            const originalItem = allItemsCache.find(i => i.pk_value === pkValue && i.item_type === itemType);
+                            if (originalItem && originalItem.sampling_date) {
+                                endpoint += `?sampling_date=${originalItem.sampling_date}`;
+                            } else {
+                                alert('Cannot assign: Missing sampling_date for partitioned sample.');
+                                return;
+                            }
+                        } else if (compositePkValuesString) { // For other composite PKs, pass parts as query params
+                            const pkParts = compositePkValuesString.split(',');
+                            for(let i = 1; i < itemConfig.pk.length; i++) {
+                                endpoint += `&${itemConfig.pk[i]}=${pkParts[i]}`;
+                            }
+                        }
+                    }
+
+                    const result = await apiFetch(endpoint, { method: 'PUT', body: payload });
+                    if (result && !result.error) {
+                        await initializePage(false); // Full refresh of all data
+                        renderBoxContents(currentSelectedBoxId); // Re-render the current box
+                        showItemDetailsPanel(null, null, null); // Clear details panel
+                    } else {
+                        alert('Failed to move item: ' + (result?.error || 'Unknown error'));
+                    }
+                });
+            });
+        }
+
+        async function initializePage(refreshData = true) {
+            document.getElementById('box-layout-section').classList.add('hidden'); // Start with box layout hidden
+            document.getElementById('side-panel-container').innerHTML = `<h2 class="text-xl font-bold mb-4">Unassigned Items</h2><div class="card p-4 space-y-2 h-[60vh] overflow-y-auto" id="unassigned-items-list"><p class="text-center text-gray-500 p-4">Loading unassigned items...</p></div>`;
+            lucide.createIcons();
+
+            if (refreshData) {
+                const promises = [
+                    getReferenceData('room'), // Reference.room
+                    apiFetch('table/Lab/storage'), // Lab.storage
+                    // Fetch all storable items from their respective tables
+                    ...storableItemTables.map(itemType => 
+                        apiFetch(`table/${itemType.schema}/${itemType.table}`).then(response => {
+                            if (response.error || !Array.isArray(response)) {
+                                console.error(`Failed to load ${itemType.table} data`); return [];
+                            }
+                            return response.map(item => ({
+                                ...item,
+                                item_type: itemType.table, 
+                                display_id: item[itemType.idColumn] || item.sample_id || item.reagent_id || 'N/A', 
+                                pk_value: Array.isArray(itemType.pk) ? itemType.pk.map(col => item[col]).join('|') : item[itemType.pk],
+                                pk_columns: itemType.pk,
+                                item_schema: itemType.schema
+                            }));
+                        })
+                    )
+                ];
+
+                const [roomData, storageData, ...allItemArrays] = await Promise.all(promises);
+                
+                storageCache.rooms = (roomData && !roomData.error) ? roomData.sort((a,b) => a.room_id.localeCompare(b.room_id)) : [];
+                storageCache.storageUnits = (storageData && !storageData.error) ? storageData.sort((a,b) => a.storage_id.localeCompare(b.storage_id)) : [];
+                allItemsCache = allItemArrays.flat().filter(item => item && item.display_id !== 'N/A'); 
+            }
+            
+            // Populate filter dropdowns
+            populateRoomFilter(storageCache.rooms);
+
+            // Check for storage_id in URL parameter (e.g., from storage.html)
+            const urlParams = new URLSearchParams(window.location.search);
+            const storageIdFromUrl = urlParams.get('storage_id');
+
+            if (storageIdFromUrl) {
+                const selectedBox = storageCache.storageUnits.find(s => s.storage_id === storageIdFromUrl);
+                if (selectedBox) {
+                    document.getElementById('filter-room').value = selectedBox.room_id;
+                    populateFreezerFilter(selectedBox.room_id);
+                    document.getElementById('filter-freezer').value = selectedBox.freezer;
+                    populateBoxFilter(selectedBox.freezer);
+                    document.getElementById('filter-box').value = storageIdFromUrl;
+                    renderBoxContents(storageIdFromUrl); // Directly render box contents if ID is in URL
+                    document.getElementById('box-layout-section').classList.remove('hidden'); // Show it
+                } else {
+                    alert(`Storage unit ${storageIdFromUrl} not found.`);
+                    renderRooms(); // Fallback to room selection
+                }
+            } else {
+                renderRooms(); // Default to room selection view
+            }
+
+            // Set up event listeners for filters
+            document.getElementById('filter-room').addEventListener('change', (e) => {
+                populateFreezerFilter(e.target.value);
+                document.getElementById('box-layout-section').classList.add('hidden'); // Hide grid until box is selected
+            });
+            document.getElementById('filter-freezer').addEventListener('change', (e) => {
+                populateBoxFilter(e.target.value);
+                document.getElementById('box-layout-section').classList.add('hidden'); // Hide grid until box is selected
+            });
+            document.getElementById('filter-box').addEventListener('change', (e) => {
+                const selectedStorageId = e.target.value;
+                if (selectedStorageId) {
+                    renderBoxContents(selectedStorageId);
+                    document.getElementById('box-layout-section').classList.remove('hidden'); // Show grid
+                } else {
+                    document.getElementById('box-layout-section').classList.add('hidden'); // Hide grid if no box selected
+                }
+            });
+
+            document.getElementById('new-storage-btn').addEventListener('click', showNewStorageModal);
+        }
+
+        function populateRoomFilter(rooms) {
+            const select = document.getElementById('filter-room');
+            select.innerHTML = '<option value="">Select a Room...</option>';
+            if (rooms) rooms.forEach(room => select.innerHTML += `<option value="${room.room_id}">${room.room_id} - ${room.description || 'N/A'}</option>`);
+        }
+
+        function populateFreezerFilter(roomId) {
+            const select = document.getElementById('filter-freezer');
+            select.innerHTML = '<option value="">Select a Unit...</option>';
+            document.getElementById('filter-box').innerHTML = '<option value="">Select a Box...</option>';
+            document.getElementById('filter-box').disabled = true;
+
+            if (roomId && storageCache.storageUnits.length > 0) {
+                const freezersInRoom = [...new Set(storageCache.storageUnits.filter(s => s.room_id === roomId).map(s => s.freezer))];
+                freezersInRoom.sort().forEach(freezer => select.innerHTML += `<option value="${freezer}">${freezer}</option>`);
+                select.disabled = false;
+            } else {
+                select.disabled = true;
+            }
+        }
+
+        function populateBoxFilter(freezerId) {
+            const select = document.getElementById('filter-box');
+            select.innerHTML = '<option value="">Select a Box...</option>';
+            if (freezerId && storageCache.storageUnits.length > 0) {
+                const boxesInFreezer = storageCache.storageUnits.filter(s => s.freezer === freezerId);
+                boxesInFreezer.sort((a,b) => a.box.localeCompare(b.box)).forEach(box => select.innerHTML += `<option value="${box.storage_id}">${box.box} (${box.storage_id})</option>`);
+                select.disabled = false;
+            } else {
+                select.disabled = true;
+            }
+        }
+
+        async function showNewStorageModal() {
+            const rooms = await getReferenceData('room');
+            const modalHTML = `<div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4"><div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-lg transform transition-all -translate-y-10 opacity-0"><div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold">New Storage Box</h2><button id="close-modal-btn">&times;</button></div><form id="new-storage-form" class="space-y-4"><div><label class="block text-sm font-medium text-gray-700">Storage ID *</label><input type="text" name="storage_id" required class="w-full mt-1 p-2 border rounded"></div><div><label class="block text-sm font-medium text-gray-700">Room *</label><select name="room_id" id="modal-room-select" required class="w-full mt-1 p-2 border rounded"><option value="">-- Select Room --</option>${rooms.map(r=>`<option value="${r.room_id}" ${value == r.room_id ? 'selected' : ''}>${r.room_id} - ${r.description || 'N/A'}</option>`).join('')}<option value="__NEW_ROOM__">-- Create New Room --</option></select><div id="new-room-fields" class="space-y-2 mt-2 hidden"><input type="text" name="new_room_id" placeholder="New Room ID (e.g., Lab01)" class="block w-full p-2 border border-gray-300 rounded-md shadow-sm"><input type="text" name="new_room_description" placeholder="New Room Description (optional)" class="block w-full p-2 border border-gray-300 rounded-md shadow-sm"></div></div><div><label class="block text-sm font-medium text-gray-700">Freezer / Unit Name *</label><input type="text" name="freezer" required class="w-full mt-1 p-2 border rounded"></div><div><label class="block text-sm font-medium text-gray-700">Box Name *</label><input type="text" name="box" required class="w-full mt-1 p-2 border rounded"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-700">Box X Dimension (Columns, default 10)</label><input type="number" name="box_size_x" value="10" min="1" class="w-full mt-1 p-2 border rounded"></div><div><label class="block text-sm font-medium text-gray-700">Box Y Dimension (Rows, default 10)</label><input type="number" name="box_size_y" value="10" min="1" class="w-full mt-1 p-2 border rounded"></div></div><div><label class="block text-sm font-medium text-gray-700">Temperature (°C)</label><input type="number" step="0.1" name="temperature_c" class="w-full mt-1 p-2 border rounded"></div><div><label class="block text-sm font-medium text-gray-700">Notes</label><textarea name="notes" rows="3" class="w-full mt-1 p-2 border rounded"></textarea></div><div class="pt-4 flex justify-end"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Add Storage Unit</button></div></form></div></div>`;
+            const { closeModal } = showModal(modalHTML);
+
+            const roomSelect = document.getElementById('modal-room-select');
+            roomSelect.addEventListener('change', () => {
+                const newRoomFieldsDiv = document.getElementById('new-room-fields');
+                const newRoomIdInput = newRoomFieldsDiv.querySelector('input[name="new_room_id"]');
+                if (roomSelect.value === '__NEW_ROOM__') {
+                    newRoomFieldsDiv.classList.remove('hidden');
+                    newRoomIdInput.setAttribute('required', 'required');
+                } else {
+                    newRoomFieldsDiv.classList.add('hidden');
+                    newRoomIdInput.removeAttribute('required');
+                    newRoomIdInput.value = '';
+                    newRoomFieldsDiv.querySelector('input[name="new_room_description"]').value = '';
+                }
+            });
+
+            document.getElementById('new-storage-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const data = {};
+                formData.forEach((value, key) => {
+                    data[key] = value === '' ? null : value;
+                });
+
+                let roomIdToUse = data.room_id;
+                if (roomIdToUse === '__NEW_ROOM__') {
+                    if (!data.new_room_id) { alert('Please provide a New Room ID.'); return; }
+                    roomIdToUse = data.new_room_id;
+                    const newRoomData = { room_id: roomIdToUse, description: data.new_room_description || null };
+                    const roomCreateResult = await apiFetch('create_if_not_exists/Reference/room', { method: 'POST', body: newRoomData });
+                    if (roomCreateResult.error) { alert('Failed to create new room: ' + roomCreateResult.error); return; }
+                } else if (!roomIdToUse) { alert('Please select an existing Room or create a New Room.'); return; }
+
+                const payload = {
+                    storage_id: data.storage_id,
+                    room_id: roomIdToUse,
+                    freezer: data.freezer,
+                    etage: data.etage,
+                    temperature_c: data.temperature_c ? parseFloat(data.temperature_c) : null,
+                    box: data.box,
+                    box_size_x: data.box_size_x ? parseInt(data.box_size_x) : 10,
+                    box_size_y: data.box_size_y ? parseInt(data.box_size_y) : 10,
+                    notes: data.notes,
+                };
+
+                const result = await apiFetch('table/Lab/storage', { method: 'POST', body: payload });
+
+                if (result && !result.error) {
+                    alert('Storage unit added successfully!');
+                    closeModal();
+                    await initializePage(true); // Full refresh to include new unit
+                    // Attempt to pre-select the newly created unit
+                    document.getElementById('filter-room').value = roomIdToUse;
+                    populateFreezerFilter(roomIdToUse);
+                    setTimeout(() => {
+                        document.getElementById('filter-freezer').value = data.freezer;
+                        populateBoxFilter(data.freezer);
+                        setTimeout(() => {
+                            document.getElementById('filter-box').value = data.storage_id;
+                            renderBoxContents(data.storage_id);
+                        }, 50);
+                    }, 50);
+                } else { alert('Failed to add storage unit: ' + (result ? result.error : 'Unknown error')); }
+            };
+      
