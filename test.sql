@@ -1,26 +1,24 @@
 -- ======================================================================
--- Complete PostgreSQL Schema for LIMS Database 
+-- Complete PostgreSQL Schema for LIMS Database (Final Version)
 -- ======================================================================
 
 -- ======================================================================
--- 0. Pre-Cleanup (Optional, but good for re-running during development)
+-- 0. Pre-Cleanup
 -- ======================================================================
 
--- Drop all schemas (order matters for dependencies)
 DROP SCHEMA IF EXISTS "lab" CASCADE;
 DROP SCHEMA IF EXISTS "lims" CASCADE;
 DROP SCHEMA IF EXISTS "reference" CASCADE;
 DROP SCHEMA IF EXISTS "bioinformatics" CASCADE;
 DROP SCHEMA IF EXISTS "audit" CASCADE;
 
--- Drop extensions (if no other databases use them)
 DROP EXTENSION IF EXISTS "uuid-ossp";
 DROP EXTENSION IF EXISTS pg_trgm;
 DROP EXTENSION IF EXISTS postgres_fdw;
 DROP EXTENSION IF EXISTS hstore;
 DROP EXTENSION IF EXISTS tablefunc;
 DROP EXTENSION IF EXISTS ltree;
-DROP EXTENSION IF NOT EXISTS postgis;
+-- DROP EXTENSION IF NOT EXISTS postgis;
 
 -- ======================================================================
 -- 1. Extensions
@@ -32,7 +30,7 @@ CREATE EXTENSION IF NOT EXISTS postgres_fdw;
 CREATE EXTENSION IF NOT EXISTS hstore;
 CREATE EXTENSION IF NOT EXISTS tablefunc;
 CREATE EXTENSION IF NOT EXISTS ltree;
-CREATE EXTENSION IF NOT EXISTS postgis; -- Crucial for spatial data
+CREATE EXTENSION IF NOT EXISTS postgis;
 
 -- ======================================================================
 -- 2. Schema Creation
@@ -145,7 +143,7 @@ CREATE TABLE IF NOT EXISTS "reference"."gene" (
 
 CREATE TABLE IF NOT EXISTS "reference"."taxon" (
     "taxon_id" text PRIMARY KEY,
-    "taxon_parent" text, -- 
+    "taxon_parent" text,
     "de_name" text,
     "en_name" text,
     "rank" text,
@@ -156,7 +154,7 @@ CREATE TABLE IF NOT EXISTS "reference"."taxon" (
 );
 
 CREATE TABLE IF NOT EXISTS "reference"."species" (
-    "species_id" text PRIMARY KEY, -- 
+    "species_id" text PRIMARY KEY,
     "de_name" text,
     "en_name" text,
     "max_length_mm" numeric,
@@ -192,7 +190,7 @@ CREATE TABLE IF NOT EXISTS "lims"."external_contacts" (
 );
 
 CREATE TABLE IF NOT EXISTS "lims"."customers" (
-    "customer_id" serial PRIMARY KEY, -- Keeping as text as per your provided script
+    "customer_id" serial PRIMARY KEY,
     "customer_name" text NOT NULL,
     "customer_abrv" text UNIQUE NOT NULL,
     "address" text NOT NULL,
@@ -207,10 +205,10 @@ CREATE TABLE IF NOT EXISTS "lims"."customers" (
 CREATE TABLE IF NOT EXISTS "lims"."projects" (
     "project_id" text PRIMARY KEY,
     "title" text,
-    "status_id" text, -- 
-    "pi_person_id" text, -- 
+    "status_id" text,
+    "pi_person_id" text,
     "funder" text,
-    "customer_id" integer, --  
+    "customer_id" integer,
     "start_date" date,
     "end_date" date,
     "report_date" date,
@@ -220,8 +218,8 @@ CREATE TABLE IF NOT EXISTS "lims"."projects" (
 );
 
 CREATE TABLE IF NOT EXISTS "lims"."project_persons" (
-    "project_id" text, -- 
-    "person_id" text, -- 
+    "project_id" text,
+    "person_id" text,
     "role" text,
     PRIMARY KEY ("project_id", "person_id"),
     "notes" text,
@@ -231,7 +229,7 @@ CREATE TABLE IF NOT EXISTS "lims"."project_persons" (
 
 CREATE TABLE IF NOT EXISTS "lab"."storage" (
     "storage_id" text PRIMARY KEY,
-    "room_id" text, -- 
+    "room_id" text,
     "freezer" text,
     "etage" text,
     "temperature_c" numeric,
@@ -239,7 +237,7 @@ CREATE TABLE IF NOT EXISTS "lab"."storage" (
     "box_size_x" numeric,
     "box_size_y" numeric,
     "storage_position_format" text,
-    "project_id" text, -- 
+    "project_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -247,16 +245,16 @@ CREATE TABLE IF NOT EXISTS "lab"."storage" (
 
 CREATE TABLE IF NOT EXISTS "lims"."cruises" (
     "cruise_id" text PRIMARY KEY,
-    "project_id" text NOT NULL, -- 
-    "vessel_id" text, -- 
-    "status_id" text DEFAULT 'Received' NOT NULL, -- 
-    "region_id" text, -- 
-    "ecosystem_id" text, -- 
-    "capitaine_contact_id" text, -- 
-    "chief_scientist_person_id" text, -- 
+    "project_id" text NOT NULL,
+    "vessel_id" text,
+    "status_id" text DEFAULT 'Received' NOT NULL,
+    "region_id" text,
+    "ecosystem_id" text,
+    "capitaine_contact_id" text,
+    "chief_scientist_person_id" text,
     "start_date" date,
     "end_date" date,
-    "together_with_contact_id" text, -- 
+    "together_with_contact_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -284,7 +282,7 @@ CREATE TABLE IF NOT EXISTS "lims"."permits" (
 
 CREATE TABLE IF NOT EXISTS "lims"."primers" (
     "primer_id" text PRIMARY KEY,
-    "target_gene_id" text, -- 
+    "target_gene_id" text,
     "primer_sequence_fwd" text,
     "primer_sequence_rev" text,
     "probe" text,
@@ -299,9 +297,9 @@ CREATE TABLE IF NOT EXISTS "lims"."sop" (
     "title" text,
     "sop_id_origin" text NOT NULL,
     "version" text NOT NULL,
-    "author_person_id" text, -- 
-    "reviewer1_person_id" text, -- 
-    "reviewer2_person_id" text, -- 
+    "author_person_id" text,
+    "reviewer1_person_id" text,
+    "reviewer2_person_id" text,
     "date_realise" date,
     "sop_protocol" text,
     "notes" text,
@@ -311,11 +309,11 @@ CREATE TABLE IF NOT EXISTS "lims"."sop" (
 
 CREATE TABLE IF NOT EXISTS "lims"."workflow_steps" (
     "step_id" text PRIMARY KEY,
-    "workflow_id" text NOT NULL, -- 
+    "workflow_id" text NOT NULL,
     "step_number" integer NOT NULL,
     "step_name" text NOT NULL,
-    "sop_id" text, -- 
-    "workflow_status_id" text DEFAULT 'Received' NOT NULL, -- 
+    "sop_id" text,
+    "workflow_status_id" text DEFAULT 'Received' NOT NULL,
     "target_table_name" text,
     "notes" text,
     "attachment" bytea,
@@ -326,7 +324,7 @@ CREATE TABLE IF NOT EXISTS "lims"."workflow_steps" (
 CREATE TABLE IF NOT EXISTS "lims"."equipment" (
     "equipment_id" text PRIMARY KEY,
     "equipment_name" text,
-    "room_id" text, -- 
+    "room_id" text,
     "lot" text,
     "mobility" text,
     "date_maintenance" date,
@@ -350,23 +348,23 @@ CREATE TABLE IF NOT EXISTS "lims"."suppliers" (
 CREATE TABLE IF NOT EXISTS "lims"."inventory_items" (
     "item_id" text PRIMARY KEY,
     "item_name" text NOT NULL,
-    "category_id" text, -- 
+    "category_id" text,
     "notes" text,
-    "unit_id" text, -- 
+    "unit_id" text,
     "attachment" bytea,
     "attachment_link" text
 );
 
 CREATE TABLE IF NOT EXISTS "lims"."orders" (
     "fi_order_nr" text PRIMARY KEY,
-    "item_id" text, -- 
-    "category_id" text, -- 
+    "item_id" text,
+    "category_id" text,
     "order_date" date,
     "price" numeric,
     "quantity" numeric,
-    "project_id" text, -- 
-    "supplier_id" text, -- 
-    "status_id" text, -- 
+    "project_id" text,
+    "supplier_id" text,
+    "status_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -375,17 +373,17 @@ CREATE TABLE IF NOT EXISTS "lims"."orders" (
 CREATE TABLE IF NOT EXISTS "lims"."reagents" (
     "reagent_id" text PRIMARY KEY,
     "reagent_complete_name" text NOT NULL,
-    "category_id" text, -- 
+    "category_id" text,
     "lot" text,
-    "storage_id" text, -- 
+    "storage_id" text,
     "storage_position" numeric,
-    "status_id" text, -- 
+    "status_id" text,
     "reception_date" date,
     "expire_date" date,
-    "order_id" text, -- 
-    "project_id" text, -- 
+    "order_id" text,
+    "project_id" text,
     "quantity_available" numeric,
-    "quantity_unit_id" text, -- 
+    "quantity_unit_id" text,
     "attachment" bytea,
     "attachment_link" text,
     "notes" text
@@ -400,21 +398,22 @@ CREATE TABLE IF NOT EXISTS "lims"."publication_type" (
 
 CREATE TABLE IF NOT EXISTS "lims"."publications" (
     "publication_id" text PRIMARY KEY,
-    "publication_type_id" text, -- 
-    "project_id" text, -- 
+    "publication_type_id" text,
+    "project_id" text,
     "title" text NOT NULL,
     "journal" text,
     "volume" text,
     "issue" text,
     "pages" text,
-    "doi" text UNIQUE,
+    "doi" text,
     "date_publication" date,
     "date_submission" date,
-    "first_author_person_id" text, -- 
-    "corresponding_author_person_id" text, -- 
+    "first_author_person_id" text,
+    "corresponding_author_person_id" text,
     "notes" text,
     "attachment" bytea,
-    "attachment_link" text
+    "attachment_link" text,
+    UNIQUE ("doi", "date_publication")
 );
 
 -- ======================================================================
@@ -422,24 +421,26 @@ CREATE TABLE IF NOT EXISTS "lims"."publications" (
 -- ======================================================================
 
 CREATE TABLE IF NOT EXISTS "lab"."experiments" (
-    "experiment_id" text PRIMARY KEY,
+    "experiment_id" text NOT NULL,
     "experiment_title" text,
     "aim" text,
     "method" text,
-    "sop_id" text, -- 
-    "experiment_date" date,
-    "person_id" text, -- 
+    "sop_id" text,
+    "experiment_date" date NOT NULL,
+    "person_id" text,
     "notes" text,
     "lab_book" text,
-    "status_id" text, -- 
+    "status_id" text,
     "attachment" bytea,
-    "attachment_link" text
-);
+    "attachment_link" text,
+    PRIMARY KEY ("experiment_id", "experiment_date")
+) PARTITION BY RANGE ("experiment_date");
 
 CREATE TABLE IF NOT EXISTS "lab"."experiments_projects" (
     "experiment_project_id" serial PRIMARY KEY,
-    "experiment_id" text, -- 
-    "project_id" text, -- 
+    "experiment_id" text NOT NULL,
+    "experiment_date" date NOT NULL,
+    "project_id" text,
     "link_date" date,
     "notes" text,
     "attachment" bytea,
@@ -448,28 +449,29 @@ CREATE TABLE IF NOT EXISTS "lab"."experiments_projects" (
 
 CREATE TABLE IF NOT EXISTS "lab"."protocol_runs" (
     "protocol_run_id" text PRIMARY KEY,
-    "experiment_id" text, -- 
-    "sop_id" text, -- 
+    "experiment_id" text NOT NULL,
+    "experiment_date" date NOT NULL,
+    "sop_id" text,
     "protocol_text" text,
     "run_date" date NOT NULL,
-    "person_id" text NOT NULL, -- 
+    "person_id" text NOT NULL,
     "protocol_run_details" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
 );
 
--- Parent table for partitioned sampling data
 CREATE TABLE "lab"."sampling" (
     "sampling_id" text NOT NULL,
-    "experiment_id" text, -- 
-    "project_id" text NOT NULL, -- 
-    "cruise_id" text, -- 
-    "region_id" text, -- 
-    "ecosystem_id" text, -- 
-    "vessel_id" text, -- 
-    "customer_id" integer, -- 
-    "sampling_date" date NOT NULL, -- Partition key
+    "experiment_id" text,
+    "experiment_date" date,
+    "project_id" text NOT NULL,
+    "cruise_id" text,
+    "region_id" text,
+    "ecosystem_id" text,
+    "vessel_id" text,
+    "customer_id" integer,
+    "sampling_date" date NOT NULL,
     "geom" geometry(Point, 4326),
     "fishing_start_geom" geometry(Point, 4326),
     "fishing_end_geom" geometry(Point, 4326),
@@ -480,16 +482,16 @@ CREATE TABLE "lab"."sampling" (
     "temperature_atmospheric_c" numeric,
     "weather" text,
     "wind_speed" numeric,
-    "wind_unit_id" text, -- 
+    "wind_unit_id" text,
     "temperature_sampling_depth_c" numeric,
     "salinity" numeric,
-    "salinity_unit_id" text, -- 
+    "salinity_unit_id" text,
     "pressure" numeric,
-    "pressure_unit_id" text, -- 
+    "pressure_unit_id" text,
     "oxygen" numeric,
-    "oxygen_unit_id" text, -- 
+    "oxygen_unit_id" text,
     "conductivity" numeric,
-    "conductivity_unit_id" text, -- 
+    "conductivity_unit_id" text,
     "ph" numeric,
     "nitrate_mg_l" numeric,
     "phosphate_mg_l" numeric,
@@ -501,7 +503,7 @@ CREATE TABLE "lab"."sampling" (
     "light_par_umol_m2_s" numeric,
     "sea_state" text,
     "sample_volume_l" numeric,
-    "sample_type_id" text, -- 
+    "sample_type_id" text,
     "preservative" text,
     "cloud_cover_percent" numeric,
     "rainfall_mm" numeric,
@@ -513,50 +515,47 @@ CREATE TABLE "lab"."sampling" (
     "fishing_method" text,
     "gear_type" text,
     "soak_time" numeric,
-    "soak_time_unit_id" text, -- 
+    "soak_time_unit_id" text,
     "trawl_speed" numeric,
-    "trawl_speed_unit_id" text, -- 
+    "trawl_speed_unit_id" text,
     "total_catch_quantity_kg" numeric,
     "total_catch_quantity_fish" numeric,
     "catch_notes" text,
     "operation_duration_min" numeric,
-    "together_with_contact_id" text, -- 
-    "status_id" text DEFAULT 'Planned' NOT NULL, -- 
+    "together_with_contact_id" text,
+    "status_id" text DEFAULT 'Planned' NOT NULL,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
 ) PARTITION BY RANGE ("sampling_date");
 
--- Primary key for partitioned table must include the partition key
 ALTER TABLE "lab"."sampling" ADD PRIMARY KEY ("sampling_id", "sampling_date");
 
--- NEW: lab.master_samples table for global sample_id uniqueness
 CREATE TABLE IF NOT EXISTS "lab"."master_samples" (
     "sample_id" text PRIMARY KEY,
     "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
     "notes" text
 );
 
--- Parent table for partitioned samples data
 CREATE TABLE "lab"."samples" (
-    "sample_id" text NOT NULL, -- FK to master_samples will be added later
+    "sample_id" text NOT NULL,
     "external_name" text,
-    "parent_sample_id" text, --  (to master_samples)
+    "parent_sample_id" text,
     "sampling_id" text,
-    "sampling_date" date NOT NULL, -- Partition key
-    "storage_id" text, -- 
+    "sampling_date" date NOT NULL,
+    "storage_id" text,
     "storage_position" text,
-    "sampler_person_id" text, -- 
-    "receiver_person_id" text, -- 
+    "sampler_person_id" text,
+    "receiver_person_id" text,
     "reception_date" date,
     "transport" text,
     "conservation_buffer" text,
-    "sample_type_id" text NOT NULL, -- 
-    "sample_status_id" text DEFAULT 'Received' NOT NULL, -- 
-    "workflow_id" text, -- 
-    "step_id" text, -- 
-    "project_id" text, -- 
-    "customer_id" integer, -- 
+    "sample_type_id" text NOT NULL,
+    "sample_status_id" text DEFAULT 'Received' NOT NULL,
+    "workflow_id" text,
+    "step_id" text,
+    "project_id" text,
+    "customer_id" integer,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -567,10 +566,10 @@ CREATE TABLE IF NOT EXISTS "lab"."fishing" (
     "fishing_id" text PRIMARY KEY,
     "sampling_id" text NOT NULL,
     "sampling_date" date NOT NULL,
-    "taxon_id" text, -- 
+    "taxon_id" text,
     "catch_kg" numeric,
     "catch_fish" numeric,
-    "customer_id" integer, -- 
+    "customer_id" integer,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -580,8 +579,8 @@ CREATE TABLE IF NOT EXISTS "lab"."storage_log" (
     "log_id" serial PRIMARY KEY,
     "sample_id" text NOT NULL,
     "sample_sampling_date" date NOT NULL,
-    "storage_id" text NOT NULL, -- 
-    "person_id" text, -- 
+    "storage_id" text NOT NULL,
+    "person_id" text,
     "move_date" timestamptz DEFAULT CURRENT_TIMESTAMP,
     "status" text NOT NULL,
     "storage_position" text,
@@ -589,10 +588,11 @@ CREATE TABLE IF NOT EXISTS "lab"."storage_log" (
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."fish" (
-    "sample_id" text PRIMARY KEY, -- This references master_samples.sample_id
-    "parent_sample_id" text NOT NULL, --  (to master_samples)
-    "experiment_id" text, -- 
-    "species_id" text NOT NULL, -- 
+    "sample_id" text PRIMARY KEY,
+    "parent_sample_id" text NOT NULL,
+    "experiment_id" text,
+    "experiment_date" date,
+    "species_id" text NOT NULL,
     "total_length_mm" numeric,
     "fork_length_mm" numeric,
     "standard_length_mm" numeric,
@@ -602,10 +602,10 @@ CREATE TABLE IF NOT EXISTS "lab"."fish" (
     "stomach_contents" text,
     "disease_info" text,
     "tag_id" text,
-    "storage_id" text, -- 
+    "storage_id" text,
     "storage_position" text,
-    "project_id" text, -- 
-    "customer_id" integer, -- 
+    "project_id" text,
+    "customer_id" integer,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -613,15 +613,16 @@ CREATE TABLE IF NOT EXISTS "lab"."fish" (
 ALTER TABLE "lab"."fish" ADD CONSTRAINT chk_fish_sex_enum CHECK ("sex" IN ('Male', 'Female', 'Undetermined', NULL));
 
 CREATE TABLE IF NOT EXISTS "lab"."tissue" (
-    "sample_id" text PRIMARY KEY, -- This references master_samples.sample_id
-    "parent_sample_id" text NOT NULL, --  (to master_samples)
-    "experiment_id" text, -- 
+    "sample_id" text PRIMARY KEY,
+    "parent_sample_id" text NOT NULL,
+    "experiment_id" text,
+    "experiment_date" date,
     "weight_mg" numeric,
     "tissue_type" text,
     "preservation_method" text,
-    "storage_id" text, -- 
+    "storage_id" text,
     "storage_position" text,
-    "project_id" text, -- 
+    "project_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -629,13 +630,13 @@ CREATE TABLE IF NOT EXISTS "lab"."tissue" (
 
 CREATE TABLE IF NOT EXISTS "lab"."otoliths" (
     "otolith_id" text PRIMARY KEY,
-    "sample_id" text NOT NULL, --  (to master_samples)
-    "reader_person_id" text NOT NULL, -- 
+    "sample_id" text NOT NULL,
+    "reader_person_id" text NOT NULL,
     "side" text NOT NULL,
     "age_reading_years" numeric,
     "confidence" numeric,
     "reading_date" date,
-    "project_id" text, -- 
+    "project_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -643,9 +644,10 @@ CREATE TABLE IF NOT EXISTS "lab"."otoliths" (
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."dna" (
-    "sample_id" text PRIMARY KEY, -- This references master_samples.sample_id
-    "parent_sample_id" text NOT NULL, --  (to master_samples)
-    "experiment_id" text, -- 
+    "sample_id" text PRIMARY KEY,
+    "parent_sample_id" text NOT NULL,
+    "experiment_id" text,
+    "experiment_date" date,
     "volume_ul" numeric,
     "concentration_ng_ul" numeric,
     "a260_280" numeric,
@@ -654,18 +656,19 @@ CREATE TABLE IF NOT EXISTS "lab"."dna" (
     "preservation_method" text,
     "extraction_date" date,
     "extraction_number" integer,
-    "storage_id" text, -- 
+    "storage_id" text,
     "storage_position" text,
-    "project_id" text, -- 
+    "project_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."rna" (
-    "sample_id" text PRIMARY KEY, -- This references master_samples.sample_id
-    "parent_sample_id" text NOT NULL, --  (to master_samples)
-    "experiment_id" text, -- 
+    "sample_id" text PRIMARY KEY,
+    "parent_sample_id" text NOT NULL,
+    "experiment_id" text,
+    "experiment_date" date,
     "volume_ul" numeric,
     "concentration_ng_ul" numeric,
     "a260_280" numeric,
@@ -674,25 +677,26 @@ CREATE TABLE IF NOT EXISTS "lab"."rna" (
     "preservation_method" text,
     "extraction_date" date,
     "extraction_number" integer,
-    "storage_id" text, -- 
+    "storage_id" text,
     "storage_position" text,
-    "project_id" text, -- 
+    "project_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."sediments" (
-    "sample_id" text PRIMARY KEY, -- This references master_samples.sample_id
-    "parent_sample_id" text NOT NULL, --  (to master_samples)
-    "experiment_id" text, -- 
-    "project_id" text, -- 
+    "sample_id" text PRIMARY KEY,
+    "parent_sample_id" text NOT NULL,
+    "experiment_id" text,
+    "experiment_date" date,
+    "project_id" text,
     "volume" numeric,
-    "volume_unit_id" text, -- 
+    "volume_unit_id" text,
     "depth_m" numeric,
     "sampling_method" text,
     "conservation_buffer" text,
-    "storage_id" text, -- 
+    "storage_id" text,
     "storage_position" text,
     "external_name" text,
     "notes" text,
@@ -701,56 +705,59 @@ CREATE TABLE IF NOT EXISTS "lab"."sediments" (
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."water" (
-    "sample_id" text PRIMARY KEY, -- This references master_samples.sample_id
-    "parent_sample_id" text NOT NULL, --  (to master_samples)
-    "experiment_id" text, -- 
+    "sample_id" text PRIMARY KEY,
+    "parent_sample_id" text NOT NULL,
+    "experiment_id" text,
+    "experiment_date" date,
     "volume_l" numeric,
     "filter" text,
     "filter_pore_size_um" numeric,
     "depth_m" numeric,
     "sampling_method" text,
     "conservation_buffer" text,
-    "storage_id" text, -- 
+    "storage_id" text,
     "storage_position" text,
     "notes" text,
-    "project_id" text, -- 
+    "project_id" text,
     "attachment" bytea,
     "attachment_link" text
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."experiments_samples" (
-    "experiment_id" text NOT NULL, -- 
-    "sample_id" text NOT NULL, --  (to master_samples)
+    "experiment_id" text NOT NULL,
+    "experiment_date" date NOT NULL,
+    "sample_id" text NOT NULL,
     "notes" text,
-    PRIMARY KEY ("experiment_id", "sample_id")
+    PRIMARY KEY ("experiment_id", "sample_id", "experiment_date")
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."dissections" (
-    "dissection_id" text PRIMARY KEY,
-    "sample_id" text NOT NULL, --  (to master_samples)
-    "person_id" text NOT NULL, -- 
+    "dissection_id" text NOT NULL,
+    "sample_id" text NOT NULL,
+    "person_id" text NOT NULL,
     "dissection_date" date NOT NULL,
     "stomach_contents_jsonb" jsonb,
     "gonad_weight_g" numeric,
     "liver_weight_g" numeric,
     "notes" text,
-    "status_id" text, -- 
+    "status_id" text,
     "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
     "attachment" bytea,
     "attachment_link" text,
-    CONSTRAINT "dissection_unique" UNIQUE ("sample_id", "person_id", "dissection_date")
-);
+    PRIMARY KEY ("dissection_id", "dissection_date")
+) PARTITION BY RANGE ("dissection_date");
 
 CREATE TABLE IF NOT EXISTS "lab"."extraction" (
-    "extraction_id" text PRIMARY KEY,
-    "experiment_id" text, -- 
-    "sample_id" text, --  (to master_samples)
-    "parent_sample_id" text NOT NULL, --  (to master_samples)
-    "sample_type_id" text NOT NULL, -- 
-    "extracted_dna_sample_id" text, --  (to master_samples)
-    "extracted_rna_sample_id" text, --  (to master_samples)
-    "extraction_date" date,
-    "person_id" text NOT NULL, -- 
+    "extraction_id" text NOT NULL,
+    "experiment_id" text,
+    "experiment_date" date,
+    "sample_id" text,
+    "parent_sample_id" text NOT NULL,
+    "sample_type_id" text NOT NULL,
+    "extracted_dna_sample_id" text,
+    "extracted_rna_sample_id" text,
+    "extraction_date" date NOT NULL,
+    "person_id" text NOT NULL,
     "kit" text,
     "elution_volume_ul" numeric,
     "yield_qubit_ng_ul" numeric,
@@ -759,166 +766,183 @@ CREATE TABLE IF NOT EXISTS "lab"."extraction" (
     "a260_230" numeric,
     "extraction_blank_id" text,
     "notes" text,
-    "status_id" text, -- 
-    "storage_id" text, -- 
+    "status_id" text,
+    "storage_id" text,
     "storage_position" text,
-    "project_id" text, -- 
+    "project_id" text,
     "attachment" bytea,
-    "attachment_link" text
-);
+    "attachment_link" text,
+    PRIMARY KEY ("extraction_id", "extraction_date")
+) PARTITION BY RANGE ("extraction_date");
 
 CREATE TABLE IF NOT EXISTS "lab"."nanodrop" (
-    "nanodrop_id" text PRIMARY KEY,
-    "experiment_id" text, -- 
-    "sample_id" text, --  (to master_samples)
+    "nanodrop_id" text NOT NULL,
+    "experiment_id" text,
+    "experiment_date" date,
+    "sample_id" text,
     "nanodrop_concentration" numeric,
-    "concentration_unit_id" text, -- 
+    "concentration_unit_id" text,
     "a260" numeric,
     "a260_280" numeric,
     "a260_280_note" text,
     "a260_230" numeric,
     "a260_230_note" text,
-    "measurement_date" date,
+    "measurement_date" date NOT NULL,
     "elution_volume_ul" numeric,
-    "person_id" text, -- 
+    "person_id" text,
     "notes" text,
-    "status_id" text, -- 
+    "status_id" text,
     "attachment" bytea,
     "attachment_link" text,
-    "storage_id" text, -- 
+    "storage_id" text,
     "storage_position" text,
-    "project_id" text, -- 
+    "project_id" text,
     "result_date" timestamptz,
-    "nanodrop_total_dna_ug" numeric GENERATED ALWAYS AS (("elution_volume_ul" * "nanodrop_concentration") / 1000) STORED
-);
+    "nanodrop_total_dna_ug" numeric GENERATED ALWAYS AS (("elution_volume_ul" * "nanodrop_concentration") / 1000) STORED,
+    PRIMARY KEY ("nanodrop_id", "measurement_date")
+) PARTITION BY RANGE ("measurement_date");
 
 CREATE TABLE IF NOT EXISTS "lab"."qubit" (
-    "qubit_id" text PRIMARY KEY,
-    "sample_id" text, --  (to master_samples)
-    "experiment_id" text, -- 
+    "qubit_id" text NOT NULL,
+    "sample_id" text,
+    "experiment_id" text,
+    "experiment_date" date,
     "run_id" text,
     "assay_kit" text,
-    "measurement_date" date,
+    "measurement_date" date NOT NULL,
     "qubit_tube_conc" numeric,
-    "tube_unit_id" text, -- 
+    "tube_unit_id" text,
     "qubit_original_sample_conc" numeric,
-    "original_sample_unit_id" text, -- 
+    "original_sample_unit_id" text,
     "sample_volume_ul" numeric,
     "elution_volume_ul" numeric,
-    "person_id" text, -- 
+    "person_id" text,
     "notes" text,
-    "status_id" text, -- 
-    "storage_id" text, -- 
+    "status_id" text,
+    "storage_id" text,
     "storage_position" text,
-    "project_id" text, -- 
+    "project_id" text,
     "attachment" bytea,
     "attachment_link" text,
-    "qubit_total_dna_ug" numeric GENERATED ALWAYS AS (("elution_volume_ul" * "qubit_original_sample_conc") / 1000) STORED
-);
+    "qubit_total_dna_ug" numeric GENERATED ALWAYS AS (("elution_volume_ul" * "qubit_original_sample_conc") / 1000) STORED,
+    PRIMARY KEY ("qubit_id", "measurement_date")
+) PARTITION BY RANGE ("measurement_date");
 
 CREATE TABLE IF NOT EXISTS "lab"."tapestation" (
-    "tapestation_id" text PRIMARY KEY,
-    "experiment_id" text, -- 
+    "tapestation_id" text NOT NULL,
+    "experiment_id" text,
+    "experiment_date" date,
     "position" text,
-    "measurement_date" date,
+    "measurement_date" date NOT NULL,
     "kit" text,
-    "person_id" text, -- 
+    "person_id" text,
     "notes" text,
-    "sample_id" text, --  (to master_samples)
-    "storage_id" text, -- 
+    "sample_id" text,
+    "storage_id" text,
     "storage_position" text,
-    "status_id" text, -- 
-    "project_id" text, -- 
-    "attachment" bytea,
-    "attachment_link" text
-);
-
-CREATE TABLE IF NOT EXISTS "lab"."pcr" (
-    "pcr_id" text PRIMARY KEY,
-    "experiment_id" text, -- 
-    "sample_id" text, --  (to master_samples)
-    "position" text,
-    "primer_id" text, -- 
-    "pcr_blank_id" text,
-    "pcr_date" date,
-    "person_id" text, -- 
-    "kit" text,
-    "storage_id" text, -- 
-    "storage_position" text,
-    "status_id" text, -- 
-    "notes" text,
-    "project_id" text, -- 
+    "status_id" text,
+    "project_id" text,
     "attachment" bytea,
     "attachment_link" text,
-    "volume_reaction_ul" numeric
-);
+    PRIMARY KEY ("tapestation_id", "measurement_date")
+) PARTITION BY RANGE ("measurement_date");
+
+CREATE TABLE IF NOT EXISTS "lab"."pcr" (
+    "pcr_id" text NOT NULL,
+    "experiment_id" text,
+    "experiment_date" date,
+    "sample_id" text,
+    "position" text,
+    "primer_id" text,
+    "pcr_blank_id" text,
+    "pcr_date" date NOT NULL,
+    "person_id" text,
+    "kit" text,
+    "storage_id" text,
+    "storage_position" text,
+    "status_id" text,
+    "notes" text,
+    "project_id" text,
+    "attachment" bytea,
+    "attachment_link" text,
+    "volume_reaction_ul" numeric,
+    PRIMARY KEY ("pcr_id", "pcr_date")
+) PARTITION BY RANGE ("pcr_date");
 
 CREATE TABLE IF NOT EXISTS "lab"."gelelectrophoresis" (
-    "gelelectrophoresis_id" text PRIMARY KEY,
-    "experiment_id" text, -- 
-    "sample_id" text, --  (to master_samples)
+    "gelelectrophoresis_id" text NOT NULL,
+    "experiment_id" text,
+    "experiment_date" date,
+    "sample_id" text,
     "position" text,
     "ladder" text,
     "voltage" numeric,
     "band_size_bp" integer,
     "gel_type" text,
     "run_time_minutes" numeric,
-    "run_date" date,
-    "person_id" text, -- 
-    "storage_id" text, -- 
+    "run_date" date NOT NULL,
+    "person_id" text,
+    "storage_id" text,
     "storage_position" text,
-    "project_id" text, -- 
+    "project_id" text,
     "notes" text,
     "attachment" bytea,
-    "attachment_link" text
-);
+    "attachment_link" text,
+    PRIMARY KEY ("gelelectrophoresis_id", "run_date")
+) PARTITION BY RANGE ("run_date");
 
 CREATE TABLE IF NOT EXISTS "lab"."qpcr" (
-    "qpcr_id" text PRIMARY KEY,
-    "experiment_id" text, -- 
-    "sample_id" text, --  (to master_samples)
+    "qpcr_id" text NOT NULL,
+    "experiment_id" text,
+    "experiment_date" date,
+    "sample_id" text,
     "position" text,
-    "qpcr_date" date,
-    "person_id" text, -- 
-    "primer_id" text, -- 
+    "qpcr_date" date NOT NULL,
+    "person_id" text,
+    "primer_id" text,
     "ct_value" numeric,
     "inhibitor_test_result" text,
     "pcr_blank_id" text,
     "kit" text,
     "volume_ul" numeric,
-    "storage_id" text, -- 
+    "storage_id" text,
     "storage_position" text,
-    "status_id" text, -- 
-    "project_id" text, -- 
+    "status_id" text,
+    "project_id" text,
     "attachment" bytea,
-    "attachment_link" text
-);
+    "attachment_link" text,
+    PRIMARY KEY ("qpcr_id", "qpcr_date")
+) PARTITION BY RANGE ("qpcr_date");
 
 CREATE TABLE IF NOT EXISTS "lab"."library" (
-    "library_id" text PRIMARY KEY,
-    "experiment_id" text, -- 
-    "sample_id" text NOT NULL, --  (to master_samples)
+    "library_id" text NOT NULL,
+    "experiment_id" text,
+    "experiment_date" date,
+    "sample_id" text NOT NULL,
     "library_name" text,
-    "prep_date" date,
-    "person_id" text, -- 
+    "prep_date" date NOT NULL,
+    "person_id" text,
     "library_prep_kit" text,
     "index_sequence" text,
     "read_length_bp" integer,
-    "storage_id" text, -- 
+    "storage_id" text,
     "storage_position" text,
-    "project_id" text, -- 
+    "project_id" text,
     "notes" text,
     "attachment" bytea,
-    "attachment_link" text
-);
+    "attachment_link" text,
+    PRIMARY KEY ("library_id", "prep_date")
+) PARTITION BY RANGE ("prep_date");
 
 CREATE TABLE IF NOT EXISTS "lab"."sequencing" (
-    "sequencing_id" text PRIMARY KEY,
-    "experiment_id" text, -- 
-    "library_id" text, -- 
-    "sample_id" text NOT NULL, --  (to master_samples)
-    "sequencing_date" date,
-    "person_id" text, -- 
+    "sequencing_id" text NOT NULL,
+    "experiment_id" text,
+    "experiment_date" date,
+    "library_id" text,
+    "prep_date" date,
+    "sample_id" text NOT NULL,
+    "sequencing_date" date NOT NULL,
+    "person_id" text,
     "sequencer" text,
     "flow_cell_id" text,
     "library_prep_kit" text,
@@ -927,28 +951,30 @@ CREATE TABLE IF NOT EXISTS "lab"."sequencing" (
     "total_reads" bigint,
     "raw_data_path" text,
     "genbank_accession_number" text,
-    "status_id" text, -- 
-    "storage_id" text, -- 
+    "status_id" text,
+    "storage_id" text,
     "storage_position" text,
-    "project_id" text, -- 
+    "project_id" text,
     "attachment" bytea,
     "attachment_link" text,
-    "notes" text
-);
+    "notes" text,
+    PRIMARY KEY ("sequencing_id", "sequencing_date")
+) PARTITION BY RANGE ("sequencing_date");
 
 CREATE TABLE IF NOT EXISTS "lab"."datasets" (
-    "dataset_id" text PRIMARY KEY,
+    "dataset_id" text NOT NULL,
     "source_type" text,
-    "ecosystem_id" text, -- 
-    "region_id" text, -- 
-    "customer_id" integer, -- 
-    "stored_location_id" text, -- 
-    "reception_date" date,
+    "ecosystem_id" text,
+    "region_id" text,
+    "customer_id" integer,
+    "stored_location_id" text,
+    "reception_date" date NOT NULL,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
-    "storage_path" text
-);
+    "storage_path" text,
+    PRIMARY KEY ("dataset_id", "reception_date")
+) PARTITION BY RANGE ("reception_date");
 
 -- ======================================================================
 -- 7. Bioinformatics Schema Tables
@@ -976,25 +1002,28 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."analysis_pipelines" (
 );
 
 CREATE TABLE IF NOT EXISTS "bioinformatics"."analysis_runs" (
-    "run_id" text PRIMARY KEY,
-    "pipeline_id" text NOT NULL, -- 
-    "sequencing_id" text NOT NULL, -- 
-    "person_id" text NOT NULL, -- 
-    "run_date" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    "run_id" text NOT NULL,
+    "pipeline_id" text NOT NULL,
+    "sequencing_id" text NOT NULL,
+    "sequencing_date" date NOT NULL,
+    "person_id" text NOT NULL,
+    "run_date" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "parameters_jsonb" jsonb,
-    "reference_db_id" text, -- 
+    "reference_db_id" text,
     "clustering_threshold" numeric,
     "final_output_path" text,
     "notes" text,
     "attachment" bytea,
-    "attachment_link" text
-);
+    "attachment_link" text,
+    PRIMARY KEY ("run_id", "run_date")
+) PARTITION BY RANGE ("run_date");
 
 CREATE TABLE IF NOT EXISTS "bioinformatics"."edna_assignments" (
     "assignment_id" text PRIMARY KEY,
-    "run_id" text NOT NULL, -- 
-    "sample_id" text NOT NULL, --  (to master_samples)
-    "taxon_id" text NOT NULL, -- 
+    "run_id" text NOT NULL,
+    "run_date" date NOT NULL,
+    "sample_id" text NOT NULL,
+    "taxon_id" text NOT NULL,
     "read_count" integer,
     "confidence" numeric,
     "notes" text,
@@ -1035,7 +1064,6 @@ CREATE SEQUENCE IF NOT EXISTS "lab"."protocol_run_serial_seq" START 1;
 -- 9. Functions
 -- ======================================================================
 
--- Audit Function: Reads LIMS user from session variable
 CREATE OR REPLACE FUNCTION "audit"."if_modified_func"()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1065,7 +1093,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate publication_id
+-- function
 CREATE OR REPLACE FUNCTION "lims".generate_publication_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1099,7 +1127,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate sop_id
 CREATE OR REPLACE FUNCTION "lims".generate_sop_id()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -1108,7 +1135,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate workflow_step_id
 CREATE OR REPLACE FUNCTION "lims".generate_workflow_step_id()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -1117,7 +1143,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to Generate Sampling ID
 CREATE OR REPLACE FUNCTION "lab".generate_sampling_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1168,7 +1193,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to Generate Fishing ID
 CREATE OR REPLACE FUNCTION "lab".generate_fishing_id()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -1177,7 +1201,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to Generate Sample ID (Now also inserts into master_samples)
 CREATE OR REPLACE FUNCTION "lab".generate_sample_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1202,7 +1225,18 @@ BEGIN
         FROM "lab"."sampling" samp
         WHERE samp.sampling_id = NEW.sampling_id AND samp.sampling_date = NEW.sampling_date;
 
-        IF temp_sampling_id_exists IS NOT NULL THEN
+        IF temp_sampling_id_exists IS NULL THEN
+            RAISE WARNING 'Provided sampling_id % on date % for new sample does not exist in "lab"."sampling". Generating ID using customer or default abbreviations.', NEW.sampling_id, NEW.sampling_date;
+            ecosystem_abrv := '-';
+            region_abrv := '-';
+            IF NEW.customer_id IS NOT NULL THEN
+                SELECT COALESCE(c.customer_abrv, '-') INTO customer_abrv
+                FROM "lims"."customers" c
+                WHERE c.customer_id = NEW.customer_id;
+            ELSE
+                customer_abrv := '-';
+            END IF;
+        ELSE
             SELECT
                 COALESCE(e.ecosystem_abrv, '-'),
                 COALESCE(r.region_abrv, '-')
@@ -1217,17 +1251,6 @@ BEGIN
                 "reference"."region" r ON samp_inner.region_id = r.region_id
             WHERE
                 samp_inner.sampling_id = NEW.sampling_id AND samp_inner.sampling_date = NEW.sampling_date;
-        ELSE
-            RAISE WARNING 'Provided sampling_id % on date % for new sample does not exist in "lab"."sampling". Generating ID using customer or default abbreviations.', NEW.sampling_id, NEW.sampling_date;
-            ecosystem_abrv := '-';
-            region_abrv := '-';
-            IF NEW.customer_id IS NOT NULL THEN
-                SELECT COALESCE(c.customer_abrv, '-') INTO customer_abrv
-                FROM "lims"."customers" c
-                WHERE c.customer_id = NEW.customer_id;
-            ELSE
-                customer_abrv := '-';
-            END IF;
         END IF;
     ELSE
         ecosystem_abrv := '-';
@@ -1249,10 +1272,9 @@ BEGIN
         RAISE EXCEPTION 'Cannot generate sample_id: Missing sampling_id (or invalid), ecosystem_id, region_id, and customer_id.';
     END IF;
 
-    -- Generate NEW.sample_id
     SELECT MAX(SUBSTRING("sample_id" FROM LENGTH(id_prefix) + 1)::INTEGER)
     INTO next_serial
-    FROM "lab"."master_samples" -- Check master_samples for uniqueness
+    FROM "lab"."master_samples"
     WHERE "sample_id" ILIKE id_prefix || '%';
 
     IF next_serial IS NULL THEN
@@ -1263,14 +1285,12 @@ BEGIN
 
     NEW.sample_id := id_prefix || LPAD(next_serial::TEXT, 4, '0');
 
-    -- Insert into master_samples to ensure global uniqueness
     INSERT INTO "lab"."master_samples" ("sample_id") VALUES (NEW.sample_id);
 
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate child sample_id for Fish
 CREATE OR REPLACE FUNCTION "lab".generate_fish_child_sample_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1300,12 +1320,11 @@ BEGIN
     END IF;
 
     NEW.sample_id := id_prefix || next_serial::TEXT;
-    INSERT INTO "lab"."master_samples" ("sample_id") VALUES (NEW.sample_id); -- Insert into master
+    INSERT INTO "lab"."master_samples" ("sample_id") VALUES (NEW.sample_id);
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate child sample_id for Tissue
 CREATE OR REPLACE FUNCTION "lab".generate_tissue_child_sample_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1335,12 +1354,11 @@ BEGIN
     END IF;
 
     NEW.sample_id := id_prefix || next_serial::TEXT;
-    INSERT INTO "lab"."master_samples" ("sample_id") VALUES (NEW.sample_id); -- Insert into master
+    INSERT INTO "lab"."master_samples" ("sample_id") VALUES (NEW.sample_id);
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate child sample_id for DNA
 CREATE OR REPLACE FUNCTION "lab".generate_dna_child_sample_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1370,12 +1388,11 @@ BEGIN
     END IF;
 
     NEW.sample_id := id_prefix || next_serial::TEXT;
-    INSERT INTO "lab"."master_samples" ("sample_id") VALUES (NEW.sample_id); -- Insert into master
+    INSERT INTO "lab"."master_samples" ("sample_id") VALUES (NEW.sample_id);
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate child sample_id for RNA
 CREATE OR REPLACE FUNCTION "lab".generate_rna_child_sample_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1405,12 +1422,11 @@ BEGIN
     END IF;
 
     NEW.sample_id := id_prefix || next_serial::TEXT;
-    INSERT INTO "lab"."master_samples" ("sample_id") VALUES (NEW.sample_id); -- Insert into master
+    INSERT INTO "lab"."master_samples" ("sample_id") VALUES (NEW.sample_id);
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate child sample_id for Sediments
 CREATE OR REPLACE FUNCTION "lab".generate_sediments_child_sample_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1440,12 +1456,11 @@ BEGIN
     END IF;
 
     NEW.sample_id := id_prefix || next_serial::TEXT;
-    INSERT INTO "lab"."master_samples" ("sample_id") VALUES (NEW.sample_id); -- Insert into master
+    INSERT INTO "lab"."master_samples" ("sample_id") VALUES (NEW.sample_id);
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate child sample_id for Water
 CREATE OR REPLACE FUNCTION "lab".generate_water_child_sample_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1475,12 +1490,11 @@ BEGIN
     END IF;
 
     NEW.sample_id := id_prefix || next_serial::TEXT;
-    INSERT INTO "lab"."master_samples" ("sample_id") VALUES (NEW.sample_id); -- Insert into master
+    INSERT INTO "lab"."master_samples" ("sample_id") VALUES (NEW.sample_id);
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate otolith_id
 CREATE OR REPLACE FUNCTION "lab".generate_otolith_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1512,7 +1526,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate dissection_id
 CREATE OR REPLACE FUNCTION "lab".generate_dissection_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1539,7 +1552,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate extraction_id
 CREATE OR REPLACE FUNCTION "lab".generate_extraction_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1566,7 +1578,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate nanodrop_id
 CREATE OR REPLACE FUNCTION "lab".generate_nanodrop_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1593,7 +1604,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate qubit_id
 CREATE OR REPLACE FUNCTION "lab".generate_qubit_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1620,7 +1630,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate tapestation_id
 CREATE OR REPLACE FUNCTION "lab".generate_tapestation_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1647,7 +1656,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate pcr_id
 CREATE OR REPLACE FUNCTION "lab".generate_pcr_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1672,7 +1680,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate gelelectrophoresis_id
 CREATE OR REPLACE FUNCTION "lab".generate_gelelectrophoresis_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1697,7 +1704,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate qpcr_id
 CREATE OR REPLACE FUNCTION "lab".generate_qpcr_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1722,7 +1728,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate library_id
 CREATE OR REPLACE FUNCTION "lab".generate_library_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1747,7 +1752,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate sequencing_id
 CREATE OR REPLACE FUNCTION "lab".generate_sequencing_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1772,7 +1776,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate dataset_id
 CREATE OR REPLACE FUNCTION "lab".generate_dataset_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1820,7 +1823,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate pipeline_id
 CREATE OR REPLACE FUNCTION "bioinformatics".generate_pipeline_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1847,7 +1849,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate analysis_run_id
 CREATE OR REPLACE FUNCTION "bioinformatics".generate_analysis_run_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1874,7 +1875,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate edna_assignment_id
 CREATE OR REPLACE FUNCTION "bioinformatics".generate_edna_assignment_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1901,7 +1901,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to update sample status in 'lab.samples'
 CREATE OR REPLACE FUNCTION "lab".update_sample_status()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1935,7 +1934,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to generate protocol_run_id
 CREATE OR REPLACE FUNCTION "lab".generate_protocol_run_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1969,7 +1967,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to update ltree paths in reference.taxon
 CREATE OR REPLACE FUNCTION "reference".update_taxon_ltree_paths()
 RETURNS VOID AS $$
 BEGIN
@@ -1991,7 +1988,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to check if the current user is part of a project (for RLS)
 CREATE OR REPLACE FUNCTION "lims".is_member_of_project(p_project_id text)
 RETURNS BOOLEAN AS $$
 DECLARE
@@ -2009,7 +2005,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- Specific Full-Text Search Trigger Functions
 CREATE OR REPLACE FUNCTION "lims".update_customer_search_vector_func()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -2053,7 +2048,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to validate sample's sampling_date is within parent sampling record's dates
 CREATE OR REPLACE FUNCTION "lab".validate_sample_sampling_date()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -2076,7 +2070,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Helper function to create partitions dynamically for lab.sampling
 CREATE OR REPLACE FUNCTION "lab".create_sampling_partition_if_not_exists()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -2101,7 +2094,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Helper function for manual partition creation for lab.sampling
 CREATE OR REPLACE FUNCTION "lab".create_sampling_partition_if_not_exists_manual(p_year integer)
 RETURNS VOID AS $$
 DECLARE
@@ -2118,7 +2110,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Helper function to create partitions dynamically for lab.samples
 CREATE OR REPLACE FUNCTION "lab".create_samples_partition_if_not_exists()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -2143,7 +2134,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Helper function for manual partition creation for lab.samples
 CREATE OR REPLACE FUNCTION "lab".create_samples_partition_if_not_exists_manual(p_year integer)
 RETURNS VOID AS $$
 DECLARE
@@ -2160,12 +2150,531 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION "lab".create_experiments_partition_if_not_exists()
+RETURNS TRIGGER AS $$
+DECLARE
+    partition_date date;
+    partition_name text;
+    start_date date;
+    end_date date;
+BEGIN
+    partition_date := NEW.experiment_date;
+    IF partition_date IS NULL THEN
+        RAISE EXCEPTION 'Cannot partition on NULL experiment_date for lab.experiments. Please provide an experiment_date.';
+    END IF;
+
+    start_date := DATE_TRUNC('year', partition_date);
+    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
+    partition_name := 'experiments_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."experiments"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_experiments_partition_if_not_exists_manual(p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'experiments_y' || p_year;
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."experiments"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_dissections_partition_if_not_exists()
+RETURNS TRIGGER AS $$
+DECLARE
+    partition_date date;
+    partition_name text;
+    start_date date;
+    end_date date;
+BEGIN
+    partition_date := NEW.dissection_date;
+    IF partition_date IS NULL THEN
+        RAISE EXCEPTION 'Cannot partition on NULL dissection_date for lab.dissections. Please provide a dissection_date.';
+    END IF;
+
+    start_date := DATE_TRUNC('year', partition_date);
+    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
+    partition_name := 'dissections_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."dissections"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_dissections_partition_if_not_exists_manual(p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'dissections_y' || p_year;
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."dissections"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_extraction_partition_if_not_exists()
+RETURNS TRIGGER AS $$
+DECLARE
+    partition_date date;
+    partition_name text;
+    start_date date;
+    end_date date;
+BEGIN
+    partition_date := NEW.extraction_date;
+    IF partition_date IS NULL THEN
+        RAISE EXCEPTION 'Cannot partition on NULL extraction_date for lab.extraction. Please provide an extraction_date.';
+    END IF;
+
+    start_date := DATE_TRUNC('year', partition_date);
+    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
+    partition_name := 'extraction_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."extraction"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_extraction_partition_if_not_exists_manual(p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'extraction_y' || p_year;
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."extraction"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_nanodrop_partition_if_not_exists()
+RETURNS TRIGGER AS $$
+DECLARE
+    partition_date date;
+    partition_name text;
+    start_date date;
+    end_date date;
+BEGIN
+    partition_date := NEW.measurement_date;
+    IF partition_date IS NULL THEN
+        RAISE EXCEPTION 'Cannot partition on NULL measurement_date for lab.nanodrop. Please provide a measurement_date.';
+    END IF;
+
+    start_date := DATE_TRUNC('year', partition_date);
+    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
+    partition_name := 'nanodrop_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."nanodrop"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_nanodrop_partition_if_not_exists_manual(p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'nanodrop_y' || p_year;
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."nanodrop"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_qubit_partition_if_not_exists()
+RETURNS TRIGGER AS $$
+DECLARE
+    partition_date date;
+    partition_name text;
+    start_date date;
+    end_date date;
+BEGIN
+    partition_date := NEW.measurement_date;
+    IF partition_date IS NULL THEN
+        RAISE EXCEPTION 'Cannot partition on NULL measurement_date for lab.qubit. Please provide a measurement_date.';
+    END IF;
+
+    start_date := DATE_TRUNC('year', partition_date);
+    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
+    partition_name := 'qubit_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."qubit"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_qubit_partition_if_not_exists_manual(p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'qubit_y' || p_year;
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."qubit"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_tapestation_partition_if_not_exists()
+RETURNS TRIGGER AS $$
+DECLARE
+    partition_date date;
+    partition_name text;
+    start_date date;
+    end_date date;
+BEGIN
+    partition_date := NEW.measurement_date;
+    IF partition_date IS NULL THEN
+        RAISE EXCEPTION 'Cannot partition on NULL measurement_date for lab.tapestation. Please provide a measurement_date.';
+    END IF;
+
+    start_date := DATE_TRUNC('year', partition_date);
+    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
+    partition_name := 'tapestation_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."tapestation"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_tapestation_partition_if_not_exists_manual(p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'tapestation_y' || p_year;
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."tapestation"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_pcr_partition_if_not_exists()
+RETURNS TRIGGER AS $$
+DECLARE
+    partition_date date;
+    partition_name text;
+    start_date date;
+    end_date date;
+BEGIN
+    partition_date := NEW.pcr_date;
+    IF partition_date IS NULL THEN
+        RAISE EXCEPTION 'Cannot partition on NULL pcr_date for lab.pcr. Please provide a pcr_date.';
+    END IF;
+
+    start_date := DATE_TRUNC('year', partition_date);
+    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
+    partition_name := 'pcr_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."pcr"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_pcr_partition_if_not_exists_manual(p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'pcr_y' || p_year;
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."pcr"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_gelelectrophoresis_partition_if_not_exists()
+RETURNS TRIGGER AS $$
+DECLARE
+    partition_date date;
+    partition_name text;
+    start_date date;
+    end_date date;
+BEGIN
+    partition_date := NEW.run_date;
+    IF partition_date IS NULL THEN
+        RAISE EXCEPTION 'Cannot partition on NULL run_date for lab.gelelectrophoresis. Please provide a run_date.';
+    END IF;
+
+    start_date := DATE_TRUNC('year', partition_date);
+    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
+    partition_name := 'gelelectrophoresis_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."gelelectrophoresis"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_gelelectrophoresis_partition_if_not_exists_manual(p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'gelelectrophoresis_y' || p_year;
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."gelelectrophoresis"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_qpcr_partition_if_not_exists()
+RETURNS TRIGGER AS $$
+DECLARE
+    partition_date date;
+    partition_name text;
+    start_date date;
+    end_date date;
+BEGIN
+    partition_date := NEW.qpcr_date;
+    IF partition_date IS NULL THEN
+        RAISE EXCEPTION 'Cannot partition on NULL qpcr_date for lab.qpcr. Please provide a qpcr_date.';
+    END IF;
+
+    start_date := DATE_TRUNC('year', partition_date);
+    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
+    partition_name := 'qpcr_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."qpcr"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_qpcr_partition_if_not_exists_manual(p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'qpcr_y' || p_year;
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."qpcr"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_library_partition_if_not_exists()
+RETURNS TRIGGER AS $$
+DECLARE
+    partition_date date;
+    partition_name text;
+    start_date date;
+    end_date date;
+BEGIN
+    partition_date := NEW.prep_date;
+    IF partition_date IS NULL THEN
+        RAISE EXCEPTION 'Cannot partition on NULL prep_date for lab.library. Please provide a prep_date.';
+    END IF;
+
+    start_date := DATE_TRUNC('year', partition_date);
+    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
+    partition_name := 'library_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."library"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_library_partition_if_not_exists_manual(p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'library_y' || p_year;
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."library"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_sequencing_partition_if_not_exists()
+RETURNS TRIGGER AS $$
+DECLARE
+    partition_date date;
+    partition_name text;
+    start_date date;
+    end_date date;
+BEGIN
+    partition_date := NEW.sequencing_date;
+    IF partition_date IS NULL THEN
+        RAISE EXCEPTION 'Cannot partition on NULL sequencing_date for lab.sequencing. Please provide a sequencing_date.';
+    END IF;
+
+    start_date := DATE_TRUNC('year', partition_date);
+    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
+    partition_name := 'sequencing_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."sequencing"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_sequencing_partition_if_not_exists_manual(p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'sequencing_y' || p_year;
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."sequencing"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_datasets_partition_if_not_exists()
+RETURNS TRIGGER AS $$
+DECLARE
+    partition_date date;
+    partition_name text;
+    start_date date;
+    end_date date;
+BEGIN
+    partition_date := NEW.reception_date;
+    IF partition_date IS NULL THEN
+        RAISE EXCEPTION 'Cannot partition on NULL reception_date for lab.datasets. Please provide a reception_date.';
+    END IF;
+
+    start_date := DATE_TRUNC('year', partition_date);
+    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
+    partition_name := 'datasets_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."datasets"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".create_datasets_partition_if_not_exists_manual(p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'datasets_y' || p_year;
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."datasets"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "bioinformatics".create_analysis_runs_partition_if_not_exists()
+RETURNS TRIGGER AS $$
+DECLARE
+    partition_date date;
+    partition_name text;
+    start_date date;
+    end_date date;
+BEGIN
+    partition_date := NEW.run_date::date;
+    IF partition_date IS NULL THEN
+        RAISE EXCEPTION 'Cannot partition on NULL run_date for bioinformatics.analysis_runs. Please provide a run_date.';
+    END IF;
+
+    start_date := DATE_TRUNC('year', partition_date);
+    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
+    partition_name := 'analysis_runs_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "bioinformatics".' || quote_ident(partition_name) || ' PARTITION OF "bioinformatics"."analysis_runs"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "bioinformatics".create_analysis_runs_partition_if_not_exists_manual(p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'analysis_runs_y' || p_year;
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "bioinformatics".' || quote_ident(partition_name) || ' PARTITION OF "bioinformatics"."analysis_runs"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
+
 
 -- ======================================================================
 -- 10. Triggers
 -- ======================================================================
 
--- Audit Triggers (apply to all tables you want to audit)
 CREATE TRIGGER audit_trigger_personal
 AFTER INSERT OR UPDATE OR DELETE ON "reference"."personal"
 FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
@@ -2348,13 +2857,13 @@ AFTER INSERT OR UPDATE OR DELETE ON "bioinformatics"."edna_assignments"
 FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
 
 
--- Triggers for ID generation (BEFORE INSERT)
+-- Triggers for ID generation
 CREATE TRIGGER trg_generate_publication_id BEFORE INSERT ON "lims"."publications" FOR EACH ROW EXECUTE FUNCTION "lims".generate_publication_id();
 CREATE TRIGGER trg_generate_sop_id BEFORE INSERT ON "lims"."sop" FOR EACH ROW EXECUTE FUNCTION "lims".generate_sop_id();
 CREATE TRIGGER trg_generate_workflow_step_id BEFORE INSERT ON "lims"."workflow_steps" FOR EACH ROW EXECUTE FUNCTION "lims".generate_workflow_step_id();
 CREATE TRIGGER trg_generate_sampling_id BEFORE INSERT ON "lab"."sampling" FOR EACH ROW EXECUTE FUNCTION "lab".generate_sampling_id();
 CREATE TRIGGER trg_generate_fishing_id BEFORE INSERT ON "lab"."fishing" FOR EACH ROW EXECUTE FUNCTION "lab".generate_fishing_id();
-CREATE TRIGGER trg_generate_sample_id BEFORE INSERT ON "lab"."samples" FOR EACH ROW EXECUTE FUNCTION "lab".generate_sample_id(); -- This now inserts into master_samples too
+CREATE TRIGGER trg_generate_sample_id BEFORE INSERT ON "lab"."samples" FOR EACH ROW EXECUTE FUNCTION "lab".generate_sample_id();
 CREATE TRIGGER trg_generate_fish_child_sample_id BEFORE INSERT ON "lab"."fish" FOR EACH ROW EXECUTE FUNCTION "lab".generate_fish_child_sample_id();
 CREATE TRIGGER trg_generate_tissue_child_sample_id BEFORE INSERT ON "lab"."tissue" FOR EACH ROW EXECUTE FUNCTION "lab".generate_tissue_child_sample_id();
 CREATE TRIGGER trg_generate_dna_child_sample_id BEFORE INSERT ON "lab"."dna" FOR EACH ROW EXECUTE FUNCTION "lab".generate_dna_child_sample_id();
@@ -2379,8 +2888,6 @@ CREATE TRIGGER trg_generate_edna_assignment_id BEFORE INSERT ON "bioinformatics"
 CREATE TRIGGER trg_generate_protocol_run_id BEFORE INSERT ON "lab"."protocol_runs" FOR EACH ROW EXECUTE FUNCTION "lab".generate_protocol_run_id();
 
 
--- Triggers to update workflow status in lab.samples
--- These triggers must target lab.samples based on sample_id and sampling_date
 CREATE TRIGGER trg_update_status_dissection AFTER INSERT ON "lab"."dissections" FOR EACH ROW EXECUTE PROCEDURE "lab".update_sample_status('Dissection');
 CREATE TRIGGER trg_update_status_extraction AFTER INSERT ON "lab"."extraction" FOR EACH ROW EXECUTE PROCEDURE "lab".update_sample_status('Extracted');
 CREATE TRIGGER trg_update_status_nanodrop AFTER INSERT ON "lab"."nanodrop" FOR EACH ROW EXECUTE PROCEDURE "lab".update_sample_status('Nanodrop QC');
@@ -2392,13 +2899,11 @@ CREATE TRIGGER trg_update_status_library AFTER INSERT ON "lab"."library" FOR EAC
 CREATE TRIGGER trg_update_status_sequencing AFTER INSERT ON "lab"."sequencing" FOR EACH ROW EXECUTE PROCEDURE "lab".update_sample_status('Sequencing Done');
 CREATE TRIGGER trg_update_status_bioinformatics AFTER INSERT ON "bioinformatics"."analysis_runs" FOR EACH ROW EXECUTE PROCEDURE "lab".update_sample_status('Bioinformatics Done');
 
--- Trigger for sample date validation
 CREATE TRIGGER trg_validate_sample_sampling_date
 BEFORE INSERT OR UPDATE ON "lab"."samples"
 FOR EACH ROW
 EXECUTE FUNCTION "lab".validate_sample_sampling_date();
 
--- Triggers for automatic partition creation
 CREATE TRIGGER trg_create_sampling_partition
 BEFORE INSERT ON "lab"."sampling"
 FOR EACH ROW
@@ -2409,11 +2914,75 @@ BEFORE INSERT ON "lab"."samples"
 FOR EACH ROW
 EXECUTE FUNCTION "lab".create_samples_partition_if_not_exists();
 
+CREATE TRIGGER trg_create_experiments_partition
+BEFORE INSERT ON "lab"."experiments"
+FOR EACH ROW
+EXECUTE FUNCTION "lab".create_experiments_partition_if_not_exists();
+
+CREATE TRIGGER trg_create_dissections_partition
+BEFORE INSERT ON "lab"."dissections"
+FOR EACH ROW
+EXECUTE FUNCTION "lab".create_dissections_partition_if_not_exists();
+
+CREATE TRIGGER trg_create_extraction_partition
+BEFORE INSERT ON "lab"."extraction"
+FOR EACH ROW
+EXECUTE FUNCTION "lab".create_extraction_partition_if_not_exists();
+
+CREATE TRIGGER trg_create_nanodrop_partition
+BEFORE INSERT ON "lab"."nanodrop"
+FOR EACH ROW
+EXECUTE FUNCTION "lab".create_nanodrop_partition_if_not_exists();
+
+CREATE TRIGGER trg_create_qubit_partition
+BEFORE INSERT ON "lab"."qubit"
+FOR EACH ROW
+EXECUTE FUNCTION "lab".create_qubit_partition_if_not_exists();
+
+CREATE TRIGGER trg_create_tapestation_partition
+BEFORE INSERT ON "lab"."tapestation"
+FOR EACH ROW
+EXECUTE FUNCTION "lab".create_tapestation_partition_if_not_exists();
+
+CREATE TRIGGER trg_create_pcr_partition
+BEFORE INSERT ON "lab"."pcr"
+FOR EACH ROW
+EXECUTE FUNCTION "lab".create_pcr_partition_if_not_exists();
+
+CREATE TRIGGER trg_create_gelelectrophoresis_partition
+BEFORE INSERT ON "lab"."gelelectrophoresis"
+FOR EACH ROW
+EXECUTE FUNCTION "lab".create_gelelectrophoresis_partition_if_not_exists();
+
+CREATE TRIGGER trg_create_qpcr_partition
+BEFORE INSERT ON "lab"."qpcr"
+FOR EACH ROW
+EXECUTE FUNCTION "lab".create_qpcr_partition_if_not_exists();
+
+CREATE TRIGGER trg_create_library_partition
+BEFORE INSERT ON "lab"."library"
+FOR EACH ROW
+EXECUTE FUNCTION "lab".create_library_partition_if_not_exists();
+
+CREATE TRIGGER trg_create_sequencing_partition
+BEFORE INSERT ON "lab"."sequencing"
+FOR EACH ROW
+EXECUTE FUNCTION "lab".create_sequencing_partition_if_not_exists();
+
+CREATE TRIGGER trg_create_datasets_partition
+BEFORE INSERT ON "lab"."datasets"
+FOR EACH ROW
+EXECUTE FUNCTION "lab".create_datasets_partition_if_not_exists();
+
+CREATE TRIGGER trg_create_analysis_runs_partition
+BEFORE INSERT ON "bioinformatics"."analysis_runs"
+FOR EACH ROW
+EXECUTE FUNCTION "bioinformatics".create_analysis_runs_partition_if_not_exists();
+
 -- ======================================================================
 -- 11. Indexes
 -- ======================================================================
 
--- Reference Schema Indexes
 CREATE INDEX IF NOT EXISTS idx_personal_full_name ON "reference"."personal" ("full_name");
 CREATE INDEX IF NOT EXISTS idx_taxon_path_gist ON "reference"."taxon" USING GIST ("path");
 CREATE INDEX IF NOT EXISTS idx_species_de_name ON "reference"."species" ("de_name");
@@ -2422,7 +2991,6 @@ CREATE INDEX IF NOT EXISTS idx_units_unit_type ON "reference"."units" ("unit_typ
 CREATE INDEX IF NOT EXISTS idx_external_contacts_full_name ON "lims"."external_contacts" ("full_name");
 
 
--- Lims Schema Indexes
 CREATE INDEX IF NOT EXISTS idx_customers_customer_name ON "lims"."customers" ("customer_name");
 CREATE INDEX IF NOT EXISTS idx_customers_customer_abrv ON "lims"."customers" ("customer_abrv");
 CREATE INDEX IF NOT EXISTS idx_projects_status_id ON "lims"."projects" ("status_id");
@@ -2430,7 +2998,7 @@ CREATE INDEX IF NOT EXISTS idx_projects_pi_person_id ON "lims"."projects" ("pi_p
 CREATE INDEX IF NOT EXISTS idx_projects_customer_id ON "lims"."projects" ("customer_id");
 CREATE INDEX IF NOT EXISTS idx_cruises_project_id ON "lims"."cruises" ("project_id");
 CREATE INDEX IF NOT EXISTS idx_cruises_region_id ON "lims"."cruises" ("region_id");
-CREATE INDEX IF NOT EXISTS idx_cruises_ecosystem_id ON "lims"."cruises" ("ecosystem_id");
+CREATE INDEX IF NOT EXISTS idx_cruises_ecosystem_id ON "reference"."ecosystem" ("ecosystem_id");
 CREATE INDEX IF NOT EXISTS idx_cruises_capitaine_contact_id ON "lims"."cruises" ("capitaine_contact_id");
 CREATE INDEX IF NOT EXISTS idx_cruises_together_with_contact_id ON "lims"."cruises" ("together_with_contact_id");
 CREATE INDEX IF NOT EXISTS idx_workflow_steps_workflow_id ON "lims"."workflow_steps" ("workflow_id");
@@ -2447,10 +3015,8 @@ CREATE INDEX IF NOT EXISTS idx_reagents_category_id ON "lims"."reagents" ("categ
 CREATE INDEX IF NOT EXISTS idx_reagents_storage_id ON "lims"."reagents" ("storage_id");
 CREATE INDEX IF NOT EXISTS idx_reagents_expire_date ON "lims"."reagents" ("expire_date");
 CREATE INDEX IF NOT EXISTS idx_publications_project_id ON "lims"."publications" ("project_id");
-CREATE INDEX IF NOT EXISTS idx_publications_doi ON "lims"."publications" ("doi");
 
 
--- Lab Schema Indexes
 CREATE INDEX IF NOT EXISTS idx_experiments_sop_id ON "lab"."experiments" ("sop_id");
 CREATE INDEX IF NOT EXISTS idx_experiments_person_id ON "lab"."experiments" ("person_id");
 CREATE INDEX IF NOT EXISTS idx_experiments_projects_experiment_id ON "lab"."experiments_projects" ("experiment_id");
@@ -2460,8 +3026,8 @@ CREATE INDEX IF NOT EXISTS idx_protocol_runs_sop_id ON "lab"."protocol_runs" ("s
 CREATE INDEX IF NOT EXISTS idx_sampling_project_id ON "lab"."sampling" ("project_id");
 CREATE INDEX IF NOT EXISTS idx_sampling_cruise_id ON "lab"."sampling" ("cruise_id");
 CREATE INDEX IF NOT EXISTS idx_sampling_region_id ON "lab"."sampling" ("region_id");
-CREATE INDEX IF NOT EXISTS idx_sampling_ecosystem_id ON "reference"."ecosystem" ("ecosystem_id"); -- Corrected from "reference"."ecosystem"
-CREATE INDEX IF NOT EXISTS idx_sampling_customer_id ON "lims"."customers" ("customer_id"); -- Corrected from "lims"."customers"
+CREATE INDEX IF NOT EXISTS idx_sampling_ecosystem_id ON "reference"."ecosystem" ("ecosystem_id");
+CREATE INDEX IF NOT EXISTS idx_sampling_customer_id ON "lims"."customers" ("customer_id");
 CREATE INDEX IF NOT EXISTS idx_sampling_geom ON "lab"."sampling" USING GIST ("geom");
 CREATE INDEX IF NOT EXISTS idx_sampling_fishing_start_geom ON "lab"."sampling" USING GIST ("fishing_start_geom");
 CREATE INDEX IF NOT EXISTS idx_sampling_fishing_end_geom ON "lab"."sampling" USING GIST ("fishing_end_geom");
@@ -2495,7 +3061,6 @@ CREATE INDEX IF NOT EXISTS idx_datasets_ecosystem_id ON "lab"."datasets" ("ecosy
 CREATE INDEX IF NOT EXISTS idx_datasets_region_id ON "lab"."datasets" ("region_id");
 
 
--- Bioinformatics Schema Indexes
 CREATE INDEX IF NOT EXISTS idx_analysis_runs_pipeline_id ON "bioinformatics"."analysis_runs" ("pipeline_id");
 CREATE INDEX IF NOT EXISTS idx_analysis_runs_sequencing_id ON "bioinformatics"."analysis_runs" ("sequencing_id");
 CREATE INDEX IF NOT EXISTS idx_edna_assignments_run_id ON "bioinformatics"."edna_assignments" ("run_id");
@@ -2504,17 +3069,14 @@ CREATE INDEX IF NOT EXISTS idx_edna_assignments_taxon_id ON "bioinformatics"."ed
 CREATE INDEX IF NOT EXISTS idx_reference_databases_db_name ON "bioinformatics"."reference_databases" ("db_name");
 
 
--- Partial Index Example: Index only active projects
 CREATE INDEX IF NOT EXISTS idx_projects_active ON "lims"."projects" ("project_id") WHERE status_id = 'Active';
 
--- Expression Index Example: Index on lowercased customer name for case-insensitive searches
 CREATE INDEX IF NOT EXISTS idx_customers_lower_name ON "lims"."customers" (LOWER("customer_name"));
 
 -- ======================================================================
 -- 12. Full-Text Search Configuration
 -- ======================================================================
 
--- Create a custom text search configuration for English with stemming.
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_ts_config WHERE cfgname = 'lims_english') THEN
@@ -2526,7 +3088,6 @@ BEGIN
 END
 $$;
 
--- Specific Full-Text Search Trigger Functions
 CREATE OR REPLACE FUNCTION "lims".update_customer_search_vector_func()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -2571,7 +3132,6 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- Add tsvector columns and GIN indexes
 ALTER TABLE "lims"."customers" ADD COLUMN IF NOT EXISTS customer_search_vector TSVECTOR;
 CREATE INDEX IF NOT EXISTS idx_customers_gin_search ON "lims"."customers" USING GIN (customer_search_vector);
 CREATE TRIGGER trg_update_customer_search BEFORE INSERT OR UPDATE ON "lims"."customers" FOR EACH ROW EXECUTE FUNCTION "lims".update_customer_search_vector_func();
@@ -2593,7 +3153,6 @@ CREATE TRIGGER trg_update_experiment_search BEFORE INSERT OR UPDATE ON "lab"."ex
 -- 13. Views
 -- ======================================================================
 
--- View: Complete_species_Taxon_View
 CREATE OR REPLACE VIEW "reference"."complete_species_taxon_view" AS
 SELECT
     t.taxon_id,
@@ -2612,7 +3171,6 @@ FROM
 LEFT JOIN
     "reference"."species" s ON t.taxon_id = s.species_id;
 
--- View: Detailed_Samples_View
 CREATE OR REPLACE VIEW "lab"."detailed_samples_view" AS
 SELECT
     s.sample_id,
@@ -2659,7 +3217,6 @@ LEFT JOIN
 LEFT JOIN
     "reference"."samples_type" stype ON s.sample_type_id = stype.sample_type_id;
 
--- View: Project_Overview_View
 CREATE OR REPLACE VIEW "lims"."project_overview_view" AS
 SELECT
     p.project_id,
@@ -2682,7 +3239,6 @@ LEFT JOIN
 LEFT JOIN
     "reference"."personal" ref_p ON p.pi_person_id = ref_p.person_id;
 
--- View: Sample_Workflow_Progress_View
 CREATE OR REPLACE VIEW "lab"."sample_workflow_progress_view" AS
 SELECT
     s.sample_id,
@@ -2698,7 +3254,6 @@ FROM
 LEFT JOIN
     "lims"."workflow_steps" ws ON s.workflow_id = ws.workflow_id AND s.step_id = ws.step_id;
 
--- View: Storage_Inventory_View
 CREATE OR REPLACE VIEW "lab"."storage_inventory_view" AS
 SELECT
     st.storage_id,
@@ -2723,7 +3278,6 @@ LEFT JOIN
 LEFT JOIN
     "lab"."samples" s ON st.storage_id = s.storage_id;
 
--- View: Experiment_Summary_View
 CREATE OR REPLACE VIEW "lab"."experiment_summary_view" AS
 SELECT
     e.experiment_id,
@@ -2753,7 +3307,6 @@ GROUP BY
     e.experiment_id, e.experiment_title, e.aim, e.method, e.sop_id, sop.title,
     e.experiment_date, e.person_id, ref_p.full_name, e.lab_book, e.status_id;
 
--- View: Bioinformatics_Results_Summary (Updated for new schema)
 CREATE OR REPLACE VIEW "bioinformatics"."analysis_results_summary" AS
 SELECT
     ar.run_id,
@@ -2793,7 +3346,6 @@ LEFT JOIN
     "bioinformatics"."reference_databases" rdb ON ar.reference_db_id = rdb.db_id;
 
 
--- View: Project_Financial_Summary_View
 CREATE OR REPLACE VIEW "lims"."project_financial_summary_view" AS
 SELECT
     p.project_id,
@@ -2813,7 +3365,6 @@ GROUP BY
 ORDER BY
     total_cost DESC;
 
--- View: Full bioinformatics results, linking taxonomic assignments back to sampling event details.
 CREATE OR REPLACE VIEW "bioinformatics"."full_analysis_results_view" AS
 SELECT
     p.project_id,
@@ -2842,7 +3393,6 @@ JOIN "reference"."taxon" t ON ea.taxon_id = t.taxon_id
 ORDER BY
     p.project_id, samp.sampling_date, s.sample_id, ea.read_count DESC;
 
--- View: Storage occupancy, calculating the percentage of used slots in each box.
 CREATE OR REPLACE VIEW "lab"."storage_occupancy_view" AS
 WITH box_counts AS (
     SELECT
@@ -2856,6 +3406,8 @@ SELECT
     st.storage_id,
     st.room_id,
     st.freezer,
+    st.etage,
+    st.temperature_c,
     st.box,
     st.box_size_x * st.box_size_y AS box_capacity,
     COALESCE(bc.stored_samples, 0) AS occupied_slots,
@@ -2867,7 +3419,6 @@ WHERE st.box_size_x > 0 AND st.box_size_y > 0
 ORDER BY
     occupancy_percent DESC;
 
--- View: Comprehensive Project Summary
 CREATE OR REPLACE VIEW "lims"."project_comprehensive_summary_view" AS
 SELECT
     p.project_id,
@@ -2888,7 +3439,6 @@ GROUP BY
     p.project_id, p.title, stat.notes, p.funder, p.start_date, p.end_date
 ORDER BY p.start_date DESC;
 
--- View: Experiment Progress Overview
 CREATE OR REPLACE VIEW "lab"."experiment_progress_overview_view" AS
 SELECT
     e.experiment_id,
@@ -2920,7 +3470,6 @@ GROUP BY
     stat.notes, e.experiment_date, pers.full_name
 ORDER BY e.experiment_date DESC;
 
--- View: Reagent Status View
 CREATE OR REPLACE VIEW "lims"."reagent_status_view" AS
 SELECT
     r.reagent_complete_name,
@@ -2942,10 +3491,8 @@ LEFT JOIN "reference"."units" ru ON r.quantity_unit_id = ru.unit_id
 ORDER BY r.expire_date ASC;
 
 
--- View: The "Mega View" for complete sample tracking
 CREATE OR REPLACE VIEW "lab"."sample_full_details_view" AS
 SELECT
-    -- Core Sample Info
     s.sample_id,
     s.external_name,
     s.project_id,
@@ -2956,7 +3503,6 @@ SELECT
     stat.notes AS sample_status_notes,
     s.parent_sample_id,
 
-    -- Storage Info
     s.storage_id,
     stor.freezer AS storage_freezer,
     stor.box AS storage_box,
@@ -2965,7 +3511,6 @@ SELECT
     r.address AS room_address,
     r.etage AS room_etage,
 
-    -- Sampling Event Info
     samp.sampling_id AS sampling_event_id,
     samp.sampling_date AS sampling_event_date,
     ST_X(samp.geom) AS sampling_lon,
@@ -2985,7 +3530,6 @@ SELECT
     samp.oxygen,
     ou.unit_abbreviation AS oxygen_unit,
 
-    -- Fish Specifics
     f.species_id,
     taxon_sp.en_name AS species_en_name,
     f.total_length_mm,
@@ -2996,38 +3540,32 @@ SELECT
     f.disease_info,
     f.tag_id,
 
-    -- Tissue Specifics
     t.weight_mg AS tissue_weight_mg,
     t.tissue_type,
     t.preservation_method AS tissue_preservation_method,
 
-    -- DNA Specifics
     dna.volume_ul AS dna_volume_ul,
     dna.concentration_ng_ul AS dna_concentration_ng_ul,
     dna.a260_280 AS dna_a260_280,
     dna.a260_230 AS dna_a260_230,
     dna.extraction_method AS dna_extraction_method,
 
-    -- RNA Specifics
     rna.volume_ul AS rna_volume_ul,
     rna.concentration_ng_ul AS rna_concentration_ng_ul,
     rna.a260_280 AS rna_a260_280,
     rna.a260_230 AS rna_a260_230,
     rna.extraction_method AS rna_extraction_method,
 
-    -- Sediments Specifics
     sed.volume AS sediment_volume,
     svu.unit_abbreviation AS sediment_volume_unit,
     sed.depth_m AS sediment_depth_m,
     sed.sampling_method AS sediment_sampling_method,
 
-    -- Water Specifics
     wat.volume_l AS water_volume_l,
     wat.filter AS water_filter,
     wat.filter_pore_size_um AS water_filter_pore_size_um,
     wat.depth_m AS water_depth_m,
 
-    -- Extraction Results
     ext.extraction_date,
     ext.kit AS extraction_kit,
     ext.elution_volume_ul AS extraction_elution_volume_ul,
@@ -3038,7 +3576,6 @@ SELECT
     ext.extracted_dna_sample_id,
     ext.extracted_rna_sample_id,
 
-    -- Nanodrop Results
     nd.nanodrop_concentration,
     ndcu.unit_abbreviation AS nanodrop_concentration_unit,
     nd.a260 AS nanodrop_a260,
@@ -3046,23 +3583,19 @@ SELECT
     nd.a260_230 AS nanodrop_a260_230,
     nd.nanodrop_total_dna_ug,
 
-    -- Qubit Results
     qu.qubit_original_sample_conc,
     quosu.unit_abbreviation AS qubit_original_sample_unit,
     qu.qubit_total_dna_ug,
 
-    -- PCR Results
     pcr.pcr_date,
     pcr.primer_id AS pcr_primer_id,
     pcr_primer.target_gene_id AS pcr_target_gene_id,
     pcr.volume_reaction_ul,
 
-    -- qPCR Results
     qpcr.qpcr_date,
     qpcr.ct_value,
     qpcr.inhibitor_test_result,
 
-    -- Library & Sequencing
     lib.library_id,
     lib.library_prep_kit,
     lib.index_sequence,
@@ -3073,7 +3606,6 @@ SELECT
     seq.raw_data_path,
     seq.genbank_accession_number,
 
-    -- Bioinformatics Results (from analysis_runs)
     ar.run_id AS analysis_run_id,
     ap.pipeline_name,
     ap.version AS pipeline_version,
@@ -3086,7 +3618,6 @@ SELECT
     ea.read_count AS edna_read_count,
     ea.confidence,
 
-    -- Sampler/Receiver/Reception from samples table
     s.sampler_person_id,
     sampler_p.full_name AS sampler_full_name,
     s.receiver_person_id,
@@ -3131,7 +3662,6 @@ LEFT JOIN "reference"."personal" sampler_p ON s.sampler_person_id = sampler_p.pe
 LEFT JOIN "reference"."personal" receiver_p ON s.receiver_person_id = receiver_p.person_id;
 
 
--- View: Taxons View with Phylum to Species
 CREATE OR REPLACE VIEW "reference"."taxon_hierarchy_view" AS
 SELECT
     t.taxon_id,
@@ -3188,7 +3718,6 @@ LEFT JOIN "reference"."taxon" genus_taxon ON l5.ancestor_taxon_id = genus_taxon.
 ORDER BY t.path;
 
 
--- Materialized View Example: Monthly Sample Reception Summary
 CREATE MATERIALIZED VIEW IF NOT EXISTS "lab"."monthly_sample_reception_mv" AS
 SELECT
     TO_CHAR(reception_date, 'YYYY-MM') AS reception_month,
@@ -3205,7 +3734,7 @@ ORDER BY
 WITH DATA;
 
 -- ======================================================================
--- 14. Initial Data Population (Example Data)
+-- 14. Initial Data Population
 -- ======================================================================
 
 INSERT INTO "reference"."status" ("status_id", "notes") VALUES
@@ -3228,7 +3757,7 @@ INSERT INTO "reference"."samples_type" ("sample_type_id", "sample_type_abrv", "n
 ('RNA', 'R', 'Ribonucleic Acid sample'),
 ('Library', 'L', 'Sequencing Library sample'),
 ('Water', 'W', 'Water sample'),
-('Sediments', 'S', 'Sediment sample'),
+('Sediments', 'S', 'Sedi ment sample'),
 ('Tissue', 'T', 'Tissue sample'),
 ('Fish', 'F', 'Fish sample'),
 ('Sequencing', 'Q', 'Sequencing run output'),
@@ -3240,8 +3769,8 @@ ON CONFLICT ("sample_type_id") DO NOTHING;
 INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "unit_type", "conversion_factor_to_base") VALUES
 ('mm', 'millimeter', 'mm', 'length', 0.001),
 ('g', 'gram', 'g', 'mass', 0.001),
-('ul', 'microliter', 'µL', 'volume', 1e-6),
-('ng_ul', 'nanogram per microliter', 'ng/µL', 'concentration', 1e-9),
+('ul', 'microliter', '碌L', 'volume', 1e-6),
+('ng_ul', 'nanogram per microliter', 'ng/碌L', 'concentration', 1e-9),
 ('bp', 'base pair', 'bp', 'length', 1),
 ('km_h', 'kilometer per hour', 'km/h', 'speed', 0.277778),
 ('m_s', 'meter per second', 'm/s', 'speed', 1),
@@ -3251,37 +3780,32 @@ INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "u
 ('psi', 'pounds per square inch', 'psi', 'pressure', 0.0689476),
 ('kPa', 'kilopascal', 'kPa', 'pressure', 1000),
 ('mg_l', 'milligram per liter', 'mg/L', 'concentration', 1),
-('umol_l', 'micromole per liter', 'µmol/L', 'concentration', 1),
+('umol_l', 'micromole per liter', '碌mol/L', 'concentration', 1),
 ('ntu', 'Nephelometric Turbidity Unit', 'NTU', 'turbidity', 1),
-('ug_l', 'microgram per liter', 'µg/L', 'concentration', 1),
+('ug_l', 'microgram per liter', '碌g/L', 'concentration', 1),
 ('deg', 'degree', 'deg', 'angle', 1),
 ('min', 'minute', 'min', 'time', 60),
 ('h', 'hour', 'h', 'time', 3600),
-('c', 'Celsius', '°C', 'temperature', 1),
+('c', 'Celsius', '掳C', 'temperature', 1),
 ('l', 'liter', 'L', 'volume', 1),
-('um', 'micrometer', 'µm', 'length', 1e-6),
+('um', 'micrometer', '碌m', 'length', 1e-6),
 ('m', 'meter', 'm', 'length', 1)
 ON CONFLICT ("unit_id") DO NOTHING;
 
--- Example: Add a system user for automated processes
 INSERT INTO "reference"."personal" ("person_id", "full_name", "password_hash") VALUES
 ('system_user', 'System Automation', 'no_password_needed_for_system')
 ON CONFLICT ("person_id") DO NOTHING;
 
 -- ======================================================================
 -- 15. Partitioning Setup
---     Call these functions to create partitions for specific years.
---     Automate this annually via a cron job or similar scheduler.
 -- ======================================================================
 
--- Create initial partitions for current and next year for lab.sampling
 DO $$
 BEGIN
     PERFORM "lab".create_sampling_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER);
     PERFORM "lab".create_sampling_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER + 1);
 END $$;
 
--- Create initial partitions for current and next year for lab.samples
 DO $$
 DECLARE
     current_year_int INTEGER := EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER;
@@ -3298,63 +3822,192 @@ BEGIN
              FOR VALUES FROM (''' || next_year_start_date || ''') TO (''' || next_year_end_date || ''');';
 END $$;
 
+DO $$
+BEGIN
+    PERFORM "lab".create_experiments_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER);
+    PERFORM "lab".create_experiments_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER + 1);
+END $$;
+
+DO $$
+BEGIN
+    PERFORM "lab".create_dissections_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER);
+    PERFORM "lab".create_dissections_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER + 1);
+END $$;
+
+DO $$
+BEGIN
+    PERFORM "lab".create_extraction_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER);
+    PERFORM "lab".create_extraction_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER + 1);
+END $$;
+
+DO $$
+BEGIN
+    PERFORM "lab".create_nanodrop_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER);
+    PERFORM "lab".create_nanodrop_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER + 1);
+END $$;
+
+DO $$
+BEGIN
+    PERFORM "lab".create_qubit_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER);
+    PERFORM "lab".create_qubit_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER + 1);
+END $$;
+
+DO $$
+BEGIN
+    PERFORM "lab".create_tapestation_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER);
+    PERFORM "lab".create_tapestation_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER + 1);
+END $$;
+
+DO $$
+BEGIN
+    PERFORM "lab".create_pcr_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER);
+    PERFORM "lab".create_pcr_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER + 1);
+END $$;
+
+DO $$
+BEGIN
+    PERFORM "lab".create_gelelectrophoresis_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER);
+    PERFORM "lab".create_gelelectrophoresis_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER + 1);
+END $$;
+
+DO $$
+BEGIN
+    PERFORM "lab".create_qpcr_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER);
+    PERFORM "lab".create_qpcr_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER + 1);
+END $$;
+
+DO $$
+BEGIN
+    PERFORM "lab".create_library_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER);
+    PERFORM "lab".create_library_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER + 1);
+END $$;
+
+DO $$
+BEGIN
+    PERFORM "lab".create_sequencing_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER);
+    PERFORM "lab".create_sequencing_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER + 1);
+END $$;
+
+DO $$
+BEGIN
+    PERFORM "lab".create_datasets_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER);
+    PERFORM "lab".create_datasets_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER + 1);
+END $$;
+
+DO $$
+BEGIN
+    PERFORM "bioinformatics".create_analysis_runs_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER);
+    PERFORM "bioinformatics".create_analysis_runs_partition_if_not_exists_manual(EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER + 1);
+END $$;
 
 
 -- ======================================================================
 -- 16. Row-Level Security (RLS) Policies
---     Enable RLS on tables and define policies.
---     Remember to set 'lims.current_person_id' in your application.
 -- ======================================================================
 
 ALTER TABLE "lims"."projects" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "lab"."samples" ENABLE ROW LEVEL SECURITY;
 
--- Policy 1: Users can see projects they are a member of.
 CREATE POLICY project_membership_policy ON "lims"."projects"
 FOR SELECT
 USING ("lims".is_member_of_project(project_id));
 
--- Policy 2: Users can see samples belonging to projects they are a member of.
 CREATE POLICY sample_project_membership_policy ON "lab"."samples"
 FOR SELECT
 USING ("lims".is_member_of_project(project_id));
 
 -- ======================================================================
--- 17. Advanced JSONB and ltree Query Examples (for reference)
+-- 17. Advanced JSONB and ltree Query Examples
 -- ======================================================================
 
 -- Querying JSONB data from the Dissections table
--- SELECT dissection_id, sample_id, stomach_contents_jsonb
--- FROM "lab"."dissections"
--- WHERE stomach_contents_jsonb @> '[{"item": "shrimp"}]'::jsonb;
+SELECT dissection_id, sample_id, stomach_contents_jsonb
+FROM "lab"."dissections"
+WHERE stomach_contents_jsonb ? 'item';
+
+SELECT dissection_id, sample_id, stomach_contents_jsonb->>'item' AS item_name
+FROM "lab"."dissections"
+WHERE stomach_contents_jsonb @> '[{"item": "shrimp"}]'::jsonb;
+
+SELECT dissection_id, sample_id, jsonb_array_elements(stomach_contents_jsonb) ->> 'quantity' AS quantity_of_item
+FROM "lab"."dissections"
+WHERE stomach_contents_jsonb @> '[{"item": "fish"}]'::jsonb;
+
+-- Example of querying nested JSONB: assuming 'parameters_jsonb' in 'bioinformatics.analysis_runs'
+-- SELECT run_id, parameters_jsonb->>'alignment_tool_version' AS tool_version
+-- FROM "bioinformatics"."analysis_runs"
+-- WHERE parameters_jsonb @> '{"pipeline_settings": {"min_quality": 30}}'::jsonb;
 
 -- Update ltree paths (run after initial taxon data load)
--- SELECT "reference".update_taxon_ltree_paths();
+SELECT "reference".update_taxon_ltree_paths();
 
 -- Find all taxa belonging to the family 'Gadidae' (assuming 'Gadidae' is a taxon_id)
--- SELECT * FROM "reference"."taxon"
--- WHERE path <@ (SELECT path FROM "reference"."taxon" WHERE taxon_id = 'Gadidae');
+SELECT * FROM "reference"."taxon"
+WHERE path <@ (SELECT path FROM "reference"."taxon" WHERE taxon_id = 'Gadidae');
 
 -- Find the full lineage of 'Gadus morhua' (Atlantic Cod)
--- SELECT * FROM "reference"."taxon"
--- WHERE path @> (SELECT path FROM "reference"."taxon" WHERE taxon_id = 'Gadus morhua')
--- ORDER BY path;
+SELECT * FROM "reference"."taxon"
+WHERE path @> (SELECT path FROM "reference"."taxon" WHERE taxon_id = 'Gadus morhua')
+ORDER BY path;
+
+-- Find all children directly under 'Animalia' (direct descendants)
+SELECT taxon_id, de_name, en_name
+FROM "reference"."taxon"
+WHERE nlevel(path) = nlevel('Animalia'::ltree) + 1
+  AND path <@ 'Animalia'::ltree;
+
+-- Find common ancestor of two taxa
+-- SELECT lca('Chordata'::ltree, 'Arthropoda'::ltree);
+
+-- Additional JSONB Query Examples
+-- Querying for keys in a JSONB object
+SELECT run_id, parameters_jsonb
+FROM "bioinformatics"."analysis_runs"
+WHERE parameters_jsonb ? 'kmer_size';
+
+-- Querying for existence of a key-value pair
+SELECT run_id, parameters_jsonb
+FROM "bioinformatics"."analysis_runs"
+WHERE parameters_jsonb @> '{"quality_filter": true}'::jsonb;
+
+-- Extracting a specific value from a nested JSONB object
+SELECT run_id, parameters_jsonb->'processing'->>'trim_length' AS trim_length_setting
+FROM "bioinformatics"."analysis_runs"
+WHERE parameters_jsonb->'processing' ? 'trim_length';
+
+-- Aggregating JSONB data
+-- SELECT jsonb_object_agg(run_id, parameters_jsonb) FROM "bioinformatics"."analysis_runs";
+
+-- Additional ltree Query Examples
+-- Find all descendants of a specific path (e.g., all species under 'Chordata.Vertebrata')
+-- SELECT taxon_id, en_name FROM "reference"."taxon" WHERE path ~ 'Chordata.Vertebrata.*'::ltree;
+
+-- Find direct parents of a specific taxon
+-- SELECT t2.taxon_id, t2.en_name
+-- FROM "reference"."taxon" t1
+-- JOIN "reference"."taxon" t2 ON t1.path @> t2.path AND nlevel(t1.path) = nlevel(t2.path) + 1
+-- WHERE t1.taxon_id = 'Gadus morhua';
+
+-- Find all ancestors of a specific taxon
+-- SELECT t2.taxon_id, t2.en_name
+-- FROM "reference"."taxon" t1
+-- JOIN "reference"."taxon" t2 ON t1.path <@ t2.path
+-- WHERE t1.taxon_id = 'Gadus morhua'
+-- ORDER BY nlevel(t2.path) DESC;
+
 
 -- ======================================================================
--- 18. Foreign Data Wrappers (FDW) Examples (for reference)
+-- 18. Foreign Data Wrappers (FDW) Examples
 -- ======================================================================
 
--- Create a foreign server (example connecting to another PostgreSQL database)
 -- CREATE SERVER IF NOT EXISTS foreign_lims_server
 -- FOREIGN DATA WRAPPER postgres_fdw
 -- OPTIONS (host 'foreign_host', port '5432', dbname 'foreign_lims_db');
 
--- Create user mapping for the foreign server
 -- CREATE USER MAPPING IF NOT EXISTS FOR CURRENT_USER
 -- SERVER foreign_lims_server
 -- OPTIONS (user 'foreign_user', password 'foreign_password');
 
--- Create a foreign table (example: accessing a 'remote_projects' table on the foreign server)
 -- CREATE FOREIGN TABLE IF NOT EXISTS "lims"."foreign_projects" (
 --      "project_id" text NOT NULL,
 --      "title" text,
@@ -3364,76 +4017,68 @@ USING ("lims".is_member_of_project(project_id));
 -- SERVER foreign_lims_server
 -- OPTIONS (schema_name 'lims', table_name 'projects');
 
--- Example query on a foreign table
 -- SELECT * FROM "lims"."foreign_projects" WHERE "title" LIKE '%External%';
 
 -- ======================================================================
--- 19. Aggregates Examples (for reference)
+-- 19. Aggregates Examples
 -- ======================================================================
 
--- Total number of samples per sample type
--- SELECT
---      st.sample_type_id,
---      COUNT(s.sample_id) AS total_samples
--- FROM
---      "reference"."samples_type" st
--- LEFT JOIN
---      "lab"."samples" s ON st.sample_type_id = s.sample_type_id
--- GROUP BY
---      st.sample_type_id
--- ORDER BY
---      total_samples DESC;
+SELECT
+    st.sample_type_id,
+    COUNT(s.sample_id) AS total_samples
+FROM
+    "reference"."samples_type" st
+LEFT JOIN
+    "lab"."samples" s ON st.sample_type_id = s.sample_type_id
+GROUP BY
+    st.sample_type_id
+ORDER BY
+    total_samples DESC;
 
--- Average DNA concentration per extraction method
--- SELECT
---      extraction_method,
---      AVG(concentration_ng_ul) AS average_concentration_ng_ul
--- FROM
---      "lab"."dna"
--- WHERE
---      concentration_ng_ul IS NOT NULL
--- GROUP BY
---      extraction_method
--- HAVING
---      COUNT(concentration_ng_ul) > 1
--- ORDER BY
---      average_concentration_ng_ul DESC;
+SELECT
+    extraction_method,
+    AVG(concentration_ng_ul) AS average_concentration_ng_ul
+FROM
+    "lab"."dna"
+WHERE
+    concentration_ng_ul IS NOT NULL
+GROUP BY
+    extraction_method
+HAVING
+    COUNT(concentration_ng_ul) > 1
+ORDER BY
+    average_concentration_ng_ul DESC;
 
--- Count of samples received per year
--- SELECT
---      EXTRACT(YEAR FROM reception_date) AS reception_year,
---      COUNT(sample_id) AS samples_received
--- FROM
---      "lab"."samples"
--- WHERE
---      reception_date IS NOT NULL
--- GROUP BY
---      reception_year
--- ORDER BY
---      reception_year;
+SELECT
+    EXTRACT(YEAR FROM reception_date) AS reception_year,
+    COUNT(sample_id) AS samples_received
+FROM
+    "lab"."samples"
+WHERE
+    reception_date IS NOT NULL
+GROUP BY
+    reception_year
+ORDER BY
+    reception_year;
 
--- Max and Min length of fish by species
--- SELECT
---      cs.species_en_name,
---      MAX(f.total_length_mm) AS max_length_mm,
---      MIN(f.total_length_mm) AS min_length_mm,
---      AVG(f.weight_g) AS avg_weight_g
--- FROM
---      "lab"."fish" f
--- JOIN
---      "reference"."complete_species_taxon_view" cs ON f.species_id = cs.species_id
--- GROUP BY
---      cs.species_en_name
--- ORDER BY
---      max_length_mm DESC;
+SELECT
+    cs.species_en_name,
+    MAX(f.total_length_mm) AS max_length_mm,
+    MIN(f.total_length_mm) AS min_length_mm,
+    AVG(f.weight_g) AS avg_weight_g
+FROM
+    "lab"."fish" f
+JOIN
+    "reference"."complete_species_taxon_view" cs ON f.species_id = cs.species_id
+GROUP BY
+    cs.species_en_name
+ORDER BY
+    max_length_mm DESC;
 
 -- ======================================================================
 -- 20. Add Deferred Foreign Key Constraints and Unique Constraints
---     These must be added AFTER all tables, functions, triggers,
---     views, and initial partitions have been created.
 -- ======================================================================
 
--- Reference Schema FKs
 ALTER TABLE "reference"."taxon"
 ADD CONSTRAINT "taxon_parent_fk" FOREIGN KEY ("taxon_parent")
 REFERENCES "reference"."taxon"("taxon_id");
@@ -3442,7 +4087,6 @@ ALTER TABLE "reference"."species"
 ADD CONSTRAINT "species_taxon_id_fk" FOREIGN KEY ("species_id")
 REFERENCES "reference"."taxon"("taxon_id");
 
--- Lims Schema FKs
 ALTER TABLE "lims"."projects"
 ADD CONSTRAINT "projects_status_id_fk" FOREIGN KEY ("status_id")
 REFERENCES "reference"."status"("status_id");
@@ -3565,7 +4209,8 @@ REFERENCES "lab"."storage"("storage_id");
 
 ALTER TABLE "lims"."reagents"
 ADD CONSTRAINT "reagents_status_id_fk" FOREIGN KEY ("status_id")
-REFERENCES "reference"."status"("status_id");
+REFERENCES "reference"."status"("status_id")(
+);
 
 ALTER TABLE "lims"."reagents"
 ADD CONSTRAINT "reagents_order_id_fk" FOREIGN KEY ("order_id")
@@ -3595,7 +4240,6 @@ ALTER TABLE "lims"."publications"
 ADD CONSTRAINT "publications_corresponding_author_person_id_fk" FOREIGN KEY ("corresponding_author_person_id")
 REFERENCES "reference"."personal"("person_id");
 
--- Lab Schema FKs
 ALTER TABLE "lab"."storage"
 ADD CONSTRAINT "storage_room_id_fk" FOREIGN KEY ("room_id")
 REFERENCES "reference"."room"("room_id");
@@ -3604,29 +4248,17 @@ ALTER TABLE "lab"."storage"
 ADD CONSTRAINT "storage_project_id_fk" FOREIGN KEY ("project_id")
 REFERENCES "lims"."projects"("project_id");
 
-ALTER TABLE "lab"."experiments"
-ADD CONSTRAINT "experiments_sop_id_fk" FOREIGN KEY ("sop_id")
-REFERENCES "lims"."sop"("sop_id");
-
-ALTER TABLE "lab"."experiments"
-ADD CONSTRAINT "experiments_person_id_fk" FOREIGN KEY ("person_id")
-REFERENCES "reference"."personal"("person_id");
-
-ALTER TABLE "lab"."experiments"
-ADD CONSTRAINT "experiments_status_id_fk" FOREIGN KEY ("status_id")
-REFERENCES "reference"."status"("status_id");
-
 ALTER TABLE "lab"."experiments_projects"
-ADD CONSTRAINT "experiments_projects_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "experiments_projects_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."experiments_projects"
 ADD CONSTRAINT "experiments_projects_project_id_fk" FOREIGN KEY ("project_id")
 REFERENCES "lims"."projects"("project_id");
 
 ALTER TABLE "lab"."protocol_runs"
-ADD CONSTRAINT "protocol_runs_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "protocol_runs_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."protocol_runs"
 ADD CONSTRAINT "protocol_runs_sop_id_fk" FOREIGN KEY ("sop_id")
@@ -3637,8 +4269,8 @@ ADD CONSTRAINT "protocol_runs_person_id_fk" FOREIGN KEY ("person_id")
 REFERENCES "reference"."personal"("person_id");
 
 ALTER TABLE "lab"."sampling"
-ADD CONSTRAINT "sampling_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "sampling_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."sampling"
 ADD CONSTRAINT "sampling_project_id_fk" FOREIGN KEY ("project_id")
@@ -3716,14 +4348,13 @@ ALTER TABLE "lab"."fishing"
 ADD CONSTRAINT "fishing_customer_id_fk" FOREIGN KEY ("customer_id")
 REFERENCES "lims"."customers"("customer_id");
 
--- Lab.samples now references lab.master_samples
 ALTER TABLE "lab"."samples"
 ADD CONSTRAINT "samples_master_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."samples"
 ADD CONSTRAINT "samples_parent_sample_id_fk" FOREIGN KEY ("parent_sample_id")
-REFERENCES "lab"."master_samples"("sample_id"); -- References master_samples
+REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."samples"
 ADD CONSTRAINT "samples_sampling_fk" FOREIGN KEY ("sampling_id", "sampling_date")
@@ -3778,7 +4409,7 @@ ADD CONSTRAINT "storage_log_person_id_fk" FOREIGN KEY ("person_id")
 REFERENCES "reference"."personal"("person_id");
 
 ALTER TABLE "lab"."fish"
-ADD CONSTRAINT "fish_sample_id_fk" FOREIGN KEY ("sample_id") -- PK is sample_id, now references master_samples
+ADD CONSTRAINT "fish_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."fish"
@@ -3786,8 +4417,8 @@ ADD CONSTRAINT "fish_parent_sample_id_fk" FOREIGN KEY ("parent_sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."fish"
-ADD CONSTRAINT "fish_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "fish_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."fish"
 ADD CONSTRAINT "fish_species_id_fk" FOREIGN KEY ("species_id")
@@ -3806,7 +4437,7 @@ ADD CONSTRAINT "fish_customer_id_fk" FOREIGN KEY ("customer_id")
 REFERENCES "lims"."customers"("customer_id");
 
 ALTER TABLE "lab"."tissue"
-ADD CONSTRAINT "tissue_sample_id_fk" FOREIGN KEY ("sample_id") -- PK is sample_id, now references master_samples
+ADD CONSTRAINT "tissue_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."tissue"
@@ -3814,8 +4445,8 @@ ADD CONSTRAINT "tissue_parent_sample_id_fk" FOREIGN KEY ("parent_sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."tissue"
-ADD CONSTRAINT "tissue_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "tissue_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."tissue"
 ADD CONSTRAINT "tissue_storage_id_fk" FOREIGN KEY ("storage_id")
@@ -3838,7 +4469,7 @@ ADD CONSTRAINT "otoliths_project_id_fk" FOREIGN KEY ("project_id")
 REFERENCES "lims"."projects"("project_id");
 
 ALTER TABLE "lab"."dna"
-ADD CONSTRAINT "dna_sample_id_fk" FOREIGN KEY ("sample_id") -- PK is sample_id, now references master_samples
+ADD CONSTRAINT "dna_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."dna"
@@ -3846,8 +4477,8 @@ ADD CONSTRAINT "dna_parent_sample_id_fk" FOREIGN KEY ("parent_sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."dna"
-ADD CONSTRAINT "dna_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "dna_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."dna"
 ADD CONSTRAINT "dna_storage_id_fk" FOREIGN KEY ("storage_id")
@@ -3858,7 +4489,7 @@ ADD CONSTRAINT "dna_project_id_fk" FOREIGN KEY ("project_id")
 REFERENCES "lims"."projects"("project_id");
 
 ALTER TABLE "lab"."rna"
-ADD CONSTRAINT "rna_sample_id_fk" FOREIGN KEY ("sample_id") -- PK is sample_id, now references master_samples
+ADD CONSTRAINT "rna_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."rna"
@@ -3866,8 +4497,8 @@ ADD CONSTRAINT "rna_parent_sample_id_fk" FOREIGN KEY ("parent_sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."rna"
-ADD CONSTRAINT "rna_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "rna_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."rna"
 ADD CONSTRAINT "rna_storage_id_fk" FOREIGN KEY ("storage_id")
@@ -3878,7 +4509,7 @@ ADD CONSTRAINT "rna_project_id_fk" FOREIGN KEY ("project_id")
 REFERENCES "lims"."projects"("project_id");
 
 ALTER TABLE "lab"."sediments"
-ADD CONSTRAINT "sediments_sample_id_fk" FOREIGN KEY ("sample_id") -- PK is sample_id, now references master_samples
+ADD CONSTRAINT "sediments_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."sediments"
@@ -3886,8 +4517,8 @@ ADD CONSTRAINT "sediments_parent_sample_id_fk" FOREIGN KEY ("parent_sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."sediments"
-ADD CONSTRAINT "sediments_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "sediments_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."sediments"
 ADD CONSTRAINT "sediments_project_id_fk" FOREIGN KEY ("project_id")
@@ -3902,7 +4533,7 @@ ADD CONSTRAINT "sediments_storage_id_fk" FOREIGN KEY ("storage_id")
 REFERENCES "lab"."storage"("storage_id");
 
 ALTER TABLE "lab"."water"
-ADD CONSTRAINT "water_sample_id_fk" FOREIGN KEY ("sample_id") -- PK is sample_id, now references master_samples
+ADD CONSTRAINT "water_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."water"
@@ -3910,8 +4541,8 @@ ADD CONSTRAINT "water_parent_sample_id_fk" FOREIGN KEY ("parent_sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."water"
-ADD CONSTRAINT "water_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "water_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."water"
 ADD CONSTRAINT "water_storage_id_fk" FOREIGN KEY ("storage_id")
@@ -3922,15 +4553,15 @@ ADD CONSTRAINT "water_project_id_fk" FOREIGN KEY ("project_id")
 REFERENCES "lims"."projects"("project_id");
 
 ALTER TABLE "lab"."experiments_samples"
-ADD CONSTRAINT "experiments_samples_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "experiments_samples_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."experiments_samples"
-ADD CONSTRAINT "experiments_samples_sample_id_fk" FOREIGN KEY ("sample_id") -- References master_samples
+ADD CONSTRAINT "experiments_samples_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."dissections"
-ADD CONSTRAINT "dissections_sample_id_fk" FOREIGN KEY ("sample_id") -- References master_samples
+ADD CONSTRAINT "dissections_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."dissections"
@@ -3942,11 +4573,11 @@ ADD CONSTRAINT "dissections_status_id_fk" FOREIGN KEY ("status_id")
 REFERENCES "reference"."status"("status_id");
 
 ALTER TABLE "lab"."extraction"
-ADD CONSTRAINT "extraction_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "extraction_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."extraction"
-ADD CONSTRAINT "extraction_sample_id_fk" FOREIGN KEY ("sample_id") -- References master_samples
+ADD CONSTRAINT "extraction_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."extraction"
@@ -3982,11 +4613,11 @@ ADD CONSTRAINT "extraction_project_id_fk" FOREIGN KEY ("project_id")
 REFERENCES "lims"."projects"("project_id");
 
 ALTER TABLE "lab"."nanodrop"
-ADD CONSTRAINT "nanodrop_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "nanodrop_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."nanodrop"
-ADD CONSTRAINT "nanodrop_sample_id_fk" FOREIGN KEY ("sample_id") -- References master_samples
+ADD CONSTRAINT "nanodrop_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."nanodrop"
@@ -4010,12 +4641,12 @@ ADD CONSTRAINT "nanodrop_project_id_fk" FOREIGN KEY ("project_id")
 REFERENCES "lims"."projects"("project_id");
 
 ALTER TABLE "lab"."qubit"
-ADD CONSTRAINT "qubit_sample_id_fk" FOREIGN KEY ("sample_id") -- References master_samples
+ADD CONSTRAINT "qubit_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."qubit"
-ADD CONSTRAINT "qubit_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "qubit_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."qubit"
 ADD CONSTRAINT "qubit_tube_unit_id_fk" FOREIGN KEY ("tube_unit_id")
@@ -4042,15 +4673,15 @@ ADD CONSTRAINT "qubit_project_id_fk" FOREIGN KEY ("project_id")
 REFERENCES "lims"."projects"("project_id");
 
 ALTER TABLE "lab"."tapestation"
-ADD CONSTRAINT "tapestation_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "tapestation_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."tapestation"
 ADD CONSTRAINT "tapestation_person_id_fk" FOREIGN KEY ("person_id")
 REFERENCES "reference"."personal"("person_id");
 
 ALTER TABLE "lab"."tapestation"
-ADD CONSTRAINT "tapestation_sample_id_fk" FOREIGN KEY ("sample_id") -- References master_samples
+ADD CONSTRAINT "tapestation_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."tapestation"
@@ -4066,11 +4697,11 @@ ADD CONSTRAINT "tapestation_project_id_fk" FOREIGN KEY ("project_id")
 REFERENCES "lims"."projects"("project_id");
 
 ALTER TABLE "lab"."pcr"
-ADD CONSTRAINT "pcr_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "pcr_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."pcr"
-ADD CONSTRAINT "pcr_sample_id_fk" FOREIGN KEY ("sample_id") -- References master_samples
+ADD CONSTRAINT "pcr_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."pcr"
@@ -4094,11 +4725,11 @@ ADD CONSTRAINT "pcr_project_id_fk" FOREIGN KEY ("project_id")
 REFERENCES "lims"."projects"("project_id");
 
 ALTER TABLE "lab"."gelelectrophoresis"
-ADD CONSTRAINT "gelelectrophoresis_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "gelelectrophoresis_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."gelelectrophoresis"
-ADD CONSTRAINT "gelelectrophoresis_sample_id_fk" FOREIGN KEY ("sample_id") -- References master_samples
+ADD CONSTRAINT "gelelectrophoresis_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."gelelectrophoresis"
@@ -4114,11 +4745,11 @@ ADD CONSTRAINT "gelelectrophoresis_project_id_fk" FOREIGN KEY ("project_id")
 REFERENCES "lims"."projects"("project_id");
 
 ALTER TABLE "lab"."qpcr"
-ADD CONSTRAINT "qpcr_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "qpcr_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."qpcr"
-ADD CONSTRAINT "qpcr_sample_id_fk" FOREIGN KEY ("sample_id") -- References master_samples
+ADD CONSTRAINT "qpcr_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."qpcr"
@@ -4142,11 +4773,11 @@ ADD CONSTRAINT "qpcr_project_id_fk" FOREIGN KEY ("project_id")
 REFERENCES "lims"."projects"("project_id");
 
 ALTER TABLE "lab"."library"
-ADD CONSTRAINT "library_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "library_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."library"
-ADD CONSTRAINT "library_sample_id_fk" FOREIGN KEY ("sample_id") -- References master_samples
+ADD CONSTRAINT "library_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."library"
@@ -4162,15 +4793,15 @@ ADD CONSTRAINT "library_project_id_fk" FOREIGN KEY ("project_id")
 REFERENCES "lims"."projects"("project_id");
 
 ALTER TABLE "lab"."sequencing"
-ADD CONSTRAINT "sequencing_experiment_id_fk" FOREIGN KEY ("experiment_id")
-REFERENCES "lab"."experiments"("experiment_id");
+ADD CONSTRAINT "sequencing_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."sequencing"
-ADD CONSTRAINT "sequencing_library_id_fk" FOREIGN KEY ("library_id")
-REFERENCES "lab"."library"("library_id");
+ADD CONSTRAINT "sequencing_library_fk" FOREIGN KEY ("library_id", "prep_date")
+REFERENCES "lab"."library"("library_id", "prep_date");
 
 ALTER TABLE "lab"."sequencing"
-ADD CONSTRAINT "sequencing_sample_id_fk" FOREIGN KEY ("sample_id") -- References master_samples
+ADD CONSTRAINT "sequencing_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "lab"."sequencing"
@@ -4205,14 +4836,13 @@ ALTER TABLE "lab"."datasets"
 ADD CONSTRAINT "datasets_stored_location_id_fk" FOREIGN KEY ("stored_location_id")
 REFERENCES "lab"."storage"("storage_id");
 
--- Bioinformatics Schema FKs
 ALTER TABLE "bioinformatics"."analysis_runs"
 ADD CONSTRAINT "analysis_runs_pipeline_id_fk" FOREIGN KEY ("pipeline_id")
 REFERENCES "bioinformatics"."analysis_pipelines"("pipeline_id");
 
 ALTER TABLE "bioinformatics"."analysis_runs"
-ADD CONSTRAINT "analysis_runs_sequencing_id_fk" FOREIGN KEY ("sequencing_id")
-REFERENCES "lab"."sequencing"("sequencing_id");
+ADD CONSTRAINT "analysis_runs_sequencing_fk" FOREIGN KEY ("sequencing_id", "sequencing_date")
+REFERENCES "lab"."sequencing"("sequencing_id", "sequencing_date");
 
 ALTER TABLE "bioinformatics"."analysis_runs"
 ADD CONSTRAINT "analysis_runs_person_id_fk" FOREIGN KEY ("person_id")
@@ -4223,11 +4853,11 @@ ADD CONSTRAINT "analysis_runs_reference_db_id_fk" FOREIGN KEY ("reference_db_id"
 REFERENCES "bioinformatics"."reference_databases"("db_id");
 
 ALTER TABLE "bioinformatics"."edna_assignments"
-ADD CONSTRAINT "edna_assignments_run_id_fk" FOREIGN KEY ("run_id")
-REFERENCES "bioinformatics"."analysis_runs"("run_id");
+ADD CONSTRAINT "edna_assignments_run_fk" FOREIGN KEY ("run_id", "run_date")
+REFERENCES "bioinformatics"."analysis_runs"("run_id", "run_date");
 
 ALTER TABLE "bioinformatics"."edna_assignments"
-ADD CONSTRAINT "edna_assignments_sample_id_fk" FOREIGN KEY ("sample_id") -- References master_samples
+ADD CONSTRAINT "edna_assignments_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
 ALTER TABLE "bioinformatics"."edna_assignments"
