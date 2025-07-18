@@ -235,7 +235,7 @@ CREATE TABLE IF NOT EXISTS "lims"."external_contacts" (
 
 
 CREATE TABLE IF NOT EXISTS "lims"."customers" (
-    "customer_id" serial PRIMARY KEY, -- automatically serial number 0,1,2,3,...
+    "customer_id" text PRIMARY KEY, -- automatically serial number 0,1,2,3,...
     "customer_name" text NOT NULL,
     "customer_abrv" text UNIQUE NOT NULL,
     "address" text NOT NULL,
@@ -272,6 +272,25 @@ CREATE TABLE IF NOT EXISTS "lims"."project_persons" (
     "attachment_link" text 
 );
 
+
+CREATE TABLE IF NOT EXISTS "lab"."storage" (
+    "storage_id" text PRIMARY KEY, -- to fill manually
+    "room_id" text REFERENCES "reference"."room"("room_id"),
+    "freezer" text, -- 
+    "etage" text,
+    "temperature_c" numeric,
+    "box" text,
+    "box_size_x" numeric, 
+    "box_size_y" numeric, 
+    "storage_position_format" text, -- New: e.g., 'A1', 'H5'
+    "project_id" text REFERENCES "lims"."projects"("project_id"),
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
+);
+
+
+
 CREATE TABLE IF NOT EXISTS "lims"."cruises" (
     "cruise_id" text PRIMARY KEY, -- to fill manually
     "project_id" text NOT NULL REFERENCES "lims"."projects"("project_id") ON DELETE CASCADE,
@@ -279,11 +298,11 @@ CREATE TABLE IF NOT EXISTS "lims"."cruises" (
     "status_id" text REFERENCES "reference"."status"("status_id") DEFAULT 'Received' NOT NULL,
     "region_id" text REFERENCES "reference"."region"("region_id"),
     "ecosystem_id" text REFERENCES "reference"."ecosystem"("ecosystem_id"),
-    "capitaine_contact_id" text REFERENCES "reference"."external_contacts"("contact_id"), -- 
+    "capitaine_contact_id" text REFERENCES "lims"."external_contacts"("contact_id"), 
     "chief_scientist_person_id" text REFERENCES "reference"."personal"("person_id"), -- 
     "start_date" date,
     "end_date" date,
-    "together_with_contact_id" text REFERENCES "reference"."external_contacts"("contact_id"), -- 
+    "together_with_contact_id" text REFERENCES "lims"."external_contacts"("contact_id"), -- 
     "notes" text, -- 
     "attachment" bytea,
     "attachment_link" text 
@@ -424,11 +443,11 @@ CREATE TABLE IF NOT EXISTS "lims"."reagents" (
 
 --  table for publications
 
-CREATE TABLE IF NOT EXISTS "lims"."publications_type" (
+CREATE TABLE IF NOT EXISTS "lims"."publication_type" (
     "publication_type_id" text PRIMARY KEY, 
     "notes" text , 
     "attachment" bytea,
-    "attachment_link" text, 
+    "attachment_link" text
 );
 
 
@@ -455,22 +474,6 @@ CREATE TABLE IF NOT EXISTS "lims"."publications" (
 -- ======================================================================
 -- 6. Lab Schema Tables
 -- ======================================================================
-
-CREATE TABLE IF NOT EXISTS "lab"."storage" (
-    "storage_id" text PRIMARY KEY, -- to fill manually
-    "room_id" text REFERENCES "reference"."room"("room_id"),
-    "freezer" text, -- 
-    "etage" text,
-    "temperature_c" numeric,
-    "box" text,
-    "box_size_x" numeric, 
-    "box_size_y" numeric, 
-    "storage_position_format" text, -- New: e.g., 'A1', 'H5'
-    "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "notes" text, -- 
-    "attachment" bytea,
-    "attachment_link" text 
-);
 
 CREATE TABLE IF NOT EXISTS "lab"."experiments" (
     "experiment_id" text PRIMARY KEY, -- to fill manually
@@ -572,7 +575,7 @@ CREATE TABLE "lab"."sampling" (
     "total_catch_quantity_fish" numeric, 
     "catch_notes" text,
     "operation_duration_min" numeric, 
-    "together_with_contact_id" text REFERENCES "reference"."external_contacts"("contact_id"), 
+    "together_with_contact_id" text REFERENCES "lims"."external_contacts"("contact_id"), 
     "status_id" text REFERENCES "reference"."status"("status_id") DEFAULT 'Planned' NOT NULL,
     "notes" text, 
     "attachment" bytea,
@@ -598,7 +601,7 @@ CREATE TABLE IF NOT EXISTS "lab"."fishing" (
 
 -- Parent table for partitioned samples data
 CREATE TABLE "lab"."samples" (
-    "sample_id" text NOT NULL,
+    "sample_id" text UNIQUE NOT NULL,
     "external_name" text, 
     "parent_sample_id" text REFERENCES "lab"."samples"("sample_id"), 
     "sampling_id" text,
@@ -1034,9 +1037,9 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."analysis_runs" (
     "run_date" timestamptz DEFAULT CURRENT_TIMESTAMP, 
     "parameters_jsonb" jsonb,
     "reference_db_id" text REFERENCES "bioinformatics"."reference_databases"("db_id"),
-    "clustering_threshold" numeric, -
+    "clustering_threshold" numeric, 
     "final_output_path" text, 
-    "notes" text, -- 
+    "notes" text,
     "attachment" bytea,
     "attachment_link" text 
 );
@@ -2274,7 +2277,7 @@ CREATE TRIGGER audit_trigger_units
 AFTER INSERT OR UPDATE OR DELETE ON "reference"."units"
 FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
 CREATE TRIGGER audit_trigger_external_contacts
-AFTER INSERT OR UPDATE OR DELETE ON "reference"."external_contacts"
+AFTER INSERT OR UPDATE OR DELETE ON "lims"."external_contacts"
 FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
 CREATE TRIGGER audit_trigger_customers
 AFTER INSERT OR UPDATE OR DELETE ON "lims"."customers"
@@ -2487,7 +2490,7 @@ CREATE INDEX IF NOT EXISTS idx_taxon_path_gist ON "reference"."taxon" USING GIST
 CREATE INDEX IF NOT EXISTS idx_species_de_name ON "reference"."species" ("de_name");
 CREATE INDEX IF NOT EXISTS idx_species_en_name ON "reference"."species" ("en_name");
 CREATE INDEX IF NOT EXISTS idx_units_unit_type ON "reference"."units" ("unit_type");
-CREATE INDEX IF NOT EXISTS idx_external_contacts_full_name ON "reference"."external_contacts" ("full_name");
+CREATE INDEX IF NOT EXISTS idx_external_contacts_full_name ON "lims"."external_contacts" ("full_name");
 
 
 -- Lims Schema Indexes
@@ -2782,7 +2785,6 @@ SELECT
     s.sample_id,
     s.external_name AS sample_external_name,
     s.sample_type_id,
-    s.storage_position AS sample_storage_position, -- Use new storage_position from samples
     s.reception_date AS sample_reception_date,
     s.project_id
 FROM
@@ -2790,7 +2792,7 @@ FROM
 LEFT JOIN
     "reference"."room" r ON st.room_id = r.room_id
 LEFT JOIN
-    "lab"."samples" s ON st.storage_id = s.storage_id AND st.storage_position = s.storage_position; -- Join on new storage_position
+    "lab"."samples" s ON st.storage_id = s."storage_id" ; -- Join on new storage_position
 
 -- View: Experiment_Summary_View
 CREATE OR REPLACE VIEW "lab"."experiment_summary_view" AS
@@ -2945,12 +2947,12 @@ SELECT
     p.funder,
     p.start_date,
     p.end_date,
-    COUNT(DISTINCT ex.experiment_id) AS number_of_experiments,
+    COUNT(DISTINCT ep.experiment_id) AS number_of_experiments, 
     COUNT(DISTINCT s.sample_id) AS number_of_samples,
     SUM(o.price) AS total_order_cost
 FROM "lims"."projects" p
 LEFT JOIN "reference"."status" stat ON p.status_id = stat.status_id
-LEFT JOIN "lab"."experiments" ex ON p.project_id = ex.project_id
+LEFT JOIN "lab"."experiments_projects" ep ON p.project_id = ep.project_id 
 LEFT JOIN "lab"."samples" s ON p.project_id = s.project_id
 LEFT JOIN "lims"."orders" o ON p.project_id = o.project_id
 GROUP BY
@@ -2958,11 +2960,12 @@ GROUP BY
 ORDER BY p.start_date DESC;
 
 -- View: Experiment Progress Overview
+-- View: Experiment Progress Overview
 CREATE OR REPLACE VIEW "lab"."experiment_progress_overview_view" AS
 SELECT
     e.experiment_id,
     e.experiment_title,
-    e.project_id,
+    p.project_id,
     p.title AS project_title,
     stat.notes AS experiment_status,
     e.experiment_date AS experiment_start_date,
@@ -2974,7 +2977,8 @@ SELECT
     COUNT(DISTINCT seq.sample_id) AS samples_sequenced,
     COUNT(DISTINCT ar.run_id) AS samples_bioinformatics_done -- Count analysis runs
 FROM "lab"."experiments" e
-LEFT JOIN "lims"."projects" p ON e.project_id = p.project_id
+LEFT JOIN "lab"."experiments_projects" ep ON e.experiment_id = ep.experiment_id 
+LEFT JOIN "lims"."projects" p ON ep.project_id = p.project_id 
 LEFT JOIN "reference"."status" stat ON e.status_id = stat.status_id
 LEFT JOIN "reference"."personal" pers ON e.person_id = pers.person_id
 LEFT JOIN "lab"."experiments_samples" es ON e.experiment_id = es.experiment_id
@@ -2982,9 +2986,9 @@ LEFT JOIN "lab"."extraction" ext ON es.sample_id = ext.sample_id
 LEFT JOIN "lab"."qubit" qu ON es.sample_id = qu.sample_id
 LEFT JOIN "lab"."library" lib ON es.sample_id = lib.sample_id
 LEFT JOIN "lab"."sequencing" seq ON es.sample_id = seq.sample_id
-LEFT JOIN "bioinformatics"."analysis_runs" ar ON seq.sequencing_id = ar.sequencing_id -- Link sequencing to analysis runs
+LEFT JOIN "bioinformatics"."analysis_runs" ar ON seq.sequencing_id = ar.sequencing_id 
 GROUP BY
-    e.experiment_id, e.experiment_title, e.project_id, p.title,
+    e.experiment_id, e.experiment_title, p.project_id, p.title, 
     stat.notes, e.experiment_date, pers.full_name
 ORDER BY e.experiment_date DESC;
 
@@ -3198,7 +3202,7 @@ LEFT JOIN "reference"."taxon" ea_taxon ON ea.taxon_id = ea_taxon.taxon_id
 LEFT JOIN "reference"."units" wu ON samp.wind_unit_id = wu.unit_id
 LEFT JOIN "reference"."units" su ON samp.salinity_unit_id = su.unit_id
 LEFT JOIN "reference"."units" ou ON samp.oxygen_unit_id = ou.unit_id
-LEFT JOIN "reference"."units" svu ON sed.volume_unit_id = svu.unit_id;
+LEFT JOIN "reference"."units" svu ON sed.volume_unit_id = svu.unit_id
 
 -- Sampler/Receiver from personal table
 LEFT JOIN "reference"."personal" sampler_p ON s.sampler_person_id = sampler_p.person_id
@@ -3316,10 +3320,10 @@ INSERT INTO "reference"."samples_type" ("sample_type_id", "sample_type_abrv", "n
 ('Publication', 'PUB', 'Research Publication') -- Added for publication type
 ON CONFLICT ("sample_type_id") DO NOTHING;
 
+
 INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "unit_type", "conversion_factor_to_base") VALUES
 ('mm', 'millimeter', 'mm', 'length', 0.001),
 ('g', 'gram', 'g', 'mass', 0.001),
-('mg', 'milligram', 'mg', 'mass', 0.000001),
 ('ul', 'microliter', 'µL', 'volume', 1e-6),
 ('ng_ul', 'nanogram per microliter', 'ng/µL', 'concentration', 1e-9),
 ('bp', 'base pair', 'bp', 'length', 1),
@@ -3328,8 +3332,8 @@ INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "u
 ('PSU', 'Practical Salinity Unit', 'PSU', 'salinity', 1),
 ('ppt', 'parts per thousand', 'ppt', 'salinity', 1),
 ('dbar', 'decibar', 'dbar', 'pressure', 1),
-('psi', 'pounds per square inch', 'psi', 0.0689476),
-('kPa', 'kilopascal', 'kPa', 'pressure', 1000), -- Corrected conversion factor
+('psi', 'pounds per square inch', 'psi', 'pressure', 0.0689476), 
+('kPa', 'kilopascal', 'kPa', 'pressure', 1000),
 ('mg_l', 'milligram per liter', 'mg/L', 'concentration', 1),
 ('umol_l', 'micromole per liter', 'µmol/L', 'concentration', 1),
 ('ntu', 'Nephelometric Turbidity Unit', 'NTU', 'turbidity', 1),
@@ -3340,7 +3344,7 @@ INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "u
 ('c', 'Celsius', '°C', 'temperature', 1),
 ('l', 'liter', 'L', 'volume', 1),
 ('um', 'micrometer', 'µm', 'length', 1e-6),
-('m', 'meter', 'm', 'length', 1) -- Added meter
+('m', 'meter', 'm', 'length', 1)
 ON CONFLICT ("unit_id") DO NOTHING;
 
 -- Example: Add a system user for automated processes
