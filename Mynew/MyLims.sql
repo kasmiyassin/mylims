@@ -434,7 +434,7 @@ CREATE TABLE IF NOT EXISTS "lims"."publications_type" (
 
 CREATE TABLE IF NOT EXISTS "lims"."publications" (
     "publication_id" text PRIMARY KEY, -- PublicationType_YY_0000
-    "publication_type_id" text REFERENCES "reference"."publication_type"("publication_type_id"), 
+    "publication_type_id" text REFERENCES "lims"."publication_type"("publication_type_id"), 
     "project_id" text REFERENCES "lims"."projects"("project_id"),
     "title" text NOT NULL,
     "journal" text,
@@ -1138,10 +1138,10 @@ DECLARE
     id_prefix text;
 BEGIN
     pub_year := TO_CHAR(COALESCE(NEW.date_publication, CURRENT_DATE), 'YY');
-    SELECT sample_type_abrv INTO pub_type_abrv FROM "reference"."samples_type" WHERE sample_type_id = NEW.publication_type_id;
+    SELECT sample_type_abrv INTO pub_type_abrv FROM "lims"."samples_type" WHERE sample_type_id = NEW.publication_type_id;
     
     IF pub_type_abrv IS NULL THEN
-        RAISE EXCEPTION 'Cannot generate publication_id: publication_type_id "%" not found in "reference"."samples_type".', NEW.publication_type_id;
+        RAISE EXCEPTION 'Cannot generate publication_id: publication_type_id "%" not found in "lims"."samples_type".', NEW.publication_type_id;
     END IF;
 
     id_prefix := pub_type_abrv || pub_year;
