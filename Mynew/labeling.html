@@ -3,17 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Label Printing - TIFI</title>
+    <title>LIMS Labeling</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
+        /* Base styles for the body and overall layout */
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        /* Styling for the sidebar navigation */
+        .sidebar { border-right: 1px solid #e2e8f0; }
+        .sidebar-item { color: #475569; }
+        /* Active state for sidebar items */
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        /* Hover effect for sidebar items */
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        /* Card styling for content sections */
         .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
-        select:disabled, button:disabled, input:disabled { background-color: #e5e7eb; cursor: not-allowed; opacity: 0.7; }
-        #loading-spinner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10; }
+        /* Modal overlay for pop-ups */
+        .modal-overlay { z-index: 50; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+        /* Loading spinner animation */
+        #loading-spinner { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10; 
+            background-color: rgba(255,255,255,0.75); /* Semi-transparent overlay for loading */
+            width: 100%; height: 100%; border-radius: 0.75rem; /* Match card border-radius */
+            display: flex; align-items: center; justify-content: center;
+        }
+        /* Print area styling, dynamically set by JavaScript */
         #print-area {
             display: grid;
             padding: 1rem;
@@ -21,10 +38,13 @@
             border: 1px solid #e5e7eb;
             border-radius: 0.5rem;
             min-height: 200px;
-            gap: var(--label-gap, 8px);
+            gap: var(--label-gap, 8px); /* Default gap, can be overridden */
         }
+        /* Grid layout for labels */
         #print-area.layout-grid { grid-template-columns: repeat(var(--label-cols, auto-fill), minmax(var(--label-width, 180px), 1fr)); }
+        /* Column layout for labels */
         #print-area.layout-column { display: flex; flex-direction: column; align-items: center; }
+        /* Individual label ticket styling */
         .label-ticket {
             background-color: white;
             border: 1px solid #d1d5db;
@@ -42,39 +62,61 @@
             flex-grow: 0;
             box-sizing: border-box;
         }
+        /* Styling for blank labels (placeholders) */
         .label-ticket.blank {
             background-color: #f0f0f0;
             border: 1px dashed #ccc;
-            visibility: hidden;
+            visibility: hidden; /* Hide blank labels from preview but maintain space */
         }
+        /* Container for barcode/QR code within the label */
         .label-ticket .code-container { margin-bottom: 5px; }
         .label-ticket .code-container svg, .label-ticket .code-container img { max-width: 100%; height: auto; display: block; }
+        /* Styling for text content within the label */
         .label-text { text-align: center; font-family: 'Arial Narrow', Arial, sans-serif; font-size: var(--label-font-size, 10px); width: 100%; }
         .label-text b { font-size: calc(var(--label-font-size, 10px) + 1px); font-weight: 700; display: block; margin-bottom: 2px; }
         .label-text span { display: block; }
         .label-text .info-key { font-weight: 600; }
         
+        /* Print-specific styles to hide UI elements and format labels for actual printing */
         @media print {
-            body > #main-app { display: none; }
-            body > #print-container { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
+            body > #main-app { display: none; } /* Hide the main application UI */
+            body > #print-container { 
+                display: block !important; 
+                position: absolute; 
+                left: 0; 
+                top: 0; 
+                width: 100%; 
+                margin: 0; 
+                padding: 0;
+            }
+            /* Grid layout for printing, using print-specific gaps */
             #print-area-for-printing {
                 display: grid;
                 grid-template-columns: repeat(var(--label-cols, auto-fill), minmax(var(--label-width, 180px), 1fr));
                 column-gap: var(--label-col-gap, 0mm);
                 row-gap: var(--label-row-gap, 0mm);
+                margin: 0;
+                padding: 0;
             }
             #print-area-for-printing.layout-column { display: flex; flex-direction: column; align-items: center; }
-            .label-ticket { border: none; page-break-inside: avoid; }
-            .label-ticket.print-border { border: 0.5pt solid #cccccc; }
-            .label-ticket.blank { background-color: #ffffff; border: none; }
+            .label-ticket { 
+                border: none; 
+                page-break-inside: avoid; /* Prevent labels from breaking across pages */
+                visibility: visible !important; /* Ensure blank labels are visible for layout but not printed content */
+                background-color: white !important; /* Ensure background is white for printing */
+            }
+            .label-ticket.print-border { border: 0.5pt solid #cccccc; } /* Optional: print a faint border */
+            .label-ticket.blank { background-color: #ffffff; border: none; } /* Ensure blank labels are truly blank for printing */
         }
     </style>
+    <!-- Dynamic styles for print margins, controlled by JavaScript -->
     <style id="dynamic-print-styles"></style>
 </head>
 <body>
     <div id="main-app" class="flex">
+        <!-- Sidebar Navigation -->
         <div id="sidebar" class="print:hidden fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
-            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI</span></div>
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI LIMS</span></div>
             <nav class="flex-grow space-y-2">
                  <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
                  <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
@@ -90,28 +132,36 @@
                  <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
                  <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
             </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t"></div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
         </div>
 
+        <!-- Main Content Area -->
         <main id="main-content" class="ml-64 p-8 w-full">
             <div class="print:hidden">
                 <h1 class="text-3xl font-bold text-gray-800 mb-6">Advanced Label Printing</h1>
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <!-- Left Panel: Controls and Configuration -->
                     <div class="lg:col-span-4 print:hidden">
                         <div class="card p-6 space-y-4 relative">
-                            <div id="loading-spinner" class="hidden absolute inset-0 bg-white bg-opacity-75 flex items-center justify-content-center rounded-lg"><i data-lucide="loader-2" class="w-10 h-10 animate-spin text-blue-600"></i></div>
+                            <!-- Loading Spinner -->
+                            <div id="loading-spinner" class="hidden">
+                                <i data-lucide="loader-2" class="w-10 h-10 animate-spin text-blue-600"></i>
+                            </div>
+
+                            <!-- 1. Select Item Type -->
                             <fieldset><legend class="text-lg font-semibold text-gray-800 mb-2">1. Select Item Type</legend>
                                  <select id="item-type" class="block w-full p-2 border-gray-300 rounded-md shadow-sm">
                                      <option value="">-- Choose a type --</option>
                                      <optgroup label="Core LIMS Items">
                                          <option value="project">Project</option>
-                                         <option value="sample">Sample (Main)</option>
-                                         <option value="storage">Storage Box</option>
+                                         <option value="customer">Customer</option>
+                                         <option value="order">Order</option>
                                          <option value="reagent">Reagent</option>
                                          <option value="equipment">Equipment</option>
                                          <option value="sop">SOP</option>
-                                         <option value="customer">Customer</option>
-                                         <option value="order">Order</option>
-                                         <option value="cruise">Cruise</option>
                                          <option value="workflow">Workflow</option>
                                          <option value="permit">Permit</option>
                                          <option value="personal">Personnel</option>
@@ -123,33 +173,51 @@
                                          <option value="ecosystem">Ecosystem</option>
                                          <option value="taxon">Taxon</option>
                                          <option value="species">Species</option>
+                                         <option value="units">Units</option>
+                                         <option value="external_contacts">External Contacts</option>
+                                         <option value="publications_type">Publication Type</option>
+                                         <option value="publications">Publications</option>
+                                         <option value="inventory_items">Inventory Items</option>
+                                         <option value="primers">Primers</option>
+                                         <option value="suppliers">Suppliers</option>
                                      </optgroup>
-                                     <optgroup label="Lab Processes & Sub-Samples">
+                                     <optgroup label="Lab Processes & Samples">
+                                         <option value="sample">Sample (Main)</option>
                                          <option value="sampling">Sampling Event</option>
-                                         <option value="experiment">Experiment (Main)</option>
-                                         <option value="Experimentsamples">Experiment Samples Link</option>
-                                         <option value="Extraction">Extraction</option>
-                                         <option value="DNA">DNA Sample</option>
-                                         <option value="RNA">RNA Sample</option>
-                                         <option value="Fish">Fish Sample</option>
-                                         <option value="Tissue">Tissue Sample</option>
-                                         <option value="Water">Water Sample</option>
-                                         <option value="Sediments">Sediments Sample</option>
-                                         <option value="Dissections">Dissection</option>
-                                         <option value="Qubit">Qubit QC</option>
-                                         <option value="Nanodrop">Nanodrop QC</option>
-                                         <option value="Tapestation">Tapestation QC</option>
-                                         <option value="PCR">PCR</option>
-                                         <option value="qPCR">qPCR</option>
-                                         <option value="Gelelectrophoresis">Gel Electrophoresis</option>
-                                         <option value="Library">Library Prep</option>
-                                         <option value="Sequencing">Sequencing Run</option>
-                                         <option value="bioinformatics">Bioinformatics Analysis</option>
-                                         <option value="gene">Gene/Primer</option>
-                                         <option value="datasets">Dataset</option>
+                                         <option value="fishing">Fishing Event</option>
+                                         <option value="experiment">Experiment</option>
+                                         <option value="protocol_runs">Protocol Run</option>
+                                         <option value="storage">Storage Unit</option>
+                                         <option value="storage_log">Storage Log</option>
+                                         <option value="fish">Fish Sample</option>
+                                         <option value="tissue">Tissue Sample</option>
+                                         <option value="otoliths">Otoliths</option>
+                                         <option value="dna">DNA Sample</option>
+                                         <option value="rna">RNA Sample</option>
+                                         <option value="sediments">Sediments Sample</option>
+                                         <option value="water">Water Sample</option>
+                                         <option value="dissections">Dissection</option>
+                                         <option value="extraction">Extraction</option>
+                                         <option value="nanodrop">Nanodrop QC</option>
+                                         <option value="qubit">Qubit QC</option>
+                                         <option value="tapestation">Tapestation QC</option>
+                                         <option value="pcr">PCR</option>
+                                         <option value="gelelectrophoresis">Gel Electrophoresis</option>
+                                         <option value="qpcr">qPCR</option>
+                                         <option value="library">Library Prep</option>
+                                         <option value="sequencing">Sequencing Run</option>
+                                         <option value="datasets">Datasets</option>
+                                     </optgroup>
+                                     <optgroup label="Bioinformatics">
+                                         <option value="reference_databases">Reference Databases</option>
+                                         <option value="analysis_pipelines">Analysis Pipelines</option>
+                                         <option value="analysis_runs">Analysis Runs</option>
+                                         <option value="edna_assignments">eDNA Assignments</option>
                                      </optgroup>
                                  </select>
                             </fieldset>
+
+                            <!-- 2. Selection Mode (only for 'sample' type) -->
                             <div id="selection-mode-panel" class="hidden">
                                 <fieldset><legend class="text-lg font-semibold text-gray-800 mb-2">2. Selection Mode</legend>
                                     <div class="flex gap-4">
@@ -158,6 +226,8 @@
                                     </div>
                                 </fieldset>
                             </div>
+
+                            <!-- 3. Item Selection Panel -->
                             <div id="item-selection-panel" class="hidden">
                                  <div id="experiment-selector-container" class="hidden mb-4">
                                      <label for="experiment-search" class="text-sm font-medium text-gray-700">Search Experiment ID/Title</label>
@@ -173,8 +243,10 @@
                                      <select id="items-to-print" multiple class="block w-full h-48 p-2 border-gray-300 rounded-md shadow-sm bg-gray-50"><option disabled>Select an item type first</option></select>
                                  </div>
                             </div>
-                            <div id="classification-panel" class="hidden">
-                                 <fieldset><legend class="text-lg font-semibold text-gray-800 mb-2">4. Classification/Sorting</legend>
+
+                            <!-- 4. Sorting -->
+                            <div id="sorting-panel" class="hidden">
+                                 <fieldset><legend class="text-lg font-semibold text-gray-800 mb-2">4. Sorting</legend>
                                      <select id="sort-order" class="block w-full p-2 border-gray-300 rounded-md shadow-sm">
                                          <option value="none">No Sorting</option>
                                          <option value="asc">ID (A-Z)</option>
@@ -183,6 +255,7 @@
                                  </fieldset>
                             </div>
 
+                            <!-- 5. Configure Label -->
                             <fieldset><legend class="text-lg font-semibold text-gray-800 mb-2">5. Configure Label</legend>
                                  <div class="space-y-4">
                                      <div class="grid grid-cols-2 gap-4">
@@ -203,7 +276,7 @@
                                                  </optgroup>
                                                  <optgroup label="Tube/Cryo Formats">
                                                      <option value="topstick-8791">TopStick 8791 (22x12mm)</option>
-                                                     <option value="herma-4385">Herma 4385 (Ø 10mm)</option>
+                                                     <option value="herma-4385">Herma 4385 (Ã˜ 10mm)</option>
                                                      <option value="micro">Micro (25x12mm)</option>
                                                  </optgroup>
                                              </select>
@@ -218,15 +291,17 @@
                                              <div><label for="start-col" class="text-sm font-medium">Start Col</label><input type="number" id="start-col" value="1" min="1" class="mt-1 block w-full p-2 text-sm border-gray-300 rounded-md"></div>
                                          </div>
                                      </div>
+                                     <!-- Additional Info Checkboxes (Dynamically Populated) -->
                                      <div id="extra-info-container" class="hidden">
-                                        <legend class="text-sm font-medium">Additional Info</legend>
-                                        <label class="flex items-center mt-2 text-xs"><input type="checkbox" id="qr-embed-data" class="mr-2">Embed all in QR</label>
+                                        <legend class="text-sm font-medium">Additional Info to Display</legend>
+                                        <label class="flex items-center mt-2 text-xs"><input type="checkbox" id="qr-embed-data" class="mr-2">Embed all selected in QR Code</label>
                                         <input type="text" id="extra-info-option-search" placeholder="Search info fields..." class="mt-2 block w-full p-2 border-gray-300 rounded-md shadow-sm text-sm">
                                         <div id="extra-info-options" class="mt-2 space-y-1 max-h-32 overflow-y-auto p-2 border rounded-md bg-gray-50 text-sm"></div>
                                      </div>
                                  </div>
                             </fieldset>
                             
+                            <!-- 6. Page & Label Customization -->
                             <fieldset class="border-t pt-4 mt-4">
                                 <legend class="text-lg font-semibold text-gray-800 mb-2">6. Page & Label Customization</legend>
                                 <div class="space-y-4">
@@ -261,6 +336,7 @@
                             </fieldset>
                         </div>
                     </div>
+                    <!-- Right Panel: Label Preview and Actions -->
                     <div class="lg:col-span-8">
                         <div class="flex justify-between items-center mb-4 print:hidden">
                             <h2 class="text-xl font-bold text-gray-700">Label Preview</h2>
@@ -280,95 +356,130 @@
             </div>
         </main>
     </div>
+    <!-- Hidden container for print-specific content -->
     <div id="print-container" class="hidden"></div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        lucide.createIcons();
-        initializePrintingPage();
-    });
-
+    // Ensure user is logged in, redirect to login if not
+    if (sessionStorage.getItem('isLoggedIn') !== 'true') window.location.href = window.location.origin + '/login.html';
+    
+    // Base URL for API calls
     const API_BASE_URL = '/mymglab/api';
+    
+    // Cache for fetched data to avoid redundant API calls
     let masterDataCache = {
-        allExperiments: null,
-        allExtraInfoKeys: null
+        allExperiments: null, // Cache for all experiments (used for 'by experiment' selection)
+        allExtraInfoKeys: null // Cache for available extra info keys for the current item type
     };
 
+    // Predefined label size specifications (dimensions in mm, cols for grid layout, padding, font size, code size)
     const LABEL_SPECS = {
         'herma-4389':   { w: 66,   h: 33.8, cols: 3, p: '2px', f: '9px', codeSize: 30, marginTop: 11.8, marginLeft: 7.2, gapH: 0,   gapV: 0 },
         'herma-9533':   { w: 99.1, h: 42.3, cols: 2, p: '4px', f: '10px',codeSize: 50, marginTop: 11.2, marginLeft: 5.25,gapH: 0,   gapV: 0 },
         'topstick-8791':{ w: 22,   h: 12,   cols: 8, p: '1px', f: '6px', codeSize: 20, marginTop: 15,   marginLeft: 9,   gapH: 4,   gapV: 2 },
         'herma-4385':   { w: 10,   h: 10,   cols: 17,p: '0px', f: '4px', codeSize: 8,  isRound: true, marginTop: 13,   marginLeft: 10,  gapH: 2.5,  gapV: 2.5 },
         'micro':        { w: 25,   h: 12,   cols: 7, p: '2px', f: '8px', codeSize: 20, marginTop: 15.5, marginLeft: 10,  gapH: 2,   gapV: 2.5 },
-        'custom':       {}
+        'custom':       {} // Placeholder for custom dimensions
     };
 
-    // Mapping of item types to their API endpoints, primary key fields, and display fields
+    // Comprehensive mapping of item types to their API endpoints, primary key fields, and display fields
+    // This is crucial for dynamically fetching and displaying data from your MyLims database.
     const ITEM_TYPE_CONFIGS = {
-        // Core LIMS Items
-        'project': { schema: 'Lims', table: 'projects', idField: 'project_id', displayField: 'Title' },
-        'sample': { schema: 'Lab', table: 'samples', idField: 'sample_id', displayField: 'External_Name' },
-        'storage': { schema: 'Lab', table: 'storage', idField: 'storage_id', displayField: 'storage_id' },
-        'reagent': { schema: 'Lims', table: 'Reagents', idField: 'Reagents_id', displayField: 'Reagent_CompleteName' },
-        'equipment': { schema: 'Lims', table: 'Equipment', idField: 'equipment_id', displayField: 'equipment' },
-        'sop': { schema: 'Lims', table: 'sop', idField: 'sop_id', displayField: 'Title' },
-        'customer': { schema: 'Lims', table: 'customers', idField: 'customer_id', displayField: 'customer_name' },
-        'order': { schema: 'Lims', table: 'orders', idField: 'FI_Order_Nr', displayField: 'item' },
-        'cruise': { schema: 'Lims', table: 'cruises', idField: 'cruise_id', displayField: 'cruise_id' },
-        'workflow': { schema: 'Lims', table: 'workflows', idField: 'workflow_id', displayField: 'workflow_name' },
-        'permit': { schema: 'Lims', table: 'permits', idField: 'permit_id', displayField: 'permit_number' },
-        'personal': { schema: 'reference', table: 'personal', idField: 'person_id', displayField: 'Full Name' },
-        'category': { schema: 'reference', table: 'category', idField: 'category', displayField: 'category' },
-        'status': { schema: 'reference', table: 'status', idField: 'status_id', displayField: 'status_id' },
-        'room': { schema: 'reference', table: 'room', idField: 'room_id', displayField: 'room_id' },
-        'vessel': { schema: 'reference', table: 'vessel', idField: 'vessel_id', displayField: 'vessel name' },
-        'region': { schema: 'reference', table: 'region', idField: 'region_id', displayField: 'region_id' },
-        'ecosystem': { schema: 'reference', table: 'ecosystem', idField: 'ecosystem_id', displayField: 'ecosystem_id' },
-        'taxon': { schema: 'reference', table: 'taxon', idField: 'taxon_id', displayField: 'DE_name' },
-        'species': { schema: 'reference', table: 'species', idField: 'species', displayField: 'DE_name' },
+        // --- Reference Schema ---
+        'personal': { schema: 'Reference', table: 'personal', idField: 'person_id', displayField: 'full_name', pk: 'person_id' },
+        'status': { schema: 'Reference', table: 'status', idField: 'status_id', displayField: 'status_id', pk: 'status_id' },
+        'room': { schema: 'Reference', table: 'room', idField: 'room_id', displayField: 'room_id', pk: 'room_id' },
+        'vessel': { schema: 'Reference', table: 'vessel', idField: 'vessel_id', displayField: 'vessel_name', pk: 'vessel_id' },
+        'region': { schema: 'Reference', table: 'region', idField: 'region_id', displayField: 'region_abrv', pk: 'region_id' },
+        'ecosystem': { schema: 'Reference', table: 'ecosystem', idField: 'ecosystem_id', displayField: 'ecosystem_abrv', pk: 'ecosystem_id' },
+        'category': { schema: 'Reference', table: 'category', idField: 'category_id', displayField: 'category_id', pk: 'category_id' },
+        'samples_type': { schema: 'Reference', table: 'samples_type', idField: 'sample_type_id', displayField: 'sample_type_abrv', pk: 'sample_type_id' },
+        'gene': { schema: 'Reference', table: 'gene', idField: 'gene_id', displayField: 'gene_id', pk: 'gene_id' },
+        'taxon': { schema: 'Reference', table: 'taxon', idField: 'taxon_id', displayField: 'de_name', pk: 'taxon_id' },
+        'species': { schema: 'Reference', table: 'species', idField: 'species_id', displayField: 'en_name', pk: 'species_id' },
+        'units': { schema: 'Reference', table: 'units', idField: 'unit_id', displayField: 'unit_abbreviation', pk: 'unit_id' },
+        'external_contacts': { schema: 'Lims', table: 'external_contacts', idField: 'contact_id', displayField: 'full_name', pk: 'contact_id' }, // Corrected schema to Lims
+        'publications_type': { schema: 'Lims', table: 'publications_type', idField: 'publication_type_id', displayField: 'publication_type_id', pk: 'publication_type_id' }, // Corrected schema to Lims
 
-        // Lab Processes & Sub-Samples
-        'sampling': { schema: 'Lab', table: 'sampling', idField: 'sampling_id', displayField: 'Location' },
-        'experiment': { schema: 'Lab', table: 'Experiments', idField: 'Experiment_id', displayField: 'Experiment_title' },
-        'Experimentsamples': { schema: 'Lab', table: 'Experimentsamples', idField: 'sample_id', displayField: 'sample_id' }, // Note: This table has a composite PK, using sample_id for display/selection
-        'Extraction': { schema: 'Lab', table: 'Extraction', idField: 'Extraction_id', displayField: 'sample_id' },
-        'DNA': { schema: 'Lab', table: 'DNA', idField: 'sample_id', displayField: 'sample_id' },
-        'RNA': { schema: 'Lab', table: 'RNA', idField: 'sample_id', displayField: 'sample_id' },
-        'Fish': { schema: 'Lab', table: 'Fish', idField: 'sample_id', displayField: 'species' },
-        'Tissue': { schema: 'Lab', table: 'Tissue', idField: 'sample_id', displayField: 'tissue_type' },
-        'Water': { schema: 'Lab', table: 'Water', idField: 'sample_id', displayField: 'VolumeL' },
-        'Sediments': { schema: 'Lab', table: 'Sediments', idField: 'sample_id', displayField: 'Volume' },
-        'Dissections': { schema: 'Lab', table: 'Dissections', idField: 'dissection_id', displayField: 'sample_id' },
-        'Qubit': { schema: 'Lab', table: 'Qubit', idField: 'nr', displayField: 'sample_id' },
-        'Nanodrop': { schema: 'Lab', table: 'Nanodrop', idField: 'nr', displayField: 'sample_id' },
-        'Tapestation': { schema: 'Lab', table: 'Tapestation', idField: 'nr', displayField: 'sample_id' },
-        'PCR': { schema: 'Lab', table: 'PCR', idField: 'nr', displayField: 'sample_id' },
-        'qPCR': { schema: 'Lab', table: 'qPCR', idField: 'nr', displayField: 'sample_id' },
-        'Gelelectrophoresis': { schema: 'Lab', table: 'Gelelectrophoresis', idField: 'nr', displayField: 'sample_id' },
-        'Library': { schema: 'Lab', table: 'Library', idField: 'Lib_id', displayField: 'Lib_id' },
-        'Sequencing': { schema: 'Lab', table: 'Sequencing', idField: 'Seq_id', displayField: 'Seq_id' },
-        'bioinformatics': { schema: 'Lab', table: 'bioinformatics', idField: 'bioinfo_id', displayField: 'PipelineName' },
-        'gene': { schema: 'reference', table: 'gene', idField: 'gene_id', displayField: 'gene_id' }, // Corrected from Primer (Gene)
-        'datasets': { schema: 'Lab', table: 'datasets', idField: 'dataset_id', displayField: 'dataset_id' }
+        // --- Lims Schema ---
+        'customer': { schema: 'Lims', table: 'customers', idField: 'customer_id', displayField: 'customer_name', pk: 'customer_id' },
+        'project': { schema: 'Lims', table: 'projects', idField: 'project_id', displayField: 'title', pk: 'project_id' },
+        // 'project_persons': Composite PK, typically not for single label printing.
+        'cruise': { schema: 'Lims', table: 'cruises', idField: 'cruise_id', displayField: 'cruise_id', pk: 'cruise_id' },
+        'workflow': { schema: 'Lims', table: 'workflows', idField: 'workflow_id', displayField: 'workflow_name', pk: 'workflow_id' },
+        'permit': { schema: 'Lims', table: 'permits', idField: 'permit_id', displayField: 'permit_number', pk: 'permit_id' },
+        'primers': { schema: 'Lims', table: 'primers', idField: 'primer_id', displayField: 'primer_id', pk: 'primer_id' },
+        'sop': { schema: 'Lims', table: 'sop', idField: 'sop_id', displayField: 'title', pk: 'sop_id' },
+        'workflow_steps': { schema: 'Lims', table: 'workflow_steps', idField: 'step_id', displayField: 'step_name', pk: 'step_id' },
+        'equipment': { schema: 'Lims', table: 'equipment', idField: 'equipment_id', displayField: 'equipment_name', pk: 'equipment_id' },
+        'suppliers': { schema: 'Lims', table: 'suppliers', idField: 'supplier_id', displayField: 'supplier_name', pk: 'supplier_id' },
+        'inventory_items': { schema: 'Lims', table: 'inventory_items', idField: 'item_id', displayField: 'item_name', pk: 'item_id' },
+        'order': { schema: 'Lims', table: 'orders', idField: 'fi_order_nr', displayField: 'item_id', pk: 'fi_order_nr' },
+        'reagent': { schema: 'Lims', table: 'reagents', idField: 'reagent_id', displayField: 'reagent_complete_name', pk: 'reagent_id' },
+        'publications': { schema: 'Lims', table: 'publications', idField: 'publication_id', displayField: 'title', pk: 'publication_id' },
+
+        // --- Lab Schema ---
+        'storage': { schema: 'Lab', table: 'storage', idField: 'storage_id', displayField: 'box', pk: 'storage_id' },
+        'experiment': { schema: 'Lab', table: 'experiments', idField: 'experiment_id', displayField: 'experiment_title', pk: 'experiment_id' },
+        'experiments_projects': { schema: 'Lab', table: 'experiments_projects', idField: 'experiment_project_id', displayField: 'experiment_id', pk: 'experiment_project_id' }, // Serial PK
+        'protocol_runs': { schema: 'Lab', table: 'protocol_runs', idField: 'protocol_run_id', displayField: 'protocol_run_id', pk: 'protocol_run_id' }, // New table
+        'sampling': { schema: 'Lab', table: 'sampling', idField: 'sampling_id', displayField: 'location_name', pk: 'sampling_id' }, // Composite PK (sampling_id, sampling_date), but using sampling_id for display/delete
+        'fishing': { schema: 'Lab', table: 'fishing', idField: 'fishing_id', displayField: 'fishing_id', pk: 'fishing_id' },
+        'sample': { schema: 'Lab', table: 'samples', idField: 'sample_id', displayField: 'external_name', pk: 'sample_id' }, // Composite PK (sample_id, sampling_date), but using sample_id for display/delete
+        'storage_log': { schema: 'Lab', table: 'storage_log', idField: 'log_id', displayField: 'log_id', pk: 'log_id' }, // Serial PK
+        'fish': { schema: 'Lab', table: 'fish', idField: 'sample_id', displayField: 'species_id', pk: 'sample_id' },
+        'tissue': { schema: 'Lab', table: 'tissue', idField: 'sample_id', displayField: 'tissue_type', pk: 'sample_id' },
+        'otoliths': { schema: 'Lab', table: 'otoliths', idField: 'otolith_id', displayField: 'otolith_id', pk: 'otolith_id' },
+        'dna': { schema: 'Lab', table: 'dna', idField: 'sample_id', displayField: 'sample_id', pk: 'sample_id' },
+        'rna': { schema: 'Lab', table: 'rna', idField: 'sample_id', displayField: 'sample_id', pk: 'sample_id' },
+        'sediments': { schema: 'Lab', table: 'sediments', idField: 'sample_id', displayField: 'sample_id', pk: 'sample_id' },
+        'water': { schema: 'Lab', table: 'water', idField: 'sample_id', displayField: 'sample_id', pk: 'sample_id' },
+        // 'experiments_samples': Composite PK, typically not for single label printing.
+        'dissections': { schema: 'Lab', table: 'dissections', idField: 'dissection_id', displayField: 'sample_id', pk: 'dissection_id' },
+        'extraction': { schema: 'Lab', table: 'extraction', idField: 'extraction_id', displayField: 'sample_id', pk: 'extraction_id' },
+        'nanodrop': { schema: 'Lab', table: 'nanodrop', idField: 'nanodrop_id', displayField: 'sample_id', pk: 'nanodrop_id' },
+        'qubit': { schema: 'Lab', table: 'qubit', idField: 'qubit_id', displayField: 'sample_id', pk: 'qubit_id' },
+        'tapestation': { schema: 'Lab', table: 'tapestation', idField: 'tapestation_id', displayField: 'sample_id', pk: 'tapestation_id' },
+        'pcr': { schema: 'Lab', table: 'pcr', idField: 'pcr_id', displayField: 'sample_id', pk: 'pcr_id' },
+        'gelelectrophoresis': { schema: 'Lab', table: 'gelelectrophoresis', idField: 'gelelectrophoresis_id', displayField: 'sample_id', pk: 'gelelectrophoresis_id' },
+        'qpcr': { schema: 'Lab', table: 'qpcr', idField: 'qpcr_id', displayField: 'sample_id', pk: 'qpcr_id' },
+        'library': { schema: 'Lab', table: 'library', idField: 'library_id', displayField: 'library_id', pk: 'library_id' },
+        'sequencing': { schema: 'Lab', table: 'sequencing', idField: 'sequencing_id', displayField: 'sequencing_id', pk: 'sequencing_id' },
+        'datasets': { schema: 'Lab', table: 'datasets', idField: 'dataset_id', displayField: 'dataset_id', pk: 'dataset_id' },
+
+        // --- Bioinformatics Schema ---
+        'reference_databases': { schema: 'Bioinformatics', table: 'reference_databases', idField: 'db_id', displayField: 'db_name', pk: 'db_id' },
+        'analysis_pipelines': { schema: 'Bioinformatics', table: 'analysis_pipelines', idField: 'pipeline_id', displayField: 'pipeline_name', pk: 'pipeline_id' },
+        'analysis_runs': { schema: 'Bioinformatics', table: 'analysis_runs', idField: 'run_id', displayField: 'run_id', pk: 'run_id' },
+        'edna_assignments': { schema: 'Bioinformatics', table: 'edna_assignments', idField: 'assignment_id', displayField: 'assignment_id', pk: 'assignment_id' },
     };
 
 
+    // Sets the visibility of the loading spinner
     const setLoading = (isLoading) => {
         document.getElementById('loading-spinner').style.display = isLoading ? 'flex' : 'none';
     };
 
+    /**
+     * Generic asynchronous function to fetch data from the API.
+     * Includes loading state management and basic error handling.
+     * @param {string} endpoint - The API endpoint to fetch from (e.g., 'table/Lab/samples').
+     * @returns {Promise<Array|null>} The fetched data as an array, or null if an error occurred.
+     */
     async function apiFetch(endpoint) {
         setLoading(true);
         try {
-            // Use a simple cache key for all fetches
-            const cacheKey = endpoint;
-            if (masterDataCache[cacheKey]) {
-                return masterDataCache[cacheKey];
+            // Use caching to avoid re-fetching the same data multiple times
+            if (masterDataCache[endpoint]) {
+                return masterDataCache[endpoint];
             }
             const response = await fetch(`${API_BASE_URL}/${endpoint}`);
-            if (!response.ok) { throw new Error(`Server error: ${response.status} ${response.statusText}`); }
+            if (!response.ok) { 
+                const errorBody = await response.json().catch(() => ({error: `Server error or HTTP ${response.status}`}));
+                throw new Error(errorBody.error || `API request failed with status: ${response.status}`); 
+            }
             const data = await response.json();
-            masterDataCache[cacheKey] = data; // Cache the data
+            masterDataCache[endpoint] = data; // Cache the fetched data
             return data;
         } catch (error) {
             console.error(`Failed to fetch from endpoint: ${endpoint}.`, error);
@@ -379,23 +490,42 @@
         }
     }
 
+    // Debounce utility function to limit how often a function is called
+    const debounce = (func, delay) => {
+        let timeout;
+        return function(...args) {
+            const context = this;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(context, args), delay);
+        };
+    };
+
+    /**
+     * Initializes the labeling page by setting up event listeners for all controls.
+     */
     function initializePrintingPage() {
+        // Event listeners for main controls
         document.getElementById('item-type').addEventListener('change', handleItemTypeChange);
         document.querySelectorAll('input[name="selection-mode"]').forEach(radio => radio.addEventListener('change', handleSelectionModeChange));
         document.getElementById('experiment-selector').addEventListener('change', e => loadSamplesForExperiment(e.target.value));
-        document.getElementById('experiment-search').addEventListener('input', filterExperimentList);
+        
+        // Debounced event listeners for search inputs to improve performance
+        document.getElementById('experiment-search').addEventListener('input', debounce(filterExperimentList, 300));
+        document.getElementById('item-search').addEventListener('input', debounce(filterItemList, 300));
+        document.getElementById('extra-info-option-search').addEventListener('input', debounce(filterExtraInfoCheckboxes, 300));
+
+        // Event listeners for action buttons
         document.getElementById('generate-btn').addEventListener('click', generateLabels);
         document.getElementById('print-btn').addEventListener('click', triggerPrint);
         document.getElementById('csv-btn').addEventListener('click', generateHermaCsv);
-        document.getElementById('item-search').addEventListener('input', filterItemList);
+        
+        // Event listeners for item selection (all/none)
         document.getElementById('select-all-btn').addEventListener('click', () => toggleAllSelection(true));
         document.getElementById('deselect-all-btn').addEventListener('click', () => toggleAllSelection(false));
         document.getElementById('items-to-print').addEventListener('change', checkControlsState);
-        document.getElementById('extra-info-option-search').addEventListener('input', filterExtraInfoCheckboxes);
-        document.getElementById('sort-order').addEventListener('change', handleSortOrderChange);
-        document.getElementById('qr-embed-data').addEventListener('change', generateLabels);
+        document.getElementById('qr-embed-data').addEventListener('change', generateLabels); // Regenerate labels if QR embed option changes
 
-
+        // Event listeners for all configuration controls (label size, layout, margins, etc.)
         const allConfigControls = [
             'print-type', 'code-type', 'label-size', 'label-layout', 'sort-order',
             'start-row', 'start-col', 'labels-per-row', 'label-width', 
@@ -405,142 +535,202 @@
         ];
         allConfigControls.forEach(id => {
             const el = document.getElementById(id);
-            el.addEventListener('input', handleConfigChange);
-            el.addEventListener('change', handleConfigChange);
+            // Use 'change' for select/checkbox, 'input' for number/text to capture immediate changes
+            const eventType = ['SELECT', 'CHECKBOX'].includes(el.tagName) || el.type === 'checkbox' ? 'change' : 'input';
+            el.addEventListener(eventType, handleConfigChange);
         });
         
-        handleItemTypeChange();
-        handleLabelSizeChange();
+        // Initial setup calls to render default states
+        handleItemTypeChange(); // Sets up initial item type selection UI
+        handleLabelSizeChange(); // Applies default label size settings
     }
     
+    /**
+     * Handles changes in label configuration settings (dimensions, gaps, etc.).
+     * Triggers label regeneration if items are selected.
+     * @param {Event} event - The event object from the input/select change.
+     */
     function handleConfigChange(event) {
+        // If label size preset changes, update dimensions
         if (event && event.target.id === 'label-size') {
             handleLabelSizeChange();
-        } else if (event && ['label-width', 'label-height'].includes(event.target.id)) {
+        } 
+        // If custom width/height are manually changed, set label size to 'custom'
+        else if (event && ['label-width', 'label-height'].includes(event.target.id)) {
             document.getElementById('label-size').value = 'custom';
-            toggleDimensionInputs(true);
+            toggleDimensionInputs(true); // Ensure custom inputs are enabled
         }
 
+        // If print type changes (e.g., to 'ticket-only'), update code type dropdown state
         if (event && event.target.id === 'print-type') {
             handlePrintTypeChange();
         }
 
-        // Only regenerate labels if there are items selected
+        // Only regenerate labels if there are items currently selected for printing
         if (document.getElementById('items-to-print').selectedOptions.length > 0) {
             generateLabels();
         }
     }
 
+    /**
+     * Applies selected label size preset values to the dimension inputs.
+     * Disables custom dimension inputs unless 'custom' preset is selected.
+     */
     function handleLabelSizeChange() {
         const sizeKey = document.getElementById('label-size').value;
         const spec = LABEL_SPECS[sizeKey];
         
         const codeTypeDropdown = document.getElementById('code-type');
+        // For very small labels, force QR code and disable barcode option
         if (['herma-4385', 'topstick-8791', 'micro'].includes(sizeKey)) {
             codeTypeDropdown.value = 'qrcode';
             codeTypeDropdown.disabled = true;
             document.getElementById('qr-embed-data').checked = true; // Force embed for tiny labels
         } else {
+            // Otherwise, enable/disable based on print type (ticket only disables code)
             codeTypeDropdown.disabled = document.getElementById('print-type').value === 'ticket-only';
+            document.getElementById('qr-embed-data').disabled = false; // Enable embed option
         }
 
+        // If 'custom' preset is selected, enable manual dimension inputs
         if (sizeKey === 'custom') {
             toggleDimensionInputs(true);
             return;
         }
 
+        // If no specific preset found, do nothing
         if (!spec) return;
 
+        // Disable manual dimension inputs for presets
         toggleDimensionInputs(false);
         
+        // Apply preset values to the inputs
         document.getElementById('label-width').value = spec.w;
         document.getElementById('label-height').value = spec.h;
         document.getElementById('labels-per-row').value = spec.cols;
         document.getElementById('label-gap-horizontal').value = spec.gapH;
         document.getElementById('label-gap-vertical').value = spec.gapV;
         document.getElementById('page-margin-top').value = spec.marginTop;
-        document.getElementById('page-margin-bottom').value = spec.marginTop;
+        document.getElementById('page-margin-bottom').value = spec.marginBottom || spec.marginTop; // Use specific bottom or default to top
         document.getElementById('page-margin-left').value = spec.marginLeft;
-        document.getElementById('page-margin-right').value = spec.marginLeft;
+        document.getElementById('page-margin-right').value = spec.marginRight || spec.marginLeft; // Use specific right or default to left
     }
 
+    /**
+     * Enables or disables the manual label width and height input fields.
+     * @param {boolean} enabled - True to enable, false to disable.
+     */
     function toggleDimensionInputs(enabled) {
         document.getElementById('label-width').disabled = !enabled;
         document.getElementById('label-height').disabled = !enabled;
     }
     
+    /**
+     * Applies the current label layout settings (dimensions, gaps, page margins)
+     * to the print preview area and the dynamic print styles.
+     */
     function applyLayoutSettings() {
         const printArea = document.getElementById('print-area');
         
-        const labelWidth = document.getElementById('label-width').value;
-        const labelHeight = document.getElementById('label-height').value;
-        const gapH = document.getElementById('label-gap-horizontal').value;
-        const gapV = document.getElementById('label-gap-vertical').value;
-        const marginTop = document.getElementById('page-margin-top').value;
-        const marginBottom = document.getElementById('page-margin-bottom').value;
-        const marginLeft = document.getElementById('page-margin-left').value;
-        const marginRight = document.getElementById('page-margin-right').value;
+        // Retrieve current values from input fields
+        const labelWidth = parseFloat(document.getElementById('label-width').value);
+        const labelHeight = parseFloat(document.getElementById('label-height').value);
+        const gapH = parseFloat(document.getElementById('label-gap-horizontal').value);
+        const gapV = parseFloat(document.getElementById('label-gap-vertical').value);
+        const marginTop = parseFloat(document.getElementById('page-margin-top').value);
+        const marginBottom = parseFloat(document.getElementById('page-margin-bottom').value);
+        const marginLeft = parseFloat(document.getElementById('page-margin-left').value);
+        const marginRight = parseFloat(document.getElementById('page-margin-right').value);
 
+        // Apply CSS variables to the print area element
         printArea.style.setProperty('--label-width', `${labelWidth}mm`);
         printArea.style.setProperty('--label-height', `${labelHeight}mm`);
-        printArea.style.setProperty('gap', `${gapV}mm ${gapH}mm`);
+        printArea.style.setProperty('gap', `${gapV}mm ${gapH}mm`); // Apply combined gap
 
+        // Update the dynamic print styles for @page rules (for actual printing)
         document.getElementById('dynamic-print-styles').innerHTML = `
             @page { 
-                size: A4;
+                size: A4; /* Assume A4 paper size */
                 margin: ${marginTop}mm ${marginRight}mm ${marginBottom}mm ${marginLeft}mm;
+            }
+            /* Also apply print-specific gaps for the print container */
+            #print-area-for-printing {
+                column-gap: ${gapH}mm;
+                row-gap: ${gapV}mm;
             }
         `;
     }
 
+    /**
+     * Generates and renders the label tickets in the preview area based on selected items and configurations.
+     */
     function generateLabels() {
+        // If no item type is selected, display a placeholder message
         if (!masterDataCache.currentItemSet) {
             document.getElementById('print-area').innerHTML = '<div class="w-full flex items-center justify-center text-gray-500 h-48 col-span-full"><p>Configure and generate labels to see a preview</p></div>';
             return;
         }
         
+        // Apply layout settings from current configurations
         applyLayoutSettings(); 
 
         const printArea = document.getElementById('print-area');
+        // Apply selected layout (grid or column) to the print area
         printArea.className = `layout-${document.getElementById('label-layout').value}`;
-        printArea.innerHTML = '';
-        
+        printArea.innerHTML = ''; // Clear existing labels
+
+        // Get current label specifications
         const sizeKey = document.getElementById('label-size').value;
         const currentSpec = LABEL_SPECS[sizeKey] || {};
         
+        // Calculate number of blank labels needed for starting position on sheet
         const startRow = parseInt(document.getElementById('start-row').value) || 1;
         const startCol = parseInt(document.getElementById('start-col').value) || 1;
         const labelsPerRow = parseInt(document.getElementById('labels-per-row').value) || 3;
         const blankLabels = (startRow - 1) * labelsPerRow + (startCol - 1);
 
+        // Set CSS variable for number of columns in grid layout
         printArea.style.setProperty('--label-cols', labelsPerRow);
 
+        // Add blank placeholder labels to fill up to the starting position
         for (let i = 0; i < blankLabels; i++) {
             const blankTicket = document.createElement('div');
             blankTicket.className = 'label-ticket blank';
-            if (currentSpec.isRound) blankTicket.style.borderRadius = '50%';
+            if (currentSpec.isRound) blankTicket.style.borderRadius = '50%'; // Apply round corners if specified
             printArea.appendChild(blankTicket);
         }
         
+        // Get the data for selected items
         const { data, idField } = masterDataCache.currentItemSet;
         const selectedOptions = Array.from(document.getElementById('items-to-print').selectedOptions);
         
+        // If no items are selected, display a message and update control states
         if (selectedOptions.length === 0) {
             printArea.innerHTML = '<div class="w-full flex items-center justify-center text-gray-500 h-48 col-span-full"><p>No items selected for printing.</p></div>';
             checkControlsState();
             return;
         }
 
+        // Create and append a label ticket for each selected item
         selectedOptions.forEach(opt => {
             const itemData = data.find(item => String(item[idField]) === opt.value);
-            if (!itemData) return;
+            if (!itemData) return; // Skip if data not found (shouldn't happen with proper caching)
             const ticket = createLabelElement(itemData, opt.value);
             printArea.appendChild(ticket);
         });
+        
+        // Update the state of action buttons (generate, export, print)
         checkControlsState();
+        lucide.createIcons(); // Re-render Lucide icons for newly created elements
     }
     
-    function createLabelElement(itemData, value) {
+    /**
+     * Creates a single label HTML element with dynamic content, barcode/QR code, and styling.
+     * @param {object} itemData - The full data object for the item.
+     * @param {string} mainIdValue - The primary ID value to display prominently.
+     * @returns {HTMLElement} The created label ticket div element.
+     */
+    function createLabelElement(itemData, mainIdValue) {
         const sizeKey = document.getElementById('label-size').value;
         const currentSpec = LABEL_SPECS[sizeKey] || {};
         const printType = document.getElementById('print-type').value;
@@ -549,59 +739,74 @@
         const ticket = document.createElement('div');
         ticket.className = 'label-ticket';
         if (printBorder) {
-            ticket.classList.add('print-border');
+            ticket.classList.add('print-border'); // Add class for printing borders if checked
         }
 
+        // Apply dynamic CSS properties for padding and font size
         ticket.style.setProperty('--label-padding', currentSpec.p || '4px');
         ticket.style.setProperty('--label-font-size', currentSpec.f || '10px');
-        if (currentSpec.isRound) ticket.style.borderRadius = '50%';
+        if (currentSpec.isRound) ticket.style.borderRadius = '50%'; // Apply round corners for circular labels
         
         const codeContainer = document.createElement('div');
         codeContainer.className = 'code-container';
         const textContainer = document.createElement('div');
         textContainer.className = 'label-text';
 
-        let textContent = `<b>${value}</b>`;
-        const embeddedData = { id: value };
+        // Start text content with the main ID
+        let textContent = `<b>${mainIdValue}</b>`;
+        // Data to be embedded in QR code (initially just the main ID)
+        const embeddedData = { id: mainIdValue };
+        
+        // Get selected extra info keys from checkboxes
         const selectedExtraInfoCheckboxes = Array.from(document.querySelectorAll('#extra-info-options input[type="checkbox"]:checked'));
         const selectedExtraInfoKeys = selectedExtraInfoCheckboxes.map(checkbox => checkbox.dataset.key);
 
-        // Define a list of fields that are typically too long or complex for a small label
-        const commonLongFields = ['description', 'Notes', 'aim', 'Method', 'LabBook', 'sop_protocol', 'RawDataPath', 'FinalOutputPath'];
+        // Define a list of fields whose values should be truncated on the label if too long
+        const longTextKeys = ['notes', 'description', 'aim', 'method', 'lab_book', 'sop_protocol', 'raw_data_path', 'final_output_path', 'query_text', 'protocol_text', 'protocol_run_details'];
         
         // Add selected extra info fields to the label text and embedded data
         selectedExtraInfoKeys.forEach(key => {
             if (itemData[key] != null && String(itemData[key]).trim() !== '') {
-                const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()); // Format key for display
                 let val = itemData[key];
 
+                // Format dates
                 if (String(key).toLowerCase().includes('date') && !isNaN(new Date(val))) {
                     val = new Date(val).toLocaleDateString();
-                } else if (commonLongFields.includes(key) && String(val).length > 50) {
-                    val = String(val).substring(0, 50) + '...'; // Truncate long text
-                } else if (typeof val === 'object' && val !== null) {
-                    val = JSON.stringify(val); // Stringify JSONB objects
+                } 
+                // Truncate long text fields
+                else if (longTextKeys.includes(key) && String(val).length > 50) {
+                    val = String(val).substring(0, 50) + '...'; 
+                } 
+                // Stringify JSONB objects for display
+                else if (typeof val === 'object' && val !== null) {
+                    val = JSON.stringify(val); 
                 }
                 
                 textContent += `<span><span class="info-key">${formattedKey}:</span> ${val}</span>`;
-                embeddedData[key] = itemData[key]; // Always embed original value
+                embeddedData[key] = itemData[key]; // Always embed original value in QR code
             }
         });
         textContainer.innerHTML = textContent;
 
+        // Generate barcode or QR code if print type is 'with-code'
         if (printType === 'with-code') {
             const codeType = document.getElementById('code-type').value;
             const qrShouldEmbed = document.getElementById('qr-embed-data').checked;
-            const codeValue = (codeType === 'qrcode' && qrShouldEmbed) ? JSON.stringify(embeddedData) : value;
-            const codeSize = currentSpec.codeSize || 60;
-            
+            // Determine the value for the code: full embedded JSON for QR, or just main ID for barcode
+            const codeValue = (codeType === 'qrcode' && qrShouldEmbed) ? JSON.stringify(embeddedData) : mainIdValue;
+            const codeSize = currentSpec.codeSize || 60; // Default code size
+
+            // Barcode generation (only if not round label)
             if (codeType === 'barcode' && !currentSpec.isRound) {
                 const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                // JsBarcode requires a DOM element or selector
                 JsBarcode(svg, codeValue, { format: "CODE128", width: 1.5, height: 30, displayValue: false, margin: 2 });
                 codeContainer.appendChild(svg);
-            } else {
-                // Clear previous QR code if any
-                codeContainer.innerHTML = ''; 
+            } 
+            // QR Code generation
+            else {
+                codeContainer.innerHTML = ''; // Clear any previous QR code
                 new QRCode(codeContainer, { text: codeValue, width: codeSize, height: codeSize, correctLevel: QRCode.CorrectLevel.M });
             }
             ticket.appendChild(codeContainer);
@@ -611,39 +816,49 @@
         return ticket;
     }
     
+    /**
+     * Triggers the browser's print dialog for the generated labels.
+     * Creates a temporary print-specific container to ensure only labels are printed.
+     */
     function triggerPrint() {
         const printContainer = document.getElementById('print-container');
-        printContainer.innerHTML = '';
+        printContainer.innerHTML = ''; // Clear previous print content
         const printAreaForPrinting = document.createElement('div');
         printAreaForPrinting.id = "print-area-for-printing";
 
         const previewArea = document.getElementById('print-area');
         
+        // Copy classes and dynamic styles from the preview area to the print area
         printAreaForPrinting.className = previewArea.className;
-        
         printAreaForPrinting.style.setProperty('--label-width', previewArea.style.getPropertyValue('--label-width'));
         printAreaForPrinting.style.setProperty('--label-height', previewArea.style.getPropertyValue('--label-height'));
         printAreaForPrinting.style.setProperty('--label-cols', previewArea.style.getPropertyValue('--label-cols'));
+        // Use print-specific gap variables for column and row gaps
         printAreaForPrinting.style.setProperty('--label-col-gap', document.getElementById('label-gap-horizontal').value + 'mm');
         printAreaForPrinting.style.setProperty('--label-row-gap', document.getElementById('label-gap-vertical').value + 'mm');
         
         printContainer.appendChild(printAreaForPrinting);
+        // Copy the inner HTML (labels) from the preview area to the print area
         printAreaForPrinting.innerHTML = previewArea.innerHTML;
         
-        window.print();
+        window.print(); // Trigger the browser's print dialog
     }
 
     /**
-     * Escapes a field for CSV format. Wraps in quotes if it contains a separator, newline, or quotes.
-     * @param {string | number | null | undefined} field The data to escape.
+     * Escapes a field's value for CSV format. Wraps in quotes if it contains a separator, newline, or quotes.
+     * @param {string | number | null | undefined | object} field - The data to escape.
      * @returns {string} The CSV-safe string.
      */
     function escapeCsvField(field) {
         if (field === null || field === undefined) {
             return '';
         }
-        const stringField = String(field);
-        // Check if the field contains characters that require quoting (quote, semicolon, newline)
+        let stringField = String(field);
+        // If it's an object (like JSONB), stringify it first
+        if (typeof field === 'object') {
+            stringField = JSON.stringify(field);
+        }
+        // Check if the field contains characters that require quoting (comma, semicolon, newline, or double quote)
         if (/[",;\n]/.test(stringField)) {
             // Escape double quotes by doubling them and wrap the whole field in double quotes
             return `"${stringField.replace(/"/g, '""')}"`;
@@ -653,6 +868,7 @@
 
     /**
      * Generates and triggers the download of a CSV file for Herma EAO systems.
+     * The CSV includes the main ID and all selected additional info fields.
      */
     function generateHermaCsv() {
         if (!masterDataCache.currentItemSet) {
@@ -668,256 +884,359 @@
             return;
         }
 
+        // Filter the main data to only include selected items
         const selectedIds = new Set(selectedOptions.map(opt => opt.value));
         const itemsToExport = data.filter(item => selectedIds.has(String(item[idField])));
+        
+        // Get the keys of the additional info fields selected by the user
         const selectedExtraInfoKeys = Array.from(document.querySelectorAll('#extra-info-options input[type="checkbox"]:checked')).map(checkbox => checkbox.dataset.key);
 
-        // Create headers using a user-friendly name for the ID and selected info fields
+        // Create CSV headers: main ID column + formatted names of selected extra info fields
         const headers = ['ID', ...selectedExtraInfoKeys.map(key => key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()))];
-        let csvContent = headers.join(';') + '\n';
+        let csvContent = headers.join(';') + '\n'; // Use semicolon as separator for Herma EAO
 
+        // Populate CSV rows
         itemsToExport.forEach(item => {
             const row = [];
-            row.push(escapeCsvField(item[idField])); // Main ID
-            selectedExtraInfoKeys.forEach(key => { // Selected extra info fields
-                let val = item[key];
-                if (typeof val === 'object' && val !== null) { // Handle JSONB fields for CSV
-                    val = JSON.stringify(val);
-                }
-                row.push(escapeCsvField(val));
+            row.push(escapeCsvField(item[idField])); // Add main ID
+            selectedExtraInfoKeys.forEach(key => { // Add selected extra info fields
+                row.push(escapeCsvField(item[key]));
             });
             csvContent += row.join(';') + '\n';
         });
 
-        // Create a BOM (Byte Order Mark) for UTF-8 to ensure Excel compatibility
+        // Create a Blob with UTF-8 BOM for Excel compatibility and trigger download
         const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);
-        const today = new Date().toISOString().slice(0, 10);
+        const today = new Date().toISOString().slice(0, 10); // Get current date for filename
         link.setAttribute("download", `herma_eao_export_${today}.csv`);
-        link.style.visibility = 'hidden';
+        link.style.visibility = 'hidden'; // Hide the link
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        URL.revokeObjectURL(url); // Clean up the URL object
     }
 
+    /**
+     * Handles the change in the main "Item Type" dropdown.
+     * Resets and updates relevant UI panels based on the selected type.
+     */
     function handleItemTypeChange() {
         const type = document.getElementById('item-type').value;
         const selectionModePanel = document.getElementById('selection-mode-panel');
         const itemSelectionPanel = document.getElementById('item-selection-panel');
-        const classificationPanel = document.getElementById('classification-panel');
+        const sortingPanel = document.getElementById('sorting-panel');
         const startPositionPanel = document.getElementById('start-position-panel');
-        resetSelectionUI(); // Always reset fully on item type change
-        if (type === 'sample') { // Only 'sample' supports "by experiment" mode
+        
+        resetSelectionUI(); // Always reset the selection UI completely on item type change
+
+        if (type === 'sample') { // Only 'sample' type supports "by experiment" mode
             selectionModePanel.classList.remove('hidden');
-            itemSelectionPanel.classList.add('hidden'); // Hidden until mode is chosen
-            classificationPanel.classList.remove('hidden');
+            itemSelectionPanel.classList.add('hidden'); // Hidden until a selection mode is chosen
+            sortingPanel.classList.remove('hidden');
             startPositionPanel.classList.remove('hidden');
+            // Default to 'direct' selection mode for samples
             document.querySelector('input[name="selection-mode"][value="direct"]').checked = true;
-            handleSelectionModeChange(); // Trigger direct selection for samples by default
-        } else if (type) { // Other types only support direct selection
+            handleSelectionModeChange(); // Trigger the selection mode handler
+        } else if (type) { // For all other selected types, only direct selection is available
             selectionModePanel.classList.add('hidden');
             itemSelectionPanel.classList.remove('hidden');
-            classificationPanel.classList.add('hidden');
+            sortingPanel.classList.remove('hidden');
             startPositionPanel.classList.remove('hidden');
-            document.getElementById('experiment-selector-container').classList.add('hidden');
-            loadItemsForDirectSelection(type);
-        } else { // No type selected
+            document.getElementById('experiment-selector-container').classList.add('hidden'); // Hide experiment selector
+            loadItemsForDirectSelection(type); // Load items directly for the selected type
+        } else { // If no type is selected, hide all relevant panels
             selectionModePanel.classList.add('hidden');
             itemSelectionPanel.classList.add('hidden');
-            classificationPanel.classList.add('hidden');
+            sortingPanel.classList.add('hidden');
             startPositionPanel.classList.add('hidden');
         }
     }
 
+    /**
+     * Handles changes in the "Selection Mode" radio buttons (Direct vs. By Experiment).
+     * Updates the UI to show the appropriate item selection method.
+     */
     function handleSelectionModeChange() {
         const mode = document.querySelector('input[name="selection-mode"]:checked').value;
         const itemSelectionPanel = document.getElementById('item-selection-panel');
         const experimentSelectorContainer = document.getElementById('experiment-selector-container');
-        resetSelectionUI(true); // Soft reset to clear item list but keep mode selection
-        itemSelectionPanel.classList.remove('hidden'); // Show item selection panel
+        
+        resetSelectionUI(true); // Perform a soft reset (clears item list but keeps mode selection)
+        itemSelectionPanel.classList.remove('hidden'); // Ensure item selection panel is visible
+
         if (mode === 'by_experiment') {
             experimentSelectorContainer.classList.remove('hidden');
-            loadExperimentList();
-        } else { // direct
+            loadExperimentList(); // Load the list of experiments
+        } else { // 'direct' mode
             experimentSelectorContainer.classList.add('hidden');
-            loadItemsForDirectSelection(document.getElementById('item-type').value); // Load based on current item type
+            loadItemsForDirectSelection(document.getElementById('item-type').value); // Load items directly based on current item type
         }
     }
 
+    /**
+     * Fetches and populates the list of experiments for the "By Experiment" selection mode.
+     * Caches the data to avoid repeated API calls.
+     */
     async function loadExperimentList() {
         if (!masterDataCache.allExperiments) {
-            const experiments = await apiFetch('table/Lab/Experiments');
+            const experiments = await apiFetch('table/Lab/experiments'); // Fetch experiments from Lab schema
             masterDataCache.allExperiments = experiments;
         }
-        filterExperimentList();
+        filterExperimentList(); // Apply filtering to the experiment list
     }
 
+    /**
+     * Filters the list of experiments based on the search term and populates the experiment selector.
+     */
     function filterExperimentList() {
         const searchTerm = document.getElementById('experiment-search').value.toLowerCase();
         const selector = document.getElementById('experiment-selector');
         const experiments = masterDataCache.allExperiments || [];
         let filteredExperiments = experiments;
+
         if (searchTerm) {
+            // Filter experiments by ID or title
             filteredExperiments = experiments.filter(exp =>
-                (exp.Experiment_id && String(exp.Experiment_id).toLowerCase().includes(searchTerm)) || // Corrected to Experiment_id
-                (exp.Experiment_title && String(exp.Experiment_title).toLowerCase().includes(searchTerm))
+                (exp.experiment_id && String(exp.experiment_id).toLowerCase().includes(searchTerm)) || 
+                (exp.experiment_title && String(exp.experiment_title).toLowerCase().includes(searchTerm))
             );
         }
+        // Populate the experiment selector dropdown
         selector.innerHTML = '<option value="">-- Select an Experiment --</option>' +
-            filteredExperiments.map(exp => `<option value="${exp.Experiment_id}">${exp.Experiment_id} - ${exp.Experiment_title || 'No Title'}</option>`).join(''); // Corrected to Experiment_id
+            filteredExperiments.map(exp => `<option value="${exp.experiment_id}">${exp.experiment_id} - ${exp.experiment_title || 'No Title'}</option>`).join('');
     }
 
+    /**
+     * Loads items directly from the specified API endpoint for direct selection.
+     * @param {string} type - The selected item type (e.g., 'sample', 'project').
+     */
     async function loadItemsForDirectSelection(type) {
         if (!type) { resetSelectionUI(); return; }
         const config = ITEM_TYPE_CONFIGS[type];
         if (!config) { resetSelectionUI(); return; }
-        const data = await apiFetch(`table/${config.schema}/${config.table}`); // Use schema and table from config
+        
+        // Fetch data using the schema and table from the configuration
+        const data = await apiFetch(`table/${config.schema}/${config.table}`); 
         populateAndCacheItems(type, data, config.idField, config.displayField);
     }
 
-    async function loadSamplesForExperiment(experimentId) { // Corrected parameter name
+    /**
+     * Loads samples associated with a specific experiment ID.
+     * This is used for the "By Experiment" selection mode for samples.
+     * @param {string} experimentId - The ID of the selected experiment.
+     */
+    async function loadSamplesForExperiment(experimentId) {
         if (!experimentId) { resetSelectionUI(true); return; }
-        // Fetch samples specifically linked to this experiment
-        const samples = await apiFetch(`table/Lab/Experimentsamples?filter_Experiment_id=${experimentId}`); // Filter by Experiment_id
         
-        if (!samples || samples.length === 0) {
+        // Fetch samples linked to this experiment using the experiments_samples table
+        const experimentSamplesLinks = await apiFetch(`table/Lab/experiments_samples?experiment_id=${experimentId}`);
+        
+        if (!experimentSamplesLinks || experimentSamplesLinks.length === 0) {
             populateAndCacheItems('sample', [], 'sample_id', 'sample_id'); // Clear list if no samples
             alert("No samples found for this experiment.");
             return;
         }
 
-        // Get the actual sample details for the linked sample_ids
-        const sampleIds = samples.map(link => link.sample_id);
-        const allSamples = await apiFetch('table/Lab/samples'); // Fetch all samples
+        // Get the actual sample details for the linked sample_ids from the main 'samples' table
+        const sampleIds = experimentSamplesLinks.map(link => link.sample_id);
+        // Fetch all samples and then filter them by the IDs found in the experiment_samples_links
+        const allSamples = await apiFetch('table/Lab/samples'); 
         const samplesToShow = allSamples.filter(s => sampleIds.includes(s.sample_id));
 
-        populateAndCacheItems('sample', samplesToShow, 'sample_id', 'sample_id');
+        populateAndCacheItems('sample', samplesToShow, 'sample_id', 'external_name'); // Use external_name for display
     }
 
+    /**
+     * Populates the item list (select element) and caches the fetched data.
+     * Also triggers the generation of extra info checkboxes.
+     * @param {string} type - The type of item (e.g., 'sample', 'project').
+     * @param {Array<object>} data - The array of item data objects.
+     * @param {string} idField - The name of the ID field in each item object.
+     * @param {string} displayField - The name of the field to display in the list.
+     */
     function populateAndCacheItems(type, data, idField, displayField) {
         if (!data) { resetSelectionUI(true); return; }
         masterDataCache.currentItemSet = { type, data, idField, displayField };
-        document.getElementById('item-search').disabled = false;
-        populateItemList(data);
-        generateExtraInfoCheckboxes(data);
-        checkControlsState();
+        document.getElementById('item-search').disabled = false; // Enable search input
+        populateItemList(data); // Populate the main item list
+        generateExtraInfoCheckboxes(data); // Generate checkboxes for additional info
+        checkControlsState(); // Update button states
     }
 
+    /**
+     * Populates the main item selection list (`items-to-print` select element).
+     * Applies sorting based on user selection.
+     * @param {Array<object>} data - The array of item data objects.
+     */
     function populateItemList(data) {
         const { idField, displayField } = masterDataCache.currentItemSet;
         const sortOrder = document.getElementById('sort-order').value;
         let sortedData = [...data];
-        if (sortOrder !== 'none') { // Apply sorting for all types now
+
+        // Apply sorting if 'none' is not selected
+        if (sortOrder !== 'none') { 
             sortedData.sort((a, b) => {
-                const valA = String(a[idField] || '').toLowerCase();
+                const valA = String(a[idField] || '').toLowerCase(); // Use idField for sorting
                 const valB = String(b[idField] || '').toLowerCase();
                 return (sortOrder === 'asc') ? valA.localeCompare(valB) : valB.localeCompare(valA);
             });
         }
-        document.getElementById('items-to-print').innerHTML = sortedData.map(item => `<option value="${item[idField]}">${item[displayField] || item[idField]}</option>`).join('') || '<option disabled>No items found</option>';
+        // Populate the select element with options
+        document.getElementById('items-to-print').innerHTML = sortedData.map(item => 
+            `<option value="${item[idField]}">${item[displayField] || item[idField]}</option>` // Display displayField or idField as fallback
+        ).join('') || '<option disabled>No items found</option>';
+        
+        // Update the count of available items
         document.getElementById('item-count').textContent = sortedData.length;
     }
 
+    /**
+     * Generates checkboxes for additional information fields based on the available keys in the data.
+     * Excludes common internal/technical fields.
+     * @param {Array<object>} data - The array of item data objects.
+     */
     function generateExtraInfoCheckboxes(data) {
         const container = document.getElementById('extra-info-options');
         const extraInfoContainer = document.getElementById('extra-info-container');
         if(!container || !extraInfoContainer) return; 
-        container.innerHTML = '';
+        container.innerHTML = ''; // Clear existing checkboxes
+
+        // If no data, hide the extra info container
         if (!data || data.length === 0) {
             extraInfoContainer.classList.add('hidden');
             masterDataCache.allExtraInfoKeys = null;
             document.getElementById('extra-info-option-search').value = '';
             return;
         }
+
         const uniqueKeysWithValues = new Set();
+        const excludedKeys = new Set([
+            'nr', 'id', 'pk', 'table', 'type', // Internal/derived fields
+            'modified_by', 'time_modification', 'attachment', 'attachment_link', 'password_hash', // Audit/sensitive fields
+            'customer_search_vector', 'sample_search_vector', 'sop_search_vector', 'experiment_search_vector', // Full-text search vectors
+            'path', // ltree path
+            // Generated/calculated fields that might not be useful on a label
+            'nanodrop_total_dna_ug', 'qubit_total_dna_ug',
+            // Primary/display fields already shown prominently
+            masterDataCache.currentItemSet.idField, masterDataCache.currentItemSet.displayField
+        ]);
+
+        // Collect all unique keys that have non-empty values in at least one item
         data.forEach(item => {
             for (const key in item) {
-                // Exclude keys that are typically not useful on a label or are internal
-                const excludedKeys = new Set([
-                    'nr', 'id', 'modified_by', 'time_modification', 'attachment', 'password',
-                    'customer_search_vector', 'sample_search_vector', 'sop_search_vector', 'experiment_search_vector',
-                    'path', // ltree path
-                    // Calculated fields that might not be desired on labels
-                    'QubitTotalDna_ug', 'NanodropTotalDna_ug'
-                ]);
-                if (item.hasOwnProperty(key) && item[key] !== null && String(item[key]).trim() !== '' && !excludedKeys.has(key)) {
+                if (item.hasOwnProperty(key) && item[key] !== null && String(item[key]).trim() !== '') {
                     uniqueKeysWithValues.add(key);
                 }
             }
         });
-        const availableKeys = Array.from(uniqueKeysWithValues).sort();
-        masterDataCache.allExtraInfoKeys = availableKeys;
-        filterExtraInfoCheckboxes();
-        extraInfoContainer.classList.remove('hidden');
+
+        // Filter out excluded keys and sort alphabetically
+        const availableKeys = Array.from(uniqueKeysWithValues).filter(key => !excludedKeys.has(key)).sort();
+        masterDataCache.allExtraInfoKeys = availableKeys; // Cache the available keys
+        
+        filterExtraInfoCheckboxes(); // Render the checkboxes
+        extraInfoContainer.classList.remove('hidden'); // Show the extra info container
     }
 
+    /**
+     * Filters the dynamically generated extra info checkboxes based on a search term.
+     */
     function filterExtraInfoCheckboxes() {
         const searchTerm = document.getElementById('extra-info-option-search').value.toLowerCase();
         const container = document.getElementById('extra-info-options');
         const allKeys = masterDataCache.allExtraInfoKeys || [];
-        container.innerHTML = '';
+        container.innerHTML = ''; // Clear existing checkboxes
+
+        // Filter keys by search term (matching key itself or its formatted version)
         const filteredKeys = allKeys.filter(key =>
             key.toLowerCase().includes(searchTerm) ||
             key.replace(/_/g, ' ').toLowerCase().includes(searchTerm)
         );
+
+        // Render filtered checkboxes
         filteredKeys.forEach(key => {
             const label = document.createElement('label');
             label.className = 'flex items-center p-1 hover:bg-gray-200 rounded-md';
             label.innerHTML = `<input type="checkbox" data-key="${key}" class="mr-2 h-4 w-4 rounded"><span class="capitalize">${key.replace(/_/g, ' ')}</span>`;
             container.appendChild(label);
         });
+        lucide.createIcons(); // Re-render icons for new checkboxes
     }
 
+    /**
+     * Filters the main item list based on the search input.
+     */
     function filterItemList() {
         if (!masterDataCache.currentItemSet) return;
         const searchTerm = document.getElementById('item-search').value.toLowerCase();
         const { data, idField, displayField } = masterDataCache.currentItemSet;
+        
+        // Filter items by ID, display field, or description (if available)
         const filteredData = data.filter(item => 
             (String(item[idField] || '').toLowerCase().includes(searchTerm)) || 
             (String(item[displayField] || '').toLowerCase().includes(searchTerm)) ||
             (item.description && String(item.description).toLowerCase().includes(searchTerm)) // Also search in description
         );
-        populateItemList(filteredData);
+        populateItemList(filteredData); // Re-populate the list with filtered data
     }
 
+    /**
+     * Selects or deselects all options in the main item list.
+     * @param {boolean} selectAll - True to select all, false to deselect all.
+     */
     function toggleAllSelection(selectAll) {
         const options = document.getElementById('items-to-print').options;
         for (let i = 0; i < options.length; i++) { options[i].selected = selectAll; }
-        checkControlsState();
+        checkControlsState(); // Update button states after selection change
     }
 
+    /**
+     * Resets the item selection UI to its initial state.
+     * @param {boolean} soft - If true, performs a soft reset (keeps selection mode, clears item list).
+     */
     function resetSelectionUI(soft = false) {
         if (!soft) {
+            // Hide all panels if not a soft reset
             document.getElementById('item-selection-panel').classList.add('hidden');
             document.getElementById('selection-mode-panel').classList.add('hidden');
-            document.getElementById('classification-panel').classList.add('hidden');
+            document.getElementById('sorting-panel').classList.add('hidden');
             document.getElementById('start-position-panel').classList.add('hidden');
             document.getElementById('item-type').value = ''; // Reset item type dropdown
         }
+        // Reset item list and count
         document.getElementById('items-to-print').innerHTML = '<option disabled>Select an option above</option>';
         document.getElementById('item-count').textContent = '0';
+        // Reset search input and disable it
         const searchInput = document.getElementById('item-search');
         searchInput.value = '';
         searchInput.disabled = true;
+        // Hide and clear extra info options
         document.getElementById('extra-info-container').classList.add('hidden');
-        masterDataCache.currentItemSet = null;
         masterDataCache.allExtraInfoKeys = null;
         document.getElementById('extra-info-option-search').value = '';
+        // Reset sorting and start position defaults
         document.getElementById('sort-order').value = 'none';
         document.getElementById('start-row').value = '1';
         document.getElementById('start-col').value = '1';
         document.getElementById('labels-per-row').value = '3';
+        // Reset experiment selector if applicable
         const experimentSearchInput = document.getElementById('experiment-search');
         if (experimentSearchInput) experimentSearchInput.value = '';
         const experimentSelector = document.getElementById('experiment-selector');
         if (experimentSelector) experimentSelector.innerHTML = '<option value="">-- Loading --</option>';
-        checkControlsState();
-        generateLabels(); // Clear preview
+        
+        masterDataCache.currentItemSet = null; // Clear current item set from cache
+        checkControlsState(); // Update button states
+        generateLabels(); // Clear preview area
     }
 
+    /**
+     * Updates the disabled state of the "Generate", "Export CSV", and "Print" buttons
+     * based on whether any items are selected for printing.
+     */
     function checkControlsState() {
         const selectedCount = document.getElementById('items-to-print').selectedOptions.length;
         document.getElementById('generate-btn').disabled = selectedCount === 0;
@@ -926,29 +1245,44 @@
         document.getElementById('print-btn').disabled = document.getElementById('print-area').querySelector('.label-ticket:not(.blank)') === null;
     }
 
+    /**
+     * Handles changes in the "Print Type" dropdown (e.g., "With Barcode/QR" vs "Ticket Only").
+     * Adjusts the state of the "Code Type" and "QR Embed Data" controls accordingly.
+     */
     function handlePrintTypeChange() {
         const printType = document.getElementById('print-type').value;
         const codeTypeDropdown = document.getElementById('code-type');
         const qrEmbedCheckbox = document.getElementById('qr-embed-data');
+        
         if (printType === 'ticket-only') {
+            // If only ticket is printed, disable code-related options
             codeTypeDropdown.disabled = true;
             qrEmbedCheckbox.disabled = true;
         } else {
+            // Otherwise, re-enable based on label size presets (small labels force QR)
             const sizeKey = document.getElementById('label-size').value;
-            // Re-enable/disable based on label size presets
             codeTypeDropdown.disabled = ['herma-4385', 'topstick-8791', 'micro'].includes(sizeKey);
             qrEmbedCheckbox.disabled = false;
         }
         generateLabels(); // Regenerate labels to reflect print type change
     }
 
+    /**
+     * Handles changes in the sorting order dropdown.
+     * Re-populates the item list with the new sort order and regenerates labels.
+     */
     function handleSortOrderChange() {
         if (masterDataCache.currentItemSet) {
-            populateItemList(masterDataCache.currentItemSet.data);
+            populateItemList(masterDataCache.currentItemSet.data); // Re-populate list with new sort
             generateLabels(); // Regenerate labels with new sort order
         }
     }
-</script>
 
+    // Initialize the page once the DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons(); // Initialize Lucide icons
+        initializePrintingPage(); // Call the main initialization function
+    });
+</script>
 </body>
 </html>

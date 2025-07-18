@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Protocols - TIFI </title>
+    <title>Protocols - TIFI LIMS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -180,7 +180,7 @@
 <body>
     <div id="main-app">
         <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
-            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI</span></div>
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI LIMS</span></div>
             <nav class="flex-grow space-y-2">
                 <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
                 <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
@@ -209,14 +209,14 @@
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="lg:col-span-1">
                         <label for="experiment-search" class="block text-sm font-medium text-gray-700">Search Experiment:</label>
-                        <input type="text" id="experiment-search" placeholder="Search by Exp. Nr or Title" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2">
+                        <input type="text" id="experiment-search" placeholder="Search by Exp. ID or Title" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2">
                         
                         <div class="sort-control-group">
                             <span>Sort by:</span>
                             <select id="sort-column">
-                                <option value="Experiment_Nr">Experiment Number</option>
-                                <option value="Experiment_title">Title</option>
-                                <option value="Date">Date</option>
+                                <option value="experiment_id">Experiment ID</option>
+                                <option value="experiment_title">Title</option>
+                                <option value="experiment_date">Date</option>
                             </select>
                             <select id="sort-direction">
                                 <option value="asc">Ascending</option>
@@ -228,7 +228,7 @@
                     <div class="lg:col-span-2">
                         <h2 class="block text-xl font-bold text-gray-800 mb-4">Selected Experiment Details:</h2>
                         <div class="space-y-2 text-sm text-gray-700 mb-4">
-                            <p><strong>Experiment Nr:</strong> <span id="selected-exp-nr" class="font-semibold">N/A</span></p>
+                            <p><strong>Experiment ID:</strong> <span id="selected-exp-id" class="font-semibold">N/A</span></p>
                             <p><strong>Title:</strong> <span id="selected-exp-title">N/A</span></p>
                             <p><strong>Project:</strong> <span id="selected-exp-project">N/A</span></p>
                             <p><strong>Aim:</strong> <span id="selected-exp-aim">N/A</span></p>
@@ -338,9 +338,9 @@
         let allExperiments = [];
         let filteredAndSortedExperiments = [];
         let selectedExperiment = null;
-        let currentProtocol = null;
-        let currentRun = null;
-        let currentSortColumn = 'Experiment_Nr';
+        let currentProtocol = null; // This will hold the lab.protocol_runs record
+        let currentRun = null; // This will hold the parsed JSON from protocol_run_details
+        let currentSortColumn = 'experiment_id'; // Corrected default sort column
         let currentSortDirection = 'asc';
 
         function showAlert(message, type = 'info') {
@@ -409,7 +409,7 @@
         }
 
         async function loadAllExperiments() {
-            const result = await apiFetch('table/Lab/Experiments');
+            const result = await apiFetch('table/Lab/experiments'); // Corrected to 'experiments' table
             if (result.error) {
                 showAlert('Error fetching experiments: ' + result.error, 'error');
                 return;
@@ -426,8 +426,8 @@
             let tempExperiments = [...allExperiments];
 
             filteredAndSortedExperiments = tempExperiments.filter(exp => 
-                (String(exp.Experiment_Nr || '').toLowerCase().includes(searchTerm)) ||
-                (String(exp.Experiment_title || '').toLowerCase().includes(searchTerm)) ||
+                (String(exp.experiment_id || '').toLowerCase().includes(searchTerm)) || // Corrected to experiment_id
+                (String(exp.experiment_title || '').toLowerCase().includes(searchTerm)) || // Corrected to experiment_title
                 (String(exp.project_id || '').toLowerCase().includes(searchTerm))
             );
 
@@ -435,12 +435,12 @@
                 let valA = String(a[sortColumn] || '').toLowerCase();
                 let valB = String(b[sortColumn] || '').toLowerCase();
 
-                if (sortColumn === 'Date') {
+                if (sortColumn === 'experiment_date') { // Corrected to experiment_date
                     const dateA = new Date(valA);
                     const dateB = new Date(valB);
                     if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) return 0;
                     return sortDirection === 'asc' ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
-                } else if (sortColumn === 'Experiment_Nr') {
+                } else if (sortColumn === 'experiment_id') { // Corrected to experiment_id
                     const numA = parseInt(valA.replace(/\D/g, '') || '0');
                     const numB = parseInt(valB.replace(/\D/g, '') || '0');
                     const stringA = valA.replace(/\d/g, '');
@@ -469,13 +469,13 @@
 
             filteredAndSortedExperiments.forEach(exp => {
                 const option = document.createElement('option');
-                option.value = exp.nr;
-                option.textContent = `${exp.Experiment_Nr} - ${exp.Experiment_title || 'No Title'} (Project: ${exp.project_id || 'N/A'})`;
+                option.value = exp.experiment_id; // Corrected to experiment_id
+                option.textContent = `${exp.experiment_id} - ${exp.experiment_title || 'No Title'} (Project: ${exp.project_id || 'N/A'})`; // Corrected to experiment_id and experiment_title
                 selectElement.appendChild(option);
             });
             
-            if (selectedExperiment && filteredAndSortedExperiments.some(exp => exp.nr == selectedExperiment.nr)) {
-                selectElement.value = selectedExperiment.nr;
+            if (selectedExperiment && filteredAndSortedExperiments.some(exp => exp.experiment_id == selectedExperiment.experiment_id)) { // Corrected to experiment_id
+                selectElement.value = selectedExperiment.experiment_id; // Corrected to experiment_id
             } else if (filteredAndSortedExperiments.length > 0) {
                 selectElement.selectedIndex = 0;
                 selectExperiment(selectElement.value);
@@ -491,7 +491,7 @@
             document.getElementById('export-run-pdf-btn').disabled = true;
             document.getElementById('delete-protocol-btn').disabled = true;
 
-            document.getElementById('selected-exp-nr').textContent = 'N/A';
+            document.getElementById('selected-exp-id').textContent = 'N/A'; // Corrected ID
             document.getElementById('selected-exp-title').textContent = 'N/A';
             document.getElementById('selected-exp-project').textContent = 'N/A';
             document.getElementById('selected-exp-aim').textContent = 'N/A';
@@ -506,18 +506,18 @@
             currentRun = null;
         }
 
-        async function selectExperiment(internalNr) {
-            selectedExperiment = allExperiments.find(exp => exp.nr == internalNr);
+        async function selectExperiment(experimentId) { // Corrected parameter name
+            selectedExperiment = allExperiments.find(exp => exp.experiment_id == experimentId); // Corrected to experiment_id
             if (!selectedExperiment) {
                 resetControlButtonsAndInfo();
                 return;
             }
 
-            document.getElementById('selected-exp-nr').textContent = selectedExperiment.Experiment_Nr;
-            document.getElementById('selected-exp-title').textContent = selectedExperiment.Experiment_title || 'N/A';
+            document.getElementById('selected-exp-id').textContent = selectedExperiment.experiment_id; // Corrected ID
+            document.getElementById('selected-exp-title').textContent = selectedExperiment.experiment_title || 'N/A'; // Corrected
             document.getElementById('selected-exp-project').textContent = selectedExperiment.project_id || 'N/A';
             document.getElementById('selected-exp-aim').textContent = selectedExperiment.aim || 'N/A';
-            document.getElementById('selected-exp-method').textContent = selectedExperiment.Method || 'N/A';
+            document.getElementById('selected-exp-method').textContent = selectedExperiment.method || 'N/A'; // Corrected method
             
             document.getElementById('create-edit-protocol-btn').disabled = false;
             document.getElementById('run-protocol-btn').disabled = true; 
@@ -533,7 +533,8 @@
             currentProtocol = null;
             if (quill) quill.setContents([]);
 
-            const protocols = await apiFetch(`table/Lab/protocols?filter_Experiments_Nr=${selectedExperiment.Experiment_Nr}`);
+            // Fetch protocol from lab.protocol_runs based on experiment_id
+            const protocols = await apiFetch(`table/Lab/protocol_runs?filter_experiment_id=${selectedExperiment.experiment_id}`); // Corrected table and filter
             
             if (protocols.error) {
                 showAlert('Error loading protocol: ' + protocols.error, 'error');
@@ -542,10 +543,10 @@
             }
 
             if (protocols.length > 0) {
-                currentProtocol = protocols[0];
-                if (currentProtocol.protocol) {
+                currentProtocol = protocols[0]; // Assuming one protocol run record per experiment for now
+                if (currentProtocol.protocol_text) { // Corrected to protocol_text
                     quill.setContents([]);
-                    quill.clipboard.dangerouslyPasteHTML(currentProtocol.protocol);
+                    quill.clipboard.dangerouslyPasteHTML(currentProtocol.protocol_text); // Corrected to protocol_text
                     lucide.createIcons();
                 } else {
                     quill.setContents([]);
@@ -555,9 +556,10 @@
                 document.getElementById('export-original-pdf-btn').disabled = false;
                 document.getElementById('delete-protocol-btn').disabled = false;
                 
-                if (currentProtocol.run) {
+                // The 'run' field is now 'protocol_run_details' and should be parsed similarly
+                if (currentProtocol.protocol_run_details) { // Corrected to protocol_run_details
                     try {
-                        const runData = JSON.parse(currentProtocol.run);
+                        const runData = JSON.parse(currentProtocol.protocol_run_details); // Corrected to protocol_run_details
                         if (runData.lastRunUpdated) {
                             document.getElementById('protocol-last-run-timestamp').textContent = new Date(runData.lastRunUpdated).toLocaleString();
                             document.getElementById('export-run-pdf-btn').disabled = false;
@@ -595,9 +597,9 @@
             }
             document.getElementById('protocol-editor-section').style.display = 'block';
 
-            if (currentProtocol && currentProtocol.protocol) {
+            if (currentProtocol && currentProtocol.protocol_text) { // Corrected to protocol_text
                 quill.setContents([]);
-                quill.clipboard.dangerouslyPasteHTML(currentProtocol.protocol);
+                quill.clipboard.dangerouslyPasteHTML(currentProtocol.protocol_text); // Corrected to protocol_text
             } else {
                 quill.setContents([]); 
                 quill.clipboard.dangerouslyPasteHTML(`
@@ -616,21 +618,21 @@
             }
 
             const protocolContent = quill.root.innerHTML;
+            const user = JSON.parse(sessionStorage.getItem('user'));
             const data = {
-                "protocol": protocolContent,
-                "Experiments_Nr": selectedExperiment.Experiment_Nr,
-                "Notes": `Protocol for ${selectedExperiment.Experiment_Nr} updated by ${JSON.parse(sessionStorage.getItem('user')).person || 'Unknown'}`
+                "protocol_text": protocolContent, // Corrected to protocol_text
+                "experiment_id": selectedExperiment.experiment_id, // Corrected to experiment_id
+                "person_id": user ? user.person_id : 'unknown', // Set the person_id
+                "run_date": new Date().toISOString().split('T')[0], // Set run_date to today
+                "notes": `Protocol content for ${selectedExperiment.experiment_id} updated by ${user ? user.person : 'Unknown'}` // Use `description` or `notes`
             };
 
-            if (!currentProtocol) {
-                data.run = '{}'; 
-            }
-
             let result;
-            if (currentProtocol && currentProtocol.nr) {
-                result = await apiFetch(`table/Lab/protocols/${currentProtocol.nr}`, { method: 'PUT', body: data });
+            if (currentProtocol && currentProtocol.protocol_run_id) { // Corrected to protocol_run_id
+                result = await apiFetch(`table/Lab/protocol_runs/${currentProtocol.protocol_run_id}`, { method: 'PUT', body: data }); // Corrected table and PK
             } else {
-                result = await apiFetch('table/Lab/protocols', { method: 'POST', body: data });
+                // If creating a new protocol run, ensure a new unique ID is generated by the backend
+                result = await apiFetch('table/Lab/protocol_runs', { method: 'POST', body: data }); // Corrected table
             }
 
             if (!result.error) {
@@ -649,7 +651,6 @@
             const range = quill.getSelection(true);
             quill.insertEmbed(range.index, 'checkbox', { text: 'New protocol step' }, Quill.sources.USER);
             quill.setSelection(range.index + 1);
-            // REMOVED: quill.focus(); -- This was causing a scroll jump.
         }
 
         function convertSelectedToSteps() {
@@ -687,13 +688,13 @@
             const currentDateTime = new Date().toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
             return `
                 <div style="position: relative; margin-bottom: 20px; padding: 15px; border: 1px solid #e2e8f0; border-radius: 0.5rem; background-color: #f8fafc; color: #333;">
-                    <img src="./photos/logo.png" style="position: absolute; top: 15px; right: 15px; width: 80px; height: auto;" alt="Logo">
+                    <img src="./photo/logo.png" style="position: absolute; top: 15px; right: 15px; width: 80px; height: auto;" alt="Logo">
                     <h2 style="font-size: 1.6em; font-weight: bold; color: #1e293b; margin-bottom: 10px; border-bottom: 2px solid #4f46e5; padding-bottom: 5px;">Experiment Protocol</h2>
-                    <p style="margin-bottom: 5px;"><strong>Experiment Nr:</strong> <span style="font-weight: 600;">${selectedExperiment.Experiment_Nr || 'N/A'}</span></p>
-                    <p style="margin-bottom: 5px;"><strong>Title:</strong> ${selectedExperiment.Experiment_title || 'N/A'}</p>
+                    <p style="margin-bottom: 5px;"><strong>Experiment ID:</strong> <span style="font-weight: 600;">${selectedExperiment.experiment_id || 'N/A'}</span></p>
+                    <p style="margin-bottom: 5px;"><strong>Title:</strong> ${selectedExperiment.experiment_title || 'N/A'}</p>
                     <p style="margin-bottom: 5px;"><strong>Project:</strong> ${selectedExperiment.project_id || 'N/A'}</p>
                     <p style="margin-bottom: 5px;"><strong>Aim:</strong> ${selectedExperiment.aim || 'N/A'}</p>
-                    <p style="margin-bottom: 15px;"><strong>Method:</strong> ${selectedExperiment.Method || 'N/A'}</p>
+                    <p style="margin-bottom: 15px;"><strong>Method:</strong> ${selectedExperiment.method || 'N/A'}</p>
                     <p style="font-size: 0.85em; text-align: right; color: #666;">Generated on: ${currentDateTime}</p>
                 </div>
             `;
@@ -701,12 +702,12 @@
 
         function getPdfContent(isRunExport) {
             if (isRunExport) {
-                if (!currentProtocol || !currentProtocol.run) {
+                if (!currentProtocol || !currentProtocol.protocol_run_details) { // Corrected
                     showAlert('No saved run data exists. Please run and save the protocol first.', 'error');
                     return null;
                 }
                 try {
-                    currentRun = JSON.parse(currentProtocol.run);
+                    currentRun = JSON.parse(currentProtocol.protocol_run_details); // Corrected
                     const fileNameSuffix = '_RunLog';
 
                     const runDetailsHtml = `
@@ -760,8 +761,8 @@
                 let htmlContentToExport = '';
                 if (document.getElementById('protocol-editor-section').style.display === 'block') {
                     htmlContentToExport = quill.root.innerHTML;
-                } else if (currentProtocol && currentProtocol.protocol) {
-                    htmlContentToExport = currentProtocol.protocol;
+                } else if (currentProtocol && currentProtocol.protocol_text) { // Corrected
+                    htmlContentToExport = currentProtocol.protocol_text; // Corrected
                 } else {
                     showAlert('No protocol content to export. Please create and save a protocol first.', 'error');
                     return null;
@@ -795,8 +796,8 @@
             
             protocolPrintArea.innerHTML = pageBreakStyles + generatePdfHeaderHtml() + `<div class="pdf-content">${pdfData.content}</div>`;
 
-            const protocolTitle = selectedExperiment.Experiment_title || 'Experiment Protocol';
-            const fileName = `${selectedExperiment.Experiment_Nr}_${protocolTitle.replace(/[^a-zA-Z0-9]/g, '_')}${pdfData.fileNameSuffix}.pdf`;
+            const protocolTitle = selectedExperiment.experiment_title || 'Experiment Protocol'; // Corrected
+            const fileName = `${selectedExperiment.experiment_id}_${protocolTitle.replace(/[^a-zA-Z0-9]/g, '_')}${pdfData.fileNameSuffix}.pdf`; // Corrected to experiment_id
 
             const opt = {
                 margin: [25, 15, 25, 15],
@@ -825,30 +826,30 @@
         }
 
         async function runProtocol() {
-            if (!currentProtocol || !currentProtocol.protocol) {
+            if (!currentProtocol || !currentProtocol.protocol_text) { // Corrected
                 showAlert('No protocol loaded to run.', 'error');
                 return;
             }
 
             let runData = null;
-            if (currentProtocol.run && currentProtocol.run.trim() !== '{}') {
+            if (currentProtocol.protocol_run_details && currentProtocol.protocol_run_details.trim() !== '{}') { // Corrected
                 try {
-                    runData = JSON.parse(currentProtocol.run);
+                    runData = JSON.parse(currentProtocol.protocol_run_details); // Corrected
                 } catch (e) {
-                    console.error("Error parsing currentProtocol.run:", e);
+                    console.error("Error parsing currentProtocol.protocol_run_details:", e); // Corrected
                     showAlert("Error loading previous run data. Starting a new run.", "error");
                     runData = null;
                 }
             }
             
             const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = currentProtocol.protocol;
+            tempDiv.innerHTML = currentProtocol.protocol_text; // Corrected
             const protocolStepElements = Array.from(tempDiv.querySelectorAll('.ql-custom-checkbox-item'));
-            const currentProtocolHtmlHash = btoa(unescape(encodeURIComponent(currentProtocol.protocol)));
+            const currentProtocolHtmlHash = btoa(unescape(encodeURIComponent(currentProtocol.protocol_text))); // Corrected
 
             if (!runData || runData.protocolHash !== currentProtocolHtmlHash) {
                 currentRun = {
-                    protocolHtml: currentProtocol.protocol,
+                    protocolHtml: currentProtocol.protocol_text, // Corrected
                     protocolHash: currentProtocolHtmlHash,
                     runStarted: new Date().toISOString(),
                     lastRunUpdated: null,
@@ -869,7 +870,7 @@
                 <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
                     <div id="protocol-run-modal" class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-4xl max-h-[90vh] flex flex-col transform transition-all ease-out duration-300 opacity-0 -translate-y-10">
                         <div class="flex justify-between items-center mb-6">
-                            <h2 class="text-2xl font-bold">Run Protocol: ${selectedExperiment.Experiment_Nr} - ${selectedExperiment.Experiment_title || 'N/A'}</h2>
+                            <h2 class="text-2xl font-bold">Run Protocol: ${selectedExperiment.experiment_id} - ${selectedExperiment.experiment_title || 'N/A'}</h2> // Corrected to experiment_id and experiment_title
                             <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl">&times;</button>
                         </div>
                         <div class="flex-grow overflow-y-auto pr-4">
@@ -887,7 +888,7 @@
             const { closeModal } = showModal(modalContent);
 
             const runStepsContainer = document.getElementById('run-steps-container');
-            const currentUser = JSON.parse(sessionStorage.getItem('user')).person || 'Unknown User';
+            const currentUser = JSON.parse(sessionStorage.getItem('user')).person_id; // Use person_id for consistency
 
             function renderRunSteps() {
                 runStepsContainer.innerHTML = '';
@@ -940,8 +941,8 @@
                 currentRun.lastRunUpdated = new Date().toISOString();
                 currentRun.overallStatus = currentRun.steps.every(s => s.completed) ? 'Completed' : 'In Progress';
 
-                const dataToSave = { "run": JSON.stringify(currentRun) };
-                const result = await apiFetch(`table/Lab/protocols/${currentProtocol.nr}`, { method: 'PUT', body: dataToSave });
+                const dataToSave = { "protocol_run_details": JSON.stringify(currentRun) }; // Corrected
+                const result = await apiFetch(`table/Lab/protocol_runs/${currentProtocol.protocol_run_id}`, { method: 'PUT', body: dataToSave }); // Corrected table and PK
 
                 if (!result.error) {
                     showAlert('Protocol run status saved successfully!', 'info');
@@ -954,13 +955,13 @@
         }
 
         async function deleteProtocol() {
-            if (!currentProtocol || !currentProtocol.nr) {
+            if (!currentProtocol || !currentProtocol.protocol_run_id) { // Corrected
                 showAlert('No protocol selected for deletion.', 'error');
                 return;
             }
 
-            if (confirm(`Are you sure you want to delete the protocol for experiment ${selectedExperiment.Experiment_Nr}? This action cannot be undone.`)) {
-                const result = await apiFetch(`table/Lab/protocols/${currentProtocol.nr}`, { method: 'DELETE' });
+            if (confirm(`Are you sure you want to delete the protocol for experiment ${selectedExperiment.experiment_id}? This action cannot be undone.`)) { // Corrected
+                const result = await apiFetch(`table/Lab/protocol_runs/${currentProtocol.protocol_run_id}`, { method: 'DELETE' }); // Corrected table and PK
 
                 if (result.success) {
                     showAlert('Protocol deleted successfully!', 'info');

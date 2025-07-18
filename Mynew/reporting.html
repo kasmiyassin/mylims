@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reporting - TIFI </title>
+    <title>Reporting - TIFI LIMS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -39,7 +39,7 @@
 <body>
     <div id="main-app">
         <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
-            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI</span></div>
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI LIMS</span></div>
             <nav class="flex-grow space-y-2">
                 <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
                 <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
@@ -117,7 +117,7 @@
     </div>
 
     <script>
-        if (sessionStorage.getItem('isLoggedIn') !== 'true') window.location.href = '/login.html'; // Corrected to absolute path
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') window.location.href = window.location.origin + '/login.html'; // Corrected to absolute path
         
         const API_BASE_URL = '/mymglab/api'; // const API_BASE_URL = `http://${window.location.hostname}:5200/api`;
         let masterCache = {}; // Cache for all fetched table data
@@ -126,7 +126,7 @@
             lucide.createIcons();
             const user = JSON.parse(sessionStorage.getItem('user'));
             if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.person}</p>`;
-            document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href = '/login.html'; }); // Corrected to absolute path
+            document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href = window.location.origin + '/login.html'; }); // Corrected to absolute path
             initializeReportingPage();
         });
 
@@ -195,30 +195,30 @@
 
             const tablesToFetch = [
                 { schema: 'Lims', table: 'projects' }, 
-                { schema: 'Lims', table: 'projectpersons' }, 
-                { schema: 'Lims', table: 'Reagents'},
+                { schema: 'Lims', table: 'project_persons' }, 
+                { schema: 'Lims', table: 'reagents'},
                 { schema: 'Lims', table: 'orders'},
                 { schema: 'Lims', table: 'cruises'},
                 { schema: 'Lims', table: 'customers'},
 
                 { schema: 'Lab', table: 'samples' }, 
-                { schema: 'Lab', table: 'Experiments' }, 
+                { schema: 'Lab', table: 'experiments' }, 
                 { schema: 'Lab', table: 'storage' },
-                { schema: 'Lab', table: 'Extraction' }, 
-                { schema: 'Lab', table: 'Qubit' }, 
-                { schema: 'Lab', table: 'Nanodrop' },
-                { schema: 'Lab', table: 'Tapestation' },
-                { schema: 'Lab', table: 'PCR' },
-                { schema: 'Lab', table: 'qPCR' },
-                { schema: 'Lab', table: 'Library' },
-                { schema: 'Lab', table: 'Sequencing' },
-                { schema: 'Lab', table: 'bioinformatics' }, 
-                { schema: 'Lab', table: 'Dissections' }, 
+                { schema: 'Lab', table: 'extraction' }, 
+                { schema: 'Lab', table: 'qubit' }, 
+                { schema: 'Lab', table: 'nanodrop' },
+                { schema: 'Lab', table: 'tapestation' },
+                { schema: 'Lab', table: 'pcr' },
+                { schema: 'Lab', table: 'qpcr' },
+                { schema: 'Lab', table: 'library' },
+                { schema: 'Lab', table: 'sequencing' },
+                { schema: 'Lab', table: 'dissections' }, 
                 { schema: 'Lab', table: 'fishing' }, 
-                { schema: 'Lab', table: 'Tissue' }, 
-                { schema: 'Lab', table: 'Water' }, 
-                { schema: 'Lab', table: 'Sediments' }, 
+                { schema: 'Lab', table: 'tissue' }, 
+                { schema: 'Lab', table: 'water' }, 
+                { schema: 'Lab', table: 'sediments' }, 
                 { schema: 'Lab', table: 'sampling' }, 
+                { schema: 'Lab', table: 'otoliths' }, 
 
                 { schema: 'Reference', table: 'personal' }, 
                 { schema: 'Reference', table: 'status' },
@@ -226,19 +226,25 @@
                 { schema: 'Reference', table: 'region' }, 
                 { schema: 'Reference', table: 'category' },
                 { schema: 'Reference', table: 'room' },
-                { schema: 'Reference', table: 'samplesType' }, 
+                { schema: 'Reference', table: 'samples_type' }, 
                 { schema: 'Reference', table: 'vessel' }, 
                 { schema: 'Reference', table: 'ecosystem' }, 
-                { schema: 'Reference', table: 'taxon' }, 
                 { schema: 'Reference', table: 'gene' }, 
+                { schema: 'Reference', table: 'taxon' }, 
 
-                // Fetch views as well, using their exact names from myDB_4Work.sql
-                { schema: 'Lab', table: 'Sample_Full_Details_View' }, 
-                { schema: 'Lims', table: 'Project_Comprehensive_Summary_View' }, 
-                { schema: 'Lab', table: 'Storage_Occupancy_View' }, 
-                { schema: 'Lims', table: 'Reagent_Status_View' }, 
-                { schema: 'Lab', table: 'Experiment_Progress_Overview_View' }, 
-                { schema: 'Reference', table: 'Complete_Species_Taxon_View' }, 
+                { schema: 'Bioinformatics', table: 'analysis_runs' },
+                { schema: 'Bioinformatics', table: 'analysis_pipelines' },
+                { schema: 'Bioinformatics', table: 'reference_databases' },
+                { schema: 'Bioinformatics', table: 'edna_assignments' },
+
+                -- Fetch views as well, using their exact names from MyLims.sql
+                { schema: 'Lab', table: 'sample_full_details_view' }, 
+                { schema: 'Lims', table: 'project_comprehensive_summary_view' }, 
+                { schema: 'Lims', table: 'project_financial_summary_view' },
+                { schema: 'Lab', table: 'storage_occupancy_view' }, 
+                { schema: 'Lims', table: 'reagent_status_view' }, 
+                { schema: 'Lab', table: 'experiment_progress_overview_view' }, 
+                { schema: 'Reference', table: 'complete_species_taxon_view' }, 
                 { schema: 'audit', table: 'log' } 
             ];
             await Promise.all(tablesToFetch.map(t => getTableData(t.schema, t.table)));
@@ -334,11 +340,11 @@
 
         async function renderProjectSelector() {
             const projects = await getTableData('Lims', 'projects'); 
-            renderSelector('Project', 'project-select', projects.map(p => ({ value: p.project_id, text: p.Title || p.project_id })), `generate${document.getElementById('report-type').value.replace(/-/g, '')}Preview`, true); 
+            renderSelector('Project', 'project-select', projects.map(p => ({ value: p.project_id, text: p.title || p.project_id })), `generate${document.getElementById('report-type').value.replace(/-/g, '')}Preview`, true); 
         }
         
         async function renderSampleLifecycleInputs() {
-            const sampleTypes = await getTableData('Reference', 'samplesType'); 
+            const sampleTypes = await getTableData('Reference', 'samples_type'); 
             const statuses = await getTableData('Reference', 'status'); 
             const projects = await getTableData('Lims', 'projects'); 
 
@@ -347,21 +353,21 @@
                     <label for="sample-type-filter" class="block text-sm font-medium text-gray-700">Filter by Sample Type:</label>
                     <select id="sample-type-filter" class="w-full mt-1 p-2 border rounded-md">
                         <option value="all">-- All Sample Types --</option>
-                        ${sampleTypes.map(st => `<option value="${st.sample_type}">${st.sample_type}</option>`).join('')}
+                        ${sampleTypes.map(st => `<option value="${st.sample_type_id}">${st.sample_type_id}</option>`).join('')}
                     </select>
                 </div>
                 <div>
                     <label for="workflow-status-filter" class="block text-sm font-medium text-gray-700">Filter by Workflow Status:</label>
                     <select id="workflow-status-filter" class="w-full mt-1 p-2 border rounded-md">
                         <option value="all">-- All Statuses --</option>
-                        ${statuses.map(s => `<option value="${s.status_id}">${s.description || s.status_id}</option>`).join('')}
+                        ${statuses.map(s => `<option value="${s.status_id}">${s.status_id}</option>`).join('')}
                     </select>
                 </div>
                 <div>
                     <label for="project-filter" class="block text-sm font-medium text-gray-700">Filter by Project:</label>
                     <select id="project-filter" class="w-full mt-1 p-2 border rounded-md">
                         <option value="all">-- All Projects --</option>
-                        ${projects.map(p => `<option value="${p.project_id}">${p.Title || p.project_id}</option>`).join('')}
+                        ${projects.map(p => `<option value="${p.project_id}">${p.title || p.project_id}</option>`).join('')}
                     </select>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -387,7 +393,7 @@
 
         async function renderStorageSelector() {
             const storage = await getTableData('Lab', 'storage'); 
-            renderSelector('Storage Box', 'storage-select', storage.map(s => ({ value: s.storage_id, text: `${s.storage_id} (${s.Box})` })), 'generateInventoryPreview', true);
+            renderSelector('Storage Box', 'storage-select', storage.map(s => ({ value: s.storage_id, text: `${s.storage_id} (${s.box})` })), 'generateInventoryPreview', true);
         }
 
         async function renderReagentExpiryInputs() {
@@ -399,14 +405,14 @@
                     <label for="reagent-category-filter" class="block text-sm font-medium text-gray-700">Filter by Category:</label>
                     <select id="reagent-category-filter" class="w-full mt-1 p-2 border rounded-md">
                         <option value="all">-- All Categories --</option>
-                        ${categories.map(c => `<option value="${c.category}">${c.category}</option>`).join('')}
+                        ${categories.map(c => `<option value="${c.category_id}">${c.category_id}</option>`).join('')}
                     </select>
                 </div>
                 <div>
                     <label for="reagent-status-filter" class="block text-sm font-medium text-gray-700">Filter by Status:</label>
                     <select id="reagent-status-filter" class="w-full mt-1 p-2 border rounded-md">
                         <option value="all">-- All Statuses --</option>
-                        ${statuses.map(s => `<option value="${s.status_id}">${s.description || s.status_id}</option>`).join('')}
+                        ${statuses.map(s => `<option value="${s.status_id}">${s.status_id}</option>`).join('')}
                     </select>
                 </div>
                 <div>
@@ -435,8 +441,8 @@
         }
 
         async function renderExperimentSelector() {
-            const experiments = await getTableData('Lab', 'Experiments');
-            renderSelector('Experiment', 'experiment-select', experiments.map(e => ({ value: e.Experiment_id, text: `${e.Experiment_id} - ${e.Experiment_title || 'No Title'}` })), 'generateQCSummaryPreview', true); 
+            const experiments = await getTableData('Lab', 'experiments');
+            renderSelector('Experiment', 'experiment-select', experiments.map(e => ({ value: e.experiment_id, text: `${e.experiment_id} - ${e.experiment_title || 'No Title'}` })), 'generateQCSummaryPreview', true); 
         }
 
         async function renderExperimentProgressInputs() {
@@ -448,14 +454,14 @@
                     <label for="exp-progress-project-filter" class="block text-sm font-medium text-gray-700">Filter by Project:</label>
                     <select id="exp-progress-project-filter" class="w-full mt-1 p-2 border rounded-md">
                         <option value="all">-- All Projects --</option>
-                        ${projects.map(p => `<option value="${p.project_id}">${p.Title || p.project_id}</option>`).join('')}
+                        ${projects.map(p => `<option value="${p.project_id}">${p.title || p.project_id}</option>`).join('')}
                     </select>
                 </div>
                 <div>
                     <label for="exp-progress-status-filter" class="block text-sm font-medium text-gray-700">Filter by Experiment Status:</label>
                     <select id="exp-progress-status-filter" class="w-full mt-1 p-2 border rounded-md">
                         <option value="all">-- All Statuses --</option>
-                        ${statuses.map(s => `<option value="${s.status_id}">${s.description || s.status_id}</option>`).join('')}
+                        ${statuses.map(s => `<option value="${s.status_id}">${s.status_id}</option>`).join('')}
                     </select>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -481,21 +487,21 @@
 
         async function renderSpeciesDistributionInputs() {
             const projects = await getTableData('Lims', 'projects'); 
-            const locations = await getTableData('Reference', 'region'); 
+            const regions = await getTableData('Reference', 'region'); 
 
             const inputsHtml = `
                 <div>
                     <label for="species-dist-project-filter" class="block text-sm font-medium text-gray-700">Filter by Project:</label>
                     <select id="species-dist-project-filter" class="w-full mt-1 p-2 border rounded-md">
                         <option value="all">-- All Projects --</option>
-                        ${projects.map(p => `<option value="${p.project_id}">${p.Title || p.project_id}</option>`).join('')}
+                        ${projects.map(p => `<option value="${p.project_id}">${p.title || p.project_id}</option>`).join('')}
                     </select>
                 </div>
                 <div>
                     <label for="species-dist-location-filter" class="block text-sm font-medium text-gray-700">Filter by Region:</label>
                     <select id="species-dist-location-filter" class="w-full mt-1 p-2 border rounded-md">
                         <option value="all">-- All Regions --</option>
-                        ${locations.map(l => `<option value="${l.region_id}">${l.region_id}</option>`).join('')}
+                        ${regions.map(l => `<option value="${l.region_id}">${l.region_id}</option>`).join('')}
                     </select>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -529,7 +535,7 @@
                     <label for="sampling-loc-project-filter" class="block text-sm font-medium text-gray-700">Filter by Project:</label>
                     <select id="sampling-loc-project-filter" class="w-full mt-1 p-2 border rounded-md">
                         <option value="all">-- All Projects --</option>
-                        ${projects.map(p => `<option value="${p.project_id}">${p.Title || p.project_id}</option>`).join('')}
+                        ${projects.map(p => `<option value="${p.project_id}">${p.title || p.project_id}</option>`).join('')}
                     </select>
                 </div>
                 <div>
@@ -576,7 +582,7 @@
                     <label for="audit-user-filter" class="block text-sm font-medium text-gray-700">Filter by User:</label>
                     <select id="audit-user-filter" class="w-full mt-1 p-2 border rounded-md">
                         <option value="all">-- All Users --</option>
-                        ${persons.map(p => `<option value="${p.person_id}">${p['Full Name'] || p.person_id}</option>`).join('')}
+                        ${persons.map(p => `<option value="${p.person_id}">${p.full_name || p.person_id}</option>`).join('')}
                     </select>
                 </div>
                 <div>
@@ -637,7 +643,7 @@
             const startDate = document.getElementById('start-date-filter').value;
             const endDate = document.getElementById('end-date-filter').value;
 
-            let projects = await getTableData('Lims', 'Project_Comprehensive_Summary_View'); 
+            let projects = await getTableData('Lims', 'project_comprehensive_summary_view'); 
             
             if (projects.error) {
                 renderPreview('Project Summary', `<p class="text-red-500">Error loading project data: ${projects.error}</p>`, () => {});
@@ -647,11 +653,11 @@
             let projectData = projects.filter(p => {
                 const matchesProject = projectId === 'all' || p.project_id === projectId;
                 let matchesDate = true;
-                if (startDate && p.Start_date) {
-                    matchesDate = matchesDate && (new Date(p.Start_date) >= new Date(startDate));
+                if (startDate && p.start_date) {
+                    matchesDate = matchesDate && (new Date(p.start_date) >= new Date(startDate));
                 }
-                if (endDate && p.End_date) {
-                    matchesDate = matchesDate && (new Date(p.End_date) <= new Date(endDate));
+                if (endDate && p.end_date) {
+                    matchesDate = matchesDate && (new Date(p.end_date) <= new Date(endDate));
                 }
                 return matchesProject && matchesDate;
             });
@@ -663,8 +669,8 @@
 
             const projectHeaders = ['Project ID', 'Title', 'Status', 'Funder', 'Start Date', 'End Date', 'Experiments', 'Samples', 'Order Cost'];
             const projectRows = projectData.map(p => [
-                p.project_id, p.project_title, p.project_status, p.Funder || 'N/A', 
-                formatDate(p.Start_date), formatDate(p.End_date), 
+                p.project_id, p.project_title, p.project_status, p.funder || 'N/A', 
+                formatDate(p.start_date), formatDate(p.end_date), 
                 p.number_of_experiments, p.number_of_samples, p.total_order_cost ? `$${p.total_order_cost.toFixed(2)}` : 'N/A'
             ]);
 
@@ -686,7 +692,7 @@
             const startDate = document.getElementById('start-date-filter').value;
             const endDate = document.getElementById('end-date-filter').value;
 
-            let financialData = await getTableData('Lims', 'Project_Financial_Summary_View'); 
+            let financialData = await getTableData('Lims', 'project_financial_summary_view'); 
 
             if (financialData.error) {
                 renderPreview('Project Financial Summary', `<p class="text-red-500">Error loading financial data: ${financialData.error}</p>`, () => {});
@@ -738,32 +744,32 @@
             const startDate = document.getElementById('start-date-filter').value;
             const endDate = document.getElementById('end-date-filter').value;
 
-            let samples = await getTableData('Lab', 'Sample_Full_Details_View'); 
+            let samples = await getTableData('Lab', 'sample_full_details_view'); 
             if (samples.error) {
                 renderPreview('Sample Lifecycle Tracking', `<p class="text-red-500">Error loading sample data: ${samples.error}</p>`, () => {});
                 return;
             }
 
             samples = samples.filter(s => {
-                const matchesType = sampleTypeFilter === 'all' || s.sample_type === sampleTypeFilter;
+                const matchesType = sampleTypeFilter === 'all' || s.sample_type_id === sampleTypeFilter;
                 const matchesStatus = workflowStatusFilter === 'all' || s.sample_status_id === workflowStatusFilter; 
                 const matchesProject = projectFilter === 'all' || s.project_id === projectFilter;
                 
                 let matchesDate = true;
-                if (startDate && s.Reception_date) { 
-                    matchesDate = matchesDate && (new Date(s.Reception_date) >= new Date(startDate));
+                if (startDate && s.reception_date) { 
+                    matchesDate = matchesDate && (new Date(s.reception_date) >= new Date(startDate));
                 }
-                if (endDate && s.Reception_date) {
-                    matchesDate = matchesDate && (new Date(s.Reception_date) <= new Date(endDate));
+                if (endDate && s.reception_date) {
+                    matchesDate = matchesDate && (new Date(s.reception_date) <= new Date(endDate));
                 }
                 return matchesType && matchesStatus && matchesProject && matchesDate;
             });
 
             const statusCounts = samples.reduce((acc, s) => { acc[s.sample_status_id] = (acc[s.sample_status_id] || 0) + 1; return acc; }, {}); 
-            const sampleHeaders = ['Sample ID', 'External Name', 'Type', 'Project', 'Status', 'Last Update', 'Species', 'Length (mm)', 'Weight (g)', 'Qubit Conc (ng/無)'];
+            const sampleHeaders = ['Sample ID', 'External Name', 'Type', 'Project', 'Status', 'Last Update', 'Species', 'Length (mm)', 'Weight (g)', 'Qubit Conc (ng/繕L)'];
             const sampleRows = samples.map(s => [
-                s.sample_id, s.External_Name || 'N/A', s.sample_type, s.project_title || 'N/A', s.sample_status_id, formatDateTime(s.last_status_update),
-                s.species_english_name || 'N/A', s.total_length_mm || 'N/A', s.weight_g || 'N/A', s.Yield_Qubit_ng_ul || 'N/A'
+                s.sample_id, s.external_name || 'N/A', s.sample_type_id, s.project_title || 'N/A', s.sample_status_id, formatDateTime(s.last_status_update),
+                s.species_en_name || 'N/A', s.total_length_mm || 'N/A', s.weight_g || 'N/A', s.yield_qubit_ng_ul || 'N/A'
             ]);
 
             let html = `
@@ -787,7 +793,7 @@
             const startDate = document.getElementById('start-date-filter').value;
             const endDate = document.getElementById('end-date-filter').value;
 
-            let inventory = await getTableData('Lab', 'Storage_Occupancy_View'); 
+            let inventory = await getTableData('Lab', 'storage_occupancy_view'); 
             if (inventory.error) {
                 renderPreview('Storage Inventory Report', `<p class="text-red-500">Error loading inventory data: ${inventory.error}</p>`, () => {});
                 return;
@@ -808,7 +814,7 @@
 
             const inventoryHeaders = ['Storage ID', 'Room', 'Freezer', 'Box', 'Capacity', 'Occupied', 'Occupancy %'];
             const inventoryRows = inventory.map(item => [
-                item.storage_id, item.room_id, item.Freezer, item.Box, 
+                item.storage_id, item.room_id, item.freezer, item.box, 
                 item.box_capacity, item.occupied_slots, `${item.occupancy_percent}%`
             ]);
 
@@ -832,23 +838,23 @@
             const endDate = document.getElementById('end-date-filter').value; 
 
 
-            let reagents = await getTableData('Lims', 'Reagent_Status_View'); 
+            let reagents = await getTableData('Lims', 'reagent_status_view'); 
             if (reagents.error) {
                 renderPreview('Reagent Expiry Report', `<p class="text-red-500">Error loading reagent data: ${reagents.error}</p>`, () => {});
                 return;
             }
 
             reagents = reagents.filter(r => {
-                const matchesCategory = categoryFilter === 'all' || r.category === categoryFilter;
+                const matchesCategory = categoryFilter === 'all' || r.category_id === categoryFilter;
                 const matchesStatus = statusFilter === 'all' || r.current_status === statusFilter;
                 const isExpiring = r.days_until_expiry !== null && r.days_until_expiry <= expiryDays && r.days_until_expiry >= 0;
                 
                 let matchesDate = true;
-                if (startDate && r.Reception_date) { 
-                    matchesDate = matchesDate && (new Date(r.Reception_date) >= new Date(startDate));
+                if (startDate && r.reception_date) { 
+                    matchesDate = matchesDate && (new Date(r.reception_date) >= new Date(startDate));
                 }
-                if (endDate && r.Reception_date) {
-                    matchesDate = matchesDate && (new Date(r.Reception_date) <= new Date(endDate));
+                if (endDate && r.reception_date) {
+                    matchesDate = matchesDate && (new Date(r.reception_date) <= new Date(endDate));
                 }
                 return matchesCategory && matchesStatus && isExpiring && matchesDate;
             });
@@ -856,8 +862,8 @@
 
             const reagentHeaders = ['Reagent Name', 'Category', 'Lot', 'Status', 'Reception Date', 'Expiry Date', 'Days Until Expiry'];
             const reagentRows = reagents.map(r => [
-                r.Reagent_CompleteName, r.category, r.Lot || 'N/A', r.current_status, formatDate(r.Reception_date),
-                formatDate(r.Expire_date), r.days_until_expiry
+                r.reagent_complete_name, r.category_id, r.lot || 'N/A', r.current_status, formatDate(r.reception_date),
+                formatDate(r.expire_date), r.days_until_expiry
             ]);
 
             let html = `
@@ -877,30 +883,30 @@
             const startDate = document.getElementById('start-date-filter').value;
             const endDate = document.getElementById('end-date-filter').value;
 
-            const experiment = (await getTableData('Lab', 'Experiments')).find(e => e.Experiment_id === experimentId); 
+            const experiment = (await getTableData('Lab', 'experiments')).find(e => e.experiment_id === experimentId); 
             
             if (!experiment) {
                 renderPreview('Experiment QC Summary', '<p class="text-red-500">Experiment not found.</p>', () => {});
                 return;
             }
 
-            let qcData = (await getTableData('Lab', 'Sample_Full_Details_View')).filter(s => {
-                const matchesExperiment = s.Experiment_id === experimentId; 
-                const hasQCData = (s.Yield_Qubit_ng_ul || s.Yield_Nanodrop_ng_ul);
+            let qcData = (await getTableData('Lab', 'sample_full_details_view')).filter(s => {
+                const matchesExperiment = s.experiment_id === experimentId; 
+                const hasQCData = (s.yield_qubit_ng_ul || s.nanodrop_concentration);
                 
                 let matchesDate = true;
-                if (startDate && s.last_status_update) { 
-                    matchesDate = matchesDate && (new Date(s.last_status_update) >= new Date(startDate));
+                if (startDate && s.reception_date) { // Assuming reception_date is a good proxy for sample's entry into the system for QC context
+                    matchesDate = matchesDate && (new Date(s.reception_date) >= new Date(startDate));
                 }
-                if (endDate && s.last_status_update) {
-                    matchesDate = matchesDate && (new Date(s.last_status_update) <= new Date(endDate));
+                if (endDate && s.reception_date) {
+                    matchesDate = matchesDate && (new Date(s.reception_date) <= new Date(endDate));
                 }
                 return matchesExperiment && hasQCData && matchesDate;
             });
             
             const html = `
-                <h4 class="report-section-title">Experiment: ${experiment.Experiment_title || experiment.Experiment_id}</h4>
-                ${renderObjectDetails(experiment, ['Experiment_id', 'Experiment_title', 'project_id', 'aim', 'date', 'person', 'status_id'])}
+                <h4 class="report-section-title">Experiment: ${experiment.experiment_title || experiment.experiment_id}</h4>
+                ${renderObjectDetails(experiment, ['experiment_id', 'experiment_title', 'project_id', 'aim', 'experiment_date', 'person_id', 'status_id'])}
 
                 <h4 class="report-section-title">QC Concentration Overview (Qubit/Nanodrop Yield)</h4>
                 <div class="w-full h-96"><canvas id="qc-chart"></canvas></div>
@@ -918,14 +924,14 @@
             const qcDetailsContainer = document.createElement('div');
             qcDetailsContainer.id = 'qc-details-table'; 
             document.getElementById('preview-body').prepend(qcDetailsContainer); 
-            qcDetailsContainer.innerHTML = renderObjectDetails(experiment, ['Experiment_id', 'Experiment_title', 'project_id', 'aim', 'date', 'person', 'status_id']);
+            qcDetailsContainer.innerHTML = renderObjectDetails(experiment, ['experiment_id', 'experiment_title', 'project_id', 'aim', 'experiment_date', 'person_id', 'status_id']);
 
 
-            renderHtmlTable('qc-table', ['Sample ID', 'Qubit Yield (ng/無)', 'Nanodrop Yield (ng/無)', 'Last Update'], 
-                qcData.map(s => [s.sample_id, s.Yield_Qubit_ng_ul || 'N/A', s.Yield_Nanodrop_ng_ul || 'N/A', formatDateTime(s.last_status_update)]));
+            renderHtmlTable('qc-table', ['Sample ID', 'Qubit Yield (ng/繕L)', 'Nanodrop Conc (ng/繕L)', 'Last Update'], 
+                qcData.map(s => [s.sample_id, s.yield_qubit_ng_ul || 'N/A', s.nanodrop_concentration || 'N/A', formatDateTime(s.last_status_update)]));
             
-            renderBarChart('qc-chart', 'Qubit/Nanodrop Yield', qcData.map(s => s.sample_id), 
-                qcData.map(s => s.Yield_Qubit_ng_ul || s.Yield_Nanodrop_ng_ul || 0), 'Yield (ng/無)');
+            renderBarChart('qc-chart', 'Qubit/Nanodrop Concentration', qcData.map(s => s.sample_id), 
+                qcData.map(s => s.yield_qubit_ng_ul || s.nanodrop_concentration || 0), 'Concentration (ng/繕L)');
             
             saveReportToHistory(`QC Summary: ${experimentId}`, 'qc-summary', { experimentId, startDate, endDate });
         }
@@ -936,7 +942,7 @@
             const startDate = document.getElementById('start-date-filter').value;
             const endDate = document.getElementById('end-date-filter').value;
 
-            let progressData = await getTableData('Lab', 'Experiment_Progress_Overview_View'); 
+            let progressData = await getTableData('Lab', 'experiment_progress_overview_view'); 
             if (progressData.error) {
                 renderPreview('Experiment Progress Overview', `<p class="text-red-500">Error loading progress data: ${progressData.error}</p>`, () => {});
                 return;
@@ -962,7 +968,7 @@
                 'Extracted', 'Qubit QC', 'Library Prep', 'Sequenced', 'Bioinfo Done'
             ];
             const progressRows = progressData.map(exp => [
-                exp.Experiment_id, exp.Experiment_title, exp.project_id, exp.experiment_status, formatDate(exp.experiment_start_date),
+                exp.experiment_id, exp.experiment_title, exp.project_id, exp.experiment_status, formatDate(exp.experiment_start_date),
                 exp.total_samples_in_experiment, exp.samples_extracted, exp.samples_qubit_qc,
                 exp.samples_library_prepped, exp.samples_sequenced, exp.samples_bioinformatics_done
             ]);
@@ -985,7 +991,7 @@
             const startDate = document.getElementById('start-date-filter').value;
             const endDate = document.getElementById('end-date-filter').value;
 
-            let samples = await getTableData('Lab', 'Sample_Full_Details_View'); 
+            let samples = await getTableData('Lab', 'sample_full_details_view'); 
             if (samples.error) {
                 renderPreview('Species Distribution', `<p class="text-red-500">Error loading sample data: ${samples.error}</p>`, () => {});
                 return;
@@ -993,37 +999,36 @@
 
             samples = samples.filter(s => {
                 const matchesProject = projectFilter === 'all' || s.project_id === projectFilter;
-                const matchesLocation = locationFilter === 'all' || s.sampling_location_name === locationFilter; 
-                const hasSpecies = s.species_scientific_name; 
+                const matchesLocation = locationFilter === 'all' || s.sampling_location === locationFilter; 
+                const hasSpecies = s.species_id; // Check for species_id now
                 
                 let matchesDate = true;
-                if (startDate && s.sampling_date) { 
-                    matchesDate = matchesDate && (new Date(s.sampling_date) >= new Date(startDate));
+                if (startDate && s.sampling_event_date) { 
+                    matchesDate = matchesDate && (new Date(s.sampling_event_date) >= new Date(startDate));
                 }
-                if (endDate && s.sampling_date) {
-                    matchesDate = matchesDate && (new Date(s.sampling_date) <= new Date(endDate));
+                if (endDate && s.sampling_event_date) {
+                    matchesDate = matchesDate && (new Date(s.sampling_event_date) <= new Date(endDate));
                 }
                 return matchesProject && matchesLocation && hasSpecies && matchesDate;
             });
 
             const speciesCounts = samples.reduce((acc, s) => { 
-                acc[s.species_scientific_name] = (acc[s.species_scientific_name] || 0) + 1; 
+                acc[s.species_id] = (acc[s.species_id] || 0) + 1; 
                 return acc; 
             }, {});
             
-            const speciesData = Object.entries(speciesCounts).map(([species, count]) => {
-                const speciesDetails = (masterCache['Reference.species'] || []).find(s => s.species === species); 
-                const taxonDetails = (masterCache['Reference.taxon'] || []).find(t => t.taxon_id === species); 
+            const speciesData = Object.entries(speciesCounts).map(([speciesId, count]) => {
+                const speciesDetails = (masterCache['Reference.complete_species_taxon_view'] || []).find(s => s.species_id === speciesId); 
                 return {
-                    species: species,
+                    species_id: speciesId,
                     count: count,
-                    de_name: taxonDetails ? taxonDetails.DE_name : 'N/A', 
-                    en_name: taxonDetails ? taxonDetails.En_name : 'N/A' 
+                    de_name: speciesDetails ? speciesDetails.species_de_name : 'N/A', 
+                    en_name: speciesDetails ? speciesDetails.species_en_name : 'N/A' 
                 };
             }).sort((a,b) => b.count - a.count);
 
-            const speciesHeaders = ['Species', 'German Name', 'English Name', 'Count']; 
-            const speciesRows = speciesData.map(s => [s.species, s.de_name, s.en_name, s.count]);
+            const speciesHeaders = ['Species ID', 'German Name', 'English Name', 'Count']; 
+            const speciesRows = speciesData.map(s => [s.species_id, s.de_name, s.en_name, s.count]);
 
             let html = `
                 <h4 class="report-section-title">Species Count Distribution</h4>
@@ -1036,7 +1041,7 @@
                 { id: 'species-table', title: 'Detailed Species List' }
             ));
 
-            renderBarChart('species-chart', 'Number of Samples', speciesData.map(s => s.species), speciesData.map(s => s.count), 'Number of Samples');
+            renderBarChart('species-chart', 'Number of Samples', speciesData.map(s => s.species_id), speciesData.map(s => s.count), 'Number of Samples');
             renderHtmlTable('species-table', speciesHeaders, speciesRows);
             saveReportToHistory('Species Distribution', 'species-distribution', { projectFilter, locationFilter, startDate, endDate });
         }
@@ -1057,7 +1062,7 @@
                 const eventYear = new Date(event.sampling_date).getFullYear();
                 const matchesYear = yearFilter === 'all' || eventYear == yearFilter;
                 
-                // Check if any experiment linked to this sampling event belongs to the filtered project
+                // Check if any samples linked to this sampling event belong to the filtered project
                 const samplesFromEvent = (masterCache['Lab.samples'] || []).filter(s => s.sampling_id === event.sampling_id); 
                 const matchesProject = projectFilter === 'all' || samplesFromEvent.some(s => s.project_id === projectFilter);
 
@@ -1072,23 +1077,22 @@
             });
 
             const locationCounts = filteredEvents.reduce((acc, event) => { 
-                acc[event.Location] = (acc[event.Location] || 0) + 1; 
+                acc[event.region_id] = (acc[event.region_id] || 0) + 1; // Use region_id
                 return acc; 
             }, {});
 
-            const locationData = Object.entries(locationCounts).map(([Location, count]) => {
-                // Location table is now 'region' in reference schema
-                const locationDetails = (masterCache['Reference.region'] || []).find(l => l.region_id === Location); 
+            const locationData = Object.entries(locationCounts).map(([regionId, count]) => {
+                const regionDetails = (masterCache['Reference.region'] || []).find(l => l.region_id === regionId); 
                 return {
-                    Location: Location,
+                    region_id: regionId,
                     count: count,
-                    country: locationDetails ? locationDetails.country : 'N/A',
-                    category: locationDetails ? locationDetails.category : 'N/A'
+                    country: regionDetails ? regionDetails.country : 'N/A',
+                    category: regionDetails ? regionDetails.category : 'N/A'
                 };
             }).sort((a,b) => b.count - a.count);
 
-            const locationHeaders = ['Location', 'Country', 'Category', 'Sampling Events'];
-            const locationRows = locationData.map(loc => [loc.Location, loc.country, loc.category, loc.count]);
+            const locationHeaders = ['Region ID', 'Country', 'Category', 'Sampling Events'];
+            const locationRows = locationData.map(loc => [loc.region_id, loc.country, loc.category, loc.count]);
 
             let html = `
                 <h4 class="report-section-title">Sampling Events by Location</h4>
@@ -1101,7 +1105,7 @@
                 { id: 'location-table', title: 'Detailed Location List' }
             ));
 
-            renderBarChart('location-chart', 'Number of Sampling Events', locationData.map(loc => loc.Location), locationData.map(loc => loc.count), 'Number of Events');
+            renderBarChart('location-chart', 'Number of Sampling Events', locationData.map(loc => loc.region_id), locationData.map(loc => loc.count), 'Number of Events');
             renderHtmlTable('location-table', locationHeaders, locationRows);
             saveReportToHistory('Sampling Location Overview', 'sampling-location-overview', { projectFilter, yearFilter, startDate, endDate });
         }
@@ -1121,7 +1125,7 @@
 
             auditLog = auditLog.filter(log => {
                 const matchesTable = tableFilter === 'all' || log.table_name === tableFilter;
-                const matchesUser = userFilter === 'all' || log.user_name === userFilter;
+                const matchesUser = userFilter === 'all' || log.user_id === userFilter; // Use user_id
                 const matchesAction = actionFilter === 'all' || log.action === actionFilter;
                 
                 let matchesDate = true;
@@ -1139,16 +1143,16 @@
 
             auditLog.sort((a,b) => new Date(b.action_timestamp) - new Date(a.action_timestamp)); // Sort by most recent
 
-            const auditHeaders = ['Timestamp', 'User', 'Schema', 'Table', 'Action', 'Original Data', 'New Data', 'Query'];
+            const auditHeaders = ['Timestamp', 'User ID', 'Schema', 'Table', 'Action', 'Original Data', 'New Data', 'Query'];
             const auditRows = auditLog.map(log => [
                 formatDateTime(log.action_timestamp),
-                log.user_name,
+                log.user_id, // Use user_id
                 log.schema_name,
                 log.table_name,
                 log.action,
                 log.original_data ? JSON.stringify(log.original_data, null, 2) : 'N/A',
                 log.new_data ? JSON.stringify(log.new_data, null, 2) : 'N/A',
-                log.query || 'N/A'
+                log.query_text || 'N/A' // Use query_text
             ]);
 
             let html = `
@@ -1193,7 +1197,7 @@
             for (const key of keysToDisplay) {
                 const value = obj[key];
                 // Skip internal/unwanted keys
-                if (['nr', 'attachment', 'Attachment', 'password_hash', 'last_status_update'].includes(key) || key.endsWith('_ug')) continue;
+                if (['nr', 'attachment', 'attachment_link', 'password_hash', 'last_status_update'].includes(key) || key.endsWith('_ug') || key.toLowerCase().includes('search_vector')) continue;
 
                 const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                 let formattedValue = value;
@@ -1207,6 +1211,8 @@
                     }
                 } else if (value === null || value === '') {
                     formattedValue = 'N/A';
+                } else if (typeof value === 'object' && value !== null) { // Handle JSONB objects
+                    formattedValue = JSON.stringify(value, null, 2);
                 }
 
                 html += `<div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100"><dt class="font-medium text-gray-500">${formattedKey}</dt><dd class="text-gray-900">${formattedValue}</dd></div>`;

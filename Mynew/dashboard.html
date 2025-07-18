@@ -143,6 +143,12 @@
                 <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-green-100 rounded-full mr-4"><i data-lucide="beaker" class="w-6 h-6 text-green-600"></i></div><div><p class="text-sm text-gray-500">Total Samples</p><p id="stat-total-samples" class="text-2xl font-bold">0</p></div></div>
                 <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-yellow-100 rounded-full mr-4"><i data-lucide="flask-round" class="w-6 h-6 text-yellow-600"></i></div><div><p class="text-sm text-gray-500">Experiments (Month)</p><p id="stat-month-experiments" class="text-2xl font-bold">0</p></div></div>
                 <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-red-100 rounded-full mr-4"><i data-lucide="calendar-x" class="w-6 h-6 text-red-600"></i></div><div><p class="text-sm text-gray-500">Reagents Expiring</p><p id="stat-expiring-reagents" class="text-2xl font-bold">0</p></div></div>
+                
+                <!-- NEW STAT CARDS -->
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-purple-100 rounded-full mr-4"><i data-lucide="flask-conical" class="w-6 h-6 text-purple-600"></i></div><div><p class="text-sm text-gray-500">Total Experiments</p><p id="stat-total-experiments" class="text-2xl font-bold">0</p></div></div>
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-indigo-100 rounded-full mr-4"><i data-lucide="book-text" class="w-6 h-6 text-indigo-600"></i></div><div><p class="text-sm text-gray-500">Total Protocols</p><p id="stat-total-protocols" class="text-2xl font-bold">0</p></div></div>
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-teal-100 rounded-full mr-4"><i data-lucide="archive" class="w-6 h-6 text-teal-600"></i></div><div><p class="text-sm text-gray-500">Total Storage Units</p><p id="stat-total-storage" class="text-2xl font-bold">0</p></div></div>
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-orange-100 rounded-full mr-4"><i data-lucide="users" class="w-6 h-6 text-orange-600"></i></div><div><p class="text-sm text-gray-500">Total Personnel</p><p id="stat-total-personnel" class="text-2xl font-bold">0</p></div></div>
             </div>
             
             <div class="card p-6 mb-8">
@@ -175,6 +181,9 @@
                                     <option value="samples">Count of Samples</option>
                                     <option value="experiments">Count of Experiments</option>
                                     <option value="reagents">Count of Reagents</option>
+                                    <option value="projects">Count of Projects</option> <!-- New Metric -->
+                                    <option value="personnel">Count of Personnel</option> <!-- New Metric -->
+                                    <option value="storage">Count of Storage Units</option> <!-- New Metric -->
                                 </select>
                             </div>
                             <div>
@@ -198,6 +207,14 @@
                     </div>
                 </div>
             </div>
+
+            <!-- NEW: Recent Activity Feed -->
+            <div class="card p-6 mt-8">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Recent System Activity <i data-lucide="activity" class="w-6 h-6 inline-block text-gray-500 ml-2"></i></h2>
+                <div id="activity-feed" class="space-y-4 max-h-80 overflow-y-auto pr-2">
+                    <p class="text-gray-500 text-center"><span class="loading-spinner mr-2"></span>Loading recent activities...</p>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -207,39 +224,61 @@
             window.location.href = './login.html';
         }
         
-        const API_BASE_URL = '/mymglab/api'; // const API_BASE_URL = `http://${window.location.hostname}:5200/api`;
-        let dataCache = {};
+        const API_BASE_URL = '/mymglab/api'; 
+        let dataCache = {}; // Stores raw data for various tables
         let dynamicChartInstance;
 
+        // Expanded category options for the Data Explorer chart
         const categoryOptions = {
             samples: [
-                { value: 'sample_type', text: 'Sample Type' },
+                { value: 'sample_type_id', text: 'Sample Type' }, // Corrected to sample_type_id
                 { value: 'sample_status_id', text: 'Status' },
                 { value: 'project_id', text: 'Project' },
                 { value: 'sampling_id', text: 'Sampling Event' },
-                { value: 'Reception_date_month', text: 'Month (Received)' }
+                { value: 'reception_date_month', text: 'Month (Received)' } // Corrected to reception_date
             ],
             experiments: [
                 { value: 'status_id', text: 'Status' },
                 { value: 'project_id', text: 'Project' },
-                { value: 'person', text: 'Person' },
-                { value: 'date_month', text: 'Month (Created)' }
+                { value: 'person_id', text: 'Person' }, // Corrected to person_id
+                { value: 'experiment_date_month', text: 'Month (Created)' } // Corrected to experiment_date
             ],
             reagents: [
-                { value: 'category', text: 'Category' },
+                { value: 'category_id', text: 'Category' }, // Corrected to category_id
                 { value: 'status_id', text: 'Status' },
-                { value: 'Expire_date_month', text: 'Month (Expiry)' }
+                { value: 'expire_date_month', text: 'Month (Expiry)' } // Corrected to expire_date
+            ],
+            projects: [ // New metric
+                { value: 'status_id', text: 'Status' },
+                { value: 'pi_person_id', text: 'Principal Investigator' }, // Corrected to pi_person_id
+                { value: 'funder', text: 'Funder' },
+                { value: 'start_date_year', text: 'Year (Start)' } // Corrected to start_date
+            ],
+            personnel: [ // New metric
+                { value: 'room_id', text: 'Room' }, // Corrected to room_id
+                { value: 'full_name', text: 'Full Name' }
+            ],
+            storage: [ // New metric
+                { value: 'room_id', text: 'Room' },
+                { value: 'freezer', text: 'Freezer' },
+                { value: 'box', text: 'Box' }
             ]
         };
 
         async function apiFetch(endpoint, options={}) {
             try {
+                const isJson = !(options.body instanceof FormData);
+                if (isJson && options.body) {
+                    options.headers = { ...options.headers, 'Content-Type': 'application/json' };
+                    options.body = JSON.stringify(options.body);
+                }
                 const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
                 if (!response.ok) {
                     if (response.status === 404 && endpoint.startsWith('global-search/')) {
                         return { projects: [], samples: [], experiments: [], sops: [], reagents: [], personal: [] };
                     }
-                    throw new Error('Network response was not ok');
+                    const errorBody = await response.json().catch(() => ({error: `Server error or HTTP ${response.status}`}));
+                    throw new Error(errorBody.error || `HTTP error! Status: ${response.status}`);
                 }
                 return response.json();
             } catch (error) {
@@ -252,7 +291,8 @@
             const select = document.getElementById('chart-category');
             if (!select) return;
             select.innerHTML = '';
-            categoryOptions[metric].forEach(opt => {
+            const options = categoryOptions[metric] || [];
+            options.forEach(opt => {
                 const option = document.createElement('option');
                 option.value = opt.value;
                 option.textContent = opt.text;
@@ -267,31 +307,49 @@
             const endDate = document.getElementById('chart-end-date').value;
 
             let data = dataCache[metric];
-            if (!data) return;
-
-            // Apply date filtering
-            if (startDate && endDate) {
-                const start = new Date(startDate);
-                const end = new Date(endDate);
-                data = data.filter(item => {
-                    let itemDate;
-                    if (metric === 'samples' && item.Reception_date) {
-                        itemDate = new Date(item.Reception_date);
-                    } else if (metric === 'experiments' && item.date) {
-                        itemDate = new Date(item.date);
-                    } else if (metric === 'reagents' && item.Expire_date) {
-                        itemDate = new Date(item.Expire_date);
-                    }
-                    return itemDate && itemDate >= start && itemDate <= end;
-                });
+            if (!data) {
+                console.warn(`Data for metric '${metric}' not loaded yet.`);
+                return;
             }
 
+            // Apply date filtering based on relevant date fields for each metric
+            let filteredData = data.filter(item => {
+                let itemDate;
+                if (metric === 'samples' && item.reception_date) {
+                    itemDate = new Date(item.reception_date);
+                } else if (metric === 'experiments' && item.experiment_date) {
+                    itemDate = new Date(item.experiment_date);
+                } else if (metric === 'reagents' && item.expire_date) {
+                    itemDate = new Date(item.expire_date);
+                } else if (metric === 'projects' && item.start_date) {
+                    itemDate = new Date(item.start_date);
+                }
+                // Personnel and Storage don't typically have date ranges for their main entity
+                
+                if (itemDate && startDate && endDate) {
+                    const start = new Date(startDate);
+                    const end = new Date(endDate);
+                    return itemDate >= start && itemDate <= end;
+                } else if (itemDate && startDate) {
+                    const start = new Date(startDate);
+                    return itemDate >= start;
+                } else if (itemDate && endDate) {
+                    const end = new Date(endDate);
+                    return itemDate <= end;
+                }
+                return true; // No date filter applied or no date field for this metric
+            });
 
-            const groupedData = data.reduce((acc, item) => {
+            const groupedData = filteredData.reduce((acc, item) => {
                 let key;
                 if (category.endsWith('_month')) {
                     const dateField = category.replace('_month', '');
                     key = item[dateField] ? new Date(item[dateField]).toISOString().slice(0, 7) : 'N/A';
+                } else if (category.endsWith('_year')) {
+                    const dateField = category.replace('_year', '');
+                    key = item[dateField] ? new Date(item[dateField]).getFullYear().toString() : 'N/A';
+                } else if (category === 'full_name' && item.full_name) { // Specific for personnel
+                    key = item.full_name;
                 } else {
                     key = item[category] || 'N/A';
                 }
@@ -300,9 +358,9 @@
             }, {});
             
             let labels = Object.keys(groupedData);
-            if(category.endsWith('_month')) labels.sort();
+            if(category.endsWith('_month') || category.endsWith('_year')) labels.sort(); // Sort date-based labels
             const values = labels.map(label => groupedData[label]);
-            let chartType = (category.endsWith('_month')) ? 'line' : (labels.length <= 7 ? 'pie' : 'bar');
+            let chartType = (category.endsWith('_month') || category.endsWith('_year')) ? 'line' : (labels.length <= 7 && labels.length > 1 ? 'pie' : 'bar');
 
             if (dynamicChartInstance) dynamicChartInstance.destroy();
             
@@ -349,41 +407,44 @@
         async function displayDetailedSampleInfo(sampleId, resultsDiv) {
             resultsDiv.innerHTML = `<div class="p-4 text-center"><div class="loading-spinner"></div> Loading sample details...</div>`;
             try {
-                const sampleResponse = await apiFetch(`table/Lab/samples?filter_sample_id=${sampleId}`);
+                // Fetch from the comprehensive view for full details
+                const sampleResponse = await apiFetch(`table/Lab/Sample_Full_Details_View?filter_sample_id=${sampleId}`);
                 const sample = sampleResponse && sampleResponse.length > 0 ? sampleResponse[0] : null;
 
                 if (!sample) {
                     resultsDiv.innerHTML = `<p class="text-red-500">No sample found with ID: ${sampleId}</p>`;
                     return;
                 }
+                
+                // Helper to render a detail row if value exists
+                const renderDetailRow = (label, value) => {
+                    if (value === null || value === undefined || String(value).trim() === '' || value === 'N/A') {
+                        return '';
+                    }
+                    return `<div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100"><dt class="font-medium text-gray-500">${label}</dt><dd class="text-gray-900 break-all">${value}</dd></div>`;
+                };
 
-                const [samplingData, storageData, extractionData, dnaData, rnaData, fishData, tissueData, waterData, sedimentsData, libraryData, sequencingData, discussionsData] = await Promise.all([
-                    sample.sampling_id ? apiFetch(`table/Lab/sampling?filter_sampling_id=${sample.sampling_id}`) : Promise.resolve(null),
-                    sample.storage_id ? apiFetch(`table/Lab/storage?filter_storage_id=${sample.storage_id}`) : Promise.resolve(null),
-                    apiFetch(`table/Lab/Extraction?filter_sample_id=${sample.sample_id}`),
-                    apiFetch(`table/Lab/DNA?filter_sample_id=${sample.sample_id}`),
-                    apiFetch(`table/Lab/RNA?filter_sample_id=${sample.sample_id}`),
-                    apiFetch(`table/Lab/fish?filter_sample_id=${sample.sample_id}`),
-                    apiFetch(`table/Lab/Tissue?filter_sample_id=${sample.sample_id}`),
-                    apiFetch(`table/Lab/Water?filter_sample_id=${sample.sample_id}`),
-                    apiFetch(`table/Lab/Sediments?filter_sample_id=${sample.sample_id}`),
-                    apiFetch(`table/Lab/Library?filter_sample_id=${sample.sample_id}`),
-                    apiFetch(`table/Lab/Sequencing?filter_sample_id=${sample.sample_id}`),
-                    apiFetch(`table/Lab/Dissections?filter_sample_id=${sample.sample_id}`)
-                ]);
+                // Helper to format date strings
+                const formatDate = (dateString) => {
+                    if (!dateString) return 'N/A';
+                    try {
+                        const date = new Date(dateString);
+                        return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString();
+                    } catch (e) {
+                        return 'N/A';
+                    }
+                };
 
-                const sampling = samplingData && samplingData.length > 0 ? samplingData[0] : null;
-                const storage = storageData && storageData.length > 0 ? storageData[0] : null;
-                const extraction = extractionData && extractionData.length > 0 ? extractionData[0] : null;
-                const dna = dnaData && dnaData.length > 0 ? dnaData[0] : null;
-                const rna = rnaData && rnaData.length > 0 ? rnaData[0] : null;
-                const fish = fishData && fishData.length > 0 ? fishData[0] : null;
-                const tissue = tissueData && tissueData.length > 0 ? tissueData[0] : null;
-                const water = waterData && waterData.length > 0 ? waterData[0] : null;
-                const sediments = sedimentsData && sedimentsData.length > 0 ? sedimentsData[0] : null;
-                const library = libraryData && libraryData.length > 0 ? libraryData[0] : null;
-                const sequencing = sequencingData && sequencingData.length > 0 ? sequencingData[0] : null;
-                const dissections = discussionsData || [];
+                // Helper to format date-time strings
+                const formatDateTime = (dateString) => {
+                    if (!dateString) return 'N/A';
+                    try {
+                        const date = new Date(dateString);
+                        return isNaN(date.getTime()) ? 'N/A' : date.toLocaleString();
+                    } catch (e) {
+                        return 'N/A';
+                    }
+                };
 
                 let html = `<div class="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
                     <h3 class="text-xl font-bold text-blue-800 mb-4">Sample: ${sample.sample_id}</h3>
@@ -393,208 +454,333 @@
                             <span class="flex items-center"><i data-lucide="info" class="w-5 h-5 mr-2"></i> Core Information</span>
                             <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                         </button>
-                        <div class="accordion-content">
-                            <p><strong>External Name:</strong> ${sample.External_Name || 'N/A'}</p>
-                            <p><strong>Type:</strong> ${sample.sample_type || 'N/A'}</p>
-                            <p><strong>Current Status:</strong> <span class="px-2 py-1 text-sm font-semibold rounded-full bg-blue-100 text-blue-800">${sample.sample_status_id || 'N/A'}</span></p>
-                            <p><strong>Project ID:</strong> ${sample.project_id || 'N/A'}</p>
-                            <p><strong>Reception Date:</strong> ${sample.Reception_date ? new Date(sample.Reception_date).toLocaleDateString() : 'N/A'}</p>
-                            <p><strong>Last Modified:</strong> ${sample.time_modification ? new Date(sample.time_modification).toLocaleString() : 'N/A'}</p>
-                            <p><strong>Parent Sample:</strong> ${sample.Parentsample_id || 'N/A'}</p>
+                        <div class="accordion-content open">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('External Name', sample.external_name)}
+                                ${renderDetailRow('Type', sample.sample_type_id)}
+                                ${renderDetailRow('Current Status', sample.sample_status_id)}
+                                ${renderDetailRow('Project ID', sample.project_id)}
+                                ${renderDetailRow('Project Title', sample.project_title)}
+                                ${renderDetailRow('Reception Date', formatDate(sample.reception_date))}
+                                ${renderDetailRow('Last Modified', formatDateTime(sample.time_modification))}
+                                ${renderDetailRow('Parent Sample', sample.parent_sample_id)}
+                            </dl>
                         </div>
                     </div>
                 `;
 
-                if (sampling) {
+                // Sampling Details
+                if (sample.sampling_id) {
                     html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="sampling-details">
-                            <span class="flex items-center"><i data-lucide="map-pin" class="w-5 h-5 mr-2"></i> Sampling Event Details (${sampling.sampling_id})</span>
+                            <span class="flex items-center"><i data-lucide="map-pin" class="w-5 h-5 mr-2"></i> Sampling Event Details (${sample.sampling_id})</span>
                             <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                         </button>
                         <div class="accordion-content">
-                            <p><strong>Date:</strong> ${sampling.sampling_date ? new Date(sampling.sampling_date).toLocaleDateString() : 'N/A'}</p>
-                            <p><strong>Location:</strong> ${sampling.Location || 'N/A'}</p>
-                            <p><strong>Depth (m):</strong> ${sampling.Depth_m || 'N/A'}</p>
-                            <p><strong>Temperature (�C):</strong> ${sampling.Temperature_Atmospheric_c || 'N/A'}</p>
-                            <p><strong>Weather:</strong> ${sampling.Weather || 'N/A'}</p>
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Date', formatDate(sample.sampling_event_date))}
+                                ${renderDetailRow('Location', sample.sampling_location)}
+                                ${renderDetailRow('Depth (m)', sample.sampling_depth_m)}
+                                ${renderDetailRow('Temperature (°C)', sample.temperature_atmospheric_c)}
+                                ${renderDetailRow('Weather', sample.weather)}
+                                ${renderDetailRow('Sampler', sample.sampler_full_name)}
+                                ${renderDetailRow('Receiver', sample.receiver_full_name)}
+                                ${renderDetailRow('Wind Speed', sample.wind_speed ? `${sample.wind_speed} ${sample.wind_unit || ''}` : 'N/A')}
+                                ${renderDetailRow('Salinity', sample.salinity ? `${sample.salinity} ${sample.salinity_unit || ''}` : 'N/A')}
+                                ${renderDetailRow('Oxygen', sample.oxygen ? `${sample.oxygen} ${sample.oxygen_unit || ''}` : 'N/A')}
+                            </dl>
                         </div>
                     </div>`;
                 }
 
-                if (storage) {
+                // Storage Details
+                if (sample.storage_id) {
                     html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="storage-details">
-                            <span class="flex items-center"><i data-lucide="archive" class="w-5 h-5 mr-2"></i> Storage Details (${storage.storage_id})</span>
+                            <span class="flex items-center"><i data-lucide="archive" class="w-5 h-5 mr-2"></i> Storage Details (${sample.storage_id})</span>
                             <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                         </button>
                         <div class="accordion-content">
-                            <p><strong>Room:</strong> ${storage.room_id || 'N/A'}</p>
-                            <p><strong>Freezer:</strong> ${storage.Freezer || 'N/A'}</p>
-                            <p><strong>Box:</strong> ${storage.Box || 'N/A'}</p>
-                            <p><strong>Position:</strong> ${sample.storage_position || 'N/A'}</p>
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Room', sample.room_id)}
+                                ${renderDetailRow('Freezer', sample.storage_freezer)}
+                                ${renderDetailRow('Box', sample.storage_box)}
+                                ${renderDetailRow('Position', sample.storage_position)}
+                            </dl>
                         </div>
                     </div>`;
                 }
 
-                if (extraction) {
+                // Fish Details
+                if (sample.species_en_name) { // Assuming species_en_name indicates a fish sample
                     html += `
                     <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="extraction-details">
-                            <span class="flex items-center"><i data-lucide="flask-conical" class="w-5 h-5 mr-2"></i> Extraction Details (${extraction.Extraction_id || 'N/A'})</span>
+                        <button class="accordion-header" data-accordion="fish-details">
+                            <span class="flex items-center"><i data-lucide="fish" class="w-5 h-5 mr-2"></i> Fish Details</span>
                             <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                         </button>
                         <div class="accordion-content">
-                            <p><strong>Date:</strong> ${extraction.date ? new Date(extraction.date).toLocaleDateString() : 'N/A'}</p>
-                            <p><strong>Kit:</strong> ${extraction.kit || 'N/A'}</p>
-                            <p><strong>Yield (Qubit ng/uL):</strong> ${extraction.Yield_Qubit_ng_ul || 'N/A'}</p>
-                            <p><strong>A260/280:</strong> ${extraction["A260_280"] || 'N/A'}</p>
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Species', sample.species_en_name)}
+                                ${renderDetailRow('Total Length (mm)', sample.total_length_mm)}
+                                ${renderDetailRow('Weight (g)', sample.weight_g)}
+                                ${renderDetailRow('Sex', sample.sex)}
+                                ${renderDetailRow('Maturity Stage', sample.maturity_stage)}
+                                ${renderDetailRow('Stomach Contents', sample.stomach_contents)}
+                                ${renderDetailRow('Disease Info', sample.disease_info)}
+                                ${renderDetailRow('Tag ID', sample.tag_id)}
+                            </dl>
                         </div>
                     </div>`;
                 }
 
-                if (dna) {
+                // Tissue Details
+                if (sample.tissue_type) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="tissue-details">
+                            <span class="flex items-center"><i data-lucide="microscope" class="w-5 h-5 mr-2"></i> Tissue Details</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Weight (mg)', sample.tissue_weight_mg)}
+                                ${renderDetailRow('Tissue Type', sample.tissue_type)}
+                                ${renderDetailRow('Preservation Method', sample.tissue_preservation_method)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // DNA Details
+                if (sample.dna_volume_ul) { // Check for a key specific to DNA table
                     html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="dna-details">
-                            <span class="flex items-center"><i data-lucide="dna" class="w-5 h-5 mr-2"></i> DNA Details (${dna.sample_id})</span>
+                            <span class="flex items-center"><i data-lucide="dna" class="w-5 h-5 mr-2"></i> DNA Details</span>
                             <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                         </button>
                         <div class="accordion-content">
-                            <p><strong>Volume (uL):</strong> ${dna.Volume_uL || 'N/A'}</p>
-                            <p><strong>Concentration (ng/uL):</strong> ${dna.Concentration_ngul || 'N/A'}</p>
-                            <p><strong>A260/280:</strong> ${dna["A260/280"] || 'N/A'}</p>
-                            <p><strong>A260/230:</strong> ${dna["A260/230"] || 'N/A'}</p>
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Volume (µL)', sample.dna_volume_ul)}
+                                ${renderDetailRow('Concentration (ng/µL)', sample.dna_concentration_ng_ul)}
+                                ${renderDetailRow('A260/280', sample.dna_a260_280)}
+                                ${renderDetailRow('A260/230', sample.dna_a260_230)}
+                                ${renderDetailRow('Extraction Method', sample.dna_extraction_method)}
+                                ${renderDetailRow('Extraction Date', formatDate(sample.extraction_date))}
+                            </dl>
                         </div>
                     </div>`;
                 }
                 
-                if (rna) {
+                // RNA Details
+                if (sample.rna_volume_ul) { // Check for a key specific to RNA table
                     html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="rna-details">
-                            <span class="flex items-center"><i data-lucide="ribbon" class="w-5 h-5 mr-2"></i> RNA Details (${rna.sample_id})</span>
+                            <span class="flex items-center"><i data-lucide="ribbon" class="w-5 h-5 mr-2"></i> RNA Details</span>
                             <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                         </button>
                         <div class="accordion-content">
-                            <p><strong>Volume (uL):</strong> ${rna.Volume_uL || 'N/A'}</p>
-                            <p><strong>Concentration (ng/uL):</strong> ${rna.Concentration_ngul || 'N/A'}</p>
-                            <p><strong>A260/280:</strong> ${rna["A260/280"] || 'N/A'}</p>
-                            <p><strong>A260/230:</strong> ${rna["A260/230"] || 'N/A'}</p>
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Volume (µL)', sample.rna_volume_ul)}
+                                ${renderDetailRow('Concentration (ng/µL)', sample.rna_concentration_ng_ul)}
+                                ${renderDetailRow('A260/280', sample.rna_a260_280)}
+                                ${renderDetailRow('A260/230', sample.rna_a260_230)}
+                                ${renderDetailRow('Extraction Method', sample.rna_extraction_method)}
+                                ${renderDetailRow('Extraction Date', formatDate(sample.extraction_date))}
+                            </dl>
                         </div>
                     </div>`;
                 }
 
-                if (fish) {
+                // Extraction Details (if not covered by DNA/RNA directly)
+                if (sample.extraction_date && !sample.dna_volume_ul && !sample.rna_volume_ul) {
+                     html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="extraction-details">
+                            <span class="flex items-center"><i data-lucide="flask-conical" class="w-5 h-5 mr-2"></i> Extraction Details</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Date', formatDate(sample.extraction_date))}
+                                ${renderDetailRow('Kit', sample.extraction_kit)}
+                                ${renderDetailRow('Elution Volume (µL)', sample.extraction_elution_volume_ul)}
+                                ${renderDetailRow('Yield Qubit (ng/µL)', sample.yield_qubit_ng_ul)}
+                                ${renderDetailRow('Yield Nanodrop (ng/µL)', sample.yield_nanodrop_ng_ul)}
+                                ${renderDetailRow('A260/280', sample.extraction_a260_280)}
+                                ${renderDetailRow('A260/230', sample.extraction_a260_230)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // Nanodrop Details
+                if (sample.nanodrop_concentration) {
                     html += `
                     <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="fish-details">
-                            <span class="flex items-center"><i data-lucide="fish" class="w-5 h-5 mr-2"></i> Fish Details (${fish.sample_id})</span>
+                        <button class="accordion-header" data-accordion="nanodrop-details">
+                            <span class="flex items-center"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-2"></i> Nanodrop Details</span>
                             <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                         </button>
                         <div class="accordion-content">
-                            <p><strong>Species:</strong> ${fish.species || 'N/A'}</p>
-                            <p><strong>Total Length (mm):</strong> ${fish.total_length_mm || 'N/A'}</p>
-                            <p><strong>Weight (g):</strong> ${fish.weight_g || 'N/A'}</p>
-                            <p><strong>Sex:</strong> ${fish.Sex || 'N/A'}</p>
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Concentration', sample.nanodrop_concentration ? `${sample.nanodrop_concentration} ${sample.nanodrop_concentration_unit || ''}` : 'N/A')}
+                                ${renderDetailRow('A260', sample.nanodrop_a260)}
+                                ${renderDetailRow('A260/280', sample.nanodrop_a260_280)}
+                                ${renderDetailRow('A260/230', sample.nanodrop_a260_230)}
+                                ${renderDetailRow('Total DNA (µg)', sample.nanodrop_total_dna_ug)}
+                            </dl>
                         </div>
                     </div>`;
                 }
 
-                if (tissue) {
+                // Qubit Details
+                if (sample.qubit_original_sample_conc) {
                     html += `
                     <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="tissue-details">
-                            <span class="flex items-center"><i data-lucide="microscope" class="w-5 h-5 mr-2"></i> Tissue Details (${tissue.sample_id})</span>
+                        <button class="accordion-header" data-accordion="qubit-details">
+                            <span class="flex items-center"><i data-lucide="thermometer" class="w-5 h-5 mr-2"></i> Qubit Details</span>
                             <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                         </button>
                         <div class="accordion-content">
-                            <p><strong>Weight (mg):</strong> ${tissue.Weight_mg || 'N/A'}</p>
-                            <p><strong>Tissue Type:</strong> ${tissue.tissue_type || 'N/A'}</p>
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Original Sample Conc.', sample.qubit_original_sample_conc ? `${sample.qubit_original_sample_conc} ${sample.qubit_original_sample_unit || ''}` : 'N/A')}
+                                ${renderDetailRow('Total DNA (µg)', sample.qubit_total_dna_ug)}
+                            </dl>
                         </div>
                     </div>`;
                 }
 
-                if (water) {
+                // PCR Details
+                if (sample.pcr_primer_id) {
                     html += `
                     <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="water-details">
-                            <span class="flex items-center"><i data-lucide="droplet" class="w-5 h-5 mr-2"></i> Water Details (${water.sample_id})</span>
+                        <button class="accordion-header" data-accordion="pcr-details">
+                            <span class="flex items-center"><i data-lucide="dna" class="w-5 h-5 mr-2"></i> PCR Details</span>
                             <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                         </button>
                         <div class="accordion-content">
-                            <p><strong>Volume (L):</strong> ${water.VolumeL || 'N/A'}</p>
-                            <p><strong>Depth (m):</strong> ${water.Depth || 'N/A'}</p>
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Date', formatDate(sample.pcr_date))}
+                                ${renderDetailRow('Primer ID', sample.pcr_primer_id)}
+                                ${renderDetailRow('Target Gene', sample.pcr_target_gene_id)}
+                                ${renderDetailRow('Reaction Volume (µL)', sample.volume_reaction_ul)}
+                            </dl>
                         </div>
                     </div>`;
                 }
 
-                if (sediments) {
+                // qPCR Details
+                if (sample.ct_value) {
                     html += `
                     <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="sediments-details">
-                            <span class="flex items-center"><i data-lucide="mountain" class="w-5 h-5 mr-2"></i> Sediments Details (${sediments.sample_id})</span>
+                        <button class="accordion-header" data-accordion="qpcr-details">
+                            <span class="flex items-center"><i data-lucide="activity" class="w-5 h-5 mr-2"></i> qPCR Details</span>
                             <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                         </button>
                         <div class="accordion-content">
-                            <p><strong>Volume:</strong> ${sediments.Volume || 'N/A'} ${sediments.unity || ''}</p>
-                            <p><strong>Depth:</strong> ${sediments.Depth || 'N/A'}</p>
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Date', formatDate(sample.qpcr_date))}
+                                ${renderDetailRow('Ct Value', sample.ct_value)}
+                                ${renderDetailRow('Inhibitor Test Result', sample.inhibitor_test_result)}
+                            </dl>
                         </div>
                     </div>`;
                 }
 
-                if (library) {
+                // Library Details
+                if (sample.library_id) {
                     html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="library-details">
-                            <span class="flex items-center"><i data-lucide="book" class="w-5 h-5 mr-2"></i> Library Details (${library.Lib_id})</span>
+                            <span class="flex items-center"><i data-lucide="book" class="w-5 h-5 mr-2"></i> Library Details (${sample.library_id})</span>
                             <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                         </button>
                         <div class="accordion-content">
-                            <p><strong>Library Prep Kit:</strong> ${library.LibraryPrepKit || 'N/A'}</p>
-                            <p><strong>Index Sequence:</strong> ${library.IndexSequence || 'N/A'}</p>
-                            <p><strong>Read Length:</strong> ${library.ReadLength || 'N/A'}</p>
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Library Prep Kit', sample.library_prep_kit)}
+                                ${renderDetailRow('Index Sequence', sample.index_sequence)}
+                                ${renderDetailRow('Read Length (bp)', sample.library_read_length_bp)}
+                            </dl>
                         </div>
                     </div>`;
                 }
 
-                if (sequencing) {
+                // Sequencing Details
+                if (sample.sequencing_id) {
                     html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="sequencing-details">
-                            <span class="flex items-center"><i data-lucide="dna-off" class="w-5 h-5 mr-2"></i> Sequencing Details (${sequencing.Seq_id})</span>
+                            <span class="flex items-center"><i data-lucide="dna-off" class="w-5 h-5 mr-2"></i> Sequencing Details (${sample.sequencing_id})</span>
                             <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                         </button>
                         <div class="accordion-content">
-                            <p><strong>Sequencer:</strong> ${sequencing.Sequencer || 'N/A'}</p>
-                            <p><strong>Total Reads:</strong> ${sequencing.TotalReads || 'N/A'}</p>
-                            <p><strong>Raw Data Path:</strong> ${sequencing.RawDataPath || 'N/A'}</p>
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Sequencer', sample.sequencer)}
+                                ${renderDetailRow('Flow Cell ID', sample.flow_cell_id)}
+                                ${renderDetailRow('Total Reads', sample.total_reads)}
+                                ${renderDetailRow('Raw Data Path', sample.raw_data_path)}
+                                ${renderDetailRow('Genbank Accession No.', sample.genbank_accession_number)}
+                            </dl>
                         </div>
                     </div>`;
                 }
+
+                // Bioinformatics Details
+                if (sample.analysis_run_id) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="bioinformatics-details">
+                            <span class="flex items-center"><i data-lucide="cloud-cog" class="w-5 h-5 mr-2"></i> Bioinformatics Details (${sample.analysis_run_id})</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Pipeline Name', sample.pipeline_name)}
+                                ${renderDetailRow('Pipeline Version', sample.pipeline_version)}
+                                ${renderDetailRow('Reference DB', sample.bioinfo_reference_database)}
+                                ${renderDetailRow('DB Version', sample.bioinfo_database_version)}
+                                ${renderDetailRow('Clustering Threshold', sample.clustering_threshold)}
+                                ${renderDetailRow('Final Output Path', sample.final_output_path)}
+                                ${renderDetailRow('Assigned Taxon', sample.edna_assigned_taxon_name)}
+                                ${renderDetailRow('Read Count', sample.edna_read_count)}
+                                ${renderDetailRow('Confidence', sample.edna_confidence)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // Dissection History (if multiple, iterate)
+                // This requires fetching Dissections separately as Sample_Full_Details_View might flatten it
+                const dissectionsData = await apiFetch(`table/Lab/Dissections?filter_sample_id=${sampleId}`);
+                const dissections = dissectionsData && !dissectionsData.error ? dissectionsData : [];
 
                 if (dissections.length > 0) {
                     html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="dissection-history">
-                            <span class="flex items-center"><i data-lucide="scissors" class="w-5 h-5 mr-2"></i> Dissection History</span>
+                            <span class="flex items-center"><i data-lucide="scissors" class="w-5 h-5 mr-2"></i> Dissection History (${dissections.length})</span>
                             <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                         </button>
                         <div class="accordion-content">`;
                     dissections.forEach(dis => {
                         html += `<div class="mb-2 p-2 bg-gray-100 rounded-md">
-                            <p><strong>Dissection ID:</strong> ${dis.dissection_id || 'N/A'}</p>
-                            <p><strong>Date:</strong> ${dis.dissection_date ? new Date(dis.dissection_date).toLocaleDateString() : 'N/A'}</p>
-                            <p><strong>Gonad Weight (g):</strong> ${dis.gonad_weight_g || 'N/A'}</p>
-                            <p><strong>Liver Weight (g):</strong> ${dis.liver_weight_g || 'N/A'}</p>
-                            <p><strong>Stomach Contents:</strong> ${dis.stomach_contents_jsonb ? JSON.stringify(dis.stomach_contents_jsonb) : 'N/A'}</p>
+                            ${renderDetailRow('Dissection ID', dis.dissection_id)}
+                            ${renderDetailRow('Date', formatDate(dis.dissection_date))}
+                            ${renderDetailRow('Person', dis.person_id)}
+                            ${renderDetailRow('Gonad Weight (g)', dis.gonad_weight_g)}
+                            ${renderDetailRow('Liver Weight (g)', dis.liver_weight_g)}
+                            ${renderDetailRow('Stomach Contents', dis.stomach_contents_jsonb ? JSON.stringify(dis.stomach_contents_jsonb) : 'N/A')}
                         </div>`;
                     });
                     html += `</div></div>`;
                 }
 
-                html += `</div>`;
+                html += `</div>`; // Close main space-y-2 div
                 resultsDiv.innerHTML = html;
 
                 // Initialize accordions after content is loaded
@@ -617,29 +803,56 @@
         async function setupDashboard() {
             lucide.createIcons();
             const user = JSON.parse(sessionStorage.getItem('user'));
-            if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.person}</p>`;
+            if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.full_name || user.person_id}</p>`; // Use full_name if available
             document.getElementById('logout-button').addEventListener('click', () => {
                 sessionStorage.clear();
                 localStorage.removeItem('redirectUrl');
                 window.location.href = './login.html';
             });
             
-            const stats = await apiFetch('dashboard-stats');
+            // Fetch all dashboard stats in one go
+            const statsPromises = {
+                active_projects: apiFetch('table/Lims/projects?filter_status_id=Active').then(res => res ? res.length : 0),
+                total_samples: apiFetch('table/Lab/samples').then(res => res ? res.length : 0),
+                experiments_this_month: apiFetch('table/Lab/experiments?filter_experiment_date_month=' + new Date().toISOString().slice(0, 7)).then(res => res ? res.length : 0),
+                reagents_expiring_soon: apiFetch('table/Lims/reagents?filter_expire_date_within_30_days=true').then(res => res ? res.length : 0), // Assuming backend can handle this filter
+                total_experiments: apiFetch('table/Lab/experiments').then(res => res ? res.length : 0),
+                total_protocols: apiFetch('table/Lims/sop').then(res => res ? res.length : 0),
+                total_storage: apiFetch('table/Lab/storage').then(res => res ? res.length : 0),
+                total_personnel: apiFetch('table/Reference/personal').then(res => res ? res.length : 0),
+            };
+
+            const stats = {};
+            for (const key in statsPromises) {
+                stats[key] = await statsPromises[key];
+            }
+
             if (stats) {
                 document.getElementById('stat-active-projects').textContent = stats.active_projects || 0;
                 document.getElementById('stat-total-samples').textContent = stats.total_samples || 0;
                 document.getElementById('stat-month-experiments').textContent = stats.experiments_this_month || 0;
                 document.getElementById('stat-expiring-reagents').textContent = stats.reagents_expiring_soon || 0;
+                document.getElementById('stat-total-experiments').textContent = stats.total_experiments || 0; // New
+                document.getElementById('stat-total-protocols').textContent = stats.total_protocols || 0; // New
+                document.getElementById('stat-total-storage').textContent = stats.total_storage || 0; // New
+                document.getElementById('stat-total-personnel').textContent = stats.total_personnel || 0; // New
             }
 
-            const [samples, experiments, reagents] = await Promise.all([
+            // Fetch data for charts
+            const [samples, experiments, reagents, projects, personnel, storage] = await Promise.all([
                 apiFetch('table/Lab/samples'),
-                apiFetch('table/Lab/Experiments'),
-                apiFetch('table/Lims/Reagents')
+                apiFetch('table/Lab/experiments'),
+                apiFetch('table/Lims/reagents'),
+                apiFetch('table/Lims/projects'), // New
+                apiFetch('table/Reference/personal'), // New
+                apiFetch('table/Lab/storage') // New
             ]);
             dataCache.samples = samples || [];
             dataCache.experiments = experiments || [];
             dataCache.reagents = reagents || [];
+            dataCache.projects = projects || []; // New
+            dataCache.personnel = personnel || []; // New
+            dataCache.storage = storage || []; // New
 
             const metricSelect = document.getElementById('chart-metric');
             const categorySelect = document.getElementById('chart-category');
@@ -677,24 +890,25 @@
                 let html = '';
 
                 if(results && results.projects && results.projects.length > 0) {
-                    html += `<div><h3 class="font-bold text-gray-700">Projects</h3><div class="space-y-1">${results.projects.map(p => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${p.Title} (<span class="font-mono text-sm">${p.project_id}</span>)</div>`).join('')}</div></div>`;
+                    html += `<div><h3 class="font-bold text-gray-700">Projects</h3><div class="space-y-1">${results.projects.map(p => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${p.title} (<span class="font-mono text-sm">${p.project_id}</span>)</div>`).join('')}</div></div>`;
                 }
                 
                 if(results && results.samples && results.samples.length > 0) {
                     html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Samples</h3><div class="space-y-1">${results.samples.map(s => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${s.sample_id} (<span class="text-sm text-gray-500">${s.sample_type}</span>)</div>`).join('')}</div></div>`;
+
                 }
 
                 if(results && results.experiments && results.experiments.length > 0) {
-                    html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Experiments</h3><div class="space-y-1">${results.experiments.map(ex => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${ex.Experiment_title} (<span class="font-mono text-sm">${ex.Experiment_id}</span>)</div>`).join('')}</div></div>`;
+                    html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Experiments</h3><div class="space-y-1">${results.experiments.map(ex => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${ex.experiment_title} (<span class="font-mono text-sm">${ex.experiment_id}</span>)</div>`).join('')}</div></div>`;
 
                 }
 
                 if(results && results.sops && results.sops.length > 0) {
-                    html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">SOPs</h3><div class="space-y-1">${results.sops.map(s => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${s.Title} (<span class="font-mono text-sm">${s.sop_id}</span>)</div>`).join('')}</div></div>`;
+                    html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">SOPs</h3><div class="space-y-1">${results.sops.map(s => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${s.title} (<span class="font-mono text-sm">${s.sop_id}</span>)</div>`).join('')}</div></div>`;
                 }
 
                 if(results && results.reagents && results.reagents.length > 0) {
-                    html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Reagents</h3><div class="space-y-1">${results.reagents.map(r => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${r.Reagent_CompleteName} (<span class="font-mono text-sm">${r.Reagents_id}</span>)</div>`).join('')}</div></div>`;
+                    html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Reagents</h3><div class="space-y-1">${results.reagents.map(r => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${r.reagent_complete_name} (<span class="font-mono text-sm">${r.reagent_id}</span>)</div>`).join('')}</div></div>`;
                 }
 
                 if(results && results.personal && results.personal.length > 0) {
@@ -711,7 +925,67 @@
                     searchResultsDiv.innerHTML = '';
                 }
             });
+
+            // Load recent activity
+            loadRecentActivity();
         }
+
+        // New function to load and display recent activity from audit log
+        async function loadRecentActivity() {
+            const activityFeedDiv = document.getElementById('activity-feed');
+            activityFeedDiv.innerHTML = `<p class="text-gray-500 text-center"><span class="loading-spinner mr-2"></span>Loading recent activities...</p>`;
+
+            try {
+                // Fetch last 10 audit log entries, ordered by timestamp descending
+                const auditLogs = await apiFetch('table/audit/log?order_by=action_timestamp&order_direction=desc&limit=10');
+
+                if (!auditLogs || auditLogs.error || auditLogs.length === 0) {
+                    activityFeedDiv.innerHTML = `<p class="text-gray-500 text-center">No recent activity found.</p>`;
+                    return;
+                }
+
+                let html = '';
+                auditLogs.forEach(log => {
+                    const actionMap = { 'I': 'created', 'U': 'updated', 'D': 'deleted' };
+                    const actionVerb = actionMap[log.action] || 'performed action on';
+                    const timestamp = new Date(log.action_timestamp).toLocaleString();
+                    const userName = log.user_id || 'System'; // Use user_id from audit log
+
+                    let details = '';
+                    if (log.table_name === 'samples' && log.new_data && log.new_data.sample_id) {
+                        details = `Sample <span class="font-semibold">${log.new_data.sample_id}</span>`;
+                        if (log.action === 'U' && log.new_data.sample_status_id) {
+                            details += ` status changed to <span class="font-semibold text-blue-600">${log.new_data.sample_status_id}</span>`;
+                        }
+                    } else if (log.table_name === 'projects' && log.new_data && log.new_data.project_id) {
+                        details = `Project <span class="font-semibold">${log.new_data.project_id}</span>`;
+                        if (log.action === 'U' && log.new_data.title) {
+                            details += ` title updated to "<span class="font-semibold">${log.new_data.title}</span>"`;
+                        }
+                    } else if (log.new_data && log.new_data.id) { // Generic ID fallback
+                        details = `Record <span class="font-semibold">${log.new_data.id}</span>`;
+                    } else if (log.original_data && log.original_data.id && log.action === 'D') {
+                        details = `Record <span class="font-semibold">${log.original_data.id}</span>`;
+                    } else {
+                        details = `a record`;
+                    }
+
+                    html += `
+                        <div class="p-3 bg-gray-50 rounded-md border border-gray-200">
+                            <p class="text-sm">
+                                <span class="font-medium text-gray-800">${userName}</span> ${actionVerb} ${details} in <span class="font-medium text-purple-600">${log.table_name}</span> table.
+                            </p>
+                            <p class="text-xs text-gray-500 mt-1">${timestamp}</p>
+                        </div>
+                    `;
+                });
+                activityFeedDiv.innerHTML = html;
+            } catch (error) {
+                console.error("Error loading recent activity:", error);
+                activityFeedDiv.innerHTML = `<p class="text-red-500 text-center">Failed to load recent activity. Error: ${error.message}</p>`;
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', setupDashboard);
     </script>
 </body>

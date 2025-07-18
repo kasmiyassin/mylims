@@ -7,6 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.0/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
         .sidebar { border-right: 1px solid #e2e8f0; }
@@ -15,33 +17,57 @@
         .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
         .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
         .modal-overlay { z-index: 50; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
-        .th-sortable { cursor: pointer; }
-        .th-sortable:hover { background-color: #f1f5f9; }
-        /* Transitions for modal */
-        .modal-content {
-            transition: all 0.3s ease-out;
-            transform: translateY(0);
-            opacity: 1;
-        }
-        .modal-content.opacity-0 {
-            opacity: 0;
-        }
-        .modal-content.-translate-y-10 {
-            transform: translateY(-2.5rem); /* Equivalent to -translate-y-10 in Tailwind */
-        }
-
-        /* Styles for filter/sort in table headers */
-        .sortable-header { cursor: pointer; user-select: none; }
-        .sortable-header:hover { background-color: #e2e8f0; }
-        .sort-icon { display: inline-block; width: 16px; height: 16px; vertical-align: middle; margin-left: 4px; }
-        .filter-input, .filter-select {
-            width: calc(100% - 10px); /* Adjust width to fit within header */
+        .table-row-selected { background-color: #eef2ff !important; }
+        .sortable-header { cursor: pointer; position: relative; display: flex; align-items: center; justify-content: space-between; }
+        .sortable-header .sort-icon { margin-left: 4px; vertical-align: middle; font-size: 0.8em; }
+        .filter-input {
+            width: calc(100% - 10px);
             padding: 4px;
             margin-top: 4px;
             border: 1px solid #cbd5e1;
             border-radius: 0.25rem;
-            font-size: 0.75rem; /* text-xs */
+            font-size: 0.75rem;
             box-sizing: border-box;
+        }
+        /* Accordion styles for details panel */
+        .accordion-item {
+            margin-bottom: 0.5rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        .accordion-header {
+            background-color: #f1f5f9;
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            width: 100%;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-weight: 600;
+            color: #475569;
+        }
+        .accordion-header:hover {
+            background-color: #e2e8f0;
+        }
+        .accordion-header .lucide {
+            transition: transform 0.3s ease;
+        }
+        .accordion-header.active .lucide {
+            transform: rotate(180deg);
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+            padding: 0 1rem; /* Initial padding, will expand */
+            background-color: white;
+            border-top: 1px solid #e2e8f0;
+        }
+        .accordion-content.open {
+            max-height: 500px; /* Adjust as needed for content height */
+            padding: 1rem;
         }
     </style>
 </head>
@@ -74,7 +100,8 @@
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-3xl font-bold text-gray-800">Storage Inventory</h1>
                 <div class="flex space-x-2">
-                    <button id="new-room-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow"><i data-lucide="home" class="w-5 h-5 mr-2"></i>New Room</button>
+                    <button id="bulk-update-btn" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow"><i data-lucide="edit" class="w-5 h-5 mr-2"></i>Bulk Update</button>
+                    <button id="bulk-import-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow"><i data-lucide="upload-cloud" class="w-5 h-5 mr-2"></i>Bulk Import</button>
                     <button id="new-storage-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow"><i data-lucide="plus" class="w-5 h-5 mr-2"></i>New Storage Unit</button>
                 </div>
             </div>
@@ -83,59 +110,49 @@
                     <div class="overflow-y-auto h-[75vh]"> <table class="min-w-full text-sm">
                             <thead class="bg-gray-50 sticky top-0">
                                 <tr>
-                                    <th data-sort-key="item_id" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
-                                        <div class="flex items-center justify-between">
-                                            <span class="sortable-header" data-column="item_id">Item ID
-                                                <i data-lucide="${sortState.column === 'item_id' ? (sortState.direction === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon w-4 h-4 text-gray-400"></i>
-                                            </span>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                        <div class="sortable-header" data-column="storage_id">
+                                            <span>Storage ID</span>
+                                            <i data-lucide="chevrons-up-down" class="sort-icon text-gray-400"></i>
                                         </div>
-                                        <input type="text" placeholder="Filter..." class="filter-input" data-column="item_id" value="">
+                                        <input type="text" placeholder="Filter ID..." class="filter-input" data-column="storage_id">
                                     </th>
-                                    <th data-sort-key="item_type" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
-                                        <div class="flex items-center justify-between">
-                                            <span class="sortable-header" data-column="item_type">Item Type
-                                                <i data-lucide="${sortState.column === 'item_type' ? (sortState.direction === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon w-4 h-4 text-gray-400"></i>
-                                            </span>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                        <div class="sortable-header" data-column="room_id">
+                                            <span>Room</span>
+                                            <i data-lucide="chevrons-up-down" class="sort-icon text-gray-400"></i>
                                         </div>
-                                        <select class="filter-select" data-column="item_type" id="filter-item-type-header">
-                                            <option value="">All Types</option>
-                                        </select>
+                                        <input type="text" placeholder="Filter Room..." class="filter-input" data-column="room_id">
                                     </th>
-                                    <th data-sort-key="classification" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
-                                        <div class="flex items-center justify-between">
-                                            <span class="sortable-header" data-column="classification">Classification
-                                                <i data-lucide="${sortState.column === 'classification' ? (sortState.direction === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon w-4 h-4 text-gray-400"></i>
-                                            </span>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                        <div class="sortable-header" data-column="freezer">
+                                            <span>Freezer</span>
+                                            <i data-lucide="chevrons-up-down" class="sort-icon text-gray-400"></i>
                                         </div>
-                                        <select class="filter-select" data-column="classification" id="filter-classification-header">
-                                            <option value="">All Classifications</option>
-                                        </select>
+                                        <input type="text" placeholder="Filter Freezer..." class="filter-input" data-column="freezer">
                                     </th>
-                                    <th data-sort-key="room" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
-                                        <div class="flex items-center justify-between">
-                                            <span class="sortable-header" data-column="room">Room
-                                                <i data-lucide="${sortState.column === 'room' ? (sortState.direction === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon w-4 h-4 text-gray-400"></i>
-                                            </span>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                        <div class="sortable-header" data-column="box">
+                                            <span>Box</span>
+                                            <i data-lucide="chevrons-up-down" class="sort-icon text-gray-400"></i>
                                         </div>
-                                        <input type="text" placeholder="Filter..." class="filter-input" data-column="room" value="">
+                                        <input type="text" placeholder="Filter Box..." class="filter-input" data-column="box">
                                     </th>
-                                    <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Freezer / Box</th>
-                                    <th data-sort-key="position" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
-                                        <div class="flex items-center justify-between">
-                                            <span class="sortable-header" data-column="position">Position
-                                                <i data-lucide="${sortState.column === 'position' ? (sortState.direction === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon w-4 h-4 text-gray-400"></i>
-                                            </span>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                        <div class="sortable-header" data-column="temperature_c">
+                                            <span>Temp (°C)</span>
+                                            <i data-lucide="chevrons-up-down" class="sort-icon text-gray-400"></i>
                                         </div>
-                                        <input type="text" placeholder="Filter..." class="filter-input" data-column="position" value="">
+                                        <input type="text" placeholder="Filter Temp..." class="filter-input" data-column="temperature_c">
                                     </th>
-                                    <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
-                                        Actions
-                                        <select class="filter-select" data-column="is_assigned" id="filter-status-header">
-                                            <option value="">All Items</option>
-                                            <option value="true">Assigned</option>
-                                            <option value="false">Unassigned</option>
-                                        </select>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                        <div class="sortable-header" data-column="occupancy_percent">
+                                            <span>Occupancy %</span>
+                                            <i data-lucide="chevrons-up-down" class="sort-icon text-gray-400"></i>
+                                        </div>
+                                        <input type="text" placeholder="Filter %..." class="filter-input" data-column="occupancy_percent">
                                     </th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="storage-table-body" class="divide-y divide-gray-200"></tbody>
@@ -150,46 +167,97 @@
         if (sessionStorage.getItem('isLoggedIn') !== 'true') window.location.href = './login.html';
         
         const API_BASE_URL = '/mymglab/api';
-        let masterInventoryList = [];
-        let storageCache = [];
-        let sortState = { column: 'item_id', direction: 'asc' };
-        let columnFilters = {}; // To store filter values for each column
+        let currentViewData = []; // Stores the raw data for the currently displayed table (Storage_Occupancy_View)
+        let referenceDataCache = {}; // Cache for all fetched reference data (e.g., rooms, projects)
+        const currentTableName = 'storage'; // Base table for CRUD
+        const currentSchema = 'Lab'; // Schema for base table
+        let parsedUploadData = []; // Data parsed from bulk upload file
+        let currentSortColumn = 'storage_id';
+        let currentSortDirection = 'asc';
+        let columnFilters = {};
 
-        // Define storable item tables and their primary/display ID columns
+        // Primary Key mapping for Lab.storage (consistent with app.py)
+        const primaryKeyMap = {
+            'storage': 'storage_id'
+        };
+
+        // Comprehensive Foreign Key Mapping for dynamic form generation
+        const foreignKeyMap = {
+            'room_id': { schema: 'Reference', table: 'room', valueCol: 'room_id', displayCol: 'room_id' },
+            'project_id': { schema: 'Lims', table: 'projects', valueCol: 'project_id', displayCol: 'title' },
+            'status_id': { schema: 'Reference', table: 'status', valueCol: 'status_id', displayCol: 'status_id' },
+            'temperature_unit_id': { schema: 'Reference', table: 'units', valueCol: 'unit_id', displayCol: 'unit_abbreviation' },
+            'notes': { type: 'textarea' }, // Explicitly define notes as textarea
+            'attachment': { type: 'file' }, // Attachment field
+        };
+
+        // Storable item types for listing contents in details panel
         const storableItemTables = [
-            { schema: 'Lab', table: 'Fish', idColumn: 'sample_id', pk: 'sample_id' },
-            { schema: 'Lab', table: 'Tissue', idColumn: 'sample_id', pk: 'sample_id' },
-            { schema: 'Lab', table: 'Water', idColumn: 'sample_id', pk: 'sample_id' },
-            { schema: 'Lab', table: 'Sediments', idColumn: 'sample_id', pk: 'sample_id' },
-            { schema: 'Lab', table: 'DNA', idColumn: 'sample_id', pk: 'sample_id' },
-            { schema: 'Lab', table: 'RNA', idColumn: 'sample_id', pk: 'sample_id' },
-            { schema: 'Lab', table: 'Library', idColumn: 'Library_id', pk: 'Library_id' }, // Library_id is unique, better PK
-            { schema: 'Lab', table: 'PCR', idColumn: 'nr', pk: 'nr' }, 
-            { schema: 'Lims', table: 'Reagents', idColumn: 'Reagent_Name', pk: 'Reagent_Name' }, // Reagent_Name is unique, better PK
-            // Add other tables that can be stored and have a unique identifier if needed for full inventory listing
-            // For tables like Extraction, Nanodrop, Qubit etc. where 'nr' is the PK but the primary identifier
-            // is usually a linked sample_id, you might still want to use 'nr' for the PK to ensure updates work correctly.
-            // If you want to display sample_id from these, that's a display concern in renderStorageTable
+            { schema: 'Lab', table: 'samples', idColumn: 'sample_id', pk: ['sample_id', 'sampling_date'] }, // Samples is partitioned
+            { schema: 'Lab', table: 'reagents', idColumn: 'reagent_id', pk: 'reagent_id' },
+            // Add other tables that can be stored and have storage_id and storage_position
+            { schema: 'Lab', table: 'fish', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'tissue', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'water', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'sediments', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'dna', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'rna', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'library', idColumn: 'library_id', pk: 'library_id' },
+            { schema: 'Lab', table: 'pcr', idColumn: 'pcr_id', pk: 'pcr_id' },
+            { schema: 'Lab', table: 'qpcr', idColumn: 'qpcr_id', pk: 'qpcr_id' },
+            { schema: 'Lab', table: 'gelelectrophoresis', idColumn: 'gelelectrophoresis_id', pk: 'gelelectrophoresis_id' },
+            { schema: 'Lab', table: 'extraction', idColumn: 'extraction_id', pk: 'extraction_id' },
+            { schema: 'Lab', table: 'nanodrop', idColumn: 'nanodrop_id', pk: 'nanodrop_id' },
+            { schema: 'Lab', table: 'qubit', idColumn: 'qubit_id', pk: 'qubit_id' },
+            { schema: 'Lab', table: 'tapestation', idColumn: 'tapestation_id', pk: 'tapestation_id' },
+            { schema: 'Lab', table: 'sequencing', idColumn: 'sequencing_id', pk: 'sequencing_id' },
+            { schema: 'Bioinformatics', table: 'analysis_runs', idColumn: 'run_id', pk: 'run_id' },
         ];
+
 
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
             const user = JSON.parse(sessionStorage.getItem('user'));
-            if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.person}</p>`;
+            if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.full_name || user.person_id}</p>`;
             document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href = './login.html'; });
-            initializeStoragePage();
+            initializePage();
         });
 
         async function apiFetch(endpoint, options = {}) {
             try {
-                if (!(options.body instanceof FormData)) {
-                    options.headers = { 'Content-Type': 'application/json', ...options.headers };
-                    if(options.body) options.body = JSON.stringify(options.body);
+                const isFormData = options.body instanceof FormData;
+                if (!isFormData && options.body !== undefined) {
+                    options.headers = { ...options.headers, 'Content-Type': 'application/json' };
+                    options.body = JSON.stringify(options.body);
                 }
                 const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
-                if (!response.ok) { const err = await response.json().catch(()=>({error: 'Server error'})); throw new Error(err.error); }
-                return response.status === 204 ? { success: true } : response.json();
-            } catch (error) { console.error("API Error:", error); return { error: error.message }; }
+                if (!response.ok) { 
+                    const errText = await response.text();
+                    try { 
+                        const errJson = JSON.parse(errText); 
+                        throw new Error(errJson.error || `Server Error: ${response.status}`);
+                    } catch { 
+                        throw new Error(errText || `Server Error: ${response.status}`);
+                    }
+                }
+                if (response.status === 204 || response.headers.get('content-length') === '0') return { success: true };
+                return await response.json();
+            } catch (error) { 
+                console.error("API Error:", error); 
+                return { error: error.message }; 
+            }
+        }
+
+        async function getReferenceData(tableName, schema='Reference') {
+            const cacheKey = `${schema}.${tableName}`;
+            if (referenceDataCache[cacheKey]) return referenceDataCache[cacheKey];
+            const data = await apiFetch(`table/${schema}/${tableName}`);
+            if(data && !data.error) referenceDataCache[cacheKey] = data;
+            return data;
+        }
+
+        function getPkColumnName(tableName) {
+            return primaryKeyMap[tableName] || 'id';
         }
 
         function showModal(content) {
@@ -200,293 +268,784 @@
             setTimeout(() => modalContent.classList.remove('opacity-0', '-translate-y-10'), 10);
             const closeModal = () => {
                 modalContent.classList.add('opacity-0', '-translate-y-10');
-                setTimeout(() => container.innerHTML = '', 300);
+                setTimeout(() => { container.innerHTML = ''; parsedUploadData = []; }, 300);
             };
             modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
             container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
             return { closeModal };
         }
 
-        function processInventoryData(allItems, storage, rooms) {
-            if (!allItems || !storage || !rooms) return [];
-            const storageMap = new Map(storage.map(s => [s.storage_id, s]));
-            const roomMap = new Map(rooms.map(r => [r.room_id, r]));
-            return allItems.map(item => {
-                const storageInfo = storageMap.get(item.storage_id);
-                const roomInfo = storageInfo ? roomMap.get(storageInfo.room_id) : null;
-
-                // Determine classification (e.g., Species for Samples, or just itemType for others)
-                let classification = 'N/A';
-                if (item.Species) { // For Sample-related items (Fish, Tissue, DNA, RNA, Water, Sediments)
-                    classification = item.Species;
-                } else if (item.item_type === 'Reagents') {
-                    classification = item.category || 'Reagent'; // Use category for reagents
-                } else if (item.item_type === 'Library' || item.item_type === 'PCR') {
-                    classification = item.type; // e.g., "Library", "PCR"
-                }
-                // Add more specific classification logic if needed for other item types
-
-                return {
-                    item_id: item.id, 
-                    item_type: item.type, 
-                    source_table: item.table, 
-                    pk_value: item.pk,
-                    classification: classification, 
-                    is_assigned: !!item.storage_id, // true or false based on if storage_id is present
-                    room: roomInfo ? (roomInfo.description || roomInfo.room_id) : '',
-                    freezer: storageInfo ? storageInfo.Freezer : '',
-                    box: storageInfo ? storageInfo.Box : '',
-                    position: item.storage_position || '' // Uses storage_position from the item
-                };
-            });
-        }
-
-        function renderStorageTable(inventory) {
+        async function loadView() {
             const tableBody = document.getElementById('storage-table-body');
-            if (!tableBody) return;
-            if (inventory.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-gray-500 py-8">No items match the current filters.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-gray-500 py-8">Loading storage units...</td></tr>`;
+
+            const result = await apiFetch(`table/Lab/Storage_Occupancy_View`);
+            if (result.error || !Array.isArray(result)) {
+                tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-red-500 py-8">Error loading data: ${result.error}</td></tr>`;
                 return;
             }
-            tableBody.innerHTML = inventory.map(item => `
-                <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-3 font-medium">${item.item_id}</td>
-                    <td class="px-4 py-3">${item.item_type}</td>
-                    <td class="px-4 py-3">${item.classification}</td>
-                    <td class="px-4 py-3">${item.room}</td>
-                    <td class="px-4 py-3">${item.freezer} / ${item.box}</td>
-                    <td class="px-4 py-3">${item.position}</td>
-                    <td class="px-4 py-3">
-                        ${item.is_assigned 
-                            ? `<button class="text-red-600 hover:text-red-800 font-semibold" onclick="unassignItem('${item.pk_value}', '${item.source_table}')">Unassign</button>`
-                            : `<button class="text-green-600 hover:text-green-800 font-semibold" onclick="showAssignStorageModal('${item.pk_value}', '${item.source_table}')">Assign</button>`
-                        }
+            currentViewData = result;
+            
+            // Initial render with default sort and filters
+            applyFiltersAndSort();
+        }
+
+        function renderTable(dataToDisplay) {
+            const tableBody = document.getElementById('storage-table-body');
+            if (!dataToDisplay || dataToDisplay.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-gray-500 py-8">No storage units found matching filters.</td></tr>`;
+                return;
+            }
+
+            tableBody.innerHTML = dataToDisplay.map(row => `
+                <tr class="hover:bg-gray-50 cursor-pointer storage-row" data-pk="${row.storage_id}">
+                    <td class="px-4 py-3 font-medium text-gray-900">${row.storage_id}</td>
+                    <td class="px-4 py-3">${row.room_id || 'N/A'}</td>
+                    <td class="px-4 py-3">${row.freezer || 'N/A'}</td>
+                    <td class="px-4 py-3">${row.box || 'N/A'}</td>
+                    <td class="px-4 py-3">${row.temperature_c !== null ? `${row.temperature_c}°C` : 'N/A'}</td>
+                    <td class="px-4 py-3">${row.occupancy_percent !== null ? `${row.occupancy_percent}%` : 'N/A'}</td>
+                    <td class="px-4 py-3 flex space-x-2">
+                        <button class="edit-btn p-1 text-gray-500 hover:text-blue-600" data-pk="${row.storage_id}"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                        <button class="delete-btn p-1 text-gray-500 hover:text-red-600" data-pk="${row.storage_id}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                     </td>
                 </tr>`).join('');
-        }
-        
-        function sortData(data, column, direction) {
-            const sortedData = [...data];
-            const isAsc = direction === 'asc';
             
-            sortedData.sort((a, b) => {
-                const valA = a[column] === null || a[column] === undefined ? '' : a[column];
-                const valB = b[column] === null || b[column] === undefined ? '' : b[column];
+            lucide.createIcons();
+            addActionListeners();
+        }
 
-                const comparison = String(valA).localeCompare(String(valB), undefined, { numeric: true, sensitivity: 'base' });
-                return isAsc ? comparison : -comparison;
+        function applyFiltersAndSort() {
+            let tempArray = [...currentViewData]; // Start with the raw data
+
+            // Apply filters
+            document.querySelectorAll('.filter-input').forEach(input => {
+                const column = input.dataset.column;
+                const filterText = input.value.toLowerCase();
+                columnFilters[column] = filterText; // Store current filter value
+
+                if (filterText) {
+                    tempArray = tempArray.filter(item => 
+                        String(item[column] || '').toLowerCase().includes(filterText)
+                    );
+                }
             });
-            return sortedData;
+
+            // Apply sorting
+            if (currentSortColumn) {
+                tempArray.sort((a, b) => {
+                    const valA = a[currentSortColumn];
+                    const valB = b[currentSortColumn];
+
+                    let comparison = 0;
+                    if (typeof valA === 'number' && typeof valB === 'number') {
+                        comparison = valA - valB;
+                    } else {
+                        const stringA = String(valA || '').toLowerCase();
+                        const stringB = String(valB || '').toLowerCase();
+                        comparison = stringA.localeCompare(stringB, undefined, { sensitivity: 'base' });
+                    }
+                    return currentSortDirection === 'asc' ? comparison : -comparison;
+                });
+            }
+
+            filteredAndSortedData = tempArray;
+            renderTable(filteredAndSortedData);
+            updateSortIcons();
         }
 
         function updateSortIcons() {
-            document.querySelectorAll('th[data-sort-key]').forEach(th => {
-                const sortableHeaderSpan = th.querySelector('.sortable-header');
-                if (!sortableHeaderSpan) return;
-
-                const icon = sortableHeaderSpan.querySelector('.sort-icon');
-                if (icon) {
-                    const column = sortableHeaderSpan.dataset.column;
-                    if (column === sortState.column) {
-                        icon.setAttribute('data-lucide', sortState.direction === 'asc' ? 'chevron-up' : 'chevron-down');
-                    } else {
-                        icon.setAttribute('data-lucide', 'chevrons-up-down');
-                    }
-                    lucide.createIcons(); // Re-render Lucide icons
-                }
+            document.querySelectorAll('.sortable-header i').forEach(icon => {
+                const column = icon.closest('.sortable-header').dataset.column;
+                icon.setAttribute('data-lucide', 'chevrons-up-down');
             });
-        }
-
-        function applyFilters() {
-            let filtered = masterInventoryList;
-
-            // Apply filters from header inputs/selects
-            document.querySelectorAll('.filter-input, .filter-select').forEach(filterElement => {
-                const column = filterElement.dataset.column;
-                let filterValue = filterElement.value;
-
-                if (filterValue === '') {
-                    delete columnFilters[column]; // Remove filter if empty
-                    return;
+            if (currentSortColumn) {
+                const currentSortIcon = document.querySelector(`.sortable-header[data-column="${currentSortColumn}"] i`);
+                if (currentSortIcon) {
+                    currentSortIcon.setAttribute('data-lucide', currentSortDirection === 'asc' ? 'chevron-up' : 'chevron-down');
                 }
-
-                columnFilters[column] = filterValue;
-
-                // Handle 'is_assigned' (boolean) filter specifically
-                if (column === 'is_assigned') {
-                    // filterValue from select will be "true" or "false" string
-                    const boolValue = filterValue === 'true';
-                    filtered = filtered.filter(item => item.is_assigned === boolValue);
-                } else if (filterElement.classList.contains('filter-select')) {
-                    // For select filters, perform exact match
-                    filtered = filtered.filter(item => String(item[column] || '') === filterValue);
-                } else {
-                    // For text inputs, perform includes match (case-insensitive)
-                    filtered = filtered.filter(item => String(item[column] || '').toLowerCase().includes(filterValue.toLowerCase()));
-                }
-            });
-            
-            // Sort the filtered data before rendering
-            const sorted = sortData(filtered, sortState.column, sortState.direction);
-            
-            renderStorageTable(sorted);
-            updateSortIcons(); // Update visual indicators
-        }
-
-        async function unassignItem(pkValue, sourceTable) {
-            if (!confirm(`Are you sure you want to remove this item from its storage position?`)) return;
-            const itemConfig = storableItemTables.find(t => t.table === sourceTable);
-            if (!itemConfig) {
-                alert(`Configuration error: No rules found for table ${sourceTable}`);
-                return;
             }
-            // All tables can have storage_position in your DB schema, so no specific list needed here
-            const payload = { storage_id: null, storage_position: null }; // Set both to null on unassign
-            const result = await apiFetch(`table/${itemConfig.schema}/${sourceTable}/${pkValue}`, { method: 'PUT', body: payload });
-            if (result && !result.error) initializeStoragePage();
-            else alert('Failed to unassign item: ' + (result ? result.error : 'Unknown error'));
+            lucide.createIcons();
         }
         
-        async function showAssignStorageModal(pkValue, sourceTable) {
-            const modalHTML = `<div class="modal-overlay fixed inset-0 flex items-center justify-center p-4"><div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl transform transition-all -translate-y-10 opacity-0"><div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold">Assign Storage</h2><button id="close-modal-btn">&times;</button></div><form id="assign-storage-form" class="space-y-4"><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-700">Room</label><select id="modal-room" class="w-full mt-1 p-2 border border-gray-300 rounded-md"></select></div><div><label class="block text-sm font-medium text-gray-700">Freezer/Unit</label><select id="modal-freezer" class="w-full mt-1 p-2 border border-gray-300 rounded-md" disabled></select></div><div id="position-container" class="md:col-span-2 grid grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-700">Box</label><select name="storage_id" id="modal-box" class="w-full mt-1 p-2 border border-gray-300 rounded-md" disabled></select></div><div id="position-input-wrapper"><label class="block text-sm font-medium text-gray-700">Position (1-100)</label><input type="number" name="storage_position" min="1" max="100" class="w-full mt-1 p-2 border border-gray-300 rounded-md"></div></div></div><div class="pt-4 flex justify-end"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Assign</button></div></form></div></div>`;
-            const { closeModal } = showModal(modalHTML);
-            const rooms = await apiFetch('table/Reference/Room');
-            const roomSelect = document.getElementById('modal-room');
-            const freezerSelect = document.getElementById('modal-freezer');
-            const boxSelect = document.getElementById('modal-box');
-            if(rooms && !rooms.error) roomSelect.innerHTML = `<option value="">Select Room</option>${rooms.map(r => `<option value="${r.room_id}">${r.description || r.room_id}</option>`).join('')}`;
-            roomSelect.onchange = () => {
-                const selectedRoom = roomSelect.value;
-                freezerSelect.innerHTML = `<option value="">Select Freezer</option>`;
-                boxSelect.innerHTML = `<option value="">Select Box</option>`;
-                freezerSelect.disabled = true;
-                boxSelect.disabled = true;
-                if (!selectedRoom || !storageCache) return;
-                const freezers = [...new Set(storageCache.filter(s => s.room_id === selectedRoom).map(s => s.Freezer))];
-                freezers.forEach(f => freezerSelect.innerHTML += `<option value="${f}">${f}</option>`);
-                freezerSelect.disabled = false;
-            };
-            freezerSelect.onchange = () => {
-                const selectedRoom = roomSelect.value;
-                const selectedFreezer = freezerSelect.value;
-                boxSelect.innerHTML = `<option value="">Select Box</option>`;
-                boxSelect.disabled = true;
-                if (!selectedFreezer) return;
-                const boxes = storageCache.filter(s => s.room_id === selectedRoom && s.Freezer === selectedFreezer);
-                boxes.forEach(b => boxSelect.innerHTML += `<option value="${b.storage_id}">${b.Box}</option>`);
-                boxSelect.disabled = false;
-            };
+        async function renderDetails(storageId) {
+            const container = document.getElementById('project-details-container'); // Reusing this ID from projects.html
+            container.innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><div class="loading-spinner"></div> Loading storage details...</div></div>`;
+            lucide.createIcons();
 
-            document.getElementById('assign-storage-form').onsubmit = async (e) => {
-                e.preventDefault();
-                const data = Object.fromEntries(new FormData(e.target).entries());
-                const itemConfig = storableItemTables.find(t => t.table === sourceTable);
-                if (!data.storage_id) { alert("Please select a box."); return; }
-                const result = await apiFetch(`table/${itemConfig.schema}/${sourceTable}/${pkValue}`, { method: 'PUT', body: data });
-                if (result && !result.error) { closeModal(); initializeStoragePage(); }
-                else { alert('Failed to assign storage: ' + (result ? result.error : 'Unknown error')); }
-            };
-        }
-
-        async function showNewStorageModal() { /* ...omitted for brevity, no changes needed here... */ }
-        async function showNewRoomModal() { /* ...omitted for brevity, no changes needed here... */ }
-
-        async function initializeStoragePage() {
-            const tableBody = document.getElementById('storage-table-body');
-            if (tableBody) tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-gray-500 py-8">Loading all inventory data...</td></tr>`;
-
-            const promises = [
-                apiFetch('table/Lab/Storage'),
-                apiFetch('table/Reference/Room'),
-                ...storableItemTables.map(itemType => 
-                    apiFetch(`table/${itemType.schema}/${itemType.table}`).then(response => {
-                        if (response.error || !Array.isArray(response)) { console.error(`Failed to load ${itemType.table} data`); return []; }
-                        return response.map(item => {
-                            // --- MODIFIED ID LOGIC ---
-                            let itemIdValue = '';
-                            if (item.sample_id) { // Priority 1: Check for sample_id (common for many Lab items)
-                                itemIdValue = item.sample_id;
-                            } else if (item.Library_id) { // Specific for Library
-                                itemIdValue = item.Library_id;
-                            } else if (item.Reagent_Name) { // Specific for Reagents
-                                itemIdValue = item.Reagent_Name;
-                            } else if (item.nr) { // Fallback to 'nr' for others like PCR
-                                itemIdValue = item.nr;
-                            } else { // Fallback if no specific ID or nr is found
-                                itemIdValue = `ID missing (${itemType.table})`; 
-                            }
-                            // --- END OF MODIFIED ID LOGIC ---
-
-                            return {
-                                ...item,
-                                type: itemType.table, // e.g., 'Fish', 'DNA'
-                                table: itemType.table, // original table name
-                                id: itemIdValue, // The determined display ID
-                                pk: item[itemType.pk] // The actual primary key value for API calls
-                            };
-                        });
-                    })
-                )
-            ];
-
-            const [storageData, roomData, ...allItemArrays] = await Promise.all(promises);
-            storageCache = (storageData && !storageData.error) ? storageData : [];
-            const rooms = (roomData && !roomData.error) ? roomData : [];
-            const allItems = allItemArrays.flat();
-            masterInventoryList = processInventoryData(allItems, storageCache, rooms);
-            
-            // Populate Filters in Header
-            const itemTypeSelect = document.getElementById('filter-item-type-header');
-            itemTypeSelect.innerHTML = '<option value="">All Types</option>';
-            [...new Set(masterInventoryList.map(item => item.item_type))].sort().forEach(type => {
-                itemTypeSelect.innerHTML += `<option value="${type}">${type}</option>`;
-            });
-
-            const classificationSelect = document.getElementById('filter-classification-header');
-            classificationSelect.innerHTML = '<option value="">All Classifications</option>';
-            // Filter out empty/N/A classifications before sorting and adding to dropdown
-            [...new Set(masterInventoryList.map(item => item.classification).filter(c => c && c !== 'N/A'))].sort().forEach(c => {
-                classificationSelect.innerHTML += `<option value="${c}">${c}</option>`;
-            });
-
-            // Re-apply any saved filter values
-            document.querySelectorAll('.filter-input, .filter-select').forEach(filterElement => {
-                const column = filterElement.dataset.column;
-                if (columnFilters[column] !== undefined) {
-                    filterElement.value = columnFilters[column];
-                }
-            });
-
-            // Add Event Listeners for filters (now including new header inputs/selects)
-            document.querySelectorAll('.filter-input').forEach(input => {
-                input.removeEventListener('input', applyFilters); // Prevent duplicate listeners
-                input.addEventListener('input', applyFilters);
-            });
-            document.querySelectorAll('.filter-select').forEach(select => {
-                select.removeEventListener('change', applyFilters); // Prevent duplicate listeners
-                select.addEventListener('change', applyFilters);
-            });
-            
-            // Add Event Listeners for table header sorting
-            document.querySelectorAll('.sortable-header').forEach(header => {
-                header.removeEventListener('click', handleSortClick); // Prevent duplicate listeners
-                header.addEventListener('click', handleSortClick);
-            });
-
-            // Initial render
-            applyFilters();
-        }
-
-        function handleSortClick(e) {
-            const column = e.currentTarget.dataset.column;
-            if (sortState.column === column) {
-                sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
-            } else {
-                sortState.column = column;
-                sortState.direction = 'asc';
+            const storageUnit = currentViewData.find(s => s.storage_id === storageId);
+            if (!storageUnit) { 
+                container.innerHTML = `<div class="card p-6 text-red-500">Error: Storage unit details not found.</div>`; 
+                return; 
             }
-            applyFilters(); // Re-apply filters and sorting
+
+            // Fetch related data for details panel
+            const [
+                room, project, status, temperatureUnit,
+                allStoredItems // All items that have a storage_id
+            ] = await Promise.all([
+                storageUnit.room_id ? getReferenceData('room').then(data => data.find(r => r.room_id === storageUnit.room_id)) : Promise.resolve(null),
+                storageUnit.project_id ? getReferenceData('projects', 'Lims').then(data => data.find(p => p.project_id === storageUnit.project_id)) : Promise.resolve(null),
+                storageUnit.status_id ? getReferenceData('status').then(data => data.find(s => s.status_id === storageUnit.status_id)) : Promise.resolve(null),
+                storageUnit.temperature_unit_id ? getReferenceData('units').then(data => data.find(u => u.unit_id === storageUnit.temperature_unit_id)) : Promise.resolve(null),
+                // Fetch all storable items and filter by this storage_id
+                (async () => {
+                    const allItemsPromises = storableItemTables.map(async itemType => {
+                        const items = await apiFetch(`table/${itemType.schema}/${itemType.table}?filter_storage_id=${storageId}`);
+                        if (items.error || !Array.isArray(items)) {
+                            console.error(`Failed to load stored items from ${itemType.table}:`, items?.error);
+                            return [];
+                        }
+                        return items.map(item => ({
+                            ...item,
+                            item_type: itemType.table, // Store original table name as item_type
+                            display_id: item[itemType.idColumn] || item.sample_id || item.reagent_id || 'N/A', // Prioritize sample_id/reagent_id
+                            pk_value: Array.isArray(itemType.pk) ? itemType.pk.map(col => item[col]).join('|') : item[itemType.pk],
+                            pk_columns: itemType.pk,
+                            item_schema: itemType.schema
+                        }));
+                    });
+                    const results = await Promise.all(allItemsPromises);
+                    return results.flat().filter(item => item.storage_id === storageId); // Final filter for exact match
+                })()
+            ]);
+
+            // Helper to render a detail row if value exists
+            const renderDetailRow = (label, value) => {
+                if (value === null || value === undefined || String(value).trim() === '' || value === 'N/A') {
+                    return '';
+                }
+                return `<div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100"><dt class="font-medium text-gray-500">${label}</dt><dd class="text-gray-900 break-all">${value}</dd></div>`;
+            };
+
+            // Helper to format date strings
+            const formatDate = (dateString) => {
+                if (!dateString) return 'N/A';
+                try {
+                    const date = new Date(dateString);
+                    return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString();
+                } catch (e) {
+                    return 'N/A';
+                }
+            };
+
+            let detailsHtml = `<div class="space-y-3 text-sm">`;
+            
+            // Core Information Accordion
+            detailsHtml += `
+                <div class="accordion-item">
+                    <button class="accordion-header" data-accordion="core-info">
+                        <span class="flex items-center"><i data-lucide="info" class="w-5 h-5 mr-2"></i> Core Information</span>
+                        <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                    </button>
+                    <div class="accordion-content open">
+                        <dl class="space-y-2 py-2">
+                            ${renderDetailRow('Storage ID', storageUnit.storage_id)}
+                            ${renderDetailRow('Room', room ? `${room.description} (${room.room_id})` : storageUnit.room_id || 'N/A')}
+                            ${renderDetailRow('Freezer', storageUnit.freezer)}
+                            ${renderDetailRow('Etage', storageUnit.etage)}
+                            ${renderDetailRow('Temperature', storageUnit.temperature_c ? `${storageUnit.temperature_c}°C` : 'N/A')}
+                            ${renderDetailRow('Box Name', storageUnit.box)}
+                            ${renderDetailRow('Box Size X', storageUnit.box_size_x)}
+                            ${renderDetailRow('Box Size Y', storageUnit.box_size_y)}
+                            ${renderDetailRow('Position Format', storageUnit.storage_position_format)}
+                            ${renderDetailRow('Project', project ? `${project.title} (${project.project_id})` : storageUnit.project_id || 'N/A')}
+                            ${renderDetailRow('Status', status ? `${status.status_id}` : storageUnit.status_id || 'N/A')}
+                            ${renderDetailRow('Notes', storageUnit.notes)}
+                            ${storageUnit.attachment ? renderDetailRow('Attachment', '<a href="#" class="text-blue-500 hover:underline">View Attachment</a>') : ''}
+                        </dl>
+                    </div>
+                </div>`;
+
+            // Stored Items List
+            if (allStoredItems && allStoredItems.length > 0) {
+                detailsHtml += `
+                    <div class="accordion-item mt-4">
+                        <button class="accordion-header" data-accordion="stored-items">
+                            <span class="flex items-center"><i data-lucide="boxes" class="w-5 h-5 mr-2"></i> Stored Items (${allStoredItems.length})</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <ul class="list-disc pl-5 py-2 space-y-1">
+                                ${allStoredItems.map(item => `<li><a href="samples.html?sample_id=${item.display_id}&table=${item.item_type}" class="text-blue-500 hover:underline">${item.display_id}</a> (Type: ${item.item_type}, Pos: ${item.storage_position || 'N/A'})</li>`).join('')}
+                            </ul>
+                        </div>
+                    </div>`;
+            } else {
+                 detailsHtml += `
+                    <div class="accordion-item mt-4">
+                        <button class="accordion-header" data-accordion="stored-items">
+                            <span class="flex items-center"><i data-lucide="boxes" class="w-5 h-5 mr-2"></i> Stored Items (0)</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <p class="py-2 text-gray-500">No items currently stored in this unit.</p>
+                        </div>
+                    </div>`;
+            }
+
+            container.innerHTML = `
+                <div class="card p-6 h-full flex flex-col">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800">${storageUnit.box}</h2>
+                            <p class="text-sm text-gray-500">${storageUnit.storage_id}</p>
+                        </div>
+                    </div>
+                    <div class="flex-grow overflow-y-auto pr-2">
+                        ${detailsHtml}
+                    </div>
+                    <div class="pt-4 flex justify-end border-t mt-4">
+                        <a href="storagesamples.html?storage_id=${storageUnit.storage_id}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow">
+                            <i data-lucide="layout-grid" class="w-5 h-5 mr-2"></i>View Box Layout
+                        </a>
+                    </div>
+                </div>`;
+            lucide.createIcons(); 
+            document.querySelectorAll('.accordion-header').forEach(header => {
+                header.addEventListener('click', () => {
+                    const content = header.nextElementSibling;
+                    header.classList.toggle('active');
+                    content.classList.toggle('open');
+                    lucide.createIcons();
+                });
+            });
         }
-    </script>
+
+        function addActionListeners() {
+            document.querySelectorAll('.storage-row').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    if (e.target.closest('button')) return; 
+                    document.querySelectorAll('.storage-row').forEach(r => r.classList.remove('table-row-selected'));
+                    row.classList.add('table-row-selected');
+                    renderDetails(row.dataset.pk);
+                });
+            });
+
+            document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', e => {
+                e.stopPropagation();
+                const storageId = e.currentTarget.dataset.pk;
+                const storageUnit = currentViewData.find(s => s.storage_id === storageId);
+                if (storageUnit) {
+                    showStorageModal(storageUnit);
+                }
+            }));
+
+            document.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', async e => {
+                e.stopPropagation();
+                const storageId = e.currentTarget.dataset.pk;
+                const storageUnit = currentViewData.find(s => s.storage_id === storageId);
+                
+                if(storageUnit && confirm(`Are you sure you want to delete storage unit: ${storageUnit.storage_id} (${storageUnit.box})? This cannot be undone.`)){
+                    // Check if there are any items in this storage unit before deleting
+                    const storedItems = await Promise.all(storableItemTables.map(async itemType => {
+                        const items = await apiFetch(`table/${itemType.schema}/${itemType.table}?filter_storage_id=${storageId}`);
+                        return items.error ? [] : items;
+                    })).then(results => results.flat());
+
+                    if (storedItems.length > 0) {
+                        alert(`Cannot delete storage unit ${storageId} because it still contains ${storedItems.length} items. Please unassign all items first.`);
+                        return;
+                    }
+
+                    const result = await apiFetch(`table/${currentSchema}/${currentTableName}/${storageId}`, { method: 'DELETE' });
+                    if(result.success) {
+                        alert('Storage unit deleted successfully!');
+                        currentViewData = []; // Clear cache to force refresh
+                        loadView(); // Reload the page
+                        document.getElementById('project-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="archive-search" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a storage unit to view its details</p></div></div>`;
+                        lucide.createIcons();
+                    } else alert('Failed to delete storage unit: ' + (result ? result.error : 'Unknown error'));
+                }
+            }));
+        }
+
+        async function showStorageModal(storageUnit = null) {
+            const isEditing = storageUnit !== null;
+            const [rooms, projects, statuses, units] = await Promise.all([
+                getReferenceData('room'), 
+                getReferenceData('projects', 'Lims'), 
+                getReferenceData('status'),
+                getReferenceData('units')
+            ]);
+
+            const modalHTML = `<div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4"><div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-lg transform transition-all -translate-y-10 opacity-0"><div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold">${isEditing ? 'Edit' : 'New'} Storage Unit</h2><button id="close-modal-btn">&times;</button></div><form id="storage-form" class="space-y-4"><div id="dynamic-fields-container" class="max-h-[60vh] overflow-y-auto p-4 rounded-md bg-gray-50 border"></div><div class="pt-4 flex justify-end"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">${isEditing ? 'Save Changes' : 'Create'}</button></div></form></div></div>`;
+            const { closeModal } = showModal(modalHTML);
+
+            await renderFormFields(storageUnit, rooms, projects, statuses, units);
+
+            document.getElementById('storage-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const data = {};
+                for (const [key, value] of formData.entries()) {
+                    if (key === 'attachment') {
+                        data[key] = value.size > 0 ? value : null;
+                    } else {
+                        data[key] = value === '' ? null : value;
+                    }
+                }
+
+                const user = JSON.parse(sessionStorage.getItem('user')) || {};
+                data.modified_by = user.person_id;
+                if (!isEditing) {
+                    data.created_by = user.person_id;
+                }
+
+                // Handle new room creation if selected
+                if (data.room_id === '__NEW_ROOM__') {
+                    if (!data.new_room_id) {
+                        alert('Please provide a New Room ID.');
+                        return;
+                    }
+                    const newRoomData = {
+                        room_id: data.new_room_id,
+                        description: data.new_room_description || null
+                    };
+                    const roomCreateResult = await apiFetch('create_if_not_exists/Reference/room', {
+                        method: 'POST',
+                        body: newRoomData
+                    });
+
+                    if (roomCreateResult.error) {
+                        alert('Failed to create new room: ' + roomCreateResult.error);
+                        return;
+                    }
+                    data.room_id = data.new_room_id; // Use the newly created room ID
+                }
+
+                let result;
+                if (data.attachment instanceof File) {
+                    const formDataWithFile = new FormData();
+                    for (const key in data) {
+                        if (data[key] !== null) {
+                            formDataWithFile.append(key, data[key]);
+                        }
+                    }
+                    result = await apiFetch(isEditing ? `table/Lab/storage/${storageUnit.storage_id}` : `table/Lab/storage`, { method: isEditing ? 'PUT' : 'POST', body: formDataWithFile });
+                } else {
+                    result = await apiFetch(isEditing ? `table/Lab/storage/${storageUnit.storage_id}` : `table/Lab/storage`, { method: isEditing ? 'PUT' : 'POST', body: data });
+                }
+
+                if (result && !result.error) {
+                    closeModal();
+                    masterCache['Lab.storage'] = null; // Invalidate cache
+                    loadView(); // Reload the page
+                } else {
+                    alert('Failed to save storage unit: ' + (result ? result.error : 'Unknown error'));
+                }
+            };
+        }
+
+        async function renderFormFields(storageUnit = null, rooms, projects, statuses, units) {
+            const container = document.getElementById('dynamic-fields-container');
+            container.innerHTML = `<p class="text-center text-gray-500 p-4">Loading form fields...</p>`;
+
+            const schemaInfo = await apiFetch(`table/Lab/storage/info`);
+            if (schemaInfo.error || !schemaInfo.columns) {
+                container.innerHTML = `<p class="text-red-500 p-4">Error loading schema for storage: ${schemaInfo.error}</p>`;
+                return;
+            }
+
+            const columns = schemaInfo.columns;
+            
+            let fieldsHtml = '<div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">';
+            const ignoredFormCols = ['nr', 'id', 'modified_by', 'time_modification', 'attachment'];
+            const isEditing = storageUnit !== null;
+
+            for (const col of columns) {
+                const colName = col.name;
+                if (ignoredFormCols.includes(colName)) continue;
+                
+                const value = storageUnit ? (storageUnit[colName] === null ? '' : storageUnit[colName]) : '';
+                const formattedLabel = colName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                let field = '';
+                const isReadOnly = isEditing && colName === 'storage_id'; // storage_id is PK, make readonly on edit
+
+                const fkConfig = foreignKeyMap[colName];
+
+                if (fkConfig) {
+                    if (colName === 'room_id') { // Special handling for room_id to allow new room creation
+                        field = `<select name="${colName}" id="${colName}" class="w-full mt-1 p-2 border rounded-md shadow-sm" ${isReadOnly ? 'disabled' : ''} ${col.is_nullable === 'NO' ? 'required' : ''}>
+                                    <option value="">-- Select Room --</option>
+                                    ${rooms.map(r => `<option value="${r.room_id}" ${value == r.room_id ? 'selected' : ''}>${r.description || r.room_id}</option>`).join('')}
+                                    <option value="__NEW_ROOM__">-- Create New Room --</option>
+                                </select>
+                                <div id="new-room-fields" class="space-y-2 mt-2 ${value === '__NEW_ROOM__' ? '' : 'hidden'}">
+                                    <input type="text" id="new_room_id" name="new_room_id" placeholder="New Room ID (e.g., Lab01)" class="block w-full p-2 border border-gray-300 rounded-md shadow-sm" ${value === '__NEW_ROOM__' ? 'required' : ''}>
+                                    <input type="text" id="new_room_description" name="new_room_description" placeholder="New Room Description (optional)" class="block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                                </div>`;
+                    } else if (fkConfig.type === 'file') { // Attachment
+                        field = `<input type="file" name="${colName}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" ${isReadOnly ? 'disabled' : ''}>`;
+                    } else { // Standard FK dropdowns
+                        const refData = await getReferenceData(fkConfig.table, fkConfig.schema);
+                        if (refData && !refData.error) {
+                            field = `<select name="${colName}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" ${isReadOnly ? 'disabled' : ''} ${col.is_nullable === 'NO' ? 'required' : ''}>
+                                        <option value="">-- Select --</option>
+                                        ${refData.map(r => `<option value="${r[fkConfig.valueCol]}" ${value == r[fkConfig.valueCol] ? 'selected' : ''}>${r[fkConfig.displayCol] || r[fkConfig.valueCol]}</option>`).join('')}
+                                    </select>`;
+                        } else {
+                            field = `<input type="text" name="${colName}" value="${value}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm bg-red-100" placeholder="Error loading options" ${isReadOnly ? 'readonly' : ''} ${col.is_nullable === 'NO' ? 'required' : ''}>`;
+                        }
+                    }
+                } else if (col.type === 'date' || col.type === 'timestamp without time zone' || col.type === 'timestamptz') {
+                    field = `<input type="date" name="${colName}" value="${value ? String(value).split('T')[0] : ''}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" ${isReadOnly ? 'readonly class="bg-gray-100"' : ''} ${col.is_nullable === 'NO' ? 'required' : ''}>`;
+                } else if (col.type === 'text' && (colName.toLowerCase().includes('notes') || colName.toLowerCase().includes('description'))) {
+                    field = `<textarea name="${colName}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm h-24" ${isReadOnly ? 'readonly class="bg-gray-100"' : ''} ${col.is_nullable === 'NO' ? 'required' : ''}>${value}</textarea>`;
+                } else if (col.type === 'integer' || col.type === 'numeric' || col.type === 'bigint') {
+                    field = `<input type="number" step="any" name="${colName}" value="${value}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" ${isReadOnly ? 'readonly class="bg-gray-100"' : ''} ${col.is_nullable === 'NO' ? 'required' : ''}>`;
+                } else if (col.type === 'boolean') {
+                    field = `<input type="checkbox" name="${colName}" class="mt-1 h-4 w-4 rounded" ${value ? 'checked' : ''} ${isReadOnly ? 'disabled' : ''}>`;
+                }
+                else { // Default to text input
+                    field = `<input type="text" name="${colName}" value="${value}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" ${isReadOnly ? 'readonly class="bg-gray-100"' : ''} ${col.is_nullable === 'NO' ? 'required' : ''}>`;
+                }
+                fieldsHtml += `<div><label class="font-medium text-sm text-gray-700">${formattedLabel}</label>${field}</div>`;
+            }
+            fieldsHtml += '</div>';
+            container.innerHTML = fieldsHtml;
+
+            // Add event listener for the new room selection
+            const roomSelect = document.getElementById('room_id');
+            if (roomSelect) {
+                roomSelect.addEventListener('change', () => {
+                    const newRoomFieldsDiv = document.getElementById('new-room-fields');
+                    const newRoomIdInput = document.getElementById('new_room_id');
+                    if (roomSelect.value === '__NEW_ROOM__') {
+                        newRoomFieldsDiv.classList.remove('hidden');
+                        newRoomIdInput.setAttribute('required', 'required');
+                    } else {
+                        newRoomFieldsDiv.classList.add('hidden');
+                        newRoomIdInput.removeAttribute('required');
+                        newRoomIdInput.value = '';
+                        document.getElementById('new_room_description').value = '';
+                    }
+                });
+            }
+        }
+
+        async function showBulkOperationModal(isUpdate = false) {
+            parsedUploadData = [];
+            const modalTitle = isUpdate ? `Bulk Update for Storage Units` : `Bulk Import for Storage Units`;
+            const actionButtonText = isUpdate ? 'Run Updates' : 'Upload to Database';
+            const actionButtonIcon = isUpdate ? 'edit' : 'upload-cloud';
+            const templateButtonText = isUpdate ? 'Download Update Template' : 'Download Template (.csv)';
+            const templateButtonIcon = 'download';
+            const fileInputAccept = ".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel";
+            const fileInputClass = isUpdate ? "file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100" : "file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100";
+
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-4xl transform transition-all -translate-y-10 opacity-0">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-2xl font-bold">${modalTitle}</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700">&times;</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <h3 class="font-semibold text-lg mb-2">1. Get Your Template</h3>
+                                <p class="text-sm text-gray-600 mb-3">${isUpdate ? 'Include storage_id to match existing records.' : 'Ensure your column headers match the database.'}</p>
+                                <button id="download-template-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow-sm">
+                                    <i data-lucide="${templateButtonIcon}" class="w-4 h-4 mr-2"></i>${templateButtonText}
+                                </button>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-lg mb-2">2. Upload Your File</h3>
+                                <p class="text-sm text-gray-600 mb-3">Select a .csv or .xlsx file to upload.</p>
+                                <input type="file" id="file-input" accept="${fileInputAccept}" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold ${fileInputClass}">
+                            </div>
+                        </div>
+                        <div class="mt-6">
+                            <h3 class="font-semibold text-lg mb-2">3. Preview Data</h3>
+                            <div id="preview-container" class="border rounded-lg p-2 bg-gray-50 h-64 overflow-auto text-xs">
+                                <p class="text-gray-500 text-center p-4">Select a file to see a preview of the data.</p>
+                            </div>
+                        </div>
+                        <div id="bulk-operation-progress" class="hidden mt-4">
+                            <h3 class="font-semibold text-lg mb-2">Operation Progress</h3>
+                            <div id="progress-log" class="w-full bg-gray-800 text-white font-mono text-xs rounded-md p-4 h-48 overflow-y-auto"></div>
+                        </div>
+                        <div class="pt-6 flex justify-end border-t mt-6">
+                            <button id="action-data-btn" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg flex items-center" disabled>
+                                <i data-lucide="${actionButtonIcon}" class="w-5 h-5 mr-2"></i>${actionButtonText}
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            const { closeModal } = showModal(modalHTML);
+            lucide.createIcons();
+
+            document.getElementById('download-template-btn').addEventListener('click', () => generateAndDownloadTemplate(isUpdate));
+            document.getElementById('file-input').addEventListener('change', (e) => handleFileSelect(e, isUpdate));
+            document.getElementById('action-data-btn').addEventListener('click', () => {
+                if (isUpdate) handleBulkUpdate(closeModal);
+                else handleBulkImport(closeModal);
+            });
+        }
+
+        async function generateAndDownloadTemplate(isUpdate) {
+            const schemaInfo = await apiFetch(`table/${currentSchema}/${currentTableName}/info`);
+            
+            if (schemaInfo.error || !schemaInfo.columns) {
+                alert('Could not determine table schema to generate template.');
+                return;
+            }
+            
+            let headers = schemaInfo.columns.map(col => col.name);
+            const pkColumn = getPkColumnName(currentTableName);
+
+            // Filter out internal/calculated fields for the template
+            headers = headers.filter(key => 
+                !['nr', 'id', 'attachment', 'password_hash', 'search_vector', 'created_at', 'modified_by', 'time_modification'].includes(key) && 
+                !key.endsWith('_ug') // Exclude generated columns like total_dna_ug
+            );
+
+            if (isUpdate) {
+                // For update template, primary key(s) are essential and should be first
+                if (Array.isArray(pkColumn)) {
+                    headers = headers.filter(h => !pkColumn.includes(h));
+                    headers = [...pkColumn, ...headers];
+                } else {
+                    headers = headers.filter(h => h !== pkColumn);
+                    headers.unshift(pkColumn);
+                }
+            } else {
+                // For new import, auto-generated PKs should be excluded from template
+                if (Array.isArray(pkColumn)) {
+                    headers = headers.filter(h => !pkColumn.includes(h));
+                } else {
+                    const isAutoGeneratedPk = ['storage_id'].includes(pkColumn); // storage_id is NOT auto-generated, but user-defined PK
+                    if (isAutoGeneratedPk) { // If it were auto-generated, we'd filter it out. But for storage_id, keep it for user input.
+                        // headers = headers.filter(h => h !== pkColumn); // This line is commented out as storage_id is user-defined
+                    }
+                }
+            }
+            
+            const csvContent = headers.join(';'); // Use semicolon for CSV
+            const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' }); // Add BOM for Excel compatibility
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `${currentTableName}_${isUpdate ? 'update' : 'import'}_template.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function handleFileSelect(event, isUpdate) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const previewContainer = document.getElementById('preview-container');
+            const actionButton = document.getElementById('action-data-btn');
+            previewContainer.innerHTML = '<p class="text-gray-500 text-center p-4">Parsing file...</p>';
+            actionButton.disabled = true;
+            
+            const onParseComplete = (results) => {
+                if(results.errors.length > 0) {
+                    previewContainer.innerHTML = `<p class="text-red-500 p-4">Error parsing file: ${results.errors[0].message}</p>`;
+                    return;
+                }
+                parsedUploadData = results.data;
+                const pkCol = getPkColumnName(currentTableName);
+                if (isUpdate && (parsedUploadData.length === 0 || !parsedUploadData[0].hasOwnProperty(Array.isArray(pkCol) ? pkCol[0] : pkCol))) {
+                    previewContainer.innerHTML = `<p class="text-red-500 p-4">Error: For bulk update, the file must contain data and include the primary key column(s) (e.g., '${Array.isArray(pkCol) ? pkCol.join(', ') : pkCol}').</p>`;
+                    return;
+                }
+                displayPreview(parsedUploadData);
+                actionButton.disabled = false;
+            };
+
+            if (file.name.endsWith('.csv')) {
+                Papa.parse(file, { header: true, skipEmptyLines: true, complete: onParseComplete });
+            } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, {type: 'array'});
+                        const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                        onParseComplete({ data: jsonData, errors: [] });
+                    } catch (err) {
+                        previewContainer.innerHTML = `<p class="text-red-500 text-center p-4">Error processing Excel file: ${err.message}</p>`;
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                previewContainer.innerHTML = `<p class="text-red-500 text-center p-4">Unsupported file type. Please upload .csv or .xlsx.</p>`;
+            }
+        }
+
+        function displayPreview(data) {
+            if (!data || data.length === 0) {
+                document.getElementById('preview-container').innerHTML = '<p class="text-red-500 text-center p-4">No data found in file.</p>';
+                return;
+            }
+            const headers = Object.keys(data[0]);
+            const previewHtml = `
+                <p class="text-sm font-medium p-2">Found ${parsedUploadData.length} records. Showing preview:</p>
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-100"><tr>${headers.map(h => `<th class="px-2 py-1 text-left font-medium text-gray-600">${h}</th>`).join('')}</tr></thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        ${data.slice(0, 5).map(row => `<tr>${headers.map(h => `<td class="px-2 py-1 whitespace-nowrap truncate max-w-[100px]">${row[h] || ''}</td>`).join('')}</tr>`).join('')}
+                    </tbody>
+                </table>`;
+            document.getElementById('preview-container').innerHTML = previewHtml;
+        }
+
+        async function handleBulkImport(closeModal) {
+            if (parsedUploadData.length === 0) { alert('No data to upload.'); return; }
+            
+            const uploadBtn = document.getElementById('action-data-btn');
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = '<i data-lucide="loader-2" class="animate-spin w-5 h-5 mr-2"></i>Uploading...';
+            lucide.createIcons();
+            
+            document.getElementById('bulk-operation-progress').classList.remove('hidden');
+            const logContainer = document.getElementById('progress-log');
+            logContainer.innerHTML = '';
+            
+            let successCount = 0;
+            let failCount = 0;
+            const failedRecords = [];
+            const user = JSON.parse(sessionStorage.getItem('user')) || {};
+
+            const logMessage = (msg, color = 'text-gray-300') => {
+                logContainer.innerHTML += `<div><span class="text-gray-500">${new Date().toLocaleTimeString()}:</span> <span class="${color}">${msg}</span></div>`;
+                logContainer.scrollTop = logContainer.scrollHeight;
+            };
+
+            logMessage(`Starting bulk import for ${parsedUploadData.length} records into ${currentSchema}.${currentTableName}...`);
+
+            for (const row of parsedUploadData) {
+                // Add created_by to each row before sending
+                const dataToInsert = { ...row, created_by: user.person_id };
+                logMessage(`Inserting record...`);
+                const result = await apiFetch(`table/${currentSchema}/${currentTableName}`, { method: 'POST', body: dataToInsert });
+                
+                if (!result.error) {
+                    successCount++;
+                    logMessage(`&nbsp;&nbsp;> OK`, 'text-green-400');
+                } else {
+                    failCount++;
+                    failedRecords.push(JSON.stringify(row));
+                    logMessage(`&nbsp;&nbsp;> FAILED: ${result.error}`, 'text-red-400');
+                }
+            }
+
+            logMessage('------------------------------------', 'text-blue-400');
+            logMessage(`Bulk import complete.`, 'text-blue-400 font-bold');
+            logMessage(`Successful: ${successCount}`, 'text-green-400');
+            logMessage(`Failed: ${failCount}`, 'text-red-400');
+            if(failedRecords.length > 0) {
+                 logMessage(`Failed rows (first 5): ${failedRecords.slice(0,5).join('; ')}`);
+            }
+
+            currentViewData = []; // Clear cache to force re-fetch
+            loadView(); // Reload the page
+            
+            uploadBtn.innerHTML = '<i data-lucide="check" class="w-5 h-5 mr-2"></i>Finished';
+            uploadBtn.onclick = closeModal; // Change button to close modal
+            uploadBtn.disabled = false;
+            lucide.createIcons();
+        }
+
+        async function handleBulkUpdate(closeModal) {
+            if (parsedUploadData.length === 0) { alert('No data to update.'); return; }
+            
+            const updateBtn = document.getElementById('action-data-btn');
+            updateBtn.disabled = true;
+            updateBtn.innerHTML = '<i data-lucide="loader-2" class="animate-spin w-5 h-5 mr-2"></i>Updating...';
+            lucide.createIcons();
+
+            document.getElementById('bulk-operation-progress').classList.remove('hidden');
+            const logContainer = document.getElementById('progress-log');
+            logContainer.innerHTML = '';
+            
+            let successCount = 0;
+            let failCount = 0;
+            const failedRecords = [];
+            const user = JSON.parse(sessionStorage.getItem('user')) || {};
+
+            const logMessage = (msg, color = 'text-gray-300') => {
+                logContainer.innerHTML += `<div><span class="text-gray-500">${new Date().toLocaleTimeString()}:</span> <span class="${color}">${msg}</span></div>`;
+                logContainer.scrollTop = logContainer.scrollHeight;
+            };
+
+            logMessage(`Starting bulk update for ${parsedUploadData.length} records in ${currentSchema}.${currentTableName}...`);
+
+            const pkColumn = getPkColumnName(currentTableName);
+
+            for (const row of parsedUploadData) {
+                let pkIdentifier = ''; // For logging purposes
+                let endpoint = `table/${currentSchema}/${currentTableName}/`;
+                const payload = { ...row };
+                
+                if (Array.isArray(pkColumn)) {
+                    // Construct PK for URL and remove from payload
+                    const pkValues = pkColumn.map(col => row[col]);
+                    if (!pkValues.every(val => val !== undefined && val !== null)) {
+                        logMessage(`Skipping row: Missing one or more primary key columns (${pkColumn.join(', ')}): ${JSON.stringify(row)}`, 'text-yellow-400');
+                        failCount++;
+                        continue;
+                    }
+                    pkIdentifier = pkValues.join('|'); // For URL and logging
+                    endpoint += pkValues[0]; // First part of composite PK for URL path
+
+                    // Add remaining PK parts as query parameters for PUT
+                    for (let i = 1; i < pkColumn.length; i++) {
+                        endpoint += `${i === 1 ? '?' : '&'}${pkColumn[i]}=${pkValues[i]}`;
+                    }
+                    pkColumn.forEach(col => delete payload[col]); // Remove PKs from payload
+                } else { // Single PK
+                    pkIdentifier = row[pkColumn];
+                    if (!pkIdentifier) {
+                        logMessage(`Skipping row: Missing primary key column '${pkColumn}': ${JSON.stringify(row)}`, 'text-yellow-400');
+                        failCount++;
+                        continue;
+                    }
+                    endpoint += pkIdentifier;
+                    delete payload[pkColumn]; // Remove PK from payload
+                }
+                
+                payload.modified_by = user.person_id; // Add modified_by
+
+                logMessage(`Updating ${pkIdentifier}...`);
+                const result = await apiFetch(endpoint, { method: 'PUT', body: payload });
+                
+                if (!result.error) {
+                    successCount++;
+                    logMessage(`&nbsp;&nbsp;> OK`, 'text-green-400');
+                } else {
+                    failCount++;
+                    failedRecords.push(`${pkIdentifier}: ${result.error}`);
+                    logMessage(`&nbsp;&nbsp;> FAILED: ${result.error}`, 'text-red-400');
+                }
+            }
+
+            logMessage('------------------------------------', 'text-blue-400');
+            logMessage(`Bulk update complete.`, 'text-blue-400 font-bold');
+            logMessage(`Successful: ${successCount}`, 'text-green-400');
+            logMessage(`Failed: ${failCount}`, 'text-red-400');
+            if(failedRecords.length > 0) {
+                 logMessage(`Failed IDs: ${failedRecords.join(', ')}`);
+            }
+
+            currentViewData = []; // Clear cache to force re-fetch
+            await loadView(); // Reload the page
+            
+            updateBtn.innerHTML = '<i data-lucide="x" class="w-5 h-5 mr-2"></i>Close';
+            updateBtn.onclick = closeModal;
+            updateBtn.disabled = false;
+            lucide.createIcons();
+        }
+
+
+    function initializePage() {
+        loadView();
+        document.getElementById('new-item-btn').addEventListener('click', () => showNewItemModal());
+        document.getElementById('bulk-import-btn').addEventListener('click', () => showBulkImportModal());
+        document.getElementById('bulk-update-btn').addEventListener('click', () => showBulkUpdateModal());
+    }
+</script>
 </body>
 </html>
