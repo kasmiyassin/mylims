@@ -91,12 +91,12 @@ CREATE TABLE IF NOT EXISTS "audit"."log" (
     "id" serial PRIMARY KEY,
     "schema_name" text NOT NULL,
     "table_name" text NOT NULL,
-    "user_id" text, -- Renamed from user_name to user_id for consistency with person_id
+    "user_id" text, --  from user_name to user_id for consistency with person_id
     "action_timestamp" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "action" text NOT NULL CHECK ("action" IN ('I', 'D', 'U')),
     "original_data" jsonb,
     "new_data" jsonb,
-    "query_text" text -- Renamed from query for clarity
+    "query_text" text --  from query for clarity
 );
 
 -- ======================================================================
@@ -109,31 +109,35 @@ CREATE TABLE IF NOT EXISTS "reference"."personal" (
     "room" text,
     "telephone" text,
     "mail" text,
-    "password_hash" text NOT NULL, -- Renamed for clarity, implies hashed password
-    "notes" text,
-    "attachment" bytea -- Keeping bytea as requested
+    "password_hash" text NOT NULL, --  for clarity, implies hashed password
+    "notes" text, -- 
+    "attachment" bytea, -- Keeping bytea as requested
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "reference"."status" (
     "status_id" text PRIMARY KEY, -- to fill manually
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "reference"."room" (
     "room_id" text PRIMARY KEY, -- to fill manually
     "etage" text,
     "address" text,
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "reference"."vessel" (
     "vessel_id" text PRIMARY KEY, -- to fill manually
     "vessel_name" text,
     "belong_to" text,
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "reference"."region" (
@@ -141,8 +145,9 @@ CREATE TABLE IF NOT EXISTS "reference"."region" (
     "region_abrv" text UNIQUE NOT NULL,
     "country" text,
     "category" text,
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "reference"."ecosystem" (
@@ -150,27 +155,31 @@ CREATE TABLE IF NOT EXISTS "reference"."ecosystem" (
     "ecosystem_abrv" text UNIQUE NOT NULL,
     "country" text,
     "category" text,
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "reference"."category" (
-    "category_id" text PRIMARY KEY, -- Renamed from category for consistency
-    "notes" text,
-    "attachment" bytea
+    "category_id" text PRIMARY KEY, --  from category for consistency
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "reference"."samples_type" (
-    "sample_type_id" text PRIMARY KEY, -- Renamed from sample_type for consistency
+    "sample_type_id" text PRIMARY KEY, --  from sample_type for consistency
     "sample_type_abrv" text UNIQUE NOT NULL,
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "reference"."gene" (
     "gene_id" text PRIMARY KEY, -- to fill manually
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "reference"."taxon" (
@@ -179,8 +188,9 @@ CREATE TABLE IF NOT EXISTS "reference"."taxon" (
     "de_name" text,
     "en_name" text,
     "rank" text,
-    "notes" text,
+    "notes" text, -- 
     "attachment" bytea,
+    "attachment_link" text, 
     "path" ltree -- For hierarchical queries with ltree
 );
 
@@ -188,10 +198,11 @@ CREATE TABLE IF NOT EXISTS "reference"."species" (
     "species_id" text PRIMARY KEY REFERENCES "reference"."taxon"("taxon_id"), -- FK to taxon_id
     "de_name" text,
     "en_name" text,
-    "max_length_mm" numeric, -- Renamed
-    "max_age_years" numeric, -- Renamed
-    "notes" text,
-    "attachment" bytea
+    "max_length_mm" numeric, -- 
+    "max_age_years" numeric, -- 
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 -- New table for centralized units
@@ -207,29 +218,48 @@ CREATE TABLE IF NOT EXISTS "reference"."units" (
 -- 5. Lims Schema Tables
 -- ======================================================================
 
+
+-- New table for external contacts (non-staff personnel)
+CREATE TABLE IF NOT EXISTS "lims"."external_contacts" (
+    "contact_id" text PRIMARY KEY, -- Manual text ID (e.g., 'Captain_John_Doe')
+    "full_name" text NOT NULL,
+    "organization" text,
+    "telephone" text,
+    "mail" text,
+    "address" text,
+    "password_hash" text, --
+    "notes" text,
+    "attachment" bytea,
+    "attachment_link" text
+);
+
+
 CREATE TABLE IF NOT EXISTS "lims"."customers" (
-    "customer_id" text PRIMARY KEY, -- automatically K000000
+    "customer_id" serial PRIMARY KEY, -- automatically serial number 0,1,2,3,...
     "customer_name" text NOT NULL,
     "customer_abrv" text UNIQUE NOT NULL,
     "address" text NOT NULL,
     "mail" text NOT NULL,
     "phone" text NOT NULL,
-    "notes" text,
-    "attachment" bytea
+    "password_hash" text, --
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lims"."projects" (
     "project_id" text PRIMARY KEY, -- to fill manually
     "title" text,
     "status_id" text REFERENCES "reference"."status"("status_id"),
-    "pi_person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed
+    "pi_person_id" text REFERENCES "reference"."personal"("person_id"), -- 
     "funder" text,
     "customer_id" text REFERENCES "lims"."customers"("customer_id"),
     "start_date" date,
     "end_date" date,
     "report_date" date,
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lims"."project_persons" (
@@ -237,8 +267,9 @@ CREATE TABLE IF NOT EXISTS "lims"."project_persons" (
     "person_id" text REFERENCES "reference"."personal"("person_id") ON DELETE CASCADE,
     "role" text,
     PRIMARY KEY ("project_id", "person_id"),
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lims"."cruises" (
@@ -248,20 +279,22 @@ CREATE TABLE IF NOT EXISTS "lims"."cruises" (
     "status_id" text REFERENCES "reference"."status"("status_id") DEFAULT 'Received' NOT NULL,
     "region_id" text REFERENCES "reference"."region"("region_id"),
     "ecosystem_id" text REFERENCES "reference"."ecosystem"("ecosystem_id"),
-    "capitaine_name" text NOT NULL,
-    "chief_scientist_person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed, added FK
+    "capitaine_contact_id" text REFERENCES "reference"."external_contacts"("contact_id"), -- 
+    "chief_scientist_person_id" text REFERENCES "reference"."personal"("person_id"), -- 
     "start_date" date,
     "end_date" date,
-    "together_with" text,
-    "notes" text,
-    "attachment" bytea
+    "together_with_contact_id" text REFERENCES "reference"."external_contacts"("contact_id"), -- 
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lims"."workflows" (
     "workflow_id" text PRIMARY KEY, -- to fill manually
     "workflow_name" text,
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lims"."permits" (
@@ -271,33 +304,36 @@ CREATE TABLE IF NOT EXISTS "lims"."permits" (
     "valid_from" date,
     "valid_to" date,
     "reference" text,
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lims"."primers" (
     "primer_id" text PRIMARY KEY, -- to fill manually
-    "target_gene_id" text REFERENCES "reference"."gene"("gene_id"), -- Renamed, added FK
+    "target_gene_id" text REFERENCES "reference"."gene"("gene_id"), -- 
     "primer_sequence_fwd" text,
     "primer_sequence_rev" text,
     "probe" text,
     "reference" text,
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lims"."sop" (
     "sop_id" text PRIMARY KEY, -- automatically SopId_Origin_vversionnumber
     "title" text,
-    "sop_id_origin" text NOT NULL, -- Renamed
+    "sop_id_origin" text NOT NULL, -- 
     "version" text NOT NULL,
-    "author_person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed, added FK
-    "reviewer1_person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed, added FK
-    "reviewer2_person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed, added FK
+    "author_person_id" text REFERENCES "reference"."personal"("person_id"), -- 
+    "reviewer1_person_id" text REFERENCES "reference"."personal"("person_id"), -- 
+    "reviewer2_person_id" text REFERENCES "reference"."personal"("person_id"), -- 
     "date_realise" date,
     "sop_protocol" text,
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lims"."workflow_steps" (
@@ -308,74 +344,111 @@ CREATE TABLE IF NOT EXISTS "lims"."workflow_steps" (
     "sop_id" text REFERENCES "lims"."sop"("sop_id"),
     "workflow_status_id" text REFERENCES "reference"."status"("status_id") DEFAULT 'Received' NOT NULL,
     "target_table_name" text, -- Re-added for UI dynamic mapping
-    "notes" text,
+    "notes" text, -- 
     "attachment" bytea,
+    "attachment_link" text, 
     UNIQUE ("workflow_id", "step_number")
 );
 
 CREATE TABLE IF NOT EXISTS "lims"."equipment" (
     "equipment_id" text PRIMARY KEY, -- to fill manually
-    "equipment_name" text, -- Renamed
+    "equipment_name" text, -- 
     "room_id" text REFERENCES "reference"."room"("room_id"),
     "lot" text,
     "mobility" text,
-    "date_maintenance" date, -- Renamed
-    "notes" text,
-    "attachment" bytea
+    "date_maintenance" date, -- 
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 -- New table for suppliers
 CREATE TABLE IF NOT EXISTS "lims"."suppliers" (
-    "supplier_id" text PRIMARY KEY,
+    "supplier_id" text PRIMARY KEY, -- manually
     "supplier_name" text NOT NULL,
     "address" text,
     "contact_person" text,
     "phone" text,
     "mail" text,
     "notes" text,
-    "attachment" bytea
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 -- New table for inventory items
 CREATE TABLE IF NOT EXISTS "lims"."inventory_items" (
-    "item_id" text PRIMARY KEY,
+    "item_id" text PRIMARY KEY, -- manually
     "item_name" text NOT NULL,
     "category_id" text REFERENCES "reference"."category"("category_id"),
-    "notes" text,
+    "notes" text, -- 
     "unit_id" text REFERENCES "reference"."units"("unit_id"), -- Link to units
-    "attachment" bytea
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lims"."orders" (
-    "fi_order_nr" text PRIMARY KEY, -- Renamed
-    "item_id" text REFERENCES "lims"."inventory_items"("item_id"), -- Changed to FK
-    "category_id" text REFERENCES "reference"."category"("category_id"), -- Renamed
-    "order_date" date, -- Renamed
+    "fi_order_nr" text PRIMARY KEY, -- 
+    "item_id" text REFERENCES "lims"."inventory_items"("item_id"), -- 
+    "category_id" text REFERENCES "reference"."category"("category_id"), -- 
+    "order_date" date, -- 
     "price" numeric,
-    "quantity" numeric, -- Changed to numeric, assuming quantity_unit_id will be added to orders if needed
+    "quantity" numeric, -- 
     "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "supplier_id" text REFERENCES "lims"."suppliers"("supplier_id"), -- Changed to FK
+    "supplier_id" text REFERENCES "lims"."suppliers"("supplier_id"), -- 
     "status_id" text REFERENCES "reference"."status"("status_id"),
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lims"."reagents" (
-    "reagent_id" text PRIMARY KEY, -- Renamed
-    "reagent_complete_name" text NOT NULL, -- Renamed
-    "category_id" text REFERENCES "reference"."category"("category_id"), -- Renamed
+    "reagent_id" text PRIMARY KEY, -- 
+    "reagent_complete_name" text NOT NULL, -- 
+    "category_id" text REFERENCES "reference"."category"("category_id"), -- 
     "lot" text,
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
     "storage_position" numeric,
     "status_id" text REFERENCES "reference"."status"("status_id"),
-    "reception_date" date, -- Renamed
+    "reception_date" date, -- 
     "expire_date" date,
-    "order_id" text REFERENCES "lims"."orders"("fi_order_nr"), -- Renamed
+    "order_id" text REFERENCES "lims"."orders"("fi_order_nr"), -- 
     "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "quantity_available" numeric, -- Added for inventory tracking
-    "quantity_unit_id" text REFERENCES "reference"."units"("unit_id"), -- Added for inventory tracking
+    "quantity_available" numeric, -- 
+    "quantity_unit_id" text REFERENCES "reference"."units"("unit_id"), -- 
     "attachment" bytea,
-    "notes" text
+    "attachment_link" text, 
+    "notes" text -- 
+);
+
+
+
+--  table for publications
+
+CREATE TABLE IF NOT EXISTS "lims"."publications_type" (
+    "publication_type_id" text PRIMARY KEY, 
+    "notes" text , 
+    "attachment" bytea,
+    "attachment_link" text, 
+);
+
+
+CREATE TABLE IF NOT EXISTS "lims"."publications" (
+    "publication_id" text PRIMARY KEY, -- PublicationType_YY_0000
+    "publication_type_id" text REFERENCES "reference"."publication_type"("publication_type_id"), 
+    "project_id" text REFERENCES "lims"."projects"("project_id"),
+    "title" text NOT NULL,
+    "journal" text,
+    "volume" text,
+    "issue" text,
+    "pages" text,
+    "doi" text UNIQUE,
+    "date_publication" date,
+    "date_submission" date,
+    "first_author_person_id" text REFERENCES "reference"."personal"("person_id"),
+    "corresponding_author_person_id" text REFERENCES "reference"."personal"("person_id"),
+    "notes" text,
+    "attachment" bytea,
+    "attachment_link" text
 );
 
 
@@ -386,15 +459,17 @@ CREATE TABLE IF NOT EXISTS "lims"."reagents" (
 CREATE TABLE IF NOT EXISTS "lab"."storage" (
     "storage_id" text PRIMARY KEY, -- to fill manually
     "room_id" text REFERENCES "reference"."room"("room_id"),
-    "freezer" text, -- Renamed
+    "freezer" text, -- 
     "etage" text,
-    "temperature_c" numeric, -- Renamed
+    "temperature_c" numeric,
     "box" text,
-    "box_size_x" numeric, -- Renamed
-    "box_size_y" numeric, -- Renamed
+    "box_size_x" numeric, 
+    "box_size_y" numeric, 
+    "box_position_format" text, -- New: e.g., 'A1', 'H5'
     "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."experiments" (
@@ -403,33 +478,37 @@ CREATE TABLE IF NOT EXISTS "lab"."experiments" (
     "aim" text,
     "method" text,
     "sop_id" text REFERENCES "lims"."sop"("sop_id"),
-    "experiment_date" date, -- Renamed from 'date'
-    "person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed from 'person'
-    "notes" text,
-    "lab_book" text, -- Renamed
+    "experiment_date" date, 
+    "person_id" text REFERENCES "reference"."personal"("person_id"), 
+    "notes" text, -- 
+    "lab_book" text, -- 
     "status_id" text REFERENCES "reference"."status"("status_id"),
-    "attachment" bytea
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
-CREATE TABLE IF NOT EXISTS "lab"."experiments_projects" ( -- Renamed
+CREATE TABLE IF NOT EXISTS "lab"."experiments_projects" ( 
     "experiment_project_id" serial PRIMARY KEY,
     "experiment_id" text REFERENCES "lab"."experiments"("experiment_id"),
     "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "link_date" date, -- Renamed from 'date'
-    "notes" text,
-    "attachment" bytea
+    "link_date" date, -- 
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
--- Refined lab.protocol_runs table
+-- lab.protocol_runs table
 CREATE TABLE IF NOT EXISTS "lab"."protocol_runs" (
-    "protocol_run_id" text PRIMARY KEY, -- New ID format: experiment_name_P_XXX
+    "protocol_run_id" text PRIMARY KEY, -- experiment_name_P_XXX
     "experiment_id" text REFERENCES "lab"."experiments"("experiment_id"),
-    "sop_id" text REFERENCES "lims"."sop"("sop_id"), -- Optional link to an SOP
+    "sop_id" text REFERENCES "lims"."sop"("sop_id"), -- link to an SOP
+    "protocol_text" text, -- For writing step-by-step protocols (can contain HTML)
     "run_date" date NOT NULL, -- When the protocol was run
     "person_id" text REFERENCES "reference"."personal"("person_id") NOT NULL, -- Who ran it
-    "run_details" text, -- "What" happened during this run (e.g., observations, deviations)
+    "protocol_run_details" text, --  from run_details: "What" happened during this run (e.g., observations, deviations, can contain HTML)
     "notes" text,
-    "attachment" bytea
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 -- Parent table for partitioned sampling data
@@ -444,60 +523,59 @@ CREATE TABLE "lab"."sampling" (
     "customer_id" text REFERENCES "lims"."customers"("customer_id"),
     "sampling_date" date NOT NULL, -- Partition key, must be NOT NULL
     "geom" geometry(Point, 4326), -- PostGIS geometry column
-    "location_name" text, -- Renamed from 'Location'
-    "depth_m" numeric, -- Renamed
-    "start_at" time, -- Renamed from date to time for consistency with fishing_time_min
-    "end_at" time, -- Renamed from date to time
-    "temperature_atmospheric_c" numeric, -- Renamed
+    "fishing_start_geom" geometry(Point, 4326), 
+    "fishing_end_geom" geometry(Point, 4326), 
+    "depth_m" numeric, 
+    "start_at" time, --  from date to time for consistency with fishing_time_min
+    "end_at" time, --  from date to time
+    "temperature_atmospheric_c" numeric, -- 
     "weather" text,
-    "wind_speed" numeric, -- Renamed
-    "wind_unit_id" text REFERENCES "reference"."units"("unit_id"), -- Changed to FK
-    "temperature_sampling_depth_c" numeric, -- Renamed
+    "wind_speed" numeric, -- 
+    "wind_unit_id" text REFERENCES "reference"."units"("unit_id"), -- 
+    "temperature_sampling_depth_c" numeric, -- 
     "salinity" numeric,
-    "salinity_unit_id" text REFERENCES "reference"."units"("unit_id"), -- Changed to FK
+    "salinity_unit_id" text REFERENCES "reference"."units"("unit_id"), -- 
     "pressure" numeric,
-    "pressure_unit_id" text REFERENCES "reference"."units"("unit_id"), -- Changed to FK
+    "pressure_unit_id" text REFERENCES "reference"."units"("unit_id"), -- 
     "oxygen" numeric,
-    "oxygen_unit_id" text REFERENCES "reference"."units"("unit_id"), -- Changed to FK
-    "conductivity" numeric, -- Renamed
-    "conductivity_unit_id" text REFERENCES "reference"."units"("unit_id"), -- Changed to FK
-    "ph" numeric, -- Renamed
-    "nitrate_mg_l" numeric, -- Renamed
-    "phosphate_mg_l" numeric, -- Renamed
-    "turbidity_ntu" numeric, -- Renamed
-    "chlorophyll_a_ug_l" numeric, -- Renamed
-    "current_speed_m_s" numeric, -- Renamed
-    "current_direction_deg" numeric, -- Renamed
-    "tide_stage" text, -- Consider lookup table
-    "light_par_umol_m2_s" numeric, -- Renamed
-    "sea_state" text, -- Consider lookup table
-    "sample_volume_l" numeric, -- Renamed
-    "sample_type_id" text REFERENCES "reference"."samples_type"("sample_type_id"), -- Changed to FK
+    "oxygen_unit_id" text REFERENCES "reference"."units"("unit_id"), -- 
+    "conductivity" numeric, -- 
+    "conductivity_unit_id" text REFERENCES "reference"."units"("unit_id"), -- 
+    "ph" numeric, -- 
+    "nitrate_mg_l" numeric, -- 
+    "phosphate_mg_l" numeric, -- 
+    "turbidity_ntu" numeric, -- 
+    "chlorophyll_a_ug_l" numeric, -- 
+    "current_speed_m_s" numeric, -- 
+    "current_direction_deg" numeric, -- 
+    "tide_stage" text, 
+    "light_par_umol_m2_s" numeric, 
+    "sea_state" text, 
+    "sample_volume_l" numeric, 
+    "sample_type_id" text REFERENCES "reference"."samples_type"("sample_type_id"), -- 
     "preservative" text,
-    "cloud_cover_percent" numeric, -- Renamed
-    "rainfall_mm" numeric, -- Renamed
+    "cloud_cover_percent" numeric, -- 
+    "rainfall_mm" numeric, -- 
     "instrument_id" text,
     "calibration_date" date,
     "visibility_m" numeric,
     "fishing_date" date,
     "fishing_time_min" time,
-    "fishing_method" text, -- Consider lookup table
-    "gear_type" text, -- Consider lookup table
+    "fishing_method" text, 
+    "gear_type" text, 
     "soak_time" numeric,
-    "soak_time_unit_id" text REFERENCES "reference"."units"("unit_id"), -- Changed to FK
+    "soak_time_unit_id" text REFERENCES "reference"."units"("unit_id"), -- 
     "trawl_speed" numeric,
-    "trawl_speed_unit_id" text REFERENCES "reference"."units"("unit_id"), -- Changed to FK
-    "total_catch_quantity_kg" numeric, -- Renamed
-    "total_catch_quantity_fish" numeric, -- Renamed
+    "trawl_speed_unit_id" text REFERENCES "reference"."units"("unit_id"), -- 
+    "total_catch_quantity_kg" numeric, -- 
+    "total_catch_quantity_fish" numeric, -- 
     "catch_notes" text,
-    "operation_duration_min" numeric, -- Renamed
-    "fishing_start_location" numeric, -- Consider geom
-    "fishing_end_location" numeric, -- Consider geom
-    "sampler_person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed
-    "together_with" text,
-    "status_id" text REFERENCES "reference"."status"("status_id") DEFAULT 'Received' NOT NULL,
-    "notes" text,
-    "attachment" bytea
+    "operation_duration_min" numeric, -- 
+    "together_with_contact_id" text REFERENCES "reference"."external_contacts"("contact_id"), -- 
+    "status_id" text REFERENCES "reference"."status"("status_id") DEFAULT 'Planned' NOT NULL,
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 ) PARTITION BY RANGE ("sampling_date");
 
 -- Primary key for partitioned table must include the partition key
@@ -507,37 +585,39 @@ CREATE TABLE IF NOT EXISTS "lab"."fishing" (
     "fishing_id" text PRIMARY KEY, -- SamplingID_0000
     "sampling_id" text NOT NULL, -- FK to lab.sampling (parent table)
     "sampling_date" date NOT NULL, -- Partition key for lab.sampling, required for FK
-    "taxon_id" text REFERENCES "reference"."taxon"("taxon_id"), -- Renamed
+    "taxon_id" text REFERENCES "reference"."taxon"("taxon_id"), -- 
     "catch_kg" numeric,
     "catch_fish" numeric,
     "customer_id" text REFERENCES "lims"."customers"("customer_id"),
-    "notes" text,
+    "notes" text, -- 
     "attachment" bytea,
+    "attachment_link" text, 
     FOREIGN KEY ("sampling_id", "sampling_date") REFERENCES "lab"."sampling"("sampling_id", "sampling_date") ON DELETE CASCADE
 );
 
 -- Parent table for partitioned samples data
 CREATE TABLE "lab"."samples" (
     "sample_id" text NOT NULL,
-    "external_name" text, -- Renamed
-    "parent_sample_id" text REFERENCES "lab"."samples"("sample_id"), -- Renamed
+    "external_name" text, -- 
+    "parent_sample_id" text REFERENCES "lab"."samples"("sample_id"), -- 
     "sampling_id" text,
     "sampling_date" date NOT NULL, -- Partition key, must be NOT NULL, also part of FK to lab.sampling
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
-    "storage_position" numeric,
-    "sampler_person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed
-    "receiver_person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed
-    "reception_date" date, -- Renamed
+    "box_position" text, -- New: Linked to lab.storage.box_position_format
+    "sampler_person_id" text REFERENCES "reference"."personal"("person_id"), -- Moved from lab.sampling/children
+    "receiver_person_id" text REFERENCES "reference"."personal"("person_id"), -- Moved from lab.sampling/children
+    "reception_date" date, -- Moved from lab.sampling/children
     "transport" text,
-    "conservation_buffer" text, -- Renamed
-    "sample_type_id" text NOT NULL REFERENCES "reference"."samples_type"("sample_type_id"), -- Renamed, changed to FK
+    "conservation_buffer" text, -- 
+    "sample_type_id" text NOT NULL REFERENCES "reference"."samples_type"("sample_type_id"), -- , 
     "sample_status_id" text REFERENCES "reference"."status"("status_id") DEFAULT 'Received' NOT NULL,
-    "workflow_id" text REFERENCES "lims"."workflows"("workflow_id"), -- Renamed
-    "step_id" text REFERENCES "lims"."workflow_steps"("step_id"), -- Renamed
+    "workflow_id" text REFERENCES "lims"."workflows"("workflow_id"), -- 
+    "step_id" text REFERENCES "lims"."workflow_steps"("step_id"), -- 
     "project_id" text REFERENCES "lims"."projects"("project_id"),
     "customer_id" text REFERENCES "lims"."customers"("customer_id"),
-    "notes" text,
+    "notes" text, -- 
     "attachment" bytea,
+    "attachment_link" text, 
     PRIMARY KEY ("sample_id", "sampling_date"), -- Primary key for partitioned table
     FOREIGN KEY ("sampling_id", "sampling_date") REFERENCES "lab"."sampling"("sampling_id", "sampling_date")
 );
@@ -550,92 +630,89 @@ CREATE TABLE IF NOT EXISTS "lab"."storage_log" (
     "person_id" text REFERENCES "reference"."personal"("person_id"),
     "move_date" timestamptz DEFAULT CURRENT_TIMESTAMP,
     "status" text NOT NULL,
-    "storage_position" numeric,
-    "notes" text,
+    "storage_position" text, -- Changed to TEXT to match samples.box_position
+    "notes" text, -- 
     FOREIGN KEY ("sample_id", "sample_sampling_date") REFERENCES "lab"."samples"("sample_id", "sampling_date")
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."fish" (
     "sample_id" text PRIMARY KEY, -- F25WeHB0000 or F25WeHB0000f1
-    "parent_sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"), -- Renamed
+    "parent_sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"), -- 
     "experiment_id" text REFERENCES "lab"."experiments"("experiment_id"),
-    "species_id" text NOT NULL REFERENCES "reference"."species"("species_id"), -- Renamed
+    "species_id" text NOT NULL REFERENCES "reference"."species"("species_id"), -- 
     "total_length_mm" numeric,
     "fork_length_mm" numeric,
     "standard_length_mm" numeric,
     "weight_g" numeric,
     "sex" text,
-    "maturity_stage" text, -- Renamed
-    "stomach_contents" text, -- Renamed
-    "disease_info" text, -- Renamed
-    "tag_id" text, -- Renamed
+    "maturity_stage" text, -- 
+    "stomach_contents" text, -- 
+    "disease_info" text, -- 
+    "tag_id" text, -- 
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
-    "storage_position" numeric,
-    "sampler_person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed
-    "receiver_person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed
-    "sampling_date" date,
-    "reception_date" date,
+    "box_position" text, -- Changed to TEXT
     "project_id" text REFERENCES "lims"."projects"("project_id"),
     "customer_id" text REFERENCES "lims"."customers"("customer_id"),
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 -- Only CHECK constraint retained
 ALTER TABLE "lab"."fish" ADD CONSTRAINT chk_fish_sex_enum CHECK ("sex" IN ('Male', 'Female', 'Undetermined', NULL));
 
 CREATE TABLE IF NOT EXISTS "lab"."tissue" (
     "sample_id" text PRIMARY KEY, -- T25WeHB0000 or F25WeHB0000t1
-    "parent_sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"), -- Renamed
+    "parent_sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"), -- 
     "experiment_id" text REFERENCES "lab"."experiments"("experiment_id"),
-    "weight_mg" numeric, -- Renamed
+    "weight_mg" numeric, -- 
     "tissue_type" text, -- Consider lookup table
     "preservation_method" text, -- Consider lookup table
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
-    "storage_position" numeric,
-    "sampler_person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed
-    "sampling_date" date,
+    "box_position" text, -- Changed to TEXT
     "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."otoliths" (
-    "sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"),
-    "reader_person_id" text NOT NULL REFERENCES "reference"."personal"("person_id"), -- Renamed
+    "otolith_id" text PRIMARY KEY, -- New PK: ParentID_o#
+    "sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"), -- Parent sample ID
+    "reader_person_id" text NOT NULL REFERENCES "reference"."personal"("person_id"), -- 
     "side" text NOT NULL,
-    "age_reading_years" numeric, -- Renamed
+    "age_reading_years" numeric, -- 
     "confidence" numeric,
     "reading_date" date,
     "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "notes" text,
+    "notes" text, -- 
     "attachment" bytea,
-    PRIMARY KEY ("sample_id", "reader_person_id", "side")
+    "attachment_link" text, 
+    UNIQUE ("sample_id", "reader_person_id", "side") -- Ensure unique reading per sample/reader/side
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."dna" (
     "sample_id" text PRIMARY KEY, -- D25WeHB0000 or F25WeHB0000d1
-    "parent_sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"), -- Renamed
+    "parent_sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"), -- 
     "experiment_id" text REFERENCES "lab"."experiments"("experiment_id"),
-    "volume_ul" numeric, -- Renamed
-    "concentration_ng_ul" numeric, -- Renamed
-    "a260_280" numeric, -- Renamed
-    "a260_230" numeric, -- Renamed
-    "extraction_method" text, -- Renamed
+    "volume_ul" numeric, -- 
+    "concentration_ng_ul" numeric, -- 
+    "a260_280" numeric, -- 
+    "a260_230" numeric, -- 
+    "extraction_method" text, -- 
     "preservation_method" text, -- Consider lookup table
     "extraction_date" date,
     "extraction_number" integer,
-    "sampler_person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed
-    "sampling_date" date,
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
-    "storage_position" numeric,
+    "box_position" text, -- Changed to TEXT
     "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."rna" (
     "sample_id" text PRIMARY KEY, -- R25WeHB0000 or F25WeHB0000r1
-    "parent_sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"), -- Renamed
+    "parent_sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"), -- 
     "experiment_id" text REFERENCES "lab"."experiments"("experiment_id"),
     "volume_ul" numeric,
     "concentration_ng_ul" numeric,
@@ -645,61 +722,54 @@ CREATE TABLE IF NOT EXISTS "lab"."rna" (
     "preservation_method" text,
     "extraction_date" date,
     "extraction_number" integer,
-    "sampler_person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed
-    "sampling_date" date,
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
-    "storage_position" numeric,
+    "box_position" text, -- Changed to TEXT
     "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."sediments" (
     "sample_id" text PRIMARY KEY, -- S25WeHB0000 or F25WeHB0000s1
-    "parent_sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"), -- Renamed
+    "parent_sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"), -- 
     "experiment_id" text REFERENCES "lab"."experiments"("experiment_id"),
     "project_id" text REFERENCES "lims"."projects"("project_id"),
     "volume" numeric,
-    "volume_unit_id" text REFERENCES "reference"."units"("unit_id"), -- Changed to FK
-    "depth_m" numeric, -- Renamed
-    "sampling_method" text, -- Renamed, consider lookup table
+    "volume_unit_id" text REFERENCES "reference"."units"("unit_id"), -- 
+    "depth_m" numeric, -- 
+    "sampling_method" text, -- , consider lookup table
     "conservation_buffer" text,
-    "sampler_person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed
-    "receiver_person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed
-    "sampling_date" date,
-    "reception_date" date,
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
-    "storage_position" numeric,
-    "external_name" text, -- Renamed
-    "notes" text,
-    "attachment" bytea
+    "box_position" text, -- Changed to TEXT
+    "external_name" text, -- 
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."water" (
     "sample_id" text PRIMARY KEY, -- W25WeHB0000 or F25WeHB0000w1
-    "parent_sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"), -- Renamed
+    "parent_sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"), -- 
     "experiment_id" text REFERENCES "lab"."experiments"("experiment_id"),
-    "volume_l" numeric, -- Renamed
+    "volume_l" numeric, -- 
     "filter" text,
-    "filter_pore_size_um" numeric, -- Renamed, added unit
-    "depth_m" numeric, -- Renamed
+    "filter_pore_size_um" numeric, -- , added unit
+    "depth_m" numeric, -- 
     "sampling_method" text, -- Consider lookup table
     "conservation_buffer" text,
-    "sampler_person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed
-    "receiver_person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed
-    "sampling_date" date,
-    "reception_date" date,
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
-    "storage_position" numeric,
-    "notes" text,
+    "box_position" text, -- Changed to TEXT
+    "notes" text, -- 
     "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "attachment" bytea
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
-CREATE TABLE IF NOT EXISTS "lab"."experiments_samples" ( -- Renamed
+CREATE TABLE IF NOT EXISTS "lab"."experiments_samples" ( -- 
     "experiment_id" text NOT NULL REFERENCES "lab"."experiments"("experiment_id"),
     "sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"),
-    "notes" text,
+    "notes" text, -- 
     PRIMARY KEY ("experiment_id", "sample_id")
 );
 
@@ -711,206 +781,221 @@ CREATE TABLE IF NOT EXISTS "lab"."dissections" (
     "stomach_contents_jsonb" jsonb,
     "gonad_weight_g" numeric,
     "liver_weight_g" numeric,
-    "notes" text,
+    "notes" text, -- 
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    "attachment" bytea,
+    "attachment_link" text, 
     CONSTRAINT "dissection_unique" UNIQUE ("sample_id", "person_id", "dissection_date")
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."extraction" (
     "extraction_id" text PRIMARY KEY, -- ExtractionYY00000
     "experiment_id" text REFERENCES "lab"."experiments"("experiment_id"),
-    "sample_id" text REFERENCES "lab"."samples"("sample_id"),
-    "parent_sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"), -- Renamed
-    "sample_type_id" text NOT NULL REFERENCES "reference"."samples_type"("sample_type_id"), -- Renamed, changed to FK
-    "extraction_date" date, -- Renamed from 'date'
-    "person_id" text NOT NULL REFERENCES "reference"."personal"("person_id"), -- Renamed from 'person'
+    "sample_id" text REFERENCES "lab"."samples"("sample_id"), -- Input sample
+    "parent_sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"), -- 
+    "sample_type_id" text NOT NULL REFERENCES "reference"."samples_type"("sample_type_id"), -- , 
+    "extracted_dna_sample_id" text REFERENCES "lab"."dna"("sample_id"), -- New: Output DNA sample
+    "extracted_rna_sample_id" text REFERENCES "lab"."rna"("sample_id"), -- New: Output RNA sample
+    "extraction_date" date, -- 
+    "person_id" text NOT NULL REFERENCES "reference"."personal"("person_id"), --  from 'person'
     "kit" text,
-    "elution_volume_ul" numeric, -- Renamed
-    "yield_qubit_ng_ul" numeric, -- Renamed
-    "yield_nanodrop_ng_ul" numeric, -- Renamed
-    "a260_280" numeric, -- Renamed
-    "a260_230" numeric, -- Renamed
-    "extraction_blank_id" text, -- Renamed
-    "notes" text,
+    "elution_volume_ul" numeric, -- 
+    "yield_qubit_ng_ul" numeric, -- 
+    "yield_nanodrop_ng_ul" numeric, -- 
+    "a260_280" numeric, -- 
+    "a260_230" numeric, -- 
+    "extraction_blank_id" text, --  (this would be a sample_id of type 'Blank')
+    "notes" text, -- 
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
-    "storage_position" numeric,
+    "box_position" text, -- Changed to TEXT
     "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "attachment" bytea
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."nanodrop" (
-    "nanodrop_id" text PRIMARY KEY, -- Renamed from 'nr'
+    "nanodrop_id" text PRIMARY KEY, --  from 'nr'
     "experiment_id" text REFERENCES "lab"."experiments"("experiment_id"),
     "sample_id" text REFERENCES "lab"."samples"("sample_id"),
-    "nanodrop_concentration" numeric, -- Renamed from "Nanodrop_Concentration ng/uL"
+    "nanodrop_concentration" numeric, --  from "Nanodrop_Concentration ng/uL"
     "concentration_unit_id" text REFERENCES "reference"."units"("unit_id"), -- New FK for unit
     "a260" numeric,
     "a260_280" numeric,
     "a260_280_note" text,
     "a260_230" numeric,
     "a260_230_note" text,
-    "measurement_date" date, -- Renamed from 'date'
+    "measurement_date" date, -- 
     "elution_volume_ul" numeric,
-    "person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed from 'person'
-    "notes" text,
+    "person_id" text REFERENCES "reference"."personal"("person_id"), --  from 'person'
+    "notes" text, -- 
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "attachment" bytea,
+    "attachment_link" text, 
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
-    "storage_position" numeric,
+    "box_position" text, -- Changed to TEXT
     "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "result_date" timestamptz, -- Renamed
-    "nanodrop_total_dna_ug" numeric GENERATED ALWAYS AS (("elution_volume_ul" * "nanodrop_concentration") / 1000) STORED -- Renamed
+    "result_date" timestamptz, -- 
+    "nanodrop_total_dna_ug" numeric GENERATED ALWAYS AS (("elution_volume_ul" * "nanodrop_concentration") / 1000) STORED -- 
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."qubit" (
-    "qubit_id" text PRIMARY KEY, -- Renamed from 'nr'
+    "qubit_id" text PRIMARY KEY, --  from 'nr'
     "sample_id" text REFERENCES "lab"."samples"("sample_id"),
     "experiment_id" text REFERENCES "lab"."experiments"("experiment_id"),
     "run_id" text,
     "assay_kit" text,
-    "measurement_date" date, -- Renamed from 'date'
+    "measurement_date" date, -- 
     "qubit_tube_conc" numeric,
-    "tube_unit_id" text REFERENCES "reference"."units"("unit_id"), -- Changed to FK
+    "tube_unit_id" text REFERENCES "reference"."units"("unit_id"), -- 
     "qubit_original_sample_conc" numeric,
     "original_sample_unit_id" text REFERENCES "reference"."units"("unit_id"), -- New FK for unit
     "sample_volume_ul" numeric,
     "elution_volume_ul" numeric,
-    "person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed from 'person'
-    "notes" text,
+    "person_id" text REFERENCES "reference"."personal"("person_id"), --  from 'person'
+    "notes" text, -- 
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
-    "storage_position" numeric,
+    "box_position" text, -- Changed to TEXT
     "project_id" text REFERENCES "lims"."projects"("project_id"),
     "attachment" bytea,
-    "qubit_total_dna_ug" numeric GENERATED ALWAYS AS (("elution_volume_ul" * "qubit_original_sample_conc") / 1000) STORED -- Renamed
+    "attachment_link" text, 
+    "qubit_total_dna_ug" numeric GENERATED ALWAYS AS (("elution_volume_ul" * "qubit_original_sample_conc") / 1000) STORED -- 
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."tapestation" (
-    "tapestation_id" text PRIMARY KEY, -- Renamed from 'nr'
+    "tapestation_id" text PRIMARY KEY, --  from 'nr'
     "experiment_id" text REFERENCES "lab"."experiments"("experiment_id"),
     "position" text,
-    "measurement_date" date, -- Renamed from 'date'
+    "measurement_date" date, -- 
     "kit" text,
-    "person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed from 'person'
-    "notes" text,
+    "person_id" text REFERENCES "reference"."personal"("person_id"), --  from 'person'
+    "notes" text, -- 
     "sample_id" text REFERENCES "lab"."samples"("sample_id"),
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
-    "storage_position" numeric,
+    "box_position" text, -- Changed to TEXT
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "attachment" bytea
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."pcr" (
-    "pcr_id" text PRIMARY KEY, -- Renamed from 'nr'
+    "pcr_id" text PRIMARY KEY, --  from 'nr'
     "experiment_id" text REFERENCES "lab"."experiments"("experiment_id"),
     "sample_id" text REFERENCES "lab"."samples"("sample_id"),
     "position" text,
-    "primer_id" text REFERENCES "lims"."primers"("primer_id"), -- Renamed
-    "pcr_blank_id" text, -- Renamed
-    "pcr_date" date, -- Renamed from 'date'
-    "person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed from 'person'
+    "primer_id" text REFERENCES "lims"."primers"("primer_id"), -- 
+    "pcr_blank_id" text, -- 
+    "pcr_date" date, -- 
+    "person_id" text REFERENCES "reference"."personal"("person_id"), --  from 'person'
     "kit" text,
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
-    "storage_position" numeric,
+    "box_position" text, -- Changed to TEXT
     "status_id" text REFERENCES "reference"."status"("status_id"),
-    "notes" text,
+    "notes" text, -- 
     "project_id" text REFERENCES "lims"."projects"("project_id"),
     "attachment" bytea,
-    "volume_reaction_ul" numeric -- Renamed, added unit
+    "attachment_link" text, 
+    "volume_reaction_ul" numeric -- , added unit
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."gelelectrophoresis" (
-    "gelelectrophoresis_id" text PRIMARY KEY, -- Renamed from 'nr'
+    "gelelectrophoresis_id" text PRIMARY KEY, --  from 'nr'
     "experiment_id" text REFERENCES "lab"."experiments"("experiment_id"),
     "sample_id" text REFERENCES "lab"."samples"("sample_id"),
     "position" text,
     "ladder" text,
     "voltage" numeric,
-    "band_size_bp" integer, -- Renamed
+    "band_size_bp" integer, -- 
     "gel_type" text, -- Consider lookup table
-    "run_time_minutes" numeric, -- Renamed
-    "run_date" date, -- Renamed from 'date'
-    "person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed from 'person'
+    "run_time_minutes" numeric, -- 
+    "run_date" date, -- 
+    "person_id" text REFERENCES "reference"."personal"("person_id"), --  from 'person'
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
-    "storage_position" numeric,
+    "box_position" text, -- Changed to TEXT
     "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."qpcr" (
-    "qpcr_id" text PRIMARY KEY, -- Renamed from 'nr'
+    "qpcr_id" text PRIMARY KEY, --  from 'nr'
     "experiment_id" text REFERENCES "lab"."experiments"("experiment_id"),
     "sample_id" text REFERENCES "lab"."samples"("sample_id"),
     "position" text,
-    "qpcr_date" date, -- Renamed from 'date'
-    "person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed from 'person'
-    "primer_id" text REFERENCES "lims"."primers"("primer_id"), -- Renamed
-    "ct_value" numeric, -- Renamed
-    "inhibitor_test_result" text, -- Renamed
-    "pcr_blank_id" text, -- Renamed
+    "qpcr_date" date, -- 
+    "person_id" text REFERENCES "reference"."personal"("person_id"), --  from 'person'
+    "primer_id" text REFERENCES "lims"."primers"("primer_id"), -- 
+    "ct_value" numeric, -- 
+    "inhibitor_test_result" text, -- 
+    "pcr_blank_id" text, -- 
     "kit" text,
-    "volume_ul" numeric, -- Renamed, added unit
+    "volume_ul" numeric, -- , added unit
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
-    "storage_position" numeric,
+    "box_position" text, -- Changed to TEXT
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "attachment" bytea
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."library" (
-    "library_id" text PRIMARY KEY, -- Renamed from 'Lib_id'
+    "library_id" text PRIMARY KEY, --  from 'Lib_id'
     "experiment_id" text REFERENCES "lab"."experiments"("experiment_id"),
     "sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"),
-    "library_name" text, -- Renamed from 'Library'
-    "prep_date" date, -- Renamed from 'date'
-    "person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed from 'person'
-    "library_prep_kit" text, -- Renamed
-    "index_sequence" text, -- Renamed
-    "read_length_bp" integer, -- Renamed, added unit
+    "library_name" text, --  from 'Library'
+    "prep_date" date, -- 
+    "person_id" text REFERENCES "reference"."personal"("person_id"), --  from 'person'
+    "library_prep_kit" text, -- 
+    "index_sequence" text, -- 
+    "read_length_bp" integer, -- , added unit
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
-    "storage_position" numeric,
+    "box_position" text, -- Changed to TEXT
     "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."sequencing" (
-    "sequencing_id" text PRIMARY KEY, -- Renamed from 'Seq_id'
+    "sequencing_id" text PRIMARY KEY, --  from 'Seq_id'
     "experiment_id" text REFERENCES "lab"."experiments"("experiment_id"),
-    "library_id" text REFERENCES "lab"."library"("library_id"), -- Renamed
+    "library_id" text REFERENCES "lab"."library"("library_id"), -- 
     "sample_id" text NOT NULL REFERENCES "lab"."samples"("sample_id"),
-    "sequencing_date" date, -- Renamed from 'date'
-    "person_id" text REFERENCES "reference"."personal"("person_id"), -- Renamed from 'person'
+    "sequencing_date" date, -- 
+    "person_id" text REFERENCES "reference"."personal"("person_id"), --  from 'person'
     "sequencer" text,
-    "flow_cell_id" text, -- Renamed
-    "library_prep_kit" text, -- Renamed
-    "index_sequence" text, -- Renamed
-    "read_length_bp" integer, -- Renamed, added unit
-    "total_reads" bigint, -- Renamed
-    "raw_data_path" text, -- Renamed
-    "genbank_accession_number" text, -- Renamed
+    "flow_cell_id" text, -- 
+    "library_prep_kit" text, -- 
+    "index_sequence" text, -- 
+    "read_length_bp" integer, -- , added unit
+    "total_reads" bigint, -- 
+    "raw_data_path" text, -- 
+    "genbank_accession_number" text, -- 
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
-    "storage_position" numeric,
+    "box_position" text, -- Changed to TEXT
     "project_id" text REFERENCES "lims"."projects"("project_id"),
     "attachment" bytea,
-    "notes" text
+    "attachment_link" text, 
+    "notes" text -- 
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."datasets" (
     "dataset_id" text PRIMARY KEY, -- ZYY00000
-    "source_type" text, -- Renamed from 'source' for clarity
+    "source_type" text, --  from 'source' for clarity
     "ecosystem_id" text REFERENCES "reference"."ecosystem"("ecosystem_id"),
     "region_id" text REFERENCES "reference"."region"("region_id"),
     "customer_id" text REFERENCES "lims"."customers"("customer_id"),
-    "stored_location_id" text REFERENCES "lab"."storage"("storage_id"), -- Renamed
+    "stored_location_id" text REFERENCES "lab"."storage"("storage_id"), -- 
     "reception_date" date,
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text, 
+    "storage_path" text -- New: for dataset specific storage path
 );
 
 -- ======================================================================
@@ -923,32 +1008,36 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."reference_databases" (
     "db_id" text PRIMARY KEY,
     "db_name" text NOT NULL,
     "db_version" text,
-    "notes" text,
+    "notes" text, -- 
     "url" text,
-    "last_updated_date" date
+    "last_updated_date" date,
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "bioinformatics"."analysis_pipelines" (
     "pipeline_id" text PRIMARY KEY, -- YY000000
-    "pipeline_name" text NOT NULL, -- Renamed from 'name'
+    "pipeline_name" text NOT NULL, --  from 'name'
     "version" text NOT NULL,
     "repository_link" text,
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "bioinformatics"."analysis_runs" (
     "run_id" text PRIMARY KEY, -- YY000000
     "pipeline_id" text NOT NULL REFERENCES "bioinformatics"."analysis_pipelines"("pipeline_id"),
-    "sequencing_id" text NOT NULL REFERENCES "lab"."sequencing"("sequencing_id"), -- Renamed from sequencing_run_id
+    "sequencing_id" text NOT NULL REFERENCES "lab"."sequencing"("sequencing_id"), --  from sequencing_run_id
     "person_id" text NOT NULL REFERENCES "reference"."personal"("person_id"),
-    "run_date" timestamptz DEFAULT CURRENT_TIMESTAMP, -- Renamed from 'run_date' (date) to timestamptz
+    "run_date" timestamptz DEFAULT CURRENT_TIMESTAMP, --  from 'run_date' (date) to timestamptz
     "parameters_jsonb" jsonb,
     "reference_db_id" text REFERENCES "bioinformatics"."reference_databases"("db_id"), -- New FK
     "clustering_threshold" numeric, -- Moved from lab.bioinformatics
     "final_output_path" text, -- Moved from lab.bioinformatics
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 CREATE TABLE IF NOT EXISTS "bioinformatics"."edna_assignments" (
@@ -958,8 +1047,9 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."edna_assignments" (
     "taxon_id" text NOT NULL REFERENCES "reference"."taxon"("taxon_id"),
     "read_count" integer,
     "confidence" numeric,
-    "notes" text,
-    "attachment" bytea
+    "notes" text, -- 
+    "attachment" bytea,
+    "attachment_link" text 
 );
 
 -- ======================================================================
@@ -967,6 +1057,7 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."edna_assignments" (
 -- ======================================================================
 
 CREATE SEQUENCE IF NOT EXISTS "lims"."customer_id_seq" START 1;
+CREATE SEQUENCE IF NOT EXISTS "lims"."publication_serial_seq" START 1; -- New sequence for publications
 CREATE SEQUENCE IF NOT EXISTS "lab"."fishing_serial_seq" START 1;
 CREATE SEQUENCE IF NOT EXISTS "lab"."fish_child_serial_seq" START 1;
 CREATE SEQUENCE IF NOT EXISTS "lab"."tissue_child_serial_seq" START 1;
@@ -974,6 +1065,7 @@ CREATE SEQUENCE IF NOT EXISTS "lab"."dna_child_serial_seq" START 1;
 CREATE SEQUENCE IF NOT EXISTS "lab"."rna_child_serial_seq" START 1;
 CREATE SEQUENCE IF NOT EXISTS "lab"."sediments_child_serial_seq" START 1;
 CREATE SEQUENCE IF NOT EXISTS "lab"."water_child_serial_seq" START 1;
+CREATE SEQUENCE IF NOT EXISTS "lab"."otolith_serial_seq" START 1; -- New sequence for otoliths
 CREATE SEQUENCE IF NOT EXISTS "lab"."dissection_serial_seq" START 1;
 CREATE SEQUENCE IF NOT EXISTS "lab"."extraction_serial_seq" START 1;
 CREATE SEQUENCE IF NOT EXISTS "lab"."nanodrop_serial_seq" START 1;
@@ -1031,6 +1123,40 @@ CREATE OR REPLACE FUNCTION "lims".generate_customer_id()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.customer_id := 'K' || LPAD(NEXTVAL('"lims"."customer_id_seq"')::TEXT, 6, '0');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to generate publication_id
+CREATE OR REPLACE FUNCTION "lims".generate_publication_id()
+RETURNS TRIGGER AS $$
+DECLARE
+    pub_type_abrv text;
+    pub_year text;
+    next_serial integer;
+    id_prefix text;
+BEGIN
+    pub_year := TO_CHAR(COALESCE(NEW.date_publication, CURRENT_DATE), 'YY');
+    SELECT sample_type_abrv INTO pub_type_abrv FROM "reference"."samples_type" WHERE sample_type_id = NEW.publication_type_id;
+    
+    IF pub_type_abrv IS NULL THEN
+        RAISE EXCEPTION 'Cannot generate publication_id: publication_type_id "%" not found in "reference"."samples_type".', NEW.publication_type_id;
+    END IF;
+
+    id_prefix := pub_type_abrv || pub_year;
+
+    SELECT MAX(SUBSTRING("publication_id" FROM LENGTH(id_prefix) + 1)::INTEGER)
+    INTO next_serial
+    FROM "lims"."publications"
+    WHERE "publication_id" ILIKE id_prefix || '%';
+
+    IF next_serial IS NULL THEN
+        next_serial := 1;
+    ELSE
+        next_serial := next_serial + 1;
+    END IF;
+
+    NEW.publication_id := id_prefix || LPAD(next_serial::TEXT, 4, '0');
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -1414,6 +1540,38 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Function to generate otolith_id
+CREATE OR REPLACE FUNCTION "lab".generate_otolith_id()
+RETURNS TRIGGER AS $$
+DECLARE
+    parent_sample_id_exists text;
+    otolith_abrv text := 'o'; -- Standard abbreviation for otolith
+    next_serial integer;
+    id_prefix text;
+BEGIN
+    SELECT sample_id INTO parent_sample_id_exists FROM "lab"."samples" WHERE sample_id = NEW.sample_id; -- sample_id is parent here
+    IF parent_sample_id_exists IS NULL THEN
+        RAISE EXCEPTION 'Sample_id % does not exist in "lab"."samples" table.', NEW.sample_id;
+    END IF;
+
+    id_prefix := NEW.sample_id || LOWER(otolith_abrv);
+
+    SELECT MAX(SUBSTRING("otolith_id" FROM LENGTH(id_prefix) + 1)::INTEGER)
+    INTO next_serial
+    FROM "lab"."otoliths"
+    WHERE "otolith_id" ILIKE id_prefix || '%';
+
+    IF next_serial IS NULL THEN
+        next_serial := 1;
+    ELSE
+        next_serial := next_serial + 1;
+    END IF;
+
+    NEW.otolith_id := id_prefix || next_serial::TEXT;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Function to generate dissection_id
 CREATE OR REPLACE FUNCTION "lab".generate_dissection_id()
 RETURNS TRIGGER AS $$
@@ -1553,12 +1711,11 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION "lab".generate_pcr_id()
 RETURNS TRIGGER AS $$
 DECLARE
-    current_year text;
     next_serial integer;
     id_prefix text;
 BEGIN
-    current_year := TO_CHAR(COALESCE(NEW.pcr_date, CURRENT_DATE), 'YY');
-    id_prefix := 'PCR' || current_year;
+    -- PCR_EXPID_SAMPLEID_XXX
+    id_prefix := 'PCR_' || NEW.experiment_id || '_' || NEW.sample_id || '_';
 
     SELECT MAX(SUBSTRING("pcr_id" FROM LENGTH(id_prefix) + 1)::INTEGER)
     INTO next_serial
@@ -1571,7 +1728,7 @@ BEGIN
         next_serial := next_serial + 1;
     END IF;
 
-    NEW.pcr_id := id_prefix || LPAD(next_serial::TEXT, 5, '0');
+    NEW.pcr_id := id_prefix || LPAD(next_serial::TEXT, 3, '0');
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -1580,12 +1737,11 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION "lab".generate_gelelectrophoresis_id()
 RETURNS TRIGGER AS $$
 DECLARE
-    current_year text;
     next_serial integer;
     id_prefix text;
 BEGIN
-    current_year := TO_CHAR(COALESCE(NEW.run_date, CURRENT_DATE), 'YY');
-    id_prefix := 'Gel' || current_year;
+    -- GEL_EXPID_SAMPLEID_XXX
+    id_prefix := 'GEL_' || NEW.experiment_id || '_' || NEW.sample_id || '_';
 
     SELECT MAX(SUBSTRING("gelelectrophoresis_id" FROM LENGTH(id_prefix) + 1)::INTEGER)
     INTO next_serial
@@ -1598,7 +1754,7 @@ BEGIN
         next_serial := next_serial + 1;
     END IF;
 
-    NEW.gelelectrophoresis_id := id_prefix || LPAD(next_serial::TEXT, 5, '0');
+    NEW.gelelectrophoresis_id := id_prefix || LPAD(next_serial::TEXT, 3, '0');
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -1607,12 +1763,11 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION "lab".generate_qpcr_id()
 RETURNS TRIGGER AS $$
 DECLARE
-    current_year text;
     next_serial integer;
     id_prefix text;
 BEGIN
-    current_year := TO_CHAR(COALESCE(NEW.qpcr_date, CURRENT_DATE), 'YY');
-    id_prefix := 'qPCR' || current_year;
+    -- QPCR_EXPID_SAMPLEID_XXX
+    id_prefix := 'QPCR_' || NEW.experiment_id || '_' || NEW.sample_id || '_';
 
     SELECT MAX(SUBSTRING("qpcr_id" FROM LENGTH(id_prefix) + 1)::INTEGER)
     INTO next_serial
@@ -1625,7 +1780,7 @@ BEGIN
         next_serial := next_serial + 1;
     END IF;
 
-    NEW.qpcr_id := id_prefix || LPAD(next_serial::TEXT, 5, '0');
+    NEW.qpcr_id := id_prefix || LPAD(next_serial::TEXT, 3, '0');
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -1634,14 +1789,11 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION "lab".generate_library_id()
 RETURNS TRIGGER AS $$
 DECLARE
-    current_year text;
-    library_abrv text;
     next_serial integer;
     id_prefix text;
 BEGIN
-    current_year := TO_CHAR(COALESCE(NEW.prep_date, CURRENT_DATE), 'YY');
-    SELECT sample_type_abrv INTO library_abrv FROM "reference"."samples_type" WHERE sample_type_id = 'Library';
-    id_prefix := library_abrv || current_year;
+    -- LIB_EXPID_SAMPLEID_XXX
+    id_prefix := 'LIB_' || NEW.experiment_id || '_' || NEW.sample_id || '_';
 
     SELECT MAX(SUBSTRING("library_id" FROM LENGTH(id_prefix) + 1)::INTEGER)
     INTO next_serial
@@ -1654,7 +1806,7 @@ BEGIN
         next_serial := next_serial + 1;
     END IF;
 
-    NEW.library_id := id_prefix || LPAD(next_serial::TEXT, 4, '0');
+    NEW.library_id := id_prefix || LPAD(next_serial::TEXT, 3, '0');
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -1663,42 +1815,11 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION "lab".generate_sequencing_id()
 RETURNS TRIGGER AS $$
 DECLARE
-    current_year text;
-    ecosystem_abrv text := '-';
-    region_abrv text := '-';
-    customer_abrv text := '-';
-    id_prefix text;
     next_serial integer;
+    id_prefix text;
 BEGIN
-    current_year := TO_CHAR(COALESCE(NEW.sequencing_date, CURRENT_DATE), 'YY');
-
-    SELECT
-        COALESCE(e.ecosystem_abrv, '-'),
-        COALESCE(r.region_abrv, '-')
-    INTO
-        ecosystem_abrv,
-        region_abrv
-    FROM
-        "lab"."samples" s
-    LEFT JOIN
-        "lab"."sampling" samp ON s.sampling_id = samp.sampling_id AND s.sampling_date = samp.sampling_date -- Join on partition key
-    LEFT JOIN
-        "reference"."ecosystem" e ON samp.ecosystem_id = e.ecosystem_id
-    LEFT JOIN
-        "reference"."region" r ON samp.region_id = r.region_id
-    WHERE
-        s.sample_id = NEW.sample_id;
-
-    IF ecosystem_abrv = '-' AND region_abrv = '-' THEN
-        SELECT COALESCE(cust.customer_abrv, '-') INTO customer_abrv
-        FROM "lab"."samples" s
-        LEFT JOIN "lims"."customers" cust ON s.customer_id = cust.customer_id
-        WHERE s.sample_id = NEW.sample_id;
-
-        id_prefix := 'Seq' || current_year || customer_abrv;
-    ELSE
-        id_prefix := 'Seq' || current_year || ecosystem_abrv || region_abrv;
-    END IF;
+    -- SEQ_EXPID_SAMPLEID_XXX
+    id_prefix := 'SEQ_' || NEW.experiment_id || '_' || NEW.sample_id || '_';
 
     SELECT MAX(SUBSTRING("sequencing_id" FROM LENGTH(id_prefix) + 1)::INTEGER)
     INTO next_serial
@@ -1711,7 +1832,7 @@ BEGIN
         next_serial := next_serial + 1;
     END IF;
 
-    NEW.sequencing_id := id_prefix || LPAD(next_serial::TEXT, 4, '0');
+    NEW.sequencing_id := id_prefix || LPAD(next_serial::TEXT, 3, '0');
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -1841,41 +1962,6 @@ BEGIN
     END IF;
 
     NEW.assignment_id := id_prefix || LPAD(next_serial::TEXT, 6, '0');
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Function to generate protocol_run_id
-CREATE OR REPLACE FUNCTION "lab".generate_protocol_run_id()
-RETURNS TRIGGER AS $$
-DECLARE
-    experiment_title_part text;
-    next_serial integer;
-    id_prefix text;
-BEGIN
-    -- Get experiment title part, sanitize for ID
-    SELECT REPLACE(LOWER(e.experiment_title), ' ', '_') INTO experiment_title_part
-    FROM "lab"."experiments" e
-    WHERE e.experiment_id = NEW.experiment_id;
-
-    IF experiment_title_part IS NULL THEN
-        RAISE EXCEPTION 'Experiment ID % not found for protocol run ID generation.', NEW.experiment_id;
-    END IF;
-
-    id_prefix := experiment_title_part || '_p_';
-
-    SELECT MAX(SUBSTRING("protocol_run_id" FROM LENGTH(id_prefix) + 1)::INTEGER)
-    INTO next_serial
-    FROM "lab"."protocol_runs"
-    WHERE "protocol_run_id" ILIKE id_prefix || '%';
-
-    IF next_serial IS NULL THEN
-        next_serial := 1;
-    ELSE
-        next_serial := next_serial + 1;
-    END IF;
-
-    NEW.protocol_run_id := id_prefix || LPAD(next_serial::TEXT, 3, '0');
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -2150,6 +2236,9 @@ FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
 CREATE TRIGGER audit_trigger_units
 AFTER INSERT OR UPDATE OR DELETE ON "reference"."units"
 FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_external_contacts
+AFTER INSERT OR UPDATE OR DELETE ON "reference"."external_contacts"
+FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
 CREATE TRIGGER audit_trigger_customers
 AFTER INSERT OR UPDATE OR DELETE ON "lims"."customers"
 FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
@@ -2191,6 +2280,9 @@ AFTER INSERT OR UPDATE OR DELETE ON "lims"."orders"
 FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
 CREATE TRIGGER audit_trigger_reagents
 AFTER INSERT OR UPDATE OR DELETE ON "lims"."reagents"
+FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_publications
+AFTER INSERT OR UPDATE OR DELETE ON "lims"."publications"
 FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
 CREATE TRIGGER audit_trigger_storage
 AFTER INSERT OR UPDATE OR DELETE ON "lab"."storage"
@@ -2289,6 +2381,7 @@ FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
 
 -- Triggers for ID generation (BEFORE INSERT)
 CREATE TRIGGER trg_generate_customer_id BEFORE INSERT ON "lims"."customers" FOR EACH ROW EXECUTE FUNCTION "lims".generate_customer_id();
+CREATE TRIGGER trg_generate_publication_id BEFORE INSERT ON "lims"."publications" FOR EACH ROW EXECUTE FUNCTION "lims".generate_publication_id(); -- New trigger
 CREATE TRIGGER trg_generate_sop_id BEFORE INSERT ON "lims"."sop" FOR EACH ROW EXECUTE FUNCTION "lims".generate_sop_id();
 CREATE TRIGGER trg_generate_workflow_step_id BEFORE INSERT ON "lims"."workflow_steps" FOR EACH ROW EXECUTE FUNCTION "lims".generate_workflow_step_id();
 CREATE TRIGGER trg_generate_sampling_id BEFORE INSERT ON "lab"."sampling" FOR EACH ROW EXECUTE FUNCTION "lab".generate_sampling_id();
@@ -2300,6 +2393,7 @@ CREATE TRIGGER trg_generate_dna_child_sample_id BEFORE INSERT ON "lab"."dna" FOR
 CREATE TRIGGER trg_generate_rna_child_sample_id BEFORE INSERT ON "lab"."rna" FOR EACH ROW EXECUTE FUNCTION "lab".generate_rna_child_sample_id();
 CREATE TRIGGER trg_generate_sediments_child_sample_id BEFORE INSERT ON "lab"."sediments" FOR EACH ROW EXECUTE FUNCTION "lab".generate_sediments_child_sample_id();
 CREATE TRIGGER trg_generate_water_child_sample_id BEFORE INSERT ON "lab"."water" FOR EACH ROW EXECUTE FUNCTION "lab".generate_water_child_sample_id();
+CREATE TRIGGER trg_generate_otolith_id BEFORE INSERT ON "lab"."otoliths" FOR EACH ROW EXECUTE FUNCTION "lab".generate_otolith_id(); -- New trigger
 CREATE TRIGGER trg_generate_dissection_id BEFORE INSERT ON "lab"."dissections" FOR EACH ROW EXECUTE FUNCTION "lab".generate_dissection_id();
 CREATE TRIGGER trg_generate_extraction_id BEFORE INSERT ON "lab"."extraction" FOR EACH ROW EXECUTE FUNCTION "lab".generate_extraction_id();
 CREATE TRIGGER trg_generate_nanodrop_id BEFORE INSERT ON "lab"."nanodrop" FOR EACH ROW EXECUTE FUNCTION "lab".generate_nanodrop_id();
@@ -2356,6 +2450,8 @@ CREATE INDEX IF NOT EXISTS idx_taxon_path_gist ON "reference"."taxon" USING GIST
 CREATE INDEX IF NOT EXISTS idx_species_de_name ON "reference"."species" ("de_name");
 CREATE INDEX IF NOT EXISTS idx_species_en_name ON "reference"."species" ("en_name");
 CREATE INDEX IF NOT EXISTS idx_units_unit_type ON "reference"."units" ("unit_type");
+CREATE INDEX IF NOT EXISTS idx_external_contacts_full_name ON "reference"."external_contacts" ("full_name");
+
 
 -- Lims Schema Indexes
 CREATE INDEX IF NOT EXISTS idx_customers_customer_name ON "lims"."customers" ("customer_name");
@@ -2366,16 +2462,24 @@ CREATE INDEX IF NOT EXISTS idx_projects_customer_id ON "lims"."projects" ("custo
 CREATE INDEX IF NOT EXISTS idx_cruises_project_id ON "lims"."cruises" ("project_id");
 CREATE INDEX IF NOT EXISTS idx_cruises_region_id ON "lims"."cruises" ("region_id");
 CREATE INDEX IF NOT EXISTS idx_cruises_ecosystem_id ON "lims"."cruises" ("ecosystem_id");
+CREATE INDEX IF NOT EXISTS idx_cruises_capitaine_contact_id ON "lims"."cruises" ("capitaine_contact_id"); -- New index
+CREATE INDEX IF NOT EXISTS idx_cruises_together_with_contact_id ON "lims"."cruises" ("together_with_contact_id"); -- New index
 CREATE INDEX IF NOT EXISTS idx_workflow_steps_workflow_id ON "lims"."workflow_steps" ("workflow_id");
 CREATE INDEX IF NOT EXISTS idx_sop_sop_id_origin ON "lims"."sop" ("sop_id_origin");
 CREATE INDEX IF NOT EXISTS idx_primers_target_gene_id ON "lims"."primers" ("target_gene_id");
 CREATE INDEX IF NOT EXISTS idx_equipment_room_id ON "lims"."equipment" ("room_id");
+CREATE INDEX IF NOT EXISTS idx_suppliers_supplier_name ON "lims"."suppliers" ("supplier_name"); -- New index
+CREATE INDEX IF NOT EXISTS idx_inventory_items_category_id ON "lims"."inventory_items" ("category_id"); -- New index
 CREATE INDEX IF NOT EXISTS idx_orders_project_id ON "lims"."orders" ("project_id");
 CREATE INDEX IF NOT EXISTS idx_orders_category_id ON "lims"."orders" ("category_id");
 CREATE INDEX IF NOT EXISTS idx_orders_supplier_id ON "lims"."orders" ("supplier_id");
+CREATE INDEX IF NOT EXISTS idx_orders_item_id ON "lims"."orders" ("item_id"); -- New index
 CREATE INDEX IF NOT EXISTS idx_reagents_category_id ON "lims"."reagents" ("category_id");
 CREATE INDEX IF NOT EXISTS idx_reagents_storage_id ON "lims"."reagents" ("storage_id");
 CREATE INDEX IF NOT EXISTS idx_reagents_expire_date ON "lims"."reagents" ("expire_date");
+CREATE INDEX IF NOT EXISTS idx_publications_project_id ON "lims"."publications" ("project_id"); -- New index
+CREATE INDEX IF NOT EXISTS idx_publications_doi ON "lims"."publications" ("doi"); -- New index
+
 
 -- Lab Schema Indexes
 CREATE INDEX IF NOT EXISTS idx_experiments_sop_id ON "lab"."experiments" ("sop_id");
@@ -2389,6 +2493,7 @@ CREATE INDEX IF NOT EXISTS idx_sampling_cruise_id ON "lab"."sampling" ("cruise_i
 CREATE INDEX IF NOT EXISTS idx_sampling_region_id ON "lab"."sampling" ("region_id");
 CREATE INDEX IF NOT EXISTS idx_sampling_ecosystem_id ON "lab"."sampling" ("ecosystem_id");
 CREATE INDEX IF NOT EXISTS idx_sampling_customer_id ON "lab"."sampling" ("customer_id");
+CREATE INDEX IF NOT EXISTS idx_sampling_geom ON "lab"."sampling" USING GIST ("geom"); -- PostGIS spatial index
 CREATE INDEX IF NOT EXISTS idx_fishing_sampling_id ON "lab"."fishing" ("sampling_id");
 CREATE INDEX IF NOT EXISTS idx_fishing_taxon_id ON "lab"."fishing" ("taxon_id");
 CREATE INDEX IF NOT EXISTS idx_samples_parent_sample_id ON "lab"."samples" ("parent_sample_id");
@@ -2549,7 +2654,7 @@ SELECT
     s.storage_id,
     st.freezer AS storage_freezer,
     st.box AS storage_box,
-    s.storage_position,
+    s.box_position, -- Use new box_position from samples
     s.sampler_person_id,
     s.receiver_person_id,
     s.reception_date,
@@ -2566,7 +2671,8 @@ SELECT
     c.customer_name,
     c.customer_abrv,
     s.notes,
-    s.attachment
+    s.attachment,
+    s.attachment_link
 FROM
     "lab"."samples" s
 LEFT JOIN
@@ -2631,10 +2737,11 @@ SELECT
     st.box,
     st.box_size_x,
     st.box_size_y,
+    st.box_position_format, -- New: Include box position format
     s.sample_id,
     s.external_name AS sample_external_name,
     s.sample_type_id,
-    s.storage_position AS sample_storage_position,
+    s.box_position AS sample_box_position, -- Use new box_position from samples
     s.reception_date AS sample_reception_date,
     s.project_id
 FROM
@@ -2642,7 +2749,7 @@ FROM
 LEFT JOIN
     "reference"."room" r ON st.room_id = r.room_id
 LEFT JOIN
-    "lab"."samples" s ON st.storage_id = s.storage_id AND st.storage_position = s.storage_position;
+    "lab"."samples" s ON st.storage_id = s.storage_id AND st.box_position = s.box_position; -- Join on new box_position
 
 -- View: Experiment_Summary_View
 CREATE OR REPLACE VIEW "lab"."experiment_summary_view" AS
@@ -2687,7 +2794,7 @@ SELECT
     s.sample_id,
     s.external_name AS sample_external_name,
     ea.taxon_id,
-    t.en_name AS taxon_english_name,
+    t.en_name AS taxon_en_name,
     ea.read_count,
     ea.confidence,
     ar.notes AS run_notes,
@@ -2748,7 +2855,7 @@ SELECT
     ap.pipeline_name,
     ap.version AS pipeline_version,
     t.taxon_id,
-    t.en_name AS taxon_english_name,
+    t.en_name AS taxon_en_name,
     t.rank AS taxon_rank,
     ea.read_count,
     ea.confidence
@@ -2880,7 +2987,7 @@ SELECT
     s.storage_id,
     stor.freezer AS storage_freezer,
     stor.box AS storage_box,
-    s.storage_position,
+    s.box_position, -- From samples table
     stor.room_id,
     r.address AS room_address,
     r.etage AS room_etage,
@@ -2903,7 +3010,7 @@ SELECT
 
     -- Fish Specifics
     f.species_id,
-    taxon_sp.en_name AS species_english_name,
+    taxon_sp.en_name AS species_en_name,
     f.total_length_mm,
     f.weight_g,
     f.sex,
@@ -2951,6 +3058,8 @@ SELECT
     ext.yield_nanodrop_ng_ul,
     ext.a260_280 AS extraction_a260_280,
     ext.a260_230 AS extraction_a260_230,
+    ext.extracted_dna_sample_id, -- New
+    ext.extracted_rna_sample_id, -- New
 
     -- Nanodrop Results
     nd.nanodrop_concentration,
@@ -3086,7 +3195,8 @@ INSERT INTO "reference"."samples_type" ("sample_type_id", "sample_type_abrv", "n
 ('Tissue', 'T', 'Tissue sample'),
 ('Fish', 'F', 'Fish sample'),
 ('Sequencing', 'Q', 'Sequencing run output'),
-('Dataset', 'Z', 'Processed dataset')
+('Dataset', 'Z', 'Processed dataset'),
+('Publication', 'PUB', 'Research Publication') -- Added for publication type
 ON CONFLICT ("sample_type_id") DO NOTHING;
 
 INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "unit_type", "conversion_factor_to_base") VALUES
