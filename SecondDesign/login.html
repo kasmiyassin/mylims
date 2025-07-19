@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - TIFI MG LIMS</title>
+    <!-- Tailwind CSS CDN for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - Inter for a clean, modern look -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome for icons (e.g., password visibility toggle) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* Custom styles for the Inter font and general body styling */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Light gray background */
+        }
+        /* Custom focus styles for input fields */
+        input:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5); /* Blue ring effect */
+            border-color: #3b82f6; /* Blue border */
+        }
+        /* Style for the password toggle icon */
+        .password-toggle {
+            cursor: pointer;
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af; /* Gray icon color */
+        }
+        .password-toggle:hover {
+            color: #6b7280; /* Darker gray on hover */
+        }
+        /* Keyframe for a subtle loading spinner animation */
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin-fast {
+            animation: spin 0.7s linear infinite;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div class="w-full max-w-md bg-white rounded-xl shadow-2xl p-8 space-y-8 transform transition-all duration-300 hover:scale-105">
+        <div class="text-center">
+            <!-- Logo section with a fallback placeholder -->
+            <img src="https://placehold.co/96x96/e0e0e0/555555?text=Logo" alt="TIFI MG Logo" class="w-24 h-24 mx-auto mb-4 rounded-full shadow-md">
+            <h1 class="text-4xl font-extrabold text-gray-900 tracking-tight">TIFI MG LIMS</h1>
+            <p class="mt-3 text-lg text-gray-600">Your Lab Information Management System</p>
+        </div>
+
+        <form id="login-form" class="space-y-6">
+            <!-- Error message display area -->
+            <div id="login-error" class="hidden p-4 text-sm text-red-700 bg-red-100 rounded-lg border border-red-200" role="alert">
+                <i class="fas fa-exclamation-circle mr-2"></i>
+                <span id="error-message-text">Invalid credentials. Please try again.</span>
+            </div>
+
+            <div class="space-y-4">
+                <!-- Username/Person ID Input -->
+                <div>
+                    <label for="username" class="sr-only">Person ID</label>
+                    <input id="username" name="username" type="text" autocomplete="username" required
+                           class="relative block w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:z-10 focus:ring-blue-500 focus:border-blue-500 sm:text-base transition duration-150 ease-in-out"
+                           placeholder="Person ID" value="TIFI">
+                </div>
+
+                <!-- Password Input with Toggle -->
+                <div class="relative">
+                    <label for="password" class="sr-only">Password</label>
+                    <input id="password" name="password" type="password" autocomplete="current-password" required
+                           class="relative block w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:z-10 focus:ring-blue-500 focus:border-blue-500 sm:text-base transition duration-150 ease-in-out pr-10"
+                           placeholder="Password" value="password">
+                    <span class="password-toggle" id="password-toggle">
+                        <i class="fas fa-eye" id="password-icon"></i>
+                    </span>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between">
+                <!-- Remember Me Checkbox -->
+                <div class="flex items-center">
+                    <input id="remember-me" name="remember-me" type="checkbox"
+                           class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                    <label for="remember-me" class="ml-2 block text-sm text-gray-900">
+                        Remember me
+                    </label>
+                </div>
+
+                <!-- Forgot Password Link (Placeholder) -->
+                <div class="text-sm">
+                    <a href="#" class="font-medium text-blue-600 hover:text-blue-500 transition duration-150 ease-in-out" onclick="alert('Forgot password functionality is not yet implemented.')">
+                        Forgot password?
+                    </a>
+                </div>
+            </div>
+
+            <!-- Sign In Button -->
+            <div>
+                <button type="submit" id="login-button"
+                        class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-lg font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out shadow-md hover:shadow-lg">
+                    <span id="button-text">Sign in</span>
+                    <span id="loading-spinner" class="hidden absolute right-4 top-1/2 -translate-y-1/2">
+                        <i class="fas fa-spinner animate-spin-fast text-white"></i>
+                    </span>
+                </button>
+            </div>
+
+            <!-- Register Link (Placeholder) -->
+            <div class="text-center text-sm text-gray-600">
+                Don't have an account?
+                <a href="#" class="font-medium text-blue-600 hover:text-blue-500 transition duration-150 ease-in-out" onclick="alert('Registration functionality is not yet implemented.')">
+                    Register now
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const API_BASE_URL = '/mymglab/api'; // Ensure this matches your Flask app's API base
+            const loginForm = document.getElementById('login-form');
+            const usernameInput = document.getElementById('username');
+            const passwordInput = document.getElementById('password');
+            const rememberMeCheckbox = document.getElementById('remember-me');
+            const loginErrorDiv = document.getElementById('login-error');
+            const errorMessageText = document.getElementById('error-message-text');
+            const loginButton = document.getElementById('login-button');
+            const buttonText = document.getElementById('button-text');
+            const loadingSpinner = document.getElementById('loading-spinner');
+            const passwordToggle = document.getElementById('password-toggle');
+            const passwordIcon = document.getElementById('password-icon');
+
+            // --- Password Visibility Toggle ---
+            passwordToggle.addEventListener('click', () => {
+                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                passwordInput.setAttribute('type', type);
+                passwordIcon.classList.toggle('fa-eye');
+                passwordIcon.classList.toggle('fa-eye-slash');
+            });
+
+            // --- Remember Me functionality ---
+            // Load saved username if 'remember-me' was checked last time
+            if (localStorage.getItem('rememberedUsername')) {
+                usernameInput.value = localStorage.getItem('rememberedUsername');
+                rememberMeCheckbox.checked = true;
+            }
+
+            // --- Initial Redirect Check ---
+            // If already logged in, redirect to dashboard or stored URL
+            const redirectUrl = localStorage.getItem('redirectUrl');
+            if (sessionStorage.getItem('isLoggedIn') === 'true') {
+                localStorage.removeItem('redirectUrl'); // Clear it once used
+                window.location.href = redirectUrl || './dashboard.html';
+            }
+
+            // --- Login Form Submission Handler ---
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault(); // Prevent default form submission
+                loginErrorDiv.classList.add('hidden'); // Hide any previous error messages
+
+                // Basic client-side validation
+                if (!usernameInput.value.trim() || !passwordInput.value.trim()) {
+                    errorMessageText.textContent = 'Please enter both Person ID and Password.';
+                    loginErrorDiv.classList.remove('hidden');
+                    return;
+                }
+
+                // Show loading state
+                buttonText.textContent = 'Signing in...';
+                loadingSpinner.classList.remove('hidden');
+                loginButton.disabled = true;
+
+                const person_id = usernameInput.value.trim();
+                const password = passwordInput.value.trim();
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/login`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ person_id, password }),
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok && result.success) {
+                        // Login successful
+                        sessionStorage.setItem('isLoggedIn', 'true');
+                        sessionStorage.setItem('user', JSON.stringify(result.user));
+
+                        // Handle 'Remember Me'
+                        if (rememberMeCheckbox.checked) {
+                            localStorage.setItem('rememberedUsername', person_id);
+                        } else {
+                            localStorage.removeItem('rememberedUsername');
+                        }
+                        
+                        // Redirect to the stored URL or dashboard
+                        const finalRedirectUrl = localStorage.getItem('redirectUrl');
+                        if (finalRedirectUrl) {
+                            localStorage.removeItem('redirectUrl'); // Clear it after use
+                            window.location.href = finalRedirectUrl;
+                        } else {
+                            window.location.href = './dashboard.html';
+                        }
+                    } else {
+                        // Login failed
+                        errorMessageText.textContent = result.error || 'Invalid credentials. Please check your Person ID and Password.';
+                        loginErrorDiv.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    console.error("Login API failed:", error);
+                    errorMessageText.textContent = 'Could not connect to the server. Please check your network connection.';
+                    loginErrorDiv.classList.remove('hidden');
+                } finally {
+                    // Reset loading state
+                    buttonText.textContent = 'Sign in';
+                    loadingSpinner.classList.add('hidden');
+                    loginButton.disabled = false;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

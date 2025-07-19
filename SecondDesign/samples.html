@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en" class="light"> <!-- Default to light mode, will be overridden by localStorage -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Samples - TIFI MG LIMS</title>
+    <!-- Tailwind CSS CDN for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - Inter for a clean, modern look -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* Custom styles for the Inter font and general body styling */
+        body {
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-color: #f3f4f6; /* Light gray background */
+        }
+        /* Dark mode body background */
+        html.dark body {
+            background-color: #1a202c; /* Dark background */
+        }
+
+        /* Custom scrollbar for sidebar */
+        .sidebar-nav::-webkit-scrollbar {
+            width: 8px;
+        }
+        .sidebar-nav::-webkit-scrollbar-track {
+            background: #e2e8f0; /* Light gray track */
+            border-radius: 10px;
+        }
+        html.dark .sidebar-nav::-webkit-scrollbar-track {
+            background: #2d3748; /* Darker track for dark mode */
+        }
+        .sidebar-nav::-webkit-scrollbar-thumb {
+            background: #94a3b8; /* Gray thumb */
+            border-radius: 10px;
+        }
+        html.dark .sidebar-nav::-webkit-scrollbar-thumb {
+            background: #718096; /* Darker thumb for dark mode */
+        }
+        .sidebar-nav::-webkit-scrollbar-thumb:hover {
+            background: #64748b; /* Darker gray on hover */
+        }
+        html.dark .sidebar-nav::-webkit-scrollbar-thumb:hover {
+            background: #5a67d8; /* Even darker thumb on hover for dark mode */
+        }
+
+        /* Modal specific styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 700px; /* Slightly wider for more sample fields */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+        html.dark .modal-content {
+            background-color: #2d3748; /* Dark background for modal */
+            color: #e2e8f0;
+        }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute;
+            top: 10px;
+            right: 20px;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        html.dark .close-button:hover,
+        html.dark .close-button:focus {
+            color: white;
+        }
+
+        /* Table header sort indicator */
+        .sort-asc::after { content: " \25B2"; /* Up arrow */ }
+        .sort-desc::after { content: " \25BC"; /* Down arrow */ }
+
+        /* Toast Notification Styles */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .toast {
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            color: white;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+            display: flex;
+            align-items: center;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .toast.success {
+            background-color: #4CAF50; /* Green */
+        }
+        .toast.error {
+            background-color: #f44336; /* Red */
+        }
+        .toast-icon {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body class="flex">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-gray-800 text-white flex flex-col h-screen sticky top-0 shadow-lg transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out z-50" id="sidebar">
+        <div class="p-6 border-b border-gray-700 flex items-center justify-center">
+            <img src="https://placehold.co/40x40/e0e0e0/555555?text=L" alt="Logo" class="rounded-full mr-3">
+            <h2 class="text-2xl font-extrabold">TIFI MG LIMS</h2>
+        </div>
+        <nav class="flex-grow p-4 sidebar-nav overflow-y-auto">
+            <ul class="space-y-2">
+                <li>
+                    <a href="./dashboard.html" class="flex items-center p-3 rounded-lg text-gray-200 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-home mr-3 text-lg"></i>
+                        <span class="font-medium">Dashboard</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="./projects.html" class="flex items-center p-3 rounded-lg text-gray-200 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-folder-open mr-3 text-lg"></i>
+                        <span class="font-medium">Projects</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="./samples.html" class="flex items-center p-3 rounded-lg text-gray-200 hover:bg-gray-700 hover:text-white transition-colors duration-200 bg-gray-700">
+                        <i class="fas fa-flask mr-3 text-lg"></i>
+                        <span class="font-medium">Samples</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="./sampling.html" class="flex items-center p-3 rounded-lg text-gray-200 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-vial mr-3 text-lg"></i>
+                        <span class="font-medium">Sampling</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="./experiments.html" class="flex items-center p-3 rounded-lg text-gray-200 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-microscope mr-3 text-lg"></i>
+                        <span class="font-medium">Experiments</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="./protocols.html" class="flex items-center p-3 rounded-lg text-gray-200 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-book mr-3 text-lg"></i>
+                        <span class="font-medium">Protocols</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="./myprocessing.html" class="flex items-center p-3 rounded-lg text-gray-200 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-cogs mr-3 text-lg"></i>
+                        <span class="font-medium">Processing</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="./workflow.html" class="flex items-center p-3 rounded-lg text-gray-200 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-project-diagram mr-3 text-lg"></i>
+                        <span class="font-medium">Workflow</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="./labeling.html" class="flex items-center p-3 rounded-lg text-gray-200 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-tags mr-3 text-lg"></i>
+                        <span class="font-medium">Labeling</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="./labeling02.html" class="flex items-center p-3 rounded-lg text-gray-200 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-tag mr-3 text-lg"></i>
+                        <span class="font-medium">Labeling 02</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="./laboratory.html" class="flex items-center p-3 rounded-lg text-gray-200 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-building mr-3 text-lg"></i>
+                        <span class="font-medium">Laboratory</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="./machines.html" class="flex items-center p-3 rounded-lg text-gray-200 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-robot mr-3 text-lg"></i>
+                        <span class="font-medium">Machines</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="./storage.html" class="flex items-center p-3 rounded-lg text-gray-200 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-warehouse mr-3 text-lg"></i>
+                        <span class="font-medium">Storage</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="./storagebox.html" class="flex items-center p-3 rounded-lg text-gray-200 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-box-open mr-3 text-lg"></i>
+                        <span class="font-medium">Storage Box</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="./storagelager.html" class="flex items-center p-3 rounded-lg text-gray-200 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-boxes mr-3 text-lg"></i>
+                        <span class="font-medium">Storage Lager</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="./storagesamples.html" class="flex items-center p-3 rounded-lg text-gray-200 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-cube mr-3 text-lg"></i>
+                        <span class="font-medium">Storage Samples</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="./reporting.html" class="flex items-center p-3 rounded-lg text-gray-200 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-chart-bar mr-3 text-lg"></i>
+                        <span class="font-medium">Reporting</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+        <div class="p-4 border-t border-gray-700">
+            <button id="logout-button" class="w-full flex items-center justify-center p-3 rounded-lg text-red-300 bg-gray-700 hover:bg-red-600 hover:text-white transition-colors duration-200">
+                <i class="fas fa-sign-out-alt mr-3 text-lg"></i>
+                <span class="font-medium">Logout</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="flex-1 flex flex-col">
+        <!-- Header -->
+        <header class="bg-white dark:bg-gray-900 shadow-sm p-4 flex items-center justify-between sticky top-0 z-40 transition-colors duration-300">
+            <button id="sidebar-toggle" class="md:hidden text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md p-2 transition-colors duration-200">
+                <i class="fas fa-bars text-xl"></i>
+            </button>
+            <h1 class="text-3xl font-bold text-gray-800 dark:text-gray-100">Samples</h1>
+            <div class="flex items-center space-x-4">
+                <!-- Theme Toggle Button -->
+                <button id="theme-toggle" class="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200">
+                    <i class="fas fa-sun text-xl" id="theme-icon"></i>
+                </button>
+                <span id="user-display" class="text-gray-700 dark:text-gray-200 font-medium"></span>
+                <img src="https://placehold.co/40x40/cbd5e1/475569?text=U" alt="User Avatar" class="w-10 h-10 rounded-full border-2 border-blue-400 shadow-sm">
+            </div>
+        </header>
+
+        <!-- Samples Content -->
+        <main class="flex-1 p-6 overflow-y-auto">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+                <div class="flex flex-col md:flex-row items-center justify-between mb-6 space-y-4 md:space-y-0">
+                    <h3 class="text-2xl font-semibold text-gray-800 dark:text-gray-100">All Samples</h3>
+                    <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3 w-full md:w-auto">
+                        <input type="text" id="search-input" placeholder="Search samples..."
+                               class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-200 w-full sm:w-auto">
+                        <select id="type-filter" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-200 w-full sm:w-auto">
+                            <option value="">All Types</option>
+                            <!-- Options populated by JS -->
+                        </select>
+                        <select id="status-filter" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-200 w-full sm:w-auto">
+                            <option value="">All Statuses</option>
+                            <!-- Options populated by JS -->
+                        </select>
+                        <select id="project-filter" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-200 w-full sm:w-auto">
+                            <option value="">All Projects</option>
+                            <!-- Options populated by JS -->
+                        </select>
+                        <button id="add-sample-button"
+                                class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 shadow-md flex items-center justify-center w-full sm:w-auto">
+                            <i class="fas fa-plus mr-2"></i> Add New Sample
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Samples Table -->
+                <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" data-sort="sample_id">
+                                    Sample ID <span class="sort-indicator"></span>
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" data-sort="sample_name">
+                                    Sample Name <span class="sort-indicator"></span>
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Type
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" data-sort="collection_date">
+                                    Collection Date <span class="sort-indicator"></span>
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Project
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Experiment
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" data-sort="status">
+                                    Status <span class="sort-indicator"></span>
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Storage
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Quantity
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Actions
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="samples-table-body" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            <!-- Sample rows will be loaded here by JavaScript -->
+                            <tr>
+                                <td colspan="10" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">
+                                    Loading samples...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="no-samples-message" class="hidden text-center py-8 text-gray-500 dark:text-gray-400">
+                    No samples found matching your criteria.
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add/Edit Sample Modal -->
+    <div id="sample-modal" class="modal flex">
+        <div class="modal-content dark:bg-gray-800 dark:text-gray-100">
+            <span class="close-button">&times;</span>
+            <h2 id="modal-title" class="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">Add New Sample</h2>
+            <form id="sample-form" class="space-y-4">
+                <input type="hidden" id="sample-id">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="sample-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sample Name</label>
+                        <input type="text" id="sample-name" name="sample_name" required
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                    </div>
+                    <div>
+                        <label for="sample-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sample Type</label>
+                        <select id="sample-type" name="sample_type_id" required
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="collection-date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Collection Date</label>
+                        <input type="date" id="collection-date" name="collection_date" required
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                    </div>
+                    <div>
+                        <label for="sample-status" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
+                        <select id="sample-status" name="status_id" required
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="project-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Project</label>
+                        <select id="project-select" name="project_id"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                            <option value="">Select Project (Optional)</option>
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                    <div>
+                        <label for="experiment-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Experiment</label>
+                        <select id="experiment-select" name="experiment_id"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                            <option value="">Select Experiment (Optional)</option>
+                            <!-- Options populated by JS, potentially filtered by project -->
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="quantity" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Quantity</label>
+                        <input type="number" id="quantity" name="quantity" step="any"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                    </div>
+                    <div>
+                        <label for="unit" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Unit</label>
+                        <input type="text" id="unit" name="unit"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                    </div>
+                    <div>
+                        <label for="storage-location" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Storage Location</label>
+                        <select id="storage-location" name="storage_location_id"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                            <option value="">Select Storage (Optional)</option>
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label for="notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Notes</label>
+                    <textarea id="notes" name="notes" rows="3"
+                              class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"></textarea>
+                </div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" id="cancel-sample-button"
+                            class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
+                        Cancel
+                    </button>
+                    <button type="submit" id="save-sample-button"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors duration-200">
+                        Save Sample
+                    </button>
+                </div>
+            </form>
+            <div id="modal-message" class="hidden mt-4 p-3 text-sm rounded-lg"></div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="modal flex">
+        <div class="modal-content dark:bg-gray-800 dark:text-gray-100">
+            <h2 class="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">Confirm Deletion</h2>
+            <p class="text-gray-700 dark:text-gray-300 mb-6">Are you sure you want to delete this sample? This action cannot be undone.</p>
+            <div class="flex justify-end space-x-3">
+                <button type="button" id="cancel-delete-button"
+                        class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
+                    Cancel
+                </button>
+                <button type="button" id="confirm-delete-button"
+                        class="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 transition-colors duration-200">
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const API_BASE_URL = '/mymglab/api'; // Your Flask API base URL
+
+            // --- Common UI Elements ---
+            const userDisplay = document.getElementById('user-display');
+            const logoutButton = document.getElementById('logout-button');
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebar-toggle');
+            const themeToggle = document.getElementById('theme-toggle');
+            const themeIcon = document.getElementById('theme-icon');
+            const htmlElement = document.documentElement;
+            const toastContainer = document.getElementById('toast-container');
+
+            // --- Samples Page Specific Elements ---
+            const searchInput = document.getElementById('search-input');
+            const typeFilter = document.getElementById('type-filter');
+            const statusFilter = document.getElementById('status-filter');
+            const projectFilter = document.getElementById('project-filter');
+            const addSampleButton = document.getElementById('add-sample-button');
+            const samplesTableBody = document.getElementById('samples-table-body');
+            const noSamplesMessage = document.getElementById('no-samples-message');
+
+            // Modals
+            const sampleModal = document.getElementById('sample-modal');
+            const confirmModal = document.getElementById('confirm-modal');
+            const closeModalButtons = document.querySelectorAll('.close-button');
+            const cancelSampleButton = document.getElementById('cancel-sample-button');
+            const cancelDeleteButton = document.getElementById('cancel-delete-button');
+            const confirmDeleteButton = document.getElementById('confirm-delete-button');
+            const modalTitle = document.getElementById('modal-title');
+            const sampleForm = document.getElementById('sample-form');
+            const modalMessage = document.getElementById('modal-message');
+
+            // Form fields
+            const sampleIdInput = document.getElementById('sample-id');
+            const sampleNameInput = document.getElementById('sample-name');
+            const sampleTypeSelect = document.getElementById('sample-type');
+            const collectionDateInput = document.getElementById('collection-date');
+            const sampleStatusSelect = document.getElementById('sample-status');
+            const projectSelect = document.getElementById('project-select');
+            const experimentSelect = document.getElementById('experiment-select');
+            const quantityInput = document.getElementById('quantity');
+            const unitInput = document.getElementById('unit');
+            const storageLocationSelect = document.getElementById('storage-location');
+            const notesInput = document.getElementById('notes');
+
+            let allSamples = []; // Stores all fetched samples
+            let filteredSamples = []; // Stores samples after search/filter
+            let allProjects = []; // Stores all projects for dropdowns
+            let allExperiments = []; // Stores all experiments for dropdowns
+            let allSampleTypes = []; // Stores all sample types for dropdowns
+            let allSampleStatuses = []; // Stores all sample statuses for dropdowns
+            let allStorageLocations = []; // Stores all storage locations for dropdowns
+
+            let currentSortColumn = 'sample_id';
+            let currentSortDirection = 'asc';
+            let sampleToDeleteId = null;
+
+            // --- Theme Management (Copied from Dashboard/Projects) ---
+            const currentTheme = localStorage.getItem('theme');
+            if (currentTheme) {
+                htmlElement.classList.add(currentTheme);
+                if (currentTheme === 'dark') {
+                    themeIcon.classList.remove('fa-sun');
+                    themeIcon.classList.add('fa-moon');
+                } else {
+                    themeIcon.classList.remove('fa-moon');
+                    themeIcon.classList.add('fa-sun');
+                }
+            } else {
+                htmlElement.classList.add('light');
+                localStorage.setItem('theme', 'light');
+            }
+
+            themeToggle.addEventListener('click', () => {
+                if (htmlElement.classList.contains('light')) {
+                    htmlElement.classList.remove('light');
+                    htmlElement.classList.add('dark');
+                    localStorage.setItem('theme', 'dark');
+                    themeIcon.classList.remove('fa-sun');
+                    themeIcon.classList.add('fa-moon');
+                } else {
+                    htmlElement.classList.remove('dark');
+                    htmlElement.classList.add('light');
+                    localStorage.setItem('theme', 'light');
+                    themeIcon.classList.remove('fa-moon');
+                    themeIcon.classList.add('fa-sun');
+                }
+            });
+
+            // --- Authentication Check and User Display (Copied from Dashboard/Projects) ---
+            const isLoggedIn = sessionStorage.getItem('isLoggedIn');
+            const userString = sessionStorage.getItem('user');
+
+            if (!isLoggedIn || isLoggedIn !== 'true' || !userString) {
+                localStorage.setItem('redirectUrl', window.location.href);
+                window.location.href = './login.html';
+                return;
+            }
+
+            try {
+                const user = JSON.parse(userString);
+                if (user && user.full_name) {
+                    userDisplay.textContent = `Welcome, ${user.full_name}!`;
+                } else {
+                    userDisplay.textContent = 'Welcome!';
+                }
+            } catch (e) {
+                console.error("Failed to parse user data from sessionStorage:", e);
+                userDisplay.textContent = 'Welcome!';
+            }
+
+            // --- Logout Functionality (Copied from Dashboard/Projects) ---
+            logoutButton.addEventListener('click', () => {
+                sessionStorage.removeItem('isLoggedIn');
+                sessionStorage.removeItem('user');
+                localStorage.removeItem('redirectUrl');
+                localStorage.removeItem('rememberedUsername');
+                window.location.href = './login.html';
+            });
+
+            // --- Sidebar Toggle for Mobile (Copied from Dashboard/Projects) ---
+            sidebarToggle.addEventListener('click', () => {
+                sidebar.classList.toggle('-translate-x-full');
+            });
+
+            document.addEventListener('click', (event) => {
+                const isClickInsideSidebar = sidebar.contains(event.target);
+                const isClickOnToggle = sidebarToggle.contains(event.target);
+                const isSidebarHidden = sidebar.classList.contains('-translate-x-full');
+
+                if (!isClickInsideSidebar && !isClickOnToggle && !isSidebarHidden && window.innerWidth < 768) {
+                    sidebar.classList.add('-translate-x-full');
+                }
+            });
+
+            // --- Highlight Active Nav Link (Copied from Dashboard/Projects) ---
+            const currentPath = window.location.pathname.split('/').pop();
+            const navLinks = document.querySelectorAll('nav a');
+            navLinks.forEach(link => {
+                const linkPath = link.getAttribute('href').split('/').pop();
+                if (linkPath === currentPath) {
+                    link.classList.add('bg-gray-700');
+                    link.classList.remove('text-gray-200');
+                    link.classList.add('text-white');
+                }
+            });
+
+            // --- Notification Functions (Toast) ---
+            function showToast(message, type = 'success', duration = 3000) {
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                const iconClass = type === 'success' ? 'fas fa-check-circle' : 'fas fa-times-circle';
+                toast.innerHTML = `<i class="${iconClass} toast-icon"></i><span>${message}</span>`;
+                toastContainer.appendChild(toast);
+
+                setTimeout(() => {
+                    toast.classList.add('show');
+                }, 10);
+
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    toast.addEventListener('transitionend', () => toast.remove());
+                }, duration);
+            }
+
+            function showModalMessage(message, type = 'success') {
+                modalMessage.textContent = message;
+                modalMessage.classList.remove('hidden', 'bg-green-100', 'text-green-700', 'bg-red-100', 'text-red-700');
+                if (type === 'success') {
+                    modalMessage.classList.add('bg-green-100', 'text-green-700');
+                } else {
+                    modalMessage.classList.add('bg-red-100', 'text-red-700');
+                }
+                setTimeout(() => {
+                    modalMessage.classList.add('hidden');
+                }, 3000);
+            }
+
+            // --- Sample Management Functions ---
+
+            // Fetch all samples
+            async function fetchSamples() {
+                samplesTableBody.innerHTML = `<tr><td colspan="10" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">
+                                                    <i class="fas fa-spinner animate-spin mr-2"></i> Loading samples...
+                                                </td></tr>`;
+                try {
+                    const response = await fetch(`${API_BASE_URL}/samples`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    allSamples = await response.json();
+                    applyFiltersAndSort();
+                } catch (error) {
+                    console.error('Error fetching samples:', error);
+                    samplesTableBody.innerHTML = `<tr><td colspan="10" class="px-6 py-4 whitespace-nowrap text-sm text-red-500 dark:text-red-400 text-center">
+                                                        Failed to load samples. Please try again.
+                                                    </td></tr>`;
+                }
+            }
+
+            // Fetch data for dropdowns
+            async function fetchDropdownData() {
+                try {
+                    const [projectsRes, sampleTypesRes, sampleStatusesRes, storageLocationsRes, experimentsRes] = await Promise.all([
+                        fetch(`${API_BASE_URL}/projects`),
+                        fetch(`${API_BASE_URL}/sample_types`),
+                        fetch(`${API_BASE_URL}/sample_statuses`),
+                        fetch(`${API_BASE_URL}/storage_locations`),
+                        fetch(`${API_BASE_URL}/experiments`) // Fetch all experiments initially
+                    ]);
+
+                    allProjects = projectsRes.ok ? await projectsRes.json() : [];
+                    allSampleTypes = sampleTypesRes.ok ? await sampleTypesRes.json() : [];
+                    allSampleStatuses = sampleStatusesRes.ok ? await sampleStatusesRes.json() : [];
+                    allStorageLocations = storageLocationsRes.ok ? await storageLocationsRes.json() : [];
+                    allExperiments = experimentsRes.ok ? await experimentsRes.json() : [];
+
+                    populateDropdown(projectFilter, allProjects, 'project_id', 'project_name', 'All Projects');
+                    populateDropdown(projectSelect, allProjects, 'project_id', 'project_name', 'Select Project (Optional)');
+                    populateDropdown(typeFilter, allSampleTypes, 'sample_type_id', 'type_name', 'All Types');
+                    populateDropdown(sampleTypeSelect, allSampleTypes, 'sample_type_id', 'type_name', 'Select Type');
+                    populateDropdown(statusFilter, allSampleStatuses, 'status_id', 'status_name', 'All Statuses');
+                    populateDropdown(sampleStatusSelect, allSampleStatuses, 'status_id', 'status_name', 'Select Status');
+                    populateDropdown(storageLocationSelect, allStorageLocations, 'storage_location_id', 'location_name', 'Select Storage (Optional)');
+                    // Experiment dropdown will be populated dynamically based on project selection
+                    populateExperimentDropdown();
+
+                } catch (error) {
+                    console.error('Error fetching dropdown data:', error);
+                    showToast('Failed to load some dropdown options.', 'error');
+                }
+            }
+
+            function populateDropdown(selectElement, data, valueKey, textKey, defaultOptionText) {
+                selectElement.innerHTML = `<option value="">${defaultOptionText}</option>`;
+                data.forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = item[valueKey];
+                    option.textContent = item[textKey];
+                    selectElement.appendChild(option);
+                });
+            }
+
+            function populateExperimentDropdown(selectedProjectId = null) {
+                experimentSelect.innerHTML = '<option value="">Select Experiment (Optional)</option>';
+                let experimentsToDisplay = allExperiments;
+
+                if (selectedProjectId) {
+                    experimentsToDisplay = allExperiments.filter(exp => exp.project_id == selectedProjectId);
+                }
+
+                experimentsToDisplay.forEach(exp => {
+                    const option = document.createElement('option');
+                    option.value = exp.experiment_id;
+                    option.textContent = exp.experiment_name;
+                    experimentSelect.appendChild(option);
+                });
+            }
+
+            // Event listener for project selection to filter experiments
+            projectSelect.addEventListener('change', () => {
+                populateExperimentDropdown(projectSelect.value);
+            });
+
+
+            // Render samples to the table
+            function renderSamples(samples) {
+                samplesTableBody.innerHTML = ''; // Clear existing rows
+                if (samples.length === 0) {
+                    noSamplesMessage.classList.remove('hidden');
+                    return;
+                }
+                noSamplesMessage.classList.add('hidden');
+
+                samples.forEach(sample => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150';
+
+                    // Find display names for IDs
+                    const sampleType = allSampleTypes.find(t => t.sample_type_id == sample.sample_type_id)?.type_name || 'N/A';
+                    const project = allProjects.find(p => p.project_id == sample.project_id)?.project_name || 'N/A';
+                    const experiment = allExperiments.find(e => e.experiment_id == sample.experiment_id)?.experiment_name || 'N/A';
+                    const status = allSampleStatuses.find(s => s.status_id == sample.status_id)?.status_name || 'N/A';
+                    const storageLocation = allStorageLocations.find(l => l.storage_location_id == sample.storage_location_id)?.location_name || 'N/A';
+
+                    let statusBadgeClass = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+                    if (status === 'Available') statusBadgeClass = 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100';
+                    else if (status === 'In Analysis') statusBadgeClass = 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100';
+                    else if (status === 'Consumed') statusBadgeClass = 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100';
+                    else if (status === 'Discarded') statusBadgeClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100';
+
+
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">${sample.sample_id}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">${sample.sample_name}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${sampleType}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${sample.collection_date || 'N/A'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${project}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${experiment}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusBadgeClass}">
+                                ${status}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${storageLocation}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${sample.quantity || 'N/A'} ${sample.unit || ''}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-200 mr-3 edit-button" data-id="${sample.sample_id}">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-200 delete-button" data-id="${sample.sample_id}">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </td>
+                    `;
+                    samplesTableBody.appendChild(row);
+                });
+
+                document.querySelectorAll('.edit-button').forEach(button => {
+                    button.addEventListener('click', (e) => openSampleModal(e.currentTarget.dataset.id));
+                });
+                document.querySelectorAll('.delete-button').forEach(button => {
+                    button.addEventListener('click', (e) => confirmDeleteSample(e.currentTarget.dataset.id));
+                });
+            }
+
+            // Apply search, filter, and sort
+            function applyFiltersAndSort() {
+                let tempSamples = [...allSamples];
+
+                // Search
+                const searchTerm = searchInput.value.toLowerCase();
+                if (searchTerm) {
+                    tempSamples = tempSamples.filter(sample =>
+                        (sample.sample_name && sample.sample_name.toLowerCase().includes(searchTerm)) ||
+                        (sample.sample_id && sample.sample_id.toString().toLowerCase().includes(searchTerm)) ||
+                        (sample.notes && sample.notes.toLowerCase().includes(searchTerm))
+                    );
+                }
+
+                // Filter by Type
+                const selectedType = typeFilter.value;
+                if (selectedType) {
+                    tempSamples = tempSamples.filter(sample => sample.sample_type_id == selectedType);
+                }
+
+                // Filter by Status
+                const selectedStatus = statusFilter.value;
+                if (selectedStatus) {
+                    tempSamples = tempSamples.filter(sample => sample.status_id == selectedStatus);
+                }
+
+                // Filter by Project
+                const selectedProject = projectFilter.value;
+                if (selectedProject) {
+                    tempSamples = tempSamples.filter(sample => sample.project_id == selectedProject);
+                }
+
+                // Sort
+                tempSamples.sort((a, b) => {
+                    let valA = a[currentSortColumn];
+                    let valB = b[currentSortColumn];
+
+                    if (valA === null || valA === undefined) valA = '';
+                    if (valB === null || valB === undefined) valB = '';
+
+                    if (currentSortColumn.includes('date')) {
+                        valA = new Date(valA);
+                        valB = new Date(valB);
+                    } else if (typeof valA === 'string') {
+                        valA = valA.toLowerCase();
+                        valB = valB.toLowerCase();
+                    }
+
+                    if (valA < valB) return currentSortDirection === 'asc' ? -1 : 1;
+                    if (valA > valB) return currentSortDirection === 'asc' ? 1 : -1;
+                    return 0;
+                });
+
+                filteredSamples = tempSamples;
+                renderSamples(filteredSamples);
+                updateSortIndicators();
+            }
+
+            // Update sort indicators in table headers
+            function updateSortIndicators() {
+                document.querySelectorAll('th[data-sort]').forEach(th => {
+                    th.classList.remove('sort-asc', 'sort-desc');
+                    if (th.dataset.sort === currentSortColumn) {
+                        th.classList.add(currentSortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
+                    }
+                });
+            }
+
+            // Open Add/Edit Sample Modal
+            async function openSampleModal(sampleId = null) {
+                modalMessage.classList.add('hidden');
+                sampleForm.reset(); // Clear form fields
+
+                if (sampleId) {
+                    modalTitle.textContent = 'Edit Sample';
+                    sampleIdInput.value = sampleId;
+                    const sample = allSamples.find(s => s.sample_id == sampleId);
+                    if (sample) {
+                        sampleNameInput.value = sample.sample_name;
+                        sampleTypeSelect.value = sample.sample_type_id || '';
+                        collectionDateInput.value = sample.collection_date || '';
+                        sampleStatusSelect.value = sample.status_id || '';
+                        projectSelect.value = sample.project_id || '';
+                        // Re-populate experiment dropdown based on the project of the sample being edited
+                        populateExperimentDropdown(sample.project_id);
+                        experimentSelect.value = sample.experiment_id || '';
+                        quantityInput.value = sample.quantity || '';
+                        unitInput.value = sample.unit || '';
+                        storageLocationSelect.value = sample.storage_location_id || '';
+                        notesInput.value = sample.notes || '';
+                    }
+                } else {
+                    modalTitle.textContent = 'Add New Sample';
+                    sampleIdInput.value = ''; // Clear ID for new sample
+                    populateExperimentDropdown(); // Reset experiment dropdown for new sample
+                }
+                sampleModal.style.display = 'flex';
+            }
+
+            // Close modal
+            function closeSampleModal() {
+                sampleModal.style.display = 'none';
+            }
+
+            function closeConfirmModal() {
+                confirmModal.style.display = 'none';
+                sampleToDeleteId = null;
+            }
+
+            // Handle Add/Edit Sample Form Submission
+            sampleForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const sampleId = sampleIdInput.value;
+                const method = sampleId ? 'PUT' : 'POST';
+                const url = sampleId ? `${API_BASE_URL}/samples/${sampleId}` : `${API_BASE_URL}/samples`;
+
+                const sampleData = {
+                    sample_name: sampleNameInput.value,
+                    sample_type_id: sampleTypeSelect.value,
+                    collection_date: collectionDateInput.value,
+                    status_id: sampleStatusSelect.value,
+                    project_id: projectSelect.value || null, // Ensure null if not selected
+                    experiment_id: experimentSelect.value || null, // Ensure null if not selected
+                    quantity: quantityInput.value ? parseFloat(quantityInput.value) : null,
+                    unit: unitInput.value || null,
+                    storage_location_id: storageLocationSelect.value || null,
+                    notes: notesInput.value || null
+                };
+
+                try {
+                    const response = await fetch(url, {
+                        method: method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(sampleData)
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok && result.success) {
+                        showModalMessage(result.message, 'success');
+                        closeSampleModal();
+                        fetchSamples(); // Re-fetch samples to update the table
+                    } else {
+                        showModalMessage(result.error || 'Operation failed.', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error saving sample:', error);
+                    showModalMessage('Could not connect to the server.', 'error');
+                }
+            });
+
+            // Confirm Delete Sample
+            function confirmDeleteSample(id) {
+                sampleToDeleteId = id;
+                confirmModal.style.display = 'flex';
+            }
+
+            // Execute Delete Sample
+            confirmDeleteButton.addEventListener('click', async () => {
+                if (!sampleToDeleteId) return;
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/samples/${sampleToDeleteId}`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok && result.success) {
+                        showToast('Sample deleted successfully!', 'success');
+                        closeConfirmModal();
+                        fetchSamples(); // Re-fetch samples
+                    } else {
+                        showToast(result.error || 'Failed to delete sample.', 'error');
+                        closeConfirmModal();
+                    }
+                } catch (error) {
+                    console.error('Error deleting sample:', error);
+                    showToast('Could not connect to the server to delete sample.', 'error');
+                    closeConfirmModal();
+                }
+            });
+
+            // --- Event Listeners ---
+            addSampleButton.addEventListener('click', () => openSampleModal());
+            closeModalButtons.forEach(button => button.addEventListener('click', closeSampleModal));
+            cancelSampleButton.addEventListener('click', closeSampleModal);
+            cancelDeleteButton.addEventListener('click', closeConfirmModal);
+
+            // Close modals if clicked outside
+            window.addEventListener('click', (event) => {
+                if (event.target == sampleModal) {
+                    closeSampleModal();
+                }
+                if (event.target == confirmModal) {
+                    closeConfirmModal();
+                }
+            });
+
+            // Search/Filter/Sort event listeners
+            searchInput.addEventListener('input', applyFiltersAndSort);
+            typeFilter.addEventListener('change', applyFiltersAndSort);
+            statusFilter.addEventListener('change', applyFiltersAndSort);
+            projectFilter.addEventListener('change', applyFiltersAndSort); // This will filter the main table
+
+            document.querySelectorAll('th[data-sort]').forEach(header => {
+                header.addEventListener('click', () => {
+                    const column = header.dataset.sort;
+                    if (currentSortColumn === column) {
+                        currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSortColumn = column;
+                        currentSortDirection = 'asc';
+                    }
+                    applyFiltersAndSort();
+                });
+            });
+
+            // Initial data load
+            fetchDropdownData(); // Fetch dropdown data first
+            fetchSamples(); // Then fetch samples
+        });
+    </script>
+</body>
+</html>

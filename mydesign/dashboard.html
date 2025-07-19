@@ -144,7 +144,6 @@
                 <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-yellow-100 rounded-full mr-4"><i data-lucide="flask-round" class="w-6 h-6 text-yellow-600"></i></div><div><p class="text-sm text-gray-500">Experiments (Month)</p><p id="stat-month-experiments" class="text-2xl font-bold">0</p></div></div>
                 <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-red-100 rounded-full mr-4"><i data-lucide="calendar-x" class="w-6 h-6 text-red-600"></i></div><div><p class="text-sm text-gray-500">Reagents Expiring</p><p id="stat-expiring-reagents" class="text-2xl font-bold">0</p></div></div>
                 
-                <!-- NEW STAT CARDS -->
                 <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-purple-100 rounded-full mr-4"><i data-lucide="flask-conical" class="w-6 h-6 text-purple-600"></i></div><div><p class="text-sm text-gray-500">Total Experiments</p><p id="stat-total-experiments" class="text-2xl font-bold">0</p></div></div>
                 <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-indigo-100 rounded-full mr-4"><i data-lucide="book-text" class="w-6 h-6 text-indigo-600"></i></div><div><p class="text-sm text-gray-500">Total Protocols</p><p id="stat-total-protocols" class="text-2xl font-bold">0</p></div></div>
                 <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-teal-100 rounded-full mr-4"><i data-lucide="archive" class="w-6 h-6 text-teal-600"></i></div><div><p class="text-sm text-gray-500">Total Storage Units</p><p id="stat-total-storage" class="text-2xl font-bold">0</p></div></div>
@@ -181,10 +180,7 @@
                                     <option value="samples">Count of Samples</option>
                                     <option value="experiments">Count of Experiments</option>
                                     <option value="reagents">Count of Reagents</option>
-                                    <option value="projects">Count of Projects</option> <!-- New Metric -->
-                                    <option value="personnel">Count of Personnel</option> <!-- New Metric -->
-                                    <option value="storage">Count of Storage Units</option> <!-- New Metric -->
-                                </select>
+                                    <option value="projects">Count of Projects</option> <option value="personnel">Count of Personnel</option> <option value="storage">Count of Storage Units</option> </select>
                             </div>
                             <div>
                                 <label for="chart-category" class="text-sm font-medium text-gray-700">Grouped by...</label>
@@ -208,7 +204,6 @@
                 </div>
             </div>
 
-            <!-- NEW: Recent Activity Feed -->
             <div class="card p-6 mt-8">
                 <h2 class="text-xl font-bold text-gray-800 mb-4">Recent System Activity <i data-lucide="activity" class="w-6 h-6 inline-block text-gray-500 ml-2"></i></h2>
                 <div id="activity-feed" class="space-y-4 max-h-80 overflow-y-auto pr-2">
@@ -219,6 +214,7 @@
     </div>
 
     <script>
+        // Redirect to login if not logged in
         if (sessionStorage.getItem('isLoggedIn') !== 'true') {
             localStorage.setItem('redirectUrl', window.location.href);
             window.location.href = './login.html';
@@ -229,39 +225,40 @@
         let dynamicChartInstance;
 
         // Expanded category options for the Data Explorer chart
+        // These keys map to column names in your database tables.
         const categoryOptions = {
             samples: [
-                { value: 'sample_type_id', text: 'Sample Type' }, // Corrected to sample_type_id
+                { value: 'sample_type_id', text: 'Sample Type' },
                 { value: 'sample_status_id', text: 'Status' },
                 { value: 'project_id', text: 'Project' },
                 { value: 'sampling_id', text: 'Sampling Event' },
-                { value: 'reception_date_month', text: 'Month (Received)' } // Corrected to reception_date
+                { value: 'reception_date_month', text: 'Month (Received)' }
             ],
             experiments: [
                 { value: 'status_id', text: 'Status' },
                 { value: 'project_id', text: 'Project' },
-                { value: 'person_id', text: 'Person' }, // Corrected to person_id
-                { value: 'experiment_date_month', text: 'Month (Created)' } // Corrected to experiment_date
+                { value: 'person_id', text: 'Person' },
+                { value: 'experiment_date_month', text: 'Month (Created)' }
             ],
             reagents: [
-                { value: 'category_id', text: 'Category' }, // Corrected to category_id
+                { value: 'category_id', text: 'Category' },
                 { value: 'status_id', text: 'Status' },
-                { value: 'expire_date_month', text: 'Month (Expiry)' } // Corrected to expire_date
+                { value: 'expire_date_month', text: 'Month (Expiry)' }
             ],
             projects: [ // New metric
                 { value: 'status_id', text: 'Status' },
-                { value: 'pi_person_id', text: 'Principal Investigator' }, // Corrected to pi_person_id
+                { value: 'pi_person_id', text: 'Principal Investigator' },
                 { value: 'funder', text: 'Funder' },
-                { value: 'start_date_year', text: 'Year (Start)' } // Corrected to start_date
+                { value: 'start_date_year', text: 'Year (Start)' }
             ],
             personnel: [ // New metric
-                { value: 'room_id', text: 'Room' }, // Corrected to room_id
+                { value: 'room_id', text: 'Room' }, // Assuming 'room_id' might be a field in 'reference.personal' or a related view
                 { value: 'full_name', text: 'Full Name' }
             ],
             storage: [ // New metric
                 { value: 'room_id', text: 'Room' },
-                { value: 'freezer', text: 'Freezer' },
-                { value: 'box', text: 'Box' }
+                { value: 'freezer_id', text: 'Freezer' }, // Changed to freezer_id based on storage schema
+                { value: 'box_id', text: 'Box' } // Changed to box_id based on storage schema
             ]
         };
 
@@ -274,7 +271,8 @@
                 }
                 const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
                 if (!response.ok) {
-                    if (response.status === 404 && endpoint.startsWith('global-search/')) {
+                    // For global search, return empty arrays if no results or 404
+                    if (endpoint.startsWith('search/global') && response.status === 404) {
                         return { projects: [], samples: [], experiments: [], sops: [], reagents: [], personal: [] };
                     }
                     const errorBody = await response.json().catch(() => ({error: `Server error or HTTP ${response.status}`}));
@@ -287,10 +285,11 @@
             }
         }
         
+        // Updates the category dropdown options based on the selected metric
         function updateCategoryOptions(metric) {
             const select = document.getElementById('chart-category');
             if (!select) return;
-            select.innerHTML = '';
+            select.innerHTML = ''; // Clear existing options
             const options = categoryOptions[metric] || [];
             options.forEach(opt => {
                 const option = document.createElement('option');
@@ -298,8 +297,13 @@
                 option.textContent = opt.text;
                 select.appendChild(option);
             });
+            // Ensure a category is always selected, pick first if available
+            if (options.length > 0) {
+                select.value = options[0].value;
+            }
         }
 
+        // Draws or updates the dynamic chart based on selected metric, category, and date range
         function drawChart() {
             const metric = document.getElementById('chart-metric').value;
             const category = document.getElementById('chart-category').value;
@@ -314,44 +318,45 @@
 
             // Apply date filtering based on relevant date fields for each metric
             let filteredData = data.filter(item => {
-                let itemDate;
-                if (metric === 'samples' && item.reception_date) {
-                    itemDate = new Date(item.reception_date);
-                } else if (metric === 'experiments' && item.experiment_date) {
-                    itemDate = new Date(item.experiment_date);
-                } else if (metric === 'reagents' && item.expire_date) {
-                    itemDate = new Date(item.expire_date);
-                } else if (metric === 'projects' && item.start_date) {
-                    itemDate = new Date(item.start_date);
+                let itemDateStr;
+                // Map the metric to the corresponding date field in your database schema
+                if (metric === 'samples') {
+                    itemDateStr = item.reception_date; // lab.samples.reception_date
+                } else if (metric === 'experiments') {
+                    itemDateStr = item.experiment_date; // lab.experiments.experiment_date
+                } else if (metric === 'reagents') {
+                    itemDateStr = item.expire_date; // reference.reagents.expire_date
+                } else if (metric === 'projects') {
+                    itemDateStr = item.start_date; // lims.projects.start_date
                 }
-                // Personnel and Storage don't typically have date ranges for their main entity
+                // Personnel and Storage entities typically don't have a primary date field for filtering their count over time.
                 
-                if (itemDate && startDate && endDate) {
-                    const start = new Date(startDate);
-                    const end = new Date(endDate);
-                    return itemDate >= start && itemDate <= end;
-                } else if (itemDate && startDate) {
-                    const start = new Date(startDate);
-                    return itemDate >= start;
-                } else if (itemDate && endDate) {
-                    const end = new Date(endDate);
-                    return itemDate <= end;
+                if (itemDateStr) {
+                    const itemDate = new Date(itemDateStr);
+                    const start = startDate ? new Date(startDate) : null;
+                    const end = endDate ? new Date(endDate) : null;
+
+                    if (start && end) {
+                        return itemDate >= start && itemDate <= end;
+                    } else if (start) {
+                        return itemDate >= start;
+                    } else if (end) {
+                        return itemDate <= end;
+                    }
                 }
-                return true; // No date filter applied or no date field for this metric
+                return true; // No date filter applied or no relevant date field
             });
 
             const groupedData = filteredData.reduce((acc, item) => {
                 let key;
                 if (category.endsWith('_month')) {
                     const dateField = category.replace('_month', '');
-                    key = item[dateField] ? new Date(item[dateField]).toISOString().slice(0, 7) : 'N/A';
+                    key = item[dateField] ? new Date(item[dateField]).toISOString().slice(0, 7) : 'N/A'; // Format as YYYY-MM
                 } else if (category.endsWith('_year')) {
                     const dateField = category.replace('_year', '');
-                    key = item[dateField] ? new Date(item[dateField]).getFullYear().toString() : 'N/A';
-                } else if (category === 'full_name' && item.full_name) { // Specific for personnel
-                    key = item.full_name;
+                    key = item[dateField] ? new Date(item[dateField]).getFullYear().toString() : 'N/A'; // Format as YYYY
                 } else {
-                    key = item[category] || 'N/A';
+                    key = item[category] !== null && item[category] !== undefined ? String(item[category]) : 'N/A';
                 }
                 acc[key] = (acc[key] || 0) + 1;
                 return acc;
@@ -359,10 +364,13 @@
             
             let labels = Object.keys(groupedData);
             if(category.endsWith('_month') || category.endsWith('_year')) labels.sort(); // Sort date-based labels
+            else labels.sort((a,b) => String(a).localeCompare(String(b))); // Sort other labels alphabetically
+
             const values = labels.map(label => groupedData[label]);
+            // Determine chart type: line for time series, pie for few categories, bar for more categories
             let chartType = (category.endsWith('_month') || category.endsWith('_year')) ? 'line' : (labels.length <= 7 && labels.length > 1 ? 'pie' : 'bar');
 
-            if (dynamicChartInstance) dynamicChartInstance.destroy();
+            if (dynamicChartInstance) dynamicChartInstance.destroy(); // Destroy previous chart instance
             
             const ctx = document.getElementById('dynamic-chart').getContext('2d');
             dynamicChartInstance = new Chart(ctx, {
@@ -370,16 +378,16 @@
                 data: {
                     labels,
                     datasets: [{
-                        label: `Count of ${metric}`,
+                        label: `Count of ${metric.charAt(0).toUpperCase() + metric.slice(1)}`, // Capitalize metric
                         data: values,
-                        backgroundColor: [
+                        backgroundColor: chartType === 'pie' ? [
                             '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b',
                             '#06b6d4', '#a855f7', '#f43f5e', '#14b8a6', '#eab308', '#6b7280', '#fb923c'
-                        ],
-                        borderColor: chartType === 'line' ? '#3b82f6' : 'rgba(0,0,0,0)',
+                        ] : '#3b82f6', // Solid color for bar/line charts
+                        borderColor: chartType === 'line' ? '#3b82f6' : (chartType === 'bar' ? '#2563eb' : 'rgba(0,0,0,0)'),
                         borderWidth: 1,
-                        tension: 0.4,
-                        fill: chartType === 'line'
+                        tension: 0.4, // For smooth lines
+                        fill: chartType === 'line' // Fill area under line chart
                     }]
                 },
                 options: {
@@ -387,7 +395,21 @@
                     maintainAspectRatio: false,
                     plugins: {
                         legend: {
-                            display: chartType === 'pie' || labels.length <= 7
+                            display: chartType === 'pie' || labels.length <= 7 // Display legend for pie and if few categories for bar/line
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y;
+                                    }
+                                    return label;
+                                }
+                            }
                         }
                     },
                     scales: {
@@ -429,7 +451,8 @@
                     if (!dateString) return 'N/A';
                     try {
                         const date = new Date(dateString);
-                        return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString();
+                        // Using toISOString and then slicing to ensure consistent format if browser locale varies
+                        return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString(); 
                     } catch (e) {
                         return 'N/A';
                     }
@@ -464,6 +487,8 @@
                                 ${renderDetailRow('Reception Date', formatDate(sample.reception_date))}
                                 ${renderDetailRow('Last Modified', formatDateTime(sample.time_modification))}
                                 ${renderDetailRow('Parent Sample', sample.parent_sample_id)}
+                                ${renderDetailRow('Person ID (Created By)', sample.person_id_created)}
+                                ${renderDetailRow('Created Date', formatDateTime(sample.date_creation))}
                             </dl>
                         </div>
                     </div>
@@ -506,6 +531,8 @@
                             <dl class="space-y-2 py-2">
                                 ${renderDetailRow('Room', sample.room_id)}
                                 ${renderDetailRow('Freezer', sample.storage_freezer)}
+                                ${renderDetailRow('Rack', sample.storage_rack)}
+                                ${renderDetailRow('Shelf', sample.storage_shelf)}
                                 ${renderDetailRow('Box', sample.storage_box)}
                                 ${renderDetailRow('Position', sample.storage_position)}
                             </dl>
@@ -555,7 +582,7 @@
                 }
 
                 // DNA Details
-                if (sample.dna_volume_ul) { // Check for a key specific to DNA table
+                if (sample.dna_volume_ul || sample.dna_concentration_ng_ul) { // Check for a key specific to DNA table
                     html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="dna-details">
@@ -569,14 +596,14 @@
                                 ${renderDetailRow('A260/280', sample.dna_a260_280)}
                                 ${renderDetailRow('A260/230', sample.dna_a260_230)}
                                 ${renderDetailRow('Extraction Method', sample.dna_extraction_method)}
-                                ${renderDetailRow('Extraction Date', formatDate(sample.extraction_date))}
+                                ${renderDetailRow('Extraction Date', formatDate(sample.dna_extraction_date))}
                             </dl>
                         </div>
                     </div>`;
                 }
                 
                 // RNA Details
-                if (sample.rna_volume_ul) { // Check for a key specific to RNA table
+                if (sample.rna_volume_ul || sample.rna_concentration_ng_ul) { // Check for a key specific to RNA table
                     html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="rna-details">
@@ -590,14 +617,15 @@
                                 ${renderDetailRow('A260/280', sample.rna_a260_280)}
                                 ${renderDetailRow('A260/230', sample.rna_a260_230)}
                                 ${renderDetailRow('Extraction Method', sample.rna_extraction_method)}
-                                ${renderDetailRow('Extraction Date', formatDate(sample.extraction_date))}
+                                ${renderDetailRow('Extraction Date', formatDate(sample.rna_extraction_date))}
                             </dl>
                         </div>
                     </div>`;
                 }
 
                 // Extraction Details (if not covered by DNA/RNA directly)
-                if (sample.extraction_date && !sample.dna_volume_ul && !sample.rna_volume_ul) {
+                // This checks if general extraction fields exist, but DNA/RNA details are preferred if present.
+                if (sample.extraction_date && !(sample.dna_volume_ul || sample.rna_volume_ul)) {
                      html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="extraction-details">
@@ -801,25 +829,32 @@
 
 
         async function setupDashboard() {
-            lucide.createIcons();
-            const user = JSON.parse(sessionStorage.getItem('user'));
-            if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.full_name || user.person_id}</p>`; // Use full_name if available
+            lucide.createIcons(); // Initialize Lucide icons
+            const personId = sessionStorage.getItem('person_id');
+            const fullName = sessionStorage.getItem('full_name');
+            if(personId) {
+                document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${fullName || personId}</p>`;
+            }
+
+            // Logout button functionality
             document.getElementById('logout-button').addEventListener('click', () => {
-                sessionStorage.clear();
-                localStorage.removeItem('redirectUrl');
-                window.location.href = './login.html';
+                sessionStorage.clear(); // Clear all session data
+                localStorage.removeItem('redirectUrl'); // Remove any stored redirect URL
+                window.location.href = './login.html'; // Redirect to login page
             });
             
-            // Fetch all dashboard stats in one go
+            // Fetch all dashboard stats in parallel for efficiency
             const statsPromises = {
-                active_projects: apiFetch('table/Lims/projects?filter_status_id=Active').then(res => res ? res.length : 0),
-                total_samples: apiFetch('table/Lab/samples').then(res => res ? res.length : 0),
-                experiments_this_month: apiFetch('table/Lab/experiments?filter_experiment_date_month=' + new Date().toISOString().slice(0, 7)).then(res => res ? res.length : 0),
-                reagents_expiring_soon: apiFetch('table/Lims/reagents?filter_expire_date_within_30_days=true').then(res => res ? res.length : 0), // Assuming backend can handle this filter
-                total_experiments: apiFetch('table/Lab/experiments').then(res => res ? res.length : 0),
-                total_protocols: apiFetch('table/Lims/sop').then(res => res ? res.length : 0),
-                total_storage: apiFetch('table/Lab/storage').then(res => res ? res.length : 0),
-                total_personnel: apiFetch('table/Reference/personal').then(res => res ? res.length : 0),
+                active_projects: apiFetch('table/lims/projects?filter_status_id=Active').then(res => res ? res.length : 0),
+                total_samples: apiFetch('table/lab/samples').then(res => res ? res.length : 0),
+                // Filter for experiments this month (YYYY-MM format)
+                experiments_this_month: apiFetch('table/lab/experiments?filter_experiment_date_month=' + new Date().toISOString().slice(0, 7)).then(res => res ? res.length : 0),
+                // Assuming backend can handle 'filter_expire_date_within_30_days' or you'd fetch all and filter client-side
+                reagents_expiring_soon: apiFetch('table/reference/reagents?filter_expire_date_within_30_days=true').then(res => res ? res.length : 0),
+                total_experiments: apiFetch('table/lab/experiments').then(res => res ? res.length : 0),
+                total_protocols: apiFetch('table/lab/protocols').then(res => res ? res.length : 0), // Corrected to lab.protocols
+                total_storage: apiFetch('table/lab/storage_locations').then(res => res ? res.length : 0), // Corrected to lab.storage_locations
+                total_personnel: apiFetch('table/reference/personal').then(res => res ? res.length : 0),
             };
 
             const stats = {};
@@ -827,46 +862,50 @@
                 stats[key] = await statsPromises[key];
             }
 
+            // Update UI with fetched stats
             if (stats) {
                 document.getElementById('stat-active-projects').textContent = stats.active_projects || 0;
                 document.getElementById('stat-total-samples').textContent = stats.total_samples || 0;
                 document.getElementById('stat-month-experiments').textContent = stats.experiments_this_month || 0;
                 document.getElementById('stat-expiring-reagents').textContent = stats.reagents_expiring_soon || 0;
-                document.getElementById('stat-total-experiments').textContent = stats.total_experiments || 0; // New
-                document.getElementById('stat-total-protocols').textContent = stats.total_protocols || 0; // New
-                document.getElementById('stat-total-storage').textContent = stats.total_storage || 0; // New
-                document.getElementById('stat-total-personnel').textContent = stats.total_personnel || 0; // New
+                document.getElementById('stat-total-experiments').textContent = stats.total_experiments || 0;
+                document.getElementById('stat-total-protocols').textContent = stats.total_protocols || 0;
+                document.getElementById('stat-total-storage').textContent = stats.total_storage || 0;
+                document.getElementById('stat-total-personnel').textContent = stats.total_personnel || 0;
             }
 
-            // Fetch data for charts
+            // Fetch data for charts. These are the source datasets for the dynamic charts.
             const [samples, experiments, reagents, projects, personnel, storage] = await Promise.all([
-                apiFetch('table/Lab/samples'),
-                apiFetch('table/Lab/experiments'),
-                apiFetch('table/Lims/reagents'),
-                apiFetch('table/Lims/projects'), // New
-                apiFetch('table/Reference/personal'), // New
-                apiFetch('table/Lab/storage') // New
+                apiFetch('table/lab/samples'),
+                apiFetch('table/lab/experiments'),
+                apiFetch('table/reference/reagents'), // Corrected schema for reagents
+                apiFetch('table/lims/projects'),
+                apiFetch('table/reference/personal'),
+                apiFetch('table/lab/storage_locations') // Corrected to lab.storage_locations
             ]);
             dataCache.samples = samples || [];
             dataCache.experiments = experiments || [];
             dataCache.reagents = reagents || [];
-            dataCache.projects = projects || []; // New
-            dataCache.personnel = personnel || []; // New
-            dataCache.storage = storage || []; // New
+            dataCache.projects = projects || [];
+            dataCache.personnel = personnel || [];
+            dataCache.storage = storage || [];
 
             const metricSelect = document.getElementById('chart-metric');
             const categorySelect = document.getElementById('chart-category');
             const startDateInput = document.getElementById('chart-start-date');
             const endDateInput = document.getElementById('chart-end-date');
 
+            // Add event listeners for chart controls
             metricSelect.addEventListener('change', () => { updateCategoryOptions(metricSelect.value); drawChart(); });
             categorySelect.addEventListener('change', drawChart);
             startDateInput.addEventListener('change', drawChart);
             endDateInput.addEventListener('change', drawChart);
             
+            // Initial setup for category options and chart
             updateCategoryOptions(metricSelect.value);
             drawChart();
 
+            // Sample tracking functionality
             document.getElementById('track-sample-btn').onclick = async () => {
                 const sampleId = document.getElementById('track-sample-input').value.trim();
                 const resultsDiv = document.getElementById('track-sample-results');
@@ -875,6 +914,7 @@
                 await displayDetailedSampleInfo(sampleId, resultsDiv);
             };
 
+            // Global search functionality
             const searchInput = document.getElementById('global-search-input');
             const searchResultsDiv = document.getElementById('global-search-results');
             searchInput.addEventListener('input', async (e) => {
@@ -886,39 +926,47 @@
 
                 searchResultsDiv.innerHTML = `<div class="card p-4 shadow-lg absolute z-10 bg-white w-full max-h-60 overflow-y-auto text-center"><div class="loading-spinner"></div> Searching...</div>`;
 
-                const results = await apiFetch(`global-search/${searchTerm}`);
+                const results = await apiFetch(`search/global?q=${encodeURIComponent(searchTerm)}`); // Use new global search endpoint
                 let html = '';
 
-                if(results && results.projects && results.projects.length > 0) {
-                    html += `<div><h3 class="font-bold text-gray-700">Projects</h3><div class="space-y-1">${results.projects.map(p => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${p.title} (<span class="font-mono text-sm">${p.project_id}</span>)</div>`).join('')}</div></div>`;
-                }
-                
-                if(results && results.samples && results.samples.length > 0) {
-                    html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Samples</h3><div class="space-y-1">${results.samples.map(s => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${s.sample_id} (<span class="text-sm text-gray-500">${s.sample_type}</span>)</div>`).join('')}</div></div>`;
+                // Render search results based on the categories returned by the backend
+                if(results) {
+                    // Projects results
+                    if(results['lims.projects'] && results['lims.projects'].length > 0) {
+                        html += `<div><h3 class="font-bold text-gray-700">Projects</h3><div class="space-y-1">${results['lims.projects'].map(p => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${p.project_name || p.title} (<span class="font-mono text-sm">${p.project_id}</span>)</div>`).join('')}</div></div>`;
+                    }
+                    
+                    // Samples results
+                    if(results['lab.samples'] && results['lab.samples'].length > 0) {
+                        html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Samples</h3><div class="space-y-1">${results['lab.samples'].map(s => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${s.sample_id} (<span class="text-sm text-gray-500">${s.sample_type_id}</span>)</div>`).join('')}</div></div>`;
+                    }
 
-                }
+                    // Experiments results
+                    if(results['lab.experiments'] && results['lab.experiments'].length > 0) {
+                        html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Experiments</h3><div class="space-y-1">${results['lab.experiments'].map(ex => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${ex.experiment_name || ex.experiment_id} (<span class="font-mono text-sm">${ex.experiment_id}</span>)</div>`).join('')}</div></div>`;
+                    }
 
-                if(results && results.experiments && results.experiments.length > 0) {
-                    html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Experiments</h3><div class="space-y-1">${results.experiments.map(ex => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${ex.experiment_title} (<span class="font-mono text-sm">${ex.experiment_id}</span>)</div>`).join('')}</div></div>`;
+                    // Protocols (SOPs) results - assuming 'lab.protocols' is the table for SOPs
+                    if(results['lab.protocols'] && results['lab.protocols'].length > 0) {
+                        html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Protocols (SOPs)</h3><div class="space-y-1">${results['lab.protocols'].map(s => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${s.protocol_name} (<span class="font-mono text-sm">${s.protocol_id}</span>)</div>`).join('')}</div></div>`;
+                    }
 
-                }
+                    // Reagents results
+                    if(results['reference.reagents'] && results['reference.reagents'].length > 0) {
+                        html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Reagents</h3><div class="space-y-1">${results['reference.reagents'].map(r => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${r.reagent_name || r.reagent_id} (<span class="font-mono text-sm">${r.reagent_id}</span>)</div>`).join('')}</div></div>`;
+                    }
 
-                if(results && results.sops && results.sops.length > 0) {
-                    html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">SOPs</h3><div class="space-y-1">${results.sops.map(s => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${s.title} (<span class="font-mono text-sm">${s.sop_id}</span>)</div>`).join('')}</div></div>`;
-                }
-
-                if(results && results.reagents && results.reagents.length > 0) {
-                    html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Reagents</h3><div class="space-y-1">${results.reagents.map(r => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${r.reagent_complete_name} (<span class="font-mono text-sm">${r.reagent_id}</span>)</div>`).join('')}</div></div>`;
-                }
-
-                if(results && results.personal && results.personal.length > 0) {
-                    html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Personnel</h3><div class="space-y-1">${results.personal.map(p => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${p["Full Name"]} (<span class="font-mono text-sm">${p.person_id}</span>)</div>`).join('')}</div></div>`;
+                    // Personnel results
+                    if(results['reference.personal'] && results['reference.personal'].length > 0) {
+                        html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Personnel</h3><div class="space-y-1">${results['reference.personal'].map(p => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${p.full_name} (<span class="font-mono text-sm">${p.person_id}</span>)</div>`).join('')}</div></div>`;
+                    }
                 }
 
 
                 searchResultsDiv.innerHTML = html ? `<div class="card p-4 shadow-lg absolute z-10 bg-white w-full max-h-60 overflow-y-auto">${html}</div>` : (searchTerm.length >= 2 ? '<p class="p-2 text-gray-500">No results found.</p>' : '');
             });
 
+            // Hide search results when clicking outside
             document.addEventListener('click', (event) => {
                 const searchContainer = document.querySelector('.relative.w-1\\/3');
                 if (searchContainer && !searchContainer.contains(event.target)) {
@@ -926,18 +974,18 @@
                 }
             });
 
-            // Load recent activity
+            // Load recent activity from audit log
             loadRecentActivity();
         }
 
-        // New function to load and display recent activity from audit log
+        // Function to load and display recent activity from audit log
         async function loadRecentActivity() {
             const activityFeedDiv = document.getElementById('activity-feed');
             activityFeedDiv.innerHTML = `<p class="text-gray-500 text-center"><span class="loading-spinner mr-2"></span>Loading recent activities...</p>`;
 
             try {
                 // Fetch last 10 audit log entries, ordered by timestamp descending
-                const auditLogs = await apiFetch('table/audit/log?order_by=action_timestamp&order_direction=desc&limit=10');
+                const auditLogs = await apiFetch('table/audit/table_change_log?order_by=-action_timestamp&limit=10'); // Corrected table name and order_by for descending
 
                 if (!auditLogs || auditLogs.error || auditLogs.length === 0) {
                     activityFeedDiv.innerHTML = `<p class="text-gray-500 text-center">No recent activity found.</p>`;
@@ -962,10 +1010,24 @@
                         if (log.action === 'U' && log.new_data.title) {
                             details += ` title updated to "<span class="font-semibold">${log.new_data.title}</span>"`;
                         }
-                    } else if (log.new_data && log.new_data.id) { // Generic ID fallback
-                        details = `Record <span class="font-semibold">${log.new_data.id}</span>`;
-                    } else if (log.original_data && log.original_data.id && log.action === 'D') {
-                        details = `Record <span class="font-semibold">${log.original_data.id}</span>`;
+                    } else if (log.table_name === 'protocols' && log.new_data && log.new_data.protocol_id) {
+                        details = `Protocol <span class="font-semibold">${log.new_data.protocol_id}</span>`;
+                    } else if (log.new_data && Object.keys(log.new_data).length > 0) {
+                        // Generic details for other tables if a primary identifier is available in new_data
+                        const primaryIdKey = Object.keys(log.new_data).find(key => key.includes('_id')); // Heuristic for ID
+                        if (primaryIdKey) {
+                            details = `record <span class="font-semibold">${log.new_data[primaryIdKey]}</span>`;
+                        } else {
+                            details = `a record`;
+                        }
+                    } else if (log.original_data && Object.keys(log.original_data).length > 0 && log.action === 'D') {
+                        // For deletions, try to get ID from original_data
+                        const primaryIdKey = Object.keys(log.original_data).find(key => key.includes('_id'));
+                        if (primaryIdKey) {
+                            details = `record <span class="font-semibold">${log.original_data[primaryIdKey]}</span>`;
+                        } else {
+                            details = `a record`;
+                        }
                     } else {
                         details = `a record`;
                     }
@@ -986,6 +1048,7 @@
             }
         }
 
+        // Initialize dashboard on page load
         document.addEventListener('DOMContentLoaded', setupDashboard);
     </script>
 </body>
