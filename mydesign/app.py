@@ -2,9 +2,9 @@ import os
 import psycopg2
 import psycopg2.extras
 import bcrypt
-from flask import Flask, jsonify, request, send_from_directory, redirect, url_for, session, g
+from flask import Flask, jsonify, request, send_from_directory, redirect, url_for
 from flask_cors import CORS
-from waitress import serve
+from waitress import serve # For production-ready server
 import base64
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -14,17 +14,13 @@ DB_HOST: str = os.getenv('DB_HOST', '0.0.0.0')
 DB_NAME: str = os.getenv('DB_NAME', 'wanderfische')
 DB_USER: str = os.getenv('DB_USER', 'kasmi')
 DB_PASS: str = os.getenv('DB_PASS', 'password')
-# Flask secret key for session management. CHANGE THIS FOR PRODUCTION!
-SECRET_KEY: str = os.getenv('SECRET_KEY', 'a_very_secret_key_for_session_management_and_security')
 
 STATIC_FOLDER: str = '.' # Serves frontend files from the directory where app.py is run
 FLASK_ENV: str = os.getenv('FLASK_ENV', 'production') # 'development' for debugging, 'production' for deployment
 API_PREFIX: str = os.getenv('API_PREFIX', '/api') # e.g., '/api', '/mymglab/api'
 
 app = Flask(__name__, static_folder=STATIC_FOLDER)
-app.secret_key = SECRET_KEY
-# Enable CORS for all routes, allowing credentials (cookies/sessions)
-CORS(app, supports_credentials=True)
+CORS(app) # Enable CORS for all routes
 
 # --- Primary Key Mapping ---
 # Maps (schema_name_lower, table_name_lower) to their primary key column name (case-sensitive as in DB).
@@ -117,67 +113,54 @@ PK_MAPPING: Dict[Tuple[str, str], str] = {
     ('lab', 'storage_occupancy_view'): 'storage_id',
     ('lims', 'project_comprehensive_summary_view'): 'project_id',
     ('lab', 'experiment_progress_overview_view'): 'experiment_id',
-    ('lims', 'reagent_status_view'): 'reagent_complete_name',
+    ('lims', 'reagent_status_view'): 'reagent_complete_name', # Using a unique name as conceptual PK
     ('lab', 'sample_full_details_view'): 'sample_id',
     ('reference', 'taxon_hierarchy_view'): 'taxon_id',
-    ('lab', 'monthly_sample_reception_mv'): 'reception_month',
+    ('lab', 'monthly_sample_reception_mv'): 'reception_month', # Materialized view, conceptual PK
 }
 
 # --- Database Connection ---
 def get_db_connection():
+    """Establishes a connection to the PostgreSQL database."""
     try:
         conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
         return conn
     except psycopg2.OperationalError as e:
         print(f"FATAL: Could not connect to database at {DB_HOST}. Error: {e}")
-        raise
-
-# --- Context Manager for DB connection ---
-@app.before_request
-def before_request_func():
-    g.db_conn = get_db_connection()
-    if 'user_id' in session and session['user_id'] is not None: # Check for None explicitly
-        # Convert user_id to string for PostgreSQL set_config, as it expects text
-        user_id_str = str(session['user_id'])
-        with g.db_conn.cursor() as cur:
-            # Use ::text cast in SQL to ensure type compatibility
-            cur.execute("SELECT set_config('lims.current_person_id', %s::text, FALSE)", (user_id_str,))
-            g.db_conn.commit()
-            print(f"RLS: Set lims.current_person_id to {user_id_str}")
-    else:
-        with g.db_conn.cursor() as cur:
-            cur.execute("SELECT set_config('lims.current_person_id', '', FALSE)")
-            g.db_conn.commit()
-            print("RLS: Cleared lims.current_person_id (no user logged in)")
-
-
-@app.teardown_request
-def teardown_request_func(exception=None):
-    if hasattr(g, 'db_conn'):
-        g.db_conn.close()
+        raise # Re-raise to stop server if DB connection fails on startup
 
 # --- Helper Functions ---
 def get_pk_column(schema: str, table: str) -> str:
+    """Retrieves the primary key column name for a given schema and table."""
+    # Fallback to 'nr' if no specific PK is mapped, though 'nr' is less common in your schema
     pk_col = PK_MAPPING.get((schema.lower(), table.lower()))
     if pk_col is None:
         print(f"WARNING: No primary key mapping found for {schema}.{table}. Defaulting to 'nr'. "
               "Please ensure PK_MAPPING is correct and matches database column casing.")
-        return 'nr'
+        return 'nr' # Fallback
     return pk_col
 
 def transform_row_for_json(row: Dict[str, Any]) -> Dict[str, Any]:
-    new_row = dict(row)
+    """Converts special data types (like memoryview from bytea) in a row for JSON serialization."""
+    new_row = dict(row) # Create a mutable copy
     for key, value in new_row.items():
         if isinstance(value, memoryview):
+            # Encode binary data to Base64 string
             new_row[key] = base64.b64encode(value.tobytes()).decode('utf-8')
         elif isinstance(value, bytes):
+            # Also handle direct bytes objects
             new_row[key] = base64.b64encode(value).decode('utf-8')
     return new_row
 
 # --- Database Schema/Table Casing Resolver ---
+# Cache for resolved schema/table names to avoid repeated lookups
 _resolved_names_cache: Dict[Tuple[str, str], Tuple[str, str]] = {}
 
 def _resolve_table_casing(conn, requested_schema: str, requested_table: str) -> Optional[Tuple[str, str]]:
+    """
+    Queries information_schema to find the exact casing of a schema and table name.
+    Returns (actual_schema_name, actual_table_name) or None if not found.
+    """
     cache_key = (requested_schema.lower(), requested_table.lower())
     if cache_key in _resolved_names_cache:
         return _resolved_names_cache[cache_key]
@@ -204,85 +187,54 @@ def _resolve_table_casing(conn, requested_schema: str, requested_table: str) -> 
 
 @app.route(f'{API_PREFIX}/login', methods=['POST'])
 def login_user():
+    """Handles user login authentication."""
     data = request.get_json()
-    username = data.get('username')
+    person_id = data.get('person_id')
     password = data.get('password')
 
-    if not username or not password:
-        return jsonify({"error": "Missing username or password"}), 400
+    if not person_id or not password:
+        return jsonify({"error": "Missing person_id or password"}), 400
 
-    # 1. Special "TIFI" user bypass
-    if username == 'TIFI' and password == 'password':
-        session['user_id'] = 'TIFI'
-        session['user_type'] = 'admin'
-        session['is_admin'] = True
-        return jsonify({"success": True, "user": {"full_name": "TIFI Admin", "person_id": "TIFI"}, "user_type": "admin"}), 200
+    # Simple demo login for development/testing
+    if FLASK_ENV == 'development' and person_id == 'demo' and password == 'password':
+        return jsonify({"success": True, "user": {"person": "Demo User", "person_id": "demo"}}), 200
 
+    # Note: "Personal" table is in "reference" schema, and column is "password_hash"
+    query = 'SELECT full_name, person_id, password_hash FROM "reference"."personal" WHERE person_id = %s;'
     conn = None
     try:
-        conn = g.db_conn
+        conn = get_db_connection()
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            # 2. Authenticate against reference.personal (using person_id)
-            query_personal = 'SELECT person_id, full_name, password_hash FROM "reference"."personal" WHERE person_id = %s;'
-            cur.execute(query_personal, (username,))
-            user_personal = cur.fetchone()
-
-            if user_personal and user_personal.get('password_hash'):
-                if bcrypt.checkpw(password.encode('utf-8'), user_personal['password_hash'].encode('utf-8')):
-                    session['user_id'] = user_personal['person_id']
-                    session['user_type'] = 'personal'
-                    session['is_admin'] = False
-                    user_personal.pop('password_hash', None)
-                    return jsonify({"success": True, "user": user_personal, "user_type": "personal"}), 200
-
-            # 3. Authenticate against lims.customers (using mail)
-            query_customers = 'SELECT customer_id, customer_name, mail, password_hash FROM "lims"."customers" WHERE mail = %s;'
-            cur.execute(query_customers, (username,))
-            user_customer = cur.fetchone()
-
-            if user_customer and user_customer.get('password_hash'):
-                if bcrypt.checkpw(password.encode('utf-8'), user_customer['password_hash'].encode('utf-8')):
-                    session['user_id'] = user_customer['customer_id']
-                    session['user_type'] = 'customer'
-                    session['is_admin'] = False
-                    user_customer.pop('password_hash', None)
-                    return jsonify({"success": True, "user": user_customer, "user_type": "customer"}), 200
-
-            # 4. Authenticate against lims.external_contacts (using mail)
-            query_external_contacts = 'SELECT contact_id, full_name, mail, password_hash FROM "lims"."external_contacts" WHERE mail = %s;'
-            cur.execute(query_external_contacts, (username,))
-            user_external = cur.fetchone()
-
-            if user_external and user_external.get('password_hash'):
-                if bcrypt.checkpw(password.encode('utf-8'), user_external['password_hash'].encode('utf-8')):
-                    session['user_id'] = user_external['contact_id']
-                    session['user_type'] = 'external_contact'
-                    session['is_admin'] = False
-                    user_external.pop('password_hash', None)
-                    return jsonify({"success": True, "user": user_external, "user_type": "external_contact"}), 200
-
-            # If none of the above succeeded
+            cur.execute(query, (person_id,))
+            user = cur.fetchone()
+            
+        if user and user.get('password_hash') and bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+            user.pop('password_hash', None) # Remove hash for security
+            return jsonify({"success": True, "user": user}), 200
+        else:
             return jsonify({"error": "Invalid credentials"}), 401
-
     except Exception as e:
-        print(f"Login error for {username}: {e}")
+        print(f"Login error for {person_id}: {e}")
         return jsonify({"error": "An internal server error occurred during login."}), 500
-
-
-@app.route(f'{API_PREFIX}/logout', methods=['POST'])
-def logout_user():
-    session.pop('user_id', None)
-    session.pop('user_type', None)
-    session.pop('is_admin', None)
-    return jsonify({"success": True, "message": "Logged out"}), 200
+    finally:
+        if conn:
+            conn.close()
 
 @app.route(f'{API_PREFIX}/global-search/<string:search_term>', methods=['GET'])
 def global_search(search_term: str):
+    """
+    Searches across multiple tables and views for a given term,
+    leveraging full-text search where applicable.
+    """
+    # Use plainto_tsquery for simple search terms, or to_tsquery for more complex queries with operators
     ts_query_func = f"plainto_tsquery('public.lims_english', %s)"
-    search_pattern = f"%{search_term}%"
+    search_pattern = f"%{search_term}%" # For ILIKE searches
 
     results: Dict[str, List[Dict[str, Any]]] = {}
 
+    # Define queries for various tables/views
+    # IMPORTANT: Ensure table/view names here match their *actual* casing in the DB if they are not lowercase.
+    # For now, assuming they are lowercase as per your SQL schema's quoted identifiers.
     queries: Dict[str, Tuple[str, Tuple[str, ...]]] = {
         "projects": (
             f'SELECT project_id, title FROM "lims"."projects" WHERE project_search_vector @@ {ts_query_func} OR project_id ILIKE %s OR title ILIKE %s LIMIT 5',
@@ -320,6 +272,7 @@ def global_search(search_term: str):
             'SELECT person_id, full_name FROM "reference"."personal" WHERE person_id ILIKE %s OR full_name ILIKE %s LIMIT 5',
             (search_pattern, search_pattern)
         ),
+        # Include relevant views for search results
         "detailed_samples_view": (
             'SELECT sample_id, external_name, sample_type_abrv, project_title FROM "lab"."detailed_samples_view" WHERE sample_id ILIKE %s OR external_name ILIKE %s OR project_title ILIKE %s LIMIT 5',
             (search_pattern, search_pattern, search_pattern)
@@ -334,8 +287,9 @@ def global_search(search_term: str):
         ),
     }
             
+    conn = None
     try:
-        conn = g.db_conn
+        conn = get_db_connection()
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             for key, (query, params) in queries.items():
                 try:
@@ -343,15 +297,19 @@ def global_search(search_term: str):
                     results[key] = [transform_row_for_json(row) for row in cur.fetchall()]
                 except Exception as inner_e:
                     print(f"Error executing search for {key}: {inner_e}")
-                    results[key] = []
+                    # Log the error but continue with other searches
+                    results[key] = [] # Return empty list for failed searches
             return jsonify(results), 200
     except Exception as e:
         print(f"Global search error: {e}")
         return jsonify({"error": "An internal server error occurred during search."}), 500
-
+    finally:
+        if conn:
+            conn.close()
 
 @app.route(f'{API_PREFIX}/dashboard-stats', methods=['GET'])
 def get_dashboard_stats():
+    """Fetches key statistics for the dashboard."""
     query = """
     SELECT
         (SELECT COUNT(*) FROM "lims"."projects" WHERE "status_id" = 'Active') AS active_projects,
@@ -361,8 +319,9 @@ def get_dashboard_stats():
         (SELECT COUNT(*) FROM "lab"."storage_occupancy_view" WHERE occupancy_percent > 75) AS highly_occupied_storages,
         (SELECT COUNT(*) FROM "lims"."orders" WHERE status_id = 'Pending') AS pending_orders;
     """
+    conn = None
     try:
-        conn = g.db_conn
+        conn = get_db_connection()
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(query)
             stats = cur.fetchone()
@@ -370,19 +329,27 @@ def get_dashboard_stats():
     except Exception as e:
         print(f"Dashboard stats error: {e}")
         return jsonify({"error": "An internal server error occurred while fetching dashboard stats."}), 500
+    finally:
+        if conn:
+            conn.close()
 
 @app.route(f'{API_PREFIX}/table_names_for_forms', methods=['GET'])
 def table_names_for_forms():
+    """
+    Returns a list of table and view names relevant for 'Target Table Name' dropdowns.
+    Queries the database's information_schema for base tables and views in specific schemas.
+    """
+    conn = None
     try:
-        conn = g.db_conn
+        conn = get_db_connection()
         with conn.cursor() as cur:
             query = """
             SELECT table_schema || '.' || table_name
             FROM information_schema.tables
             WHERE table_schema IN ('lab', 'lims', 'reference', 'bioinformatics', 'audit')
-              AND table_type IN ('BASE TABLE', 'VIEW', 'MATERIALIZED VIEW')
-              AND table_name NOT LIKE '%_seq'
-              AND table_name NOT LIKE '%_y%'
+              AND table_type IN ('BASE TABLE', 'VIEW', 'MATERIALIZED VIEW') -- Include views and materialized views
+              AND table_name NOT LIKE '%_seq' -- Exclude sequence tables
+              AND table_name NOT LIKE '%_y%' -- Exclude specific year partitions (e.g., samples_y2023)
             ORDER BY table_schema, table_name;
             """
             cur.execute(query)
@@ -391,12 +358,21 @@ def table_names_for_forms():
     except Exception as e:
         print(f"Error fetching table names for forms: {e}")
         return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 @app.route(f'{API_PREFIX}/table/<string:schema>/<string:table>', methods=['GET'])
 def get_table_data(schema: str, table: str):
+    """
+    Generic function to fetch data from a table or view, with optional filtering, ordering, and limit.
+    Handles PostgreSQL's case-sensitive schema/table names by attempting to resolve correct casing.
+    """
+    conn = None
     try:
-        conn = g.db_conn
+        conn = get_db_connection()
 
+        # Resolve actual schema and table casing from information_schema
         resolved_names = _resolve_table_casing(conn, schema, table)
         if not resolved_names:
             return jsonify({"error": f"Table or view '{schema}.{table}' not found or inaccessible."}), 404
@@ -408,15 +384,17 @@ def get_table_data(schema: str, table: str):
         where_clauses: List[str] = []
         params: List[Any] = []
 
+        # Initialize ordering parameters
         order_by_column: Optional[str] = None
-        order_direction: str = 'ASC'
+        order_direction: str = 'ASC' # Default direction
 
+        # Process query parameters for filtering and ordering
         for key, value in request.args.items():
             if not value:
-                continue
+                continue # Skip empty values
 
             if key == 'limit' or key == 'offset':
-                continue
+                continue # Processed later
             elif key == 'order_by':
                 order_by_column = value
                 continue
@@ -425,6 +403,9 @@ def get_table_data(schema: str, table: str):
                     order_direction = value.upper()
                 continue
 
+            # This list should contain all possible column names that might be filtered or ordered by.
+            # Ensure the casing here matches the *actual* casing of columns in your database.
+            # For simplicity, assuming lowercase for most, but adjust if your DB uses mixed-case column names.
             filterable_columns = [
                 'sample_id', 'project_id', 'status_id', 'sop_id', 'person_id',
                 'room_id', 'category_id', 'primer_id', 'sample_type_id', 'region_id',
@@ -437,43 +418,46 @@ def get_table_data(schema: str, table: str):
                 'publication_type_id', 'log_id', 'protocol_run_id', 'dissection_id',
                 'extraction_id', 'nanodrop_id', 'qubit_id', 'tapestation_id',
                 'pcr_id', 'gelelectrophoresis_id', 'qpcr_id', 'dataset_id',
-                'reception_month',
+                'reception_month', # For materialized view
+                # Date/Timestamp fields (ensure these match DB column casing)
                 'sampling_date', 'experiment_date', 'dissection_date', 'extraction_date',
                 'measurement_date', 'pcr_date', 'run_date', 'prep_date', 'sequencing_date',
                 'reception_date', 'order_date', 'expire_date', 'date_publication',
                 'date_submission', 'valid_from', 'valid_to', 'link_date', 'move_date',
                 'action_timestamp', 'created_at', 'date_realise',
+                # Other common columns that might be filtered/ordered
                 'title', 'full_name', 'customer_name', 'experiment_title',
                 'reagent_complete_name', 'lot', 'de_name', 'en_name', 'sample_type_abrv',
                 'workflow_name', 'pipeline_name', 'db_name', 'item_name', 'supplier_name',
                 'vessel_name', 'region_abrv', 'ecosystem_abrv', 'unit_name', 'unit_abbreviation',
-                'pi_person_id', 'funder', 'temperature_c', 'box', 'freezer', 'sex', 'stomach_contents_jsonb',
-                'mail',
-                'path'
+                'pi_person_id', 'funder', 'temperature_c', 'box', 'freezer', 'sex', 'stomach_contents_jsonb'
             ]
 
             if key.startswith('filter_'):
                 col_name = key[len('filter_'):]
-                if col_name in filterable_columns:
-                    where_clauses.append(f'"{col_name}" ILIKE %s')
-                    params.append(f'%{value}%')
-                else:
-                    print(f"Warning: Filter by non-filterable column '{col_name}' skipped.")
+                where_clauses.append(f'"{col_name}" ILIKE %s')
+                params.append(f'%{value}%')
             elif key in filterable_columns:
                 where_clauses.append(f'"{key}" = %s')
                 params.append(value)
+            # Add more complex filters if needed, e.g., for numeric ranges, date ranges
 
         if where_clauses:
             query = f"{base_query} WHERE {' AND '.join(where_clauses)}"
         else:
             query = base_query
         
+        # Add ORDER BY clause
         if order_by_column:
-            if order_by_column in filterable_columns:
-                query += f' ORDER BY "{order_by_column}" {order_direction}'
-            else:
+            # Ensure the order_by_column matches an actual column name in the database.
+            # For robustness, you might want to query information_schema.columns here too,
+            # but for simplicity, we assume it's one of the filterable_columns.
+            if order_by_column not in filterable_columns: # Simplified check
                 print(f"Warning: Attempted to order by unlisted column '{order_by_column}'. Skipping order by.")
+            else:
+                query += f' ORDER BY "{order_by_column}" {order_direction}'
         
+        # Add LIMIT and OFFSET
         limit = request.args.get('limit', type=int)
         offset = request.args.get('offset', type=int)
         if limit is not None:
@@ -496,11 +480,16 @@ def get_table_data(schema: str, table: str):
     except Exception as e:
         print(f"Error fetching table data for {schema}.{table}: {e}")
         return jsonify({"error": str(e)}), 500
+    finally:    
+        if conn:
+            conn.close()
             
 @app.route(f'{API_PREFIX}/table/<string:schema>/<string:table>', methods=['POST'])
 def create_record(schema: str, table: str):
+    """Generic function to create a new record in a table."""
+    conn = None
     try:
-        conn = g.db_conn
+        conn = get_db_connection()
         resolved_names = _resolve_table_casing(conn, schema, table)
         if not resolved_names:
             return jsonify({"error": f"Table '{schema}.{table}' not found or inaccessible."}), 404
@@ -519,16 +508,8 @@ def create_record(schema: str, table: str):
         if 'attachment' in files and files['attachment'].filename != '':
             data['attachment'] = psycopg2.Binary(files['attachment'].read())
         elif 'attachment' in data and data['attachment'] == '':
-            data['attachment'] = None
-        
-        if (actual_schema.lower() == 'reference' and actual_table.lower() == 'personal') or \
-           (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
-           (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
-            if 'password' in data and data['password']:
-                hashed_password = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt())
-                data['password_hash'] = hashed_password.decode('utf-8')
-            data.pop('password', None)
-        
+            data['attachment'] = None # Explicitly set to None for empty string
+
         filtered_data = {k: (v if v != '' else None) for k, v in data.items()}
         
         columns = filtered_data.keys()
@@ -550,11 +531,16 @@ def create_record(schema: str, table: str):
             conn.rollback()
         print(f"Error creating record in {schema}.{table}: {e}")
         return jsonify({"error": str(e)}), 500
+    finally:    
+        if conn:
+            conn.close()
 
 @app.route(f'{API_PREFIX}/table/<string:schema>/<string:table>/<pk_value>', methods=['PUT'])
 def update_record(schema: str, table: str, pk_value: Union[str, int]):
+    """Generic function to update an existing record in a table."""
+    conn = None
     try:
-        conn = g.db_conn
+        conn = get_db_connection()
         resolved_names = _resolve_table_casing(conn, schema, table)
         if not resolved_names:
             return jsonify({"error": f"Table '{schema}.{table}' not found or inaccessible."}), 404
@@ -567,14 +553,6 @@ def update_record(schema: str, table: str, pk_value: Union[str, int]):
             
         set_clauses: List[str] = []
         values: List[Any] = []
-        
-        if (actual_schema.lower() == 'reference' and actual_table.lower() == 'personal') or \
-           (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
-           (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
-            if 'password' in data and data['password']:
-                hashed_password = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt())
-                data['password_hash'] = hashed_password.decode('utf-8')
-            data.pop('password', None)
         
         for key, val in data.items():
             set_clauses.append(f'"{key}" = %s')
@@ -612,11 +590,57 @@ def update_record(schema: str, table: str, pk_value: Union[str, int]):
             conn.rollback()
         print(f"Error updating record in {schema}.{table}: {e}")
         return jsonify({"error": str(e)}), 500
+    finally:    
+        if conn:
+            conn.close()
+
+@app.route(f'{API_PREFIX}/table/<string:schema>/<string:table>/<pk_value>', methods=['DELETE'])
+def delete_record(schema: str, table: str, pk_value: Union[str, int]):
+    """Generic function to delete a record from a table."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        resolved_names = _resolve_table_casing(conn, schema, table)
+        if not resolved_names:
+            return jsonify({"error": f"Table '{schema}.{table}' not found or inaccessible."}), 404
+        actual_schema, actual_table = resolved_names
+
+        pk_column = get_pk_column(schema, table)
+        
+        integer_pk_tables = [
+            ('lims', 'customers'), ('lab', 'experiments_projects'), ('lab', 'storage_log')
+        ]
+        try:
+            if (schema.lower(), table.lower()) in integer_pk_tables:
+                param_pk_value = int(pk_value)
+            else:
+                param_pk_value = pk_value
+        except ValueError:
+            return jsonify({"error": f"Invalid ID format for '{pk_column}': {pk_value}. Expected integer for this table."}), 400
+
+        query = f'DELETE FROM "{actual_schema}"."{actual_table}" WHERE "{pk_column}" = %s;'
+        with conn.cursor() as cur:
+            print(f"Executing DELETE query: {query} with param: {param_pk_value}")
+            cur.execute(query, (param_pk_value,))
+            conn.commit()
+            if cur.rowcount == 0:    
+                return jsonify({"error": "Record not found"}), 404
+        return "", 204
+    except Exception as e:    
+        if conn:
+            conn.rollback()
+        print(f"Error deleting record in {schema}.{table}: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:    
+        if conn:
+            conn.close()
 
 @app.route(f'{API_PREFIX}/table/<string:schema>/<string:table>/batch_upload', methods=['POST'])
 def batch_upload(schema: str, table: str):
+    """Handles batch insertion of records into a table."""
+    conn = None
     try:
-        conn = g.db_conn
+        conn = get_db_connection()
         resolved_names = _resolve_table_casing(conn, schema, table)
         if not resolved_names:
             return jsonify({"error": f"Table '{schema}.{table}' not found or inaccessible."}), 404
@@ -629,33 +653,15 @@ def batch_upload(schema: str, table: str):
         if not records:
             return jsonify({"success": True, "inserted_rows": 0}), 200
 
-        first_record_keys = list(records[0].keys())
-        processed_records_for_insertion = []
-
-        for record in records:
-            if set(record.keys()) != set(first_record_keys):
-                return jsonify({"error": "All records in batch must have the same keys."}), 400
-
-            temp_record = record.copy()
-            if (actual_schema.lower() == 'reference' and actual_table.lower() == 'personal') or \
-               (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
-               (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
-                if 'password' in temp_record and temp_record['password']:
-                    hashed_password = bcrypt.hashpw(temp_record['password'].encode('utf-8'), bcrypt.gensalt())
-                    temp_record['password_hash'] = hashed_password.decode('utf-8')
-                temp_record.pop('password', None)
-
-            processed_records_for_insertion.append({k: (v if v != '' else None) for k, v in temp_record.items()})
-
-        columns = list(processed_records_for_insertion[0].keys())
+        columns = list(records[0].keys()) # Assume all records in the batch have the same keys/columns
         column_names = ', '.join([f'"{col}"' for col in columns])
         
         data_tuples: List[Tuple[Any, ...]] = []
-        for record in processed_records_for_insertion:
+        for record in records:
             row = []
             for col in columns:
                 val = record.get(col)
-                row.append(None if val == '' else val)
+                row.append(None if val == '' else val) # Convert empty strings to None
             data_tuples.append(tuple(row))
 
         query_template = f"INSERT INTO \"{actual_schema}\".\"{actual_table}\" ({column_names}) VALUES %s"
@@ -665,19 +671,24 @@ def batch_upload(schema: str, table: str):
             psycopg2.extras.execute_values(cur, query_template, data_tuples)
             conn.commit()
         return jsonify({"success": True, "inserted_rows": len(records)}), 201
-    except Exception as e:    
-        if conn:
+    except Exception as e:
+        if conn:    
             conn.rollback()
         print(f"Error during batch upload for {schema}.{table}: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
+    finally:    
+        if conn:
+            conn.close()
 
 # --- Static File Serving ---
 @app.route('/')
 def root():    
+    # Redirect to login.html by default
     return redirect(url_for('serve_static', filename='login.html'))
 
 @app.route('/<path:filename>')
 def serve_static(filename: str):
+    # Serve static files from the STATIC_FOLDER
     return send_from_directory(app.static_folder, filename)
 
 # --- Server Run ---
@@ -685,7 +696,7 @@ if __name__ == '__main__':
     host: str = '0.0.0.0'
     port: int = 5200
 
-    print("="*60 + f"\n TIFI LIMS Backend Server ".center(60, "=") + "\n" + " Serving Multi-Table Login ".center(60, "=") + "\n" + "="*60)
+    print("="*60 + f"\n TIFI LIMS Backend Server ".center(60, "=") + "\n" + "="*60)
     print(f" -> Serving LIMS frontend from: {os.path.abspath(STATIC_FOLDER)}")
     print(f" -> API listening on http://{host}:{port}{API_PREFIX}/")
     print(f" -> Access the UI at http://127.0.0.1:{port}")
@@ -694,4 +705,5 @@ if __name__ == '__main__':
     if FLASK_ENV == "development":
         app.run(host=host, port=port, debug=True)
     else:
+        # Use Waitress for production deployment
         serve(app, host=host, port=port)
