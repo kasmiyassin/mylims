@@ -3,47 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - TIFI MG</title>
+    <title>Dashboard - TIFI MG LIMS</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
     <style>
+        /* Base styles */
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f8fafc;
+            background-color: #f8fafc; /* Tailwind's bg-slate-50 */
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
+        /* Sidebar styling */
         .sidebar {
             transition: width 0.3s ease;
-            border-right: 1px solid #e2e8f0;
+            border-right: 1px solid #e2e8f0; /* Tailwind's border-slate-200 */
         }
         .sidebar-item {
             transition: all 0.2s ease;
-            color: #475569;
+            color: #475569; /* Tailwind's text-slate-600 */
         }
         .sidebar-item.active, .sidebar-item.active i {
-            background-color: #eef2ff;
-            color: #4f46e5;
-            font-weight: 600;
+            background-color: #eef2ff; /* Tailwind's bg-indigo-50 */
+            color: #4f46e5; /* Tailwind's text-indigo-600 */
+            font-weight: 600; /* Tailwind's font-semibold */
         }
         .sidebar-item:hover {
-            background-color: #f1f5f9;
-            color: #1e293b;
+            background-color: #f1f5f9; /* Tailwind's bg-slate-100 */
+            color: #1e293b; /* Tailwind's text-slate-800 */
         }
+        /* Card styling */
         .card {
             background-color: white;
-            border-radius: 0.75rem;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            border-radius: 0.75rem; /* Tailwind's rounded-xl */
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); /* Tailwind's shadow-md */
         }
+        /* Stat card icon animation */
         .stat-card i {
             transition: transform 0.3s ease;
         }
         .stat-card:hover i {
             transform: scale(1.1);
         }
+        /* Loading spinner animation */
         .loading-spinner {
             border: 4px solid rgba(0, 0, 0, 0.1);
-            border-left-color: #3b82f6;
+            border-left-color: #3b82f6; /* Tailwind's blue-500 */
             border-radius: 50%;
             width: 24px;
             height: 24px;
@@ -58,12 +67,12 @@
         /* Accordion styles */
         .accordion-item {
             margin-bottom: 0.5rem;
-            border: 1px solid #e2e8f0;
-            border-radius: 0.5rem;
+            border: 1px solid #e2e8f0; /* Tailwind's border-slate-200 */
+            border-radius: 0.5rem; /* Tailwind's rounded-lg */
             overflow: hidden;
         }
         .accordion-header {
-            background-color: #f1f5f9;
+            background-color: #f1f5f9; /* Tailwind's bg-slate-100 */
             padding: 0.75rem 1rem;
             cursor: pointer;
             width: 100%;
@@ -71,11 +80,11 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            font-weight: 600;
-            color: #475569;
+            font-weight: 600; /* Tailwind's font-semibold */
+            color: #475569; /* Tailwind's text-slate-600 */
         }
         .accordion-header:hover {
-            background-color: #e2e8f0;
+            background-color: #e2e8f0; /* Tailwind's bg-slate-200 */
         }
         .accordion-header .lucide {
             transition: transform 0.3s ease;
@@ -89,7 +98,7 @@
             transition: max-height 0.3s ease-out, padding 0.3s ease-out;
             padding: 0 1rem; /* Initial padding, will expand */
             background-color: white;
-            border-top: 1px solid #e2e8f0;
+            border-top: 1px solid #e2e8f0; /* Tailwind's border-slate-200 */
         }
         .accordion-content.open {
             max-height: 500px; /* Adjust as needed for content height */
@@ -98,8 +107,8 @@
     </style>
 </head>
 <body>
-    <div id="main-app">
-        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
+    <div id="main-app" class="flex">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col z-20">
             <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0">
                 <i data-lucide="flask-conical" class="inline-block mr-2 text-blue-600"></i><span>TIFI MG</span>
             </div>
@@ -109,23 +118,23 @@
                 <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
                 <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
                 <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
-                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (SOP)</span></a>
                 <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
                 <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
                 <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="box" class="w-5 h-5 mr-3"></i><span>Storage Box</span></a>
                 <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
-                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="Printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
                 <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
                 <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
             </nav>
             <div class="mt-auto shrink-0">
-                <div id="user-profile" class="p-2 mb-2 border-t flex items-center">
+                <div id="user-profile" class="p-2 mb-2 border-t flex items-center text-gray-800">
                     </div>
                 <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
             </div>
         </div>
 
-        <div id="main-content" class="ml-64 p-8">
+        <div id="main-content" class="ml-64 p-8 flex-grow">
             <div class="flex justify-between items-center mb-6">
                 <div>
                     <h1 class="text-3xl font-bold text-gray-800">Dashboard</h1>
@@ -134,27 +143,27 @@
                 <div class="relative w-1/3">
                     <input type="text" id="global-search-input" placeholder="Search projects, samples, experiments, SOPs, reagents, personal..." class="w-full py-2 pl-10 pr-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <i data-lucide="search" class="absolute top-1/2 left-3 transform -translate-y-1/2 text-gray-400 w-5 h-5"></i>
+                    <div id="global-search-results" class="absolute top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl z-10 hidden"></div>
                 </div>
             </div>
-            <div id="global-search-results" class="mb-6"></div>
-
+            
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-blue-100 rounded-full mr-4"><i data-lucide="folder-kanban" class="w-6 h-6 text-blue-600"></i></div><div><p class="text-sm text-gray-500">Active Projects</p><p id="stat-active-projects" class="text-2xl font-bold">0</p></div></div>
-                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-green-100 rounded-full mr-4"><i data-lucide="beaker" class="w-6 h-6 text-green-600"></i></div><div><p class="text-sm text-gray-500">Total Samples</p><p id="stat-total-samples" class="text-2xl font-bold">0</p></div></div>
-                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-yellow-100 rounded-full mr-4"><i data-lucide="flask-round" class="w-6 h-6 text-yellow-600"></i></div><div><p class="text-sm text-gray-500">Experiments (Month)</p><p id="stat-month-experiments" class="text-2xl font-bold">0</p></div></div>
-                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-red-100 rounded-full mr-4"><i data-lucide="calendar-x" class="w-6 h-6 text-red-600"></i></div><div><p class="text-sm text-gray-500">Reagents Expiring</p><p id="stat-expiring-reagents" class="text-2xl font-bold">0</p></div></div>
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-blue-100 rounded-full mr-4"><i data-lucide="folder-kanban" class="w-6 h-6 text-blue-600"></i></div><div><p class="text-sm text-gray-500">Active Projects</p><p id="stat-active-projects" class="text-2xl font-bold"><span class="loading-spinner"></span></p></div></div>
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-green-100 rounded-full mr-4"><i data-lucide="beaker" class="w-6 h-6 text-green-600"></i></div><div><p class="text-sm text-gray-500">Total Samples</p><p id="stat-total-samples" class="text-2xl font-bold"><span class="loading-spinner"></span></p></div></div>
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-yellow-100 rounded-full mr-4"><i data-lucide="flask-round" class="w-6 h-6 text-yellow-600"></i></div><div><p class="text-sm text-gray-500">Experiments (Month)</p><p id="stat-month-experiments" class="text-2xl font-bold"><span class="loading-spinner"></span></p></div></div>
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-red-100 rounded-full mr-4"><i data-lucide="calendar-x" class="w-6 h-6 text-red-600"></i></div><div><p class="text-sm text-gray-500">Reagents Expiring</p><p id="stat-expiring-reagents" class="text-2xl font-bold"><span class="loading-spinner"></span></p></div></div>
                 
-                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-purple-100 rounded-full mr-4"><i data-lucide="flask-conical" class="w-6 h-6 text-purple-600"></i></div><div><p class="text-sm text-gray-500">Total Experiments</p><p id="stat-total-experiments" class="text-2xl font-bold">0</p></div></div>
-                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-indigo-100 rounded-full mr-4"><i data-lucide="book-text" class="w-6 h-6 text-indigo-600"></i></div><div><p class="text-sm text-gray-500">Total Protocols</p><p id="stat-total-protocols" class="text-2xl font-bold">0</p></div></div>
-                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-teal-100 rounded-full mr-4"><i data-lucide="archive" class="w-6 h-6 text-teal-600"></i></div><div><p class="text-sm text-gray-500">Total Storage Units</p><p id="stat-total-storage" class="text-2xl font-bold">0</p></div></div>
-                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-orange-100 rounded-full mr-4"><i data-lucide="users" class="w-6 h-6 text-orange-600"></i></div><div><p class="text-sm text-gray-500">Total Personnel</p><p id="stat-total-personnel" class="text-2xl font-bold">0</p></div></div>
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-purple-100 rounded-full mr-4"><i data-lucide="package" class="w-6 h-6 text-purple-600"></i></div><div><p class="text-sm text-gray-500">Occupied Storage</p><p id="stat-occupied-storage" class="text-2xl font-bold"><span class="loading-spinner"></span></p></div></div>
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-indigo-100 rounded-full mr-4"><i data-lucide="book-text" class="w-6 h-6 text-indigo-600"></i></div><div><p class="text-sm text-gray-500">Total SOPs</p><p id="stat-total-sops" class="text-2xl font-bold"><span class="loading-spinner"></span></p></div></div>
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-teal-100 rounded-full mr-4"><i data-lucide="activity-square" class="w-6 h-6 text-teal-600"></i></div><div><p class="text-sm text-gray-500">Most Active Person</p><p id="stat-most-active-person" class="text-2xl font-bold"><span class="loading-spinner"></span></p></div></div>
+                <div class="stat-card card p-4 flex items-center"><div class="p-3 bg-orange-100 rounded-full mr-4"><i data-lucide="flask-conical" class="w-6 h-6 text-orange-600"></i></div><div><p class="text-sm text-gray-500">Total Experiments</p><p id="stat-total-experiments" class="text-2xl font-bold"><span class="loading-spinner"></span></p></div></div>
             </div>
             
             <div class="card p-6 mb-8">
                 <h2 class="text-xl font-bold text-gray-800 mb-4">Track a Sample</h2>
                 <div class="flex items-center space-x-2">
                     <input type="text" id="track-sample-input" placeholder="Enter Sample ID (e.g., F25WeHB0000 or D25WeHB0000d1)..." class="w-full max-w-md py-2 px-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <button id="track-sample-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg flex items-center"><i data-lucide="search" class="w-5 h-5 mr-2"></i>Track</button>
+                    <button id="track-sample-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg flex items-center transition-all duration-200 shadow hover:shadow-lg"><i data-lucide="search" class="w-5 h-5 mr-2"></i>Track</button>
                 </div>
                 <div id="track-sample-results" class="mt-4"></div>
             </div>
@@ -180,7 +189,11 @@
                                     <option value="samples">Count of Samples</option>
                                     <option value="experiments">Count of Experiments</option>
                                     <option value="reagents">Count of Reagents</option>
-                                    <option value="projects">Count of Projects</option> <option value="personnel">Count of Personnel</option> <option value="storage">Count of Storage Units</option> </select>
+                                    <option value="projects">Count of Projects</option>
+                                    <option value="personnel">Count of Personnel</option>
+                                    <option value="storage">Count of Storage Units</option>
+                                    <option value="protocols">Count of SOPs</option>
+                                </select>
                             </div>
                             <div>
                                 <label for="chart-category" class="text-sm font-medium text-gray-700">Grouped by...</label>
@@ -214,55 +227,63 @@
     </div>
 
     <script>
+        // --- Security and Session Check ---
         // Redirect to login if not logged in
         if (sessionStorage.getItem('isLoggedIn') !== 'true') {
-            localStorage.setItem('redirectUrl', window.location.href);
+            localStorage.setItem('redirectUrl', window.location.href); // Store current URL to redirect back after login
             window.location.href = './login.html';
         }
         
+        // --- Global Constants and Cache ---
         const API_BASE_URL = '/mymglab/api'; 
-        let dataCache = {}; // Stores raw data for various tables
-        let dynamicChartInstance;
+        let dataCache = {}; // Stores raw data fetched from API for charting
+        let dynamicChartInstance; // Chart.js instance
 
-        // Expanded category options for the Data Explorer chart
-        // These keys map to column names in your database tables.
+        // --- Data Explorer Chart Category Options ---
+        // These map to tables and their relevant column names for grouping
         const categoryOptions = {
             samples: [
                 { value: 'sample_type_id', text: 'Sample Type' },
                 { value: 'sample_status_id', text: 'Status' },
                 { value: 'project_id', text: 'Project' },
                 { value: 'sampling_id', text: 'Sampling Event' },
-                { value: 'reception_date_month', text: 'Month (Received)' }
+                { value: 'reception_date', text: 'Reception Month', type: 'month' }
             ],
             experiments: [
                 { value: 'status_id', text: 'Status' },
                 { value: 'project_id', text: 'Project' },
                 { value: 'person_id', text: 'Person' },
-                { value: 'experiment_date_month', text: 'Month (Created)' }
+                { value: 'experiment_date', text: 'Experiment Month', type: 'month' }
             ],
             reagents: [
                 { value: 'category_id', text: 'Category' },
                 { value: 'status_id', text: 'Status' },
-                { value: 'expire_date_month', text: 'Month (Expiry)' }
+                { value: 'expire_date', text: 'Expiry Month', type: 'month' }
             ],
-            projects: [ // New metric
+            projects: [
                 { value: 'status_id', text: 'Status' },
                 { value: 'pi_person_id', text: 'Principal Investigator' },
                 { value: 'funder', text: 'Funder' },
-                { value: 'start_date_year', text: 'Year (Start)' }
+                { value: 'start_date', text: 'Start Year', type: 'year' }
             ],
-            personnel: [ // New metric
-                { value: 'room_id', text: 'Room' }, // Assuming 'room_id' might be a field in 'reference.personal' or a related view
+            personnel: [
+                { value: 'room', text: 'Room' },
                 { value: 'full_name', text: 'Full Name' }
             ],
-            storage: [ // New metric
+            storage: [
                 { value: 'room_id', text: 'Room' },
-                { value: 'freezer_id', text: 'Freezer' }, // Changed to freezer_id based on storage schema
-                { value: 'box_id', text: 'Box' } // Changed to box_id based on storage schema
+                { value: 'freezer', text: 'Freezer' },
+                { value: 'box', text: 'Box' }
+            ],
+            protocols: [ // For lims.sop
+                { value: 'author_person_id', text: 'Author' },
+                { value: 'date_realise', text: 'Realize Year', type: 'year' }
             ]
         };
 
-        async function apiFetch(endpoint, options={}) {
+        // --- API Fetch Helper Function ---
+        // Handles making API requests to the Flask backend
+        async function apiFetch(endpoint, options = {}) {
             try {
                 const isJson = !(options.body instanceof FormData);
                 if (isJson && options.body) {
@@ -270,10 +291,12 @@
                     options.body = JSON.stringify(options.body);
                 }
                 const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                
                 if (!response.ok) {
-                    // For global search, return empty arrays if no results or 404
-                    if (endpoint.startsWith('search/global') && response.status === 404) {
-                        return { projects: [], samples: [], experiments: [], sops: [], reagents: [], personal: [] };
+                    // Specific handling for global search when no results found (404)
+                    if (endpoint.startsWith('global-search/') && response.status === 404) {
+                        // Backend returns object with keys, so return empty arrays for each expected key
+                        return { projects: [], samples: [], experiments: [], sop: [], customers: [], species: [], primers: [], reagents: [], personal: [], detailed_samples_view: [], project_overview_view: [], analysis_results_summary: [] };
                     }
                     const errorBody = await response.json().catch(() => ({error: `Server error or HTTP ${response.status}`}));
                     throw new Error(errorBody.error || `HTTP error! Status: ${response.status}`);
@@ -281,10 +304,11 @@
                 return response.json();
             } catch (error) {
                 console.error(`API Error on ${endpoint}:`, error);
-                return null;
+                return null; // Return null to indicate a failed fetch
             }
         }
         
+        // --- Charting Functions ---
         // Updates the category dropdown options based on the selected metric
         function updateCategoryOptions(metric) {
             const select = document.getElementById('chart-category');
@@ -295,9 +319,9 @@
                 const option = document.createElement('option');
                 option.value = opt.value;
                 option.textContent = opt.text;
+                if (opt.type) option.dataset.type = opt.type; 
                 select.appendChild(option);
             });
-            // Ensure a category is always selected, pick first if available
             if (options.length > 0) {
                 select.value = options[0].value;
             }
@@ -306,13 +330,16 @@
         // Draws or updates the dynamic chart based on selected metric, category, and date range
         function drawChart() {
             const metric = document.getElementById('chart-metric').value;
-            const category = document.getElementById('chart-category').value;
+            const categorySelect = document.getElementById('chart-category');
+            const category = categorySelect.value;
+            const categoryType = categorySelect.selectedOptions[0]?.dataset.type; // Get 'type' from data attribute
             const startDate = document.getElementById('chart-start-date').value;
             const endDate = document.getElementById('chart-end-date').value;
 
             let data = dataCache[metric];
             if (!data) {
-                console.warn(`Data for metric '${metric}' not loaded yet.`);
+                console.warn(`Data for metric '${metric}' not loaded yet. Cannot draw chart.`);
+                if (dynamicChartInstance) dynamicChartInstance.destroy();
                 return;
             }
 
@@ -325,11 +352,12 @@
                 } else if (metric === 'experiments') {
                     itemDateStr = item.experiment_date; // lab.experiments.experiment_date
                 } else if (metric === 'reagents') {
-                    itemDateStr = item.expire_date; // reference.reagents.expire_date
+                    itemDateStr = item.expire_date; // lims.reagents.expire_date
                 } else if (metric === 'projects') {
                     itemDateStr = item.start_date; // lims.projects.start_date
+                } else if (metric === 'protocols') {
+                    itemDateStr = item.date_realise; // lims.sop.date_realise
                 }
-                // Personnel and Storage entities typically don't have a primary date field for filtering their count over time.
                 
                 if (itemDateStr) {
                     const itemDate = new Date(itemDateStr);
@@ -349,11 +377,11 @@
 
             const groupedData = filteredData.reduce((acc, item) => {
                 let key;
-                if (category.endsWith('_month')) {
-                    const dateField = category.replace('_month', '');
+                if (categoryType === 'month') {
+                    const dateField = category;
                     key = item[dateField] ? new Date(item[dateField]).toISOString().slice(0, 7) : 'N/A'; // Format as YYYY-MM
-                } else if (category.endsWith('_year')) {
-                    const dateField = category.replace('_year', '');
+                } else if (categoryType === 'year') {
+                    const dateField = category;
                     key = item[dateField] ? new Date(item[dateField]).getFullYear().toString() : 'N/A'; // Format as YYYY
                 } else {
                     key = item[category] !== null && item[category] !== undefined ? String(item[category]) : 'N/A';
@@ -363,12 +391,14 @@
             }, {});
             
             let labels = Object.keys(groupedData);
-            if(category.endsWith('_month') || category.endsWith('_year')) labels.sort(); // Sort date-based labels
+            if (categoryType === 'month' || categoryType === 'year') labels.sort(); // Sort date-based labels
             else labels.sort((a,b) => String(a).localeCompare(String(b))); // Sort other labels alphabetically
 
             const values = labels.map(label => groupedData[label]);
-            // Determine chart type: line for time series, pie for few categories, bar for more categories
-            let chartType = (category.endsWith('_month') || category.endsWith('_year')) ? 'line' : (labels.length <= 7 && labels.length > 1 ? 'pie' : 'bar');
+            
+            // Determine chart type: line for time series, pie for few categories (2-7), bar for more categories
+            let chartType = (categoryType === 'month' || categoryType === 'year') ? 'line' : (labels.length <= 7 && labels.length > 1 ? 'pie' : 'bar');
+            if (labels.length === 1 && (categoryType === 'month' || categoryType === 'year')) chartType = 'bar'; // Single point line chart looks weird
 
             if (dynamicChartInstance) dynamicChartInstance.destroy(); // Destroy previous chart instance
             
@@ -415,7 +445,10 @@
                     scales: {
                         y: {
                             beginAtZero: true,
-                            display: chartType !== 'pie'
+                            display: chartType !== 'pie',
+                            ticks: {
+                                precision: 0 // Ensure y-axis labels are whole numbers for counts
+                            }
                         },
                         x: {
                             display: chartType !== 'pie'
@@ -425,7 +458,8 @@
             });
         }
 
-        // Function to display detailed sample information using accordions
+        // --- Sample Tracking Functionality ---
+        // Displays detailed sample information in an accordion format
         async function displayDetailedSampleInfo(sampleId, resultsDiv) {
             resultsDiv.innerHTML = `<div class="p-4 text-center"><div class="loading-spinner"></div> Loading sample details...</div>`;
             try {
@@ -441,18 +475,18 @@
                 // Helper to render a detail row if value exists
                 const renderDetailRow = (label, value) => {
                     if (value === null || value === undefined || String(value).trim() === '' || value === 'N/A') {
-                        return '';
+                        return ''; // Don't render empty rows
                     }
                     return `<div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100"><dt class="font-medium text-gray-500">${label}</dt><dd class="text-gray-900 break-all">${value}</dd></div>`;
                 };
 
-                // Helper to format date strings
+                // Helper to format date strings (YYYY-MM-DD)
                 const formatDate = (dateString) => {
                     if (!dateString) return 'N/A';
                     try {
                         const date = new Date(dateString);
-                        // Using toISOString and then slicing to ensure consistent format if browser locale varies
-                        return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString(); 
+                        // Using toLocaleDateString with 'en-CA' for YYYY-MM-DD format consistency
+                        return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString('en-CA');
                     } catch (e) {
                         return 'N/A';
                     }
@@ -480,15 +514,14 @@
                         <div class="accordion-content open">
                             <dl class="space-y-2 py-2">
                                 ${renderDetailRow('External Name', sample.external_name)}
-                                ${renderDetailRow('Type', sample.sample_type_id)}
-                                ${renderDetailRow('Current Status', sample.sample_status_id)}
+                                ${renderDetailRow('Type', sample.sample_type_abrv || sample.sample_type_id)}
+                                ${renderDetailRow('Current Status', sample.sample_status_id || sample.sample_status_notes)}
                                 ${renderDetailRow('Project ID', sample.project_id)}
                                 ${renderDetailRow('Project Title', sample.project_title)}
                                 ${renderDetailRow('Reception Date', formatDate(sample.reception_date))}
-                                ${renderDetailRow('Last Modified', formatDateTime(sample.time_modification))}
                                 ${renderDetailRow('Parent Sample', sample.parent_sample_id)}
-                                ${renderDetailRow('Person ID (Created By)', sample.person_id_created)}
-                                ${renderDetailRow('Created Date', formatDateTime(sample.date_creation))}
+                                ${renderDetailRow('Sampler', sample.sampler_full_name)}
+                                ${renderDetailRow('Receiver', sample.receiver_full_name)}
                             </dl>
                         </div>
                     </div>
@@ -507,10 +540,8 @@
                                 ${renderDetailRow('Date', formatDate(sample.sampling_event_date))}
                                 ${renderDetailRow('Location', sample.sampling_location)}
                                 ${renderDetailRow('Depth (m)', sample.sampling_depth_m)}
-                                ${renderDetailRow('Temperature (Â°C)', sample.temperature_atmospheric_c)}
+                                ${renderDetailRow('Temperature (°C)', sample.temperature_atmospheric_c)}
                                 ${renderDetailRow('Weather', sample.weather)}
-                                ${renderDetailRow('Sampler', sample.sampler_full_name)}
-                                ${renderDetailRow('Receiver', sample.receiver_full_name)}
                                 ${renderDetailRow('Wind Speed', sample.wind_speed ? `${sample.wind_speed} ${sample.wind_unit || ''}` : 'N/A')}
                                 ${renderDetailRow('Salinity', sample.salinity ? `${sample.salinity} ${sample.salinity_unit || ''}` : 'N/A')}
                                 ${renderDetailRow('Oxygen', sample.oxygen ? `${sample.oxygen} ${sample.oxygen_unit || ''}` : 'N/A')}
@@ -530,9 +561,8 @@
                         <div class="accordion-content">
                             <dl class="space-y-2 py-2">
                                 ${renderDetailRow('Room', sample.room_id)}
+                                ${renderDetailRow('Address', sample.room_address)}
                                 ${renderDetailRow('Freezer', sample.storage_freezer)}
-                                ${renderDetailRow('Rack', sample.storage_rack)}
-                                ${renderDetailRow('Shelf', sample.storage_shelf)}
                                 ${renderDetailRow('Box', sample.storage_box)}
                                 ${renderDetailRow('Position', sample.storage_position)}
                             </dl>
@@ -552,6 +582,8 @@
                             <dl class="space-y-2 py-2">
                                 ${renderDetailRow('Species', sample.species_en_name)}
                                 ${renderDetailRow('Total Length (mm)', sample.total_length_mm)}
+                                ${renderDetailRow('Fork Length (mm)', sample.fork_length_mm)}
+                                ${renderDetailRow('Standard Length (mm)', sample.standard_length_mm)}
                                 ${renderDetailRow('Weight (g)', sample.weight_g)}
                                 ${renderDetailRow('Sex', sample.sex)}
                                 ${renderDetailRow('Maturity Stage', sample.maturity_stage)}
@@ -564,7 +596,7 @@
                 }
 
                 // Tissue Details
-                if (sample.tissue_type) {
+                if (sample.tissue_type || sample.tissue_weight_mg) {
                     html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="tissue-details">
@@ -581,8 +613,28 @@
                     </div>`;
                 }
 
+                // Otolith Details
+                if (sample.otolith_id) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="otolith-details">
+                            <span class="flex items-center"><i data-lucide="circle-dot" class="w-5 h-5 mr-2"></i> Otolith Details (${sample.otolith_id})</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Reader', sample.reader_person_id)}
+                                ${renderDetailRow('Side', sample.side)}
+                                ${renderDetailRow('Age Reading (years)', sample.age_reading_years)}
+                                ${renderDetailRow('Confidence', sample.confidence)}
+                                ${renderDetailRow('Reading Date', formatDate(sample.reading_date))}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
                 // DNA Details
-                if (sample.dna_volume_ul || sample.dna_concentration_ng_ul) { // Check for a key specific to DNA table
+                if (sample.dna_volume_ul || sample.dna_concentration_ng_ul) {
                     html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="dna-details">
@@ -591,19 +643,19 @@
                         </button>
                         <div class="accordion-content">
                             <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Volume (ÂµL)', sample.dna_volume_ul)}
-                                ${renderDetailRow('Concentration (ng/ÂµL)', sample.dna_concentration_ng_ul)}
+                                ${renderDetailRow('Volume (µL)', sample.dna_volume_ul)}
+                                ${renderDetailRow('Concentration (ng/µL)', sample.dna_concentration_ng_ul)}
                                 ${renderDetailRow('A260/280', sample.dna_a260_280)}
                                 ${renderDetailRow('A260/230', sample.dna_a260_230)}
                                 ${renderDetailRow('Extraction Method', sample.dna_extraction_method)}
-                                ${renderDetailRow('Extraction Date', formatDate(sample.dna_extraction_date))}
+                                ${renderDetailRow('Extraction Date', formatDate(sample.extraction_date))}
                             </dl>
                         </div>
                     </div>`;
                 }
                 
                 // RNA Details
-                if (sample.rna_volume_ul || sample.rna_concentration_ng_ul) { // Check for a key specific to RNA table
+                if (sample.rna_volume_ul || sample.rna_concentration_ng_ul) {
                     html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="rna-details">
@@ -612,33 +664,95 @@
                         </button>
                         <div class="accordion-content">
                             <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Volume (ÂµL)', sample.rna_volume_ul)}
-                                ${renderDetailRow('Concentration (ng/ÂµL)', sample.rna_concentration_ng_ul)}
+                                ${renderDetailRow('Volume (µL)', sample.rna_volume_ul)}
+                                ${renderDetailRow('Concentration (ng/µL)', sample.rna_concentration_ng_ul)}
                                 ${renderDetailRow('A260/280', sample.rna_a260_280)}
                                 ${renderDetailRow('A260/230', sample.rna_a260_230)}
                                 ${renderDetailRow('Extraction Method', sample.rna_extraction_method)}
-                                ${renderDetailRow('Extraction Date', formatDate(sample.rna_extraction_date))}
+                                ${renderDetailRow('Extraction Date', formatDate(sample.extraction_date))}
                             </dl>
                         </div>
                     </div>`;
                 }
 
+                // Sediments Details
+                if (sample.sediment_volume || sample.sediment_depth_m) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="sediments-details">
+                            <span class="flex items-center"><i data-lucide="sand-grain" class="w-5 h-5 mr-2"></i> Sediments Details</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Volume', sample.sediment_volume ? `${sample.sediment_volume} ${sample.sediment_volume_unit || ''}` : 'N/A')}
+                                ${renderDetailRow('Depth (m)', sample.sediment_depth_m)}
+                                ${renderDetailRow('Sampling Method', sample.sediment_sampling_method)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // Water Details
+                if (sample.water_volume_l || sample.water_depth_m) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="water-details">
+                            <span class="flex items-center"><i data-lucide="droplet" class="w-5 h-5 mr-2"></i> Water Details</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Volume (L)', sample.water_volume_l)}
+                                ${renderDetailRow('Filter', sample.water_filter)}
+                                ${renderDetailRow('Filter Pore Size (µm)', sample.water_filter_pore_size_um)}
+                                ${renderDetailRow('Depth (m)', sample.water_depth_m)}
+                                ${renderDetailRow('Sampling Method', sample.water_sampling_method)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // Dissections (Separate Fetch - Sample_Full_Details_View might not include all dissections)
+                const dissectionsData = await apiFetch(`table/Lab/Dissections?filter_sample_id=${sampleId}`);
+                const dissections = dissectionsData && !dissectionsData.error ? dissectionsData : [];
+
+                if (dissections.length > 0) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="dissection-history">
+                            <span class="flex items-center"><i data-lucide="scissors" class="w-5 h-5 mr-2"></i> Dissection History (${dissections.length})</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">`;
+                    dissections.forEach(dis => {
+                        html += `<div class="mb-2 p-2 bg-gray-100 rounded-md">
+                            ${renderDetailRow('Dissection ID', dis.dissection_id)}
+                            ${renderDetailRow('Date', formatDate(dis.dissection_date))}
+                            ${renderDetailRow('Person', dis.person_id)}
+                            ${renderDetailRow('Gonad Weight (g)', dis.gonad_weight_g)}
+                            ${renderDetailRow('Liver Weight (g)', dis.liver_weight_g)}
+                            ${renderDetailRow('Stomach Contents', dis.stomach_contents_jsonb ? JSON.stringify(dis.stomach_contents_jsonb) : 'N/A')}
+                        </div>`;
+                    });
+                    html += `</div></div>`;
+                }
+
                 // Extraction Details (if not covered by DNA/RNA directly)
-                // This checks if general extraction fields exist, but DNA/RNA details are preferred if present.
-                if (sample.extraction_date && !(sample.dna_volume_ul || sample.rna_volume_ul)) {
-                     html += `
+                if (sample.extraction_date && !(sample.dna_volume_ul || sample.rna_volume_ul)) { // Avoid duplication if DNA/RNA sections cover this
+                    html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="extraction-details">
-                            <span class="flex items-center"><i data-lucide="flask-conical" class="w-5 h-5 mr-2"></i> Extraction Details</span>
+                            <span class="flex items-center"><i data-lucide="flask-conical" class="w-5 h-5 mr-2"></i> General Extraction Details</span>
                             <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                         </button>
                         <div class="accordion-content">
                             <dl class="space-y-2 py-2">
                                 ${renderDetailRow('Date', formatDate(sample.extraction_date))}
                                 ${renderDetailRow('Kit', sample.extraction_kit)}
-                                ${renderDetailRow('Elution Volume (ÂµL)', sample.extraction_elution_volume_ul)}
-                                ${renderDetailRow('Yield Qubit (ng/ÂµL)', sample.yield_qubit_ng_ul)}
-                                ${renderDetailRow('Yield Nanodrop (ng/ÂµL)', sample.yield_nanodrop_ng_ul)}
+                                ${renderDetailRow('Elution Volume (µL)', sample.extraction_elution_volume_ul)}
+                                ${renderDetailRow('Yield Qubit (ng/µL)', sample.yield_qubit_ng_ul)}
+                                ${renderDetailRow('Yield Nanodrop (ng/µL)', sample.yield_nanodrop_ng_ul)}
                                 ${renderDetailRow('A260/280', sample.extraction_a260_280)}
                                 ${renderDetailRow('A260/230', sample.extraction_a260_230)}
                             </dl>
@@ -660,7 +774,7 @@
                                 ${renderDetailRow('A260', sample.nanodrop_a260)}
                                 ${renderDetailRow('A260/280', sample.nanodrop_a260_280)}
                                 ${renderDetailRow('A260/230', sample.nanodrop_a260_230)}
-                                ${renderDetailRow('Total DNA (Âµg)', sample.nanodrop_total_dna_ug)}
+                                ${renderDetailRow('Total DNA (µg)', sample.nanodrop_total_dna_ug)}
                             </dl>
                         </div>
                     </div>`;
@@ -677,7 +791,25 @@
                         <div class="accordion-content">
                             <dl class="space-y-2 py-2">
                                 ${renderDetailRow('Original Sample Conc.', sample.qubit_original_sample_conc ? `${sample.qubit_original_sample_conc} ${sample.qubit_original_sample_unit || ''}` : 'N/A')}
-                                ${renderDetailRow('Total DNA (Âµg)', sample.qubit_total_dna_ug)}
+                                ${renderDetailRow('Total DNA (µg)', sample.qubit_total_dna_ug)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // Tapestation Details
+                if (sample.tapestation_id) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="tapestation-details">
+                            <span class="flex items-center"><i data-lucide="waveform" class="w-5 h-5 mr-2"></i> Tapestation Details (${sample.tapestation_id})</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Measurement Date', formatDate(sample.measurement_date))}
+                                ${renderDetailRow('Kit', sample.kit)}
+                                ${renderDetailRow('Position', sample.position)}
                             </dl>
                         </div>
                     </div>`;
@@ -696,7 +828,28 @@
                                 ${renderDetailRow('Date', formatDate(sample.pcr_date))}
                                 ${renderDetailRow('Primer ID', sample.pcr_primer_id)}
                                 ${renderDetailRow('Target Gene', sample.pcr_target_gene_id)}
-                                ${renderDetailRow('Reaction Volume (ÂµL)', sample.volume_reaction_ul)}
+                                ${renderDetailRow('Reaction Volume (µL)', sample.volume_reaction_ul)}
+                            </dl>
+                        </div>
+                    </div>`;
+                }
+
+                // Gel Electrophoresis Details
+                if (sample.gelelectrophoresis_id) {
+                    html += `
+                    <div class="accordion-item">
+                        <button class="accordion-header" data-accordion="gel-electrophoresis-details">
+                            <span class="flex items-center"><i data-lucide="gel-electrophoresis" class="w-5 h-5 mr-2"></i> Gel Electrophoresis Details (${sample.gelelectrophoresis_id})</span>
+                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Run Date', formatDate(sample.run_date))}
+                                ${renderDetailRow('Ladder', sample.ladder)}
+                                ${renderDetailRow('Voltage', sample.voltage)}
+                                ${renderDetailRow('Band Size (bp)', sample.band_size_bp)}
+                                ${renderDetailRow('Gel Type', sample.gel_type)}
+                                ${renderDetailRow('Run Time (minutes)', sample.run_time_minutes)}
                             </dl>
                         </div>
                     </div>`;
@@ -730,6 +883,8 @@
                         </button>
                         <div class="accordion-content">
                             <dl class="space-y-2 py-2">
+                                ${renderDetailRow('Library Name', sample.library_name)}
+                                ${renderDetailRow('Prep Date', formatDate(sample.prep_date))}
                                 ${renderDetailRow('Library Prep Kit', sample.library_prep_kit)}
                                 ${renderDetailRow('Index Sequence', sample.index_sequence)}
                                 ${renderDetailRow('Read Length (bp)', sample.library_read_length_bp)}
@@ -782,32 +937,6 @@
                     </div>`;
                 }
 
-                // Dissection History (if multiple, iterate)
-                // This requires fetching Dissections separately as Sample_Full_Details_View might flatten it
-                const dissectionsData = await apiFetch(`table/Lab/Dissections?filter_sample_id=${sampleId}`);
-                const dissections = dissectionsData && !dissectionsData.error ? dissectionsData : [];
-
-                if (dissections.length > 0) {
-                    html += `
-                    <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="dissection-history">
-                            <span class="flex items-center"><i data-lucide="scissors" class="w-5 h-5 mr-2"></i> Dissection History (${dissections.length})</span>
-                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
-                        </button>
-                        <div class="accordion-content">`;
-                    dissections.forEach(dis => {
-                        html += `<div class="mb-2 p-2 bg-gray-100 rounded-md">
-                            ${renderDetailRow('Dissection ID', dis.dissection_id)}
-                            ${renderDetailRow('Date', formatDate(dis.dissection_date))}
-                            ${renderDetailRow('Person', dis.person_id)}
-                            ${renderDetailRow('Gonad Weight (g)', dis.gonad_weight_g)}
-                            ${renderDetailRow('Liver Weight (g)', dis.liver_weight_g)}
-                            ${renderDetailRow('Stomach Contents', dis.stomach_contents_jsonb ? JSON.stringify(dis.stomach_contents_jsonb) : 'N/A')}
-                        </div>`;
-                    });
-                    html += `</div></div>`;
-                }
-
                 html += `</div>`; // Close main space-y-2 div
                 resultsDiv.innerHTML = html;
 
@@ -828,60 +957,66 @@
         }
 
 
+        // --- Dashboard Initialization ---
         async function setupDashboard() {
-            lucide.createIcons(); // Initialize Lucide icons
-            const personId = sessionStorage.getItem('person_id');
-            const fullName = sessionStorage.getItem('full_name');
-            if(personId) {
-                document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${fullName || personId}</p>`;
+            lucide.createIcons(); // Initialize Lucide icons on page load
+
+            // Display logged-in user info in sidebar
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if (user && user.person_id) {
+                document.getElementById('user-profile').innerHTML = `
+                    <span class="mr-2 p-2 bg-blue-500 text-white rounded-full text-xs font-bold">${user.person_id.charAt(0).toUpperCase()}</span>
+                    <p class="font-semibold text-sm text-gray-800">${user.full_name || user.person_id}</p>
+                `;
+            } else if (user && user.customer_id) { // For customer users
+                 document.getElementById('user-profile').innerHTML = `
+                    <span class="mr-2 p-2 bg-green-500 text-white rounded-full text-xs font-bold">${String(user.customer_id).charAt(0).toUpperCase()}</span>
+                    <p class="font-semibold text-sm text-gray-800">${user.customer_name || `Customer ${user.customer_id}`}</p>
+                `;
+            } else if (user && user.contact_id) { // For external contacts
+                 document.getElementById('user-profile').innerHTML = `
+                    <span class="mr-2 p-2 bg-purple-500 text-white rounded-full text-xs font-bold">${String(user.contact_id).charAt(0).toUpperCase()}</span>
+                    <p class="font-semibold text-sm text-gray-800">${user.full_name || `Contact ${user.contact_id}`}</p>
+                `;
             }
+
 
             // Logout button functionality
-            document.getElementById('logout-button').addEventListener('click', () => {
-                sessionStorage.clear(); // Clear all session data
-                localStorage.removeItem('redirectUrl'); // Remove any stored redirect URL
-                window.location.href = './login.html'; // Redirect to login page
+            document.getElementById('logout-button').addEventListener('click', async () => {
+                try {
+                    await apiFetch('logout', { method: 'POST' }); // Call backend logout
+                } catch (error) {
+                    console.error("Logout API failed, but proceeding with client-side clear:", error);
+                } finally {
+                    sessionStorage.clear(); // Clear all session data client-side
+                    localStorage.removeItem('redirectUrl'); // Remove any stored redirect URL
+                    window.location.href = './login.html'; // Redirect to login page
+                }
             });
             
-            // Fetch all dashboard stats in parallel for efficiency
-            const statsPromises = {
-                active_projects: apiFetch('table/lims/projects?filter_status_id=Active').then(res => res ? res.length : 0),
-                total_samples: apiFetch('table/lab/samples').then(res => res ? res.length : 0),
-                // Filter for experiments this month (YYYY-MM format)
-                experiments_this_month: apiFetch('table/lab/experiments?filter_experiment_date_month=' + new Date().toISOString().slice(0, 7)).then(res => res ? res.length : 0),
-                // Assuming backend can handle 'filter_expire_date_within_30_days' or you'd fetch all and filter client-side
-                reagents_expiring_soon: apiFetch('table/reference/reagents?filter_expire_date_within_30_days=true').then(res => res ? res.length : 0),
-                total_experiments: apiFetch('table/lab/experiments').then(res => res ? res.length : 0),
-                total_protocols: apiFetch('table/lab/protocols').then(res => res ? res.length : 0), // Corrected to lab.protocols
-                total_storage: apiFetch('table/lab/storage_locations').then(res => res ? res.length : 0), // Corrected to lab.storage_locations
-                total_personnel: apiFetch('table/reference/personal').then(res => res ? res.length : 0),
-            };
+            // Fetch all dashboard stats using the custom dashboard-stats endpoint
+            const dashboardStats = await apiFetch('dashboard-stats');
 
-            const stats = {};
-            for (const key in statsPromises) {
-                stats[key] = await statsPromises[key];
+            if (dashboardStats) {
+                document.getElementById('stat-active-projects').textContent = dashboardStats.active_projects || 0;
+                document.getElementById('stat-total-samples').textContent = dashboardStats.total_samples || 0;
+                document.getElementById('stat-month-experiments').textContent = dashboardStats.experiments_this_month || 0;
+                document.getElementById('stat-expiring-reagents').textContent = dashboardStats.reagents_expiring_soon || 0;
+                document.getElementById('stat-occupied-storage').textContent = dashboardStats.occupied_storage_units || 0; // Updated stat
+                document.getElementById('stat-total-sops').textContent = dashboardStats.total_sops || 0; // Updated stat
+                document.getElementById('stat-most-active-person').textContent = dashboardStats.most_active_person || 'N/A'; // Updated stat
+                document.getElementById('stat-total-experiments').textContent = dashboardStats.total_experiments || 0; // Existing stat
             }
 
-            // Update UI with fetched stats
-            if (stats) {
-                document.getElementById('stat-active-projects').textContent = stats.active_projects || 0;
-                document.getElementById('stat-total-samples').textContent = stats.total_samples || 0;
-                document.getElementById('stat-month-experiments').textContent = stats.experiments_this_month || 0;
-                document.getElementById('stat-expiring-reagents').textContent = stats.reagents_expiring_soon || 0;
-                document.getElementById('stat-total-experiments').textContent = stats.total_experiments || 0;
-                document.getElementById('stat-total-protocols').textContent = stats.total_protocols || 0;
-                document.getElementById('stat-total-storage').textContent = stats.total_storage || 0;
-                document.getElementById('stat-total-personnel').textContent = stats.total_personnel || 0;
-            }
-
-            // Fetch data for charts. These are the source datasets for the dynamic charts.
-            const [samples, experiments, reagents, projects, personnel, storage] = await Promise.all([
+            // Fetch data for charts. These are the source datasets.
+            const [samples, experiments, reagents, projects, personnel, storage, protocols] = await Promise.all([
                 apiFetch('table/lab/samples'),
                 apiFetch('table/lab/experiments'),
-                apiFetch('table/reference/reagents'), // Corrected schema for reagents
+                apiFetch('table/lims/reagents'),
                 apiFetch('table/lims/projects'),
                 apiFetch('table/reference/personal'),
-                apiFetch('table/lab/storage_locations') // Corrected to lab.storage_locations
+                apiFetch('table/lab/storage'), // Use lab.storage table for storage data
+                apiFetch('table/lims/sop') // Use lims.sop table for protocols (SOPs)
             ]);
             dataCache.samples = samples || [];
             dataCache.experiments = experiments || [];
@@ -889,6 +1024,7 @@
             dataCache.projects = projects || [];
             dataCache.personnel = personnel || [];
             dataCache.storage = storage || [];
+            dataCache.protocols = protocols || [];
 
             const metricSelect = document.getElementById('chart-metric');
             const categorySelect = document.getElementById('chart-category');
@@ -906,86 +1042,124 @@
             drawChart();
 
             // Sample tracking functionality
-            document.getElementById('track-sample-btn').onclick = async () => {
-                const sampleId = document.getElementById('track-sample-input').value.trim();
-                const resultsDiv = document.getElementById('track-sample-results');
-                if (!sampleId) { resultsDiv.innerHTML = `<p class="text-red-500">Please enter a Sample ID.</p>`; return; }
-                
-                await displayDetailedSampleInfo(sampleId, resultsDiv);
-            };
+            const trackSampleBtn = document.getElementById('track-sample-btn');
+            if (trackSampleBtn) {
+                trackSampleBtn.onclick = async () => {
+                    const sampleId = document.getElementById('track-sample-input').value.trim();
+                    const resultsDiv = document.getElementById('track-sample-results');
+                    if (!sampleId) { resultsDiv.innerHTML = `<p class="text-red-500">Please enter a Sample ID.</p>`; return; }
+                    await displayDetailedSampleInfo(sampleId, resultsDiv);
+                    lucide.createIcons(); // Re-render icons after dynamic content is added
+                };
+            }
 
             // Global search functionality
             const searchInput = document.getElementById('global-search-input');
             const searchResultsDiv = document.getElementById('global-search-results');
-            searchInput.addEventListener('input', async (e) => {
-                const searchTerm = e.target.value.trim();
-                if (searchTerm.length < 2) { 
-                    searchResultsDiv.innerHTML = ''; 
-                    return; 
-                }
-
-                searchResultsDiv.innerHTML = `<div class="card p-4 shadow-lg absolute z-10 bg-white w-full max-h-60 overflow-y-auto text-center"><div class="loading-spinner"></div> Searching...</div>`;
-
-                const results = await apiFetch(`search/global?q=${encodeURIComponent(searchTerm)}`); // Use new global search endpoint
-                let html = '';
-
-                // Render search results based on the categories returned by the backend
-                if(results) {
-                    // Projects results
-                    if(results['lims.projects'] && results['lims.projects'].length > 0) {
-                        html += `<div><h3 class="font-bold text-gray-700">Projects</h3><div class="space-y-1">${results['lims.projects'].map(p => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${p.project_name || p.title} (<span class="font-mono text-sm">${p.project_id}</span>)</div>`).join('')}</div></div>`;
-                    }
-                    
-                    // Samples results
-                    if(results['lab.samples'] && results['lab.samples'].length > 0) {
-                        html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Samples</h3><div class="space-y-1">${results['lab.samples'].map(s => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${s.sample_id} (<span class="text-sm text-gray-500">${s.sample_type_id}</span>)</div>`).join('')}</div></div>`;
+            if (searchInput && searchResultsDiv) {
+                searchInput.addEventListener('input', async (e) => {
+                    const searchTerm = e.target.value.trim();
+                    if (searchTerm.length < 2) { 
+                        searchResultsDiv.innerHTML = ''; 
+                        searchResultsDiv.classList.add('hidden');
+                        return; 
                     }
 
-                    // Experiments results
-                    if(results['lab.experiments'] && results['lab.experiments'].length > 0) {
-                        html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Experiments</h3><div class="space-y-1">${results['lab.experiments'].map(ex => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${ex.experiment_name || ex.experiment_id} (<span class="font-mono text-sm">${ex.experiment_id}</span>)</div>`).join('')}</div></div>`;
+                    searchResultsDiv.innerHTML = `<div class="p-4 text-center"><div class="loading-spinner"></div> Searching...</div>`;
+                    searchResultsDiv.classList.remove('hidden');
+
+                    const results = await apiFetch(`global-search/${encodeURIComponent(searchTerm)}`); 
+                    let html = '';
+
+                    if(results) {
+                        // Backend global-search returns simplified keys (e.g., "projects", "samples")
+                        // The app.py global_search endpoint directly returns these keys, not schema.table.
+                        const resultCategories = {
+                            "projects": "Projects",
+                            "samples": "Samples",
+                            "experiments": "Experiments",
+                            "sop": "SOPs",
+                            "customers": "Customers",
+                            "species": "Species",
+                            "primers": "Primers",
+                            "reagents": "Reagents",
+                            "personal": "Personnel",
+                            "detailed_samples_view": "Detailed Samples",
+                            "project_overview_view": "Project Overviews",
+                            "analysis_results_summary": "Analysis Results"
+                        };
+
+                        let foundResults = false;
+                        for (const key in resultCategories) {
+                            if (results[key] && results[key].length > 0) {
+                                foundResults = true;
+                                const categoryTitle = resultCategories[key];
+                                html += `<div class="${html ? 'mt-4' : ''}">
+                                    <h3 class="font-bold text-gray-700 mb-1">${categoryTitle}</h3>
+                                    <div class="space-y-1">`;
+                                results[key].forEach(item => {
+                                    let itemDisplay = '';
+                                    if (key === "projects" || key === "project_overview_view") {
+                                        itemDisplay = `${item.title || 'No Title'} (<span class="font-mono text-sm">${item.project_id}</span>)`;
+                                    } else if (key === "samples" || key === "detailed_samples_view") {
+                                        itemDisplay = `${item.external_name || 'No Name'} (<span class="font-mono text-sm">${item.sample_id}</span>)`;
+                                    } else if (key === "experiments") {
+                                        itemDisplay = `${item.experiment_title || 'No Title'} (<span class="font-mono text-sm">${item.experiment_id}</span>)`;
+                                    } else if (key === "sop") {
+                                        itemDisplay = `${item.title || 'No Title'} (<span class="font-mono text-sm">${item.sop_id}</span>)`;
+                                    } else if (key === "customers") {
+                                        itemDisplay = `${item.customer_name} (<span class="font-mono text-sm">${item.customer_id}</span>)`;
+                                    } else if (key === "species") {
+                                        itemDisplay = `${item.en_name} (${item.de_name})`;
+                                    } else if (key === "primers") {
+                                        itemDisplay = `${item.primer_id} (Fwd: ${item.primer_sequence_fwd || 'N/A'})`;
+                                    } else if (key === "reagents") {
+                                        itemDisplay = `${item.reagent_complete_name || 'No Name'} (Lot: ${item.lot || 'N/A'})`;
+                                    } else if (key === "personal") {
+                                        itemDisplay = `${item.full_name || 'No Name'} (${item.person_id})`;
+                                    } else if (key === "analysis_results_summary") {
+                                        itemDisplay = `Run: ${item.run_id}, Sample: ${item.sample_id}, Taxon: ${item.taxon_en_name}`;
+                                    } else {
+                                        itemDisplay = JSON.stringify(item); // Fallback for unexpected results
+                                    }
+                                    html += `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${itemDisplay}</div>`;
+                                });
+                                html += `</div></div>`;
+                            }
+                        }
+                        if (!foundResults) {
+                            html = '<p class="p-2 text-gray-500">No results found.</p>';
+                        }
+                    } else {
+                        html = '<p class="p-2 text-gray-500">Error fetching search results.</p>';
                     }
+                    searchResultsDiv.innerHTML = html;
+                    searchResultsDiv.classList.remove('hidden'); // Ensure it's visible now
+                    lucide.createIcons(); // Re-render icons if they are inside dynamic content
+                });
 
-                    // Protocols (SOPs) results - assuming 'lab.protocols' is the table for SOPs
-                    if(results['lab.protocols'] && results['lab.protocols'].length > 0) {
-                        html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Protocols (SOPs)</h3><div class="space-y-1">${results['lab.protocols'].map(s => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${s.protocol_name} (<span class="font-mono text-sm">${s.protocol_id}</span>)</div>`).join('')}</div></div>`;
+                // Hide search results when clicking outside
+                document.addEventListener('click', (event) => {
+                    const searchContainer = document.querySelector('.relative.w-1\\/3');
+                    if (searchContainer && !searchContainer.contains(event.target)) {
+                        searchResultsDiv.innerHTML = '';
+                        searchResultsDiv.classList.add('hidden'); // Hide the search results div
                     }
-
-                    // Reagents results
-                    if(results['reference.reagents'] && results['reference.reagents'].length > 0) {
-                        html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Reagents</h3><div class="space-y-1">${results['reference.reagents'].map(r => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${r.reagent_name || r.reagent_id} (<span class="font-mono text-sm">${r.reagent_id}</span>)</div>`).join('')}</div></div>`;
-                    }
-
-                    // Personnel results
-                    if(results['reference.personal'] && results['reference.personal'].length > 0) {
-                        html += `<div class="${html ? 'mt-4' : ''}"><h3 class="font-bold text-gray-700">Personnel</h3><div class="space-y-1">${results['reference.personal'].map(p => `<div class="p-1 hover:bg-gray-100 cursor-pointer rounded-md">${p.full_name} (<span class="font-mono text-sm">${p.person_id}</span>)</div>`).join('')}</div></div>`;
-                    }
-                }
-
-
-                searchResultsDiv.innerHTML = html ? `<div class="card p-4 shadow-lg absolute z-10 bg-white w-full max-h-60 overflow-y-auto">${html}</div>` : (searchTerm.length >= 2 ? '<p class="p-2 text-gray-500">No results found.</p>' : '');
-            });
-
-            // Hide search results when clicking outside
-            document.addEventListener('click', (event) => {
-                const searchContainer = document.querySelector('.relative.w-1\\/3');
-                if (searchContainer && !searchContainer.contains(event.target)) {
-                    searchResultsDiv.innerHTML = '';
-                }
-            });
+                });
+            }
 
             // Load recent activity from audit log
             loadRecentActivity();
         }
 
-        // Function to load and display recent activity from audit log
+        // --- Recent Activity Function ---
         async function loadRecentActivity() {
             const activityFeedDiv = document.getElementById('activity-feed');
             activityFeedDiv.innerHTML = `<p class="text-gray-500 text-center"><span class="loading-spinner mr-2"></span>Loading recent activities...</p>`;
 
             try {
                 // Fetch last 10 audit log entries, ordered by timestamp descending
-                const auditLogs = await apiFetch('table/audit/table_change_log?order_by=-action_timestamp&limit=10'); // Corrected table name and order_by for descending
+                const auditLogs = await apiFetch('table/audit/log?order_by=action_timestamp&order_direction=DESC&limit=10');
 
                 if (!auditLogs || auditLogs.error || auditLogs.length === 0) {
                     activityFeedDiv.innerHTML = `<p class="text-gray-500 text-center">No recent activity found.</p>`;
@@ -997,32 +1171,36 @@
                     const actionMap = { 'I': 'created', 'U': 'updated', 'D': 'deleted' };
                     const actionVerb = actionMap[log.action] || 'performed action on';
                     const timestamp = new Date(log.action_timestamp).toLocaleString();
-                    const userName = log.user_id || 'System'; // Use user_id from audit log
+                    const userName = log.user_id || 'System';
 
                     let details = '';
+                    // Prioritize specific display for key tables based on typical identifiers
                     if (log.table_name === 'samples' && log.new_data && log.new_data.sample_id) {
                         details = `Sample <span class="font-semibold">${log.new_data.sample_id}</span>`;
                         if (log.action === 'U' && log.new_data.sample_status_id) {
                             details += ` status changed to <span class="font-semibold text-blue-600">${log.new_data.sample_status_id}</span>`;
+                        } else if (log.new_data.external_name) {
+                            details += ` (${log.new_data.external_name})`;
                         }
                     } else if (log.table_name === 'projects' && log.new_data && log.new_data.project_id) {
                         details = `Project <span class="font-semibold">${log.new_data.project_id}</span>`;
-                        if (log.action === 'U' && log.new_data.title) {
-                            details += ` title updated to "<span class="font-semibold">${log.new_data.title}</span>"`;
+                        if (log.new_data.title) {
+                             details += ` ("<span class="font-semibold">${log.new_data.title}</span>")`;
                         }
-                    } else if (log.table_name === 'protocols' && log.new_data && log.new_data.protocol_id) {
-                        details = `Protocol <span class="font-semibold">${log.new_data.protocol_id}</span>`;
+                    } else if (log.table_name === 'sop' && log.new_data && log.new_data.sop_id) {
+                        details = `SOP <span class="font-semibold">${log.new_data.sop_id}</span>`;
+                         if (log.new_data.title) {
+                             details += ` ("<span class="font-semibold">${log.new_data.title}</span>")`;
+                        }
                     } else if (log.new_data && Object.keys(log.new_data).length > 0) {
-                        // Generic details for other tables if a primary identifier is available in new_data
-                        const primaryIdKey = Object.keys(log.new_data).find(key => key.includes('_id')); // Heuristic for ID
+                        const primaryIdKey = Object.keys(log.new_data).find(key => key.includes('_id') || key.includes('_nr'));
                         if (primaryIdKey) {
                             details = `record <span class="font-semibold">${log.new_data[primaryIdKey]}</span>`;
                         } else {
                             details = `a record`;
                         }
                     } else if (log.original_data && Object.keys(log.original_data).length > 0 && log.action === 'D') {
-                        // For deletions, try to get ID from original_data
-                        const primaryIdKey = Object.keys(log.original_data).find(key => key.includes('_id'));
+                        const primaryIdKey = Object.keys(log.original_data).find(key => key.includes('_id') || key.includes('_nr'));
                         if (primaryIdKey) {
                             details = `record <span class="font-semibold">${log.original_data[primaryIdKey]}</span>`;
                         } else {
@@ -1042,13 +1220,14 @@
                     `;
                 });
                 activityFeedDiv.innerHTML = html;
+                lucide.createIcons();
             } catch (error) {
                 console.error("Error loading recent activity:", error);
                 activityFeedDiv.innerHTML = `<p class="text-red-500 text-center">Failed to load recent activity. Error: ${error.message}</p>`;
             }
         }
 
-        // Initialize dashboard on page load
+        // --- Initialize dashboard on page load ---
         document.addEventListener('DOMContentLoaded', setupDashboard);
     </script>
 </body>

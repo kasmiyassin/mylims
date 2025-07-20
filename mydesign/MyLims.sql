@@ -3702,6 +3702,112 @@ CREATE INDEX IF NOT EXISTS idx_experiments_gin_search ON "lab"."experiments" USI
 CREATE TRIGGER trg_update_experiment_search BEFORE INSERT OR UPDATE ON "lab"."experiments" FOR EACH ROW EXECUTE FUNCTION "lab".update_experiment_search_vector_func();
 
 
+
+
+-- -----------------------------------------------------------------------
+-- Full-Text Search Configuration (always safe to run with IF NOT EXISTS)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_ts_config WHERE cfgname = 'lims_english') THEN
+        CREATE TEXT SEARCH CONFIGURATION public.lims_english (PARSER = default);
+        ALTER TEXT SEARCH CONFIGURATION public.lims_english
+            ALTER MAPPING FOR asciiword, asciihword, hword, hword_asciipart, hword_part
+            WITH english_stem;
+    END IF;
+END
+$$;
+
+--------------------------------------------------------------------------------
+-- Drop existing triggers before recreating them to avoid "already exists" errors
+--------------------------------------------------------------------------------
+
+DROP TRIGGER IF EXISTS trg_update_customer_search ON "lims"."customers";
+DROP TRIGGER IF EXISTS trg_update_sample_search ON "lab"."samples";
+DROP TRIGGER IF EXISTS trg_update_sop_search ON "lims"."sop";
+DROP TRIGGER IF EXISTS trg_update_experiment_search ON "lab"."experiments";
+DROP TRIGGER IF EXISTS trg_update_project_search ON "lims"."projects"; -- Added this based on the last suggested fix for projects
+
+--------------------------------------------------------------------------------
+-- Recreate Functions for updating search vectors (safe to run with CREATE OR REPLACE)
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION "lims".update_customer_search_vector_func()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.customer_search_vector =
+        TO_TSVECTOR('public.lims_english', COALESCE(NEW.customer_name, '')) ||
+        TO_TSVECTOR('public.lims_english', COALESCE(NEW.notes, ''));
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".update_sample_search_vector_func()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.sample_search_vector =
+        TO_TSVECTOR('public.lims_english', COALESCE(NEW.external_name, '')) ||
+        TO_TSVECTOR('public.lims_english', COALESCE(NEW.notes, ''));
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lims".update_sop_search_vector_func()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.sop_search_vector =
+        TO_TSVECTOR('public.lims_english', COALESCE(NEW.title, '')) ||
+        TO_TSVECTOR('public.lims_english', COALESCE(NEW.sop_protocol, '')) ||
+        TO_TSVECTOR('public.lims_english', COALESCE(NEW.notes, ''));
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".update_experiment_search_vector_func()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.experiment_search_vector =
+        TO_TSVECTOR('public.lims_english', COALESCE(NEW.experiment_title, '')) ||
+        TO_TSVECTOR('public.lims_english', COALESCE(NEW.aim, '')) ||
+        TO_TSVECTOR('public.lims_english', COALESCE(NEW.method, '')) ||
+        TO_TSVECTOR('public.lims_english', COALESCE(NEW.notes, ''));
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lims".update_project_search_vector_func() -- Ensure this function exists
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.project_search_vector =
+        TO_TSVECTOR('public.lims_english', COALESCE(NEW.title, '')) ||
+        TO_TSVECTOR('public.lims_english', COALESCE(NEW.notes, ''));
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+--------------------------------------------------------------------------------
+-- Add search_vector columns and GIN indexes (safe to run with IF NOT EXISTS)
+--------------------------------------------------------------------------------
+
+ALTER TABLE "lims"."customers" ADD COLUMN IF NOT EXISTS customer_search_vector TSVECTOR;
+CREATE INDEX IF NOT EXISTS idx_customers_gin_search ON "lims"."customers" USING GIN (customer_search_vector);
+-- Create the trigger AFTER dropping it and recreating its function
+CREATE TRIGGER trg_update_customer_search BEFORE INSERT OR UPDATE ON "lims"."customers" FOR EACH ROW EXECUTE FUNCTION "lims".update_customer_search_vector_func();
+
+ALTER TABLE "lab"."samples" ADD COLUMN IF NOT EXISTS sample_search_vector TSVECTOR;
+CREATE INDEX IF NOT EXISTS idx_samples_gin_search ON "lab"."samples" USING GIN (sample_search_vector);
+CREATE TRIGGER trg_update_sample_search BEFORE INSERT OR UPDATE ON "lab"."samples" FOR EACH ROW EXECUTE FUNCTION "lab".update_sample_search_vector_func();
+
+ALTER TABLE "lims"."sop" ADD COLUMN IF NOT EXISTS sop_search_vector TSVECTOR;
+CREATE INDEX IF NOT EXISTS idx_sop_gin_search ON "lims"."sop" USING GIN (sop_search_vector);
+CREATE TRIGGER trg_update_sop_search BEFORE INSERT OR UPDATE ON "lims"."sop" FOR EACH ROW EXECUTE FUNCTION "lims".update_sop_search_vector_func();
+
+ALTER TABLE "lab"."experiments" ADD COLUMN IF NOT EXISTS experiment_search_vector TSVECTOR;
+CREATE INDEX IF NOT EXISTS idx_experiments_gin_search ON "lab"."experiments" USING GIN (experiment_search_vector);
+CREATE TRIGGER trg_update_experiment_search BEFORE INSERT OR UPDATE ON "lab"."experiments" FOR EACH ROW EXECUTE FUNCTION "lab".update_experiment_search_vector_func();
+
+ALTER TABLE "lims"."projects" ADD COLUMN IF NOT EXISTS project_search_vector TSVECTOR; -- Ensure this column exists
+CREATE INDEX IF NOT EXISTS idx_projects_gin_search ON "lims"."projects" USING GIN (project_search_vector);
+CREATE TRIGGER trg_update_project_search BEFORE INSERT OR UPDATE ON "lims"."projects" FOR EACH ROW EXECUTE FUNCTION "lims".update_project_search_vector_func();
 -- ======================================================================
 -- 13. Views
 -- ======================================================================
