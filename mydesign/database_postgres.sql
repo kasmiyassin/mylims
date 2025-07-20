@@ -592,8 +592,8 @@ CREATE TABLE IF NOT EXISTS "lab"."storage_log" (
 CREATE TABLE IF NOT EXISTS "lab"."fish" (
     "sample_id" text NOT NULL, -- Make it NOT NULL as part of a composite PK
     "parent_sample_id" text,
-    "sampling_id" text,
-    "sampling_date" date NOT NULL, -- Make this NOT NULL and part of the PK
+    "experiment_id" text,
+    "experiment_date" date NOT NULL, -- Make this NOT NULL and part of the PK
     "species_id" text NOT NULL,
     "total_length_mm" numeric,
     "fork_length_mm" numeric,
@@ -611,7 +611,7 @@ CREATE TABLE IF NOT EXISTS "lab"."fish" (
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
-    PRIMARY KEY ("sample_id", "sampling_date")
+    PRIMARY KEY ("sample_id", "experiment_date")
 	) PARTITION BY RANGE ("experiment_date"); -- Define it as a partitioned table
 
 ALTER TABLE "lab"."fish" ADD CONSTRAINT chk_fish_sex_enum CHECK ("sex" IN ('Male', 'Female', 'Undetermined', NULL));
@@ -638,7 +638,6 @@ CREATE TABLE IF NOT EXISTS "lab"."tissue" (
 CREATE TABLE IF NOT EXISTS "lab"."otoliths" (
     "otolith_id" text NOT NULL,
     "sample_id" text NOT NULL,
-    "experiment_id" text NOT NULL,
     "experiment_date" date NOT NULL,
     "reader_person_id" text NOT NULL,
     "side" text NOT NULL,
@@ -751,8 +750,6 @@ CREATE TABLE IF NOT EXISTS "lab"."dissections" (
     "sample_id" text NOT NULL,
     "person_id" text NOT NULL,
     "dissection_date" date NOT NULL,
-    "experiment_id" text,
-    "experiment_date" date NOT NULL,
     "stomach_contents_jsonb" jsonb,
     "gonad_weight_g" numeric,
     "liver_weight_g" numeric,
@@ -982,8 +979,6 @@ CREATE TABLE IF NOT EXISTS "lab"."datasets" (
     "dataset_id" text NOT NULL,
     "source_type" text,
     "ecosystem_id" text,
-    "experiment_id" text,
-    "experiment_date" date NOT NULL,
     "region_id" text,
     "customer_id" integer,
     "stored_location_id" text,
@@ -1092,77 +1087,42 @@ RETURNS TRIGGER AS $$
 DECLARE
     exp_id text;
     exp_date date;
-    -- Removed sample_exp_id, sample_exp_date as they tried to read non-existent columns from samples
+    sample_exp_id text;
+    sample_exp_date date;
 BEGIN
-    -- Derive experiment_id and experiment_date by joining lab.samples to lab.sampling,
-    -- and then to lab.experiments.
-    SELECT
-        sa.experiment_id,
-        sa.experiment_date
-    INTO
-        exp_id,
-        exp_date
-    FROM
-        "lab"."samples" s
-    JOIN
-        "lab"."sampling" sa ON s.sampling_id = sa.sampling_id AND s.sampling_date = sa.sampling_date
-    WHERE
-        s.sample_id = NEW.sample_id
-        AND s.sampling_date IS NOT NULL; -- Ensure sampling_date is not null for the join
+    -- First, try to get experiment_id and experiment_date from lab.samples
+    SELECT s.experiment_id, s.experiment_date
+    INTO sample_exp_id, sample_exp_date
+    FROM "lab"."samples" s
+    WHERE s.sample_id = NEW.sample_id;
 
-    -- Raise an exception if the associated experiment data cannot be found,
-    -- as experiment_date is NOT NULL for partitioning.
-    IF exp_id IS NULL OR exp_date IS NULL THEN
-        RAISE EXCEPTION 'Could not find associated experiment_id or experiment_date for sample_id % from sampling record for otolith record. Ensure sample and sampling data are complete.', NEW.sample_id;
+    IF sample_exp_id IS NOT NULL AND sample_exp_date IS NOT NULL THEN
+        NEW.experiment_id := sample_exp_id;
+        NEW.experiment_date := sample_exp_date;
+    ELSE
+        -- If not found directly in samples (e.g., if sample.experiment_id is NULL or not set up to pull directly)
+        -- You might need to derive it from 'lab.experiments_samples' or directly from 'lab.experiments'
+        -- This part depends on how your experiment_id is populated in the 'samples' table,
+        -- or if 'otoliths' are directly linked to an 'experiment'.
+        -- For this example, let's assume 'sample_id' links to 'experiments_samples' which then links to 'experiments'.
+        SELECT es.experiment_id, es.experiment_date
+        INTO exp_id, exp_date
+        FROM "lab"."experiments_samples" es
+        WHERE es.sample_id = NEW.sample_id;
+
+        IF exp_id IS NULL OR exp_date IS NULL THEN
+            RAISE EXCEPTION 'Could not find associated experiment_id or experiment_date for sample_id % for otolith record. Ensure sample and experiment linkage is complete.', NEW.sample_id;
+        END IF;
+
+        NEW.experiment_id := exp_id;
+        NEW.experiment_date := exp_date;
     END IF;
-
-    -- Assign the retrieved experiment data to the new otolith record
-    NEW.experiment_id := exp_id;
-    NEW.experiment_date := exp_date;
 
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION "lab".create_dna_partition_if_not_exists_manual(p_year integer)
-RETURNS VOID AS $$
-DECLARE
-    start_date date;
-    end_date date;
-    partition_name text;
-BEGIN
-    start_date := MAKE_DATE(p_year, 1, 1);
-    end_date := MAKE_DATE(p_year + 1, 1, 1);
-    partition_name := 'y' || p_year;
 
-    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."dna"
-             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
-END;
-$$ LANGUAGE plpgsql;
-
-
--- 
-CREATE OR REPLACE FUNCTION "lab".create_sampling_partition_if_not_exists_manual (p_year integer)
-RETURNS VOID AS $$
-DECLARE
-    start_date date;
-    end_date date;
-    partition_name text;
-BEGIN
-    start_date := MAKE_DATE(p_year, 1, 1);
-    end_date := MAKE_DATE(p_year + 1, 1, 1);
-    partition_name := 'y' || TO_CHAR(start_date, 'YYYY');
-
-    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."fish"
-             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
-END;
-$$ LANGUAGE plpgsql;
-
-
-
-
-
--- ===================================================================================================
 -- Corrected Function for lab.dna partitions
 CREATE OR REPLACE FUNCTION "lab".create_dna_partition_if_not_exists_manual (p_year integer)
 RETURNS VOID AS $$
@@ -1301,6 +1261,12 @@ $$ LANGUAGE plpgsql;
 
 
 
+
+
+
+
+
+
 CREATE OR REPLACE FUNCTION "lab".create_rna_partition_if_not_exists()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1330,6 +1296,9 @@ CREATE TRIGGER trg_create_rna_partition
 BEFORE INSERT ON "lab"."rna"
 FOR EACH ROW
 EXECUTE FUNCTION "lab".create_rna_partition_if_not_exists();
+
+
+
 
 -- ======================================================================
 -- 8. Sequences for ID Generation
@@ -1501,7 +1470,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-
 CREATE OR REPLACE FUNCTION "lab".generate_sample_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1515,8 +1483,7 @@ DECLARE
     temp_sampling_id_exists text;
     temp_sampling_date_exists date;
 BEGIN
-    -- Explicitly qualify the column reference with the table alias 'st'
-    SELECT st.sample_type_abrv INTO sample_type_abrv
+    SELECT sample_type_abrv INTO sample_type_abrv
     FROM "reference"."samples_type" st
     WHERE st.sample_type_id = NEW.sample_type_id;
 
@@ -1592,7 +1559,6 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 
 CREATE OR REPLACE FUNCTION "lab".generate_fish_child_sample_id()
 RETURNS TRIGGER AS $$
@@ -3009,7 +2975,7 @@ DECLARE
     start_date date;
     end_date date;
 BEGIN
-    partition_date := NEW.sampling_date;
+    partition_date := NEW.experiment_date;
     IF partition_date IS NULL THEN
         RAISE EXCEPTION 'Cannot partition on NULL experiment_date for lab.fish. Please provide an experiment_date.';
     END IF;
@@ -3035,7 +3001,7 @@ DECLARE
     start_date date;
     end_date date;
 BEGIN
-    partition_date := NEW.sampling_date;
+    partition_date := NEW.experiment_date;
     IF partition_date IS NULL THEN
         RAISE EXCEPTION 'Cannot partition on NULL experiment_date for lab.fishing. Please provide an experiment_date.';
     END IF;
@@ -4286,6 +4252,68 @@ ORDER BY
     1, 2
 WITH DATA;
 
+-- ======================================================================
+-- 14. Initial Data Population
+-- ======================================================================
+
+INSERT INTO "reference"."status" ("status_id", "notes") VALUES
+('Received', 'sample has been received in the lab'),
+('Dissection', 'sample has been dissected'),
+('Extracted', 'sample has been extracted'),
+('Nanodrop QC', 'sample quality checked with Nanodrop'),
+('Qubit QC', 'sample quality checked with Qubit'),
+('Tapestation QC', 'sample quality checked with Tapestation'),
+('PCR Done', 'PCR has been performed on the sample'),
+('qPCR Done', 'qPCR has been performed on the sample'),
+('Library Prep', 'Sequencing library has been prepared'),
+('Sequencing Done', 'sample has been sequenced'),
+('Bioinformatics Done', 'bioinformatics analysis is complete'),
+('Unknown Step', 'An unknown step has occurred in the workflow')
+ON CONFLICT ("status_id") DO NOTHING;
+
+INSERT INTO "reference"."samples_type" ("sample_type_id", "sample_type_abrv", "notes") VALUES
+('DNA', 'D', 'Deoxyribonucleic Acid sample'),
+('RNA', 'R', 'Ribonucleic Acid sample'),
+('Library', 'L', 'Sequencing Library sample'),
+('Water', 'W', 'Water sample'),
+('Sediments', 'S', 'Sedi ment sample'),
+('Tissue', 'T', 'Tissue sample'),
+('Fish', 'F', 'Fish sample'),
+('Sequencing', 'Q', 'Sequencing run output'),
+('Dataset', 'Z', 'Processed dataset'),
+('Publication', 'PUB', 'Research Publication')
+ON CONFLICT ("sample_type_id") DO NOTHING;
+
+
+INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "unit_type", "conversion_factor_to_base") VALUES
+('mm', 'millimeter', 'mm', 'length', 0.001),
+('g', 'gram', 'g', 'mass', 0.001),
+('ul', 'microliter', 'µl', 'volume', 1e-6),
+('ng_ul', 'nanogram per microliter', 'ng/µl', 'concentration', 1e-9),
+('bp', 'base pair', 'bp', 'length', 1),
+('km_h', 'kilometer per hour', 'km/h', 'speed', 0.277778),
+('m_s', 'meter per second', 'm/s', 'speed', 1),
+('PSU', 'Practical Salinity Unit', 'PSU', 'salinity', 1),
+('ppt', 'parts per thousand', 'ppt', 'salinity', 1),
+('dbar', 'decibar', 'dbar', 'pressure', 1),
+('psi', 'pounds per square inch', 'psi', 'pressure', 0.0689476),
+('kPa', 'kilopascal', 'kPa', 'pressure', 1000),
+('mg_l', 'milligram per liter', 'mg/L', 'concentration', 1),
+('umol_l', 'micromole per liter', 'µmol/L', 'concentration', 1),
+('ntu', 'Nephelometric Turbidity Unit', 'NTU', 'turbidity', 1),
+('ug_l', 'microgram per liter', 'µg/L', 'concentration', 1),
+('deg', 'degree', 'deg', 'angle', 1),
+('min', 'minute', 'min', 'time', 60),
+('h', 'hour', 'h', 'time', 3600),
+('c', 'Celsius', '°C', 'temperature', 1),
+('l', 'liter', 'L', 'volume', 1),
+('um', 'micrometer', 'µm', 'length', 1e-6),
+('m', 'meter', 'm', 'length', 1)
+ON CONFLICT ("unit_id") DO NOTHING;
+
+INSERT INTO "reference"."personal" ("person_id", "full_name", "password_hash") VALUES
+('system_user', 'System Automation', 'no_password_needed_for_system')
+ON CONFLICT ("person_id") DO NOTHING;
 
 -- ======================================================================
 -- 15. Partitioning Setup
@@ -4451,7 +4479,6 @@ BEGIN
     PERFORM "lab".create_fishing_partition_if_not_exists_manual(current_year_int);
     PERFORM "lab".create_fishing_partition_if_not_exists_manual(next_year_int);
 END $$;
-
 
 DO $$
 DECLARE -- Re-declare variables here
@@ -5472,105 +5499,9 @@ REFERENCES "reference"."taxon"("taxon_id");
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+-- 
 -- 
 --
--- ======================================================================
--- 14. Initial Data Population
--- ======================================================================
-
-INSERT INTO "reference"."status" ("status_id", "notes") VALUES
-('Received', 'sample has been received in the lab'),
-('Dissection', 'sample has been dissected'),
-('Extracted', 'sample has been extracted'),
-('Nanodrop QC', 'sample quality checked with Nanodrop'),
-('Qubit QC', 'sample quality checked with Qubit'),
-('Tapestation QC', 'sample quality checked with Tapestation'),
-('PCR Done', 'PCR has been performed on the sample'),
-('qPCR Done', 'qPCR has been performed on the sample'),
-('Library Prep', 'Sequencing library has been prepared'),
-('Sequencing Done', 'sample has been sequenced'),
-('Bioinformatics Done', 'bioinformatics analysis is complete'),
-('Unknown Step', 'An unknown step has occurred in the workflow')
-ON CONFLICT ("status_id") DO NOTHING;
-
-INSERT INTO "reference"."samples_type" ("sample_type_id", "sample_type_abrv", "notes") VALUES
-('DNA', 'D', 'Deoxyribonucleic Acid sample'),
-('RNA', 'R', 'Ribonucleic Acid sample'),
-('Library', 'L', 'Sequencing Library sample'),
-('Water', 'W', 'Water sample'),
-('Sediments', 'S', 'Sedi ment sample'),
-('Tissue', 'T', 'Tissue sample'),
-('Fish', 'F', 'Fish sample'),
-('Sequencing', 'Q', 'Sequencing run output'),
-('Dataset', 'Z', 'Processed dataset'),
-('Publication', 'PUB', 'Research Publication')
-ON CONFLICT ("sample_type_id") DO NOTHING;
-
-
-INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "unit_type", "conversion_factor_to_base") VALUES
-('mm', 'millimeter', 'mm', 'length', 0.001),
-('g', 'gram', 'g', 'mass', 0.001),
-('ul', 'microliter', 'µl', 'volume', 1e-6),
-('ng_ul', 'nanogram per microliter', 'ng/µl', 'concentration', 1e-9),
-('bp', 'base pair', 'bp', 'length', 1),
-('km_h', 'kilometer per hour', 'km/h', 'speed', 0.277778),
-('m_s', 'meter per second', 'm/s', 'speed', 1),
-('PSU', 'Practical Salinity Unit', 'PSU', 'salinity', 1),
-('ppt', 'parts per thousand', 'ppt', 'salinity', 1),
-('dbar', 'decibar', 'dbar', 'pressure', 1),
-('psi', 'pounds per square inch', 'psi', 'pressure', 0.0689476),
-('kPa', 'kilopascal', 'kPa', 'pressure', 1000),
-('mg_l', 'milligram per liter', 'mg/L', 'concentration', 1),
-('umol_l', 'micromole per liter', 'µmol/L', 'concentration', 1),
-('ntu', 'Nephelometric Turbidity Unit', 'NTU', 'turbidity', 1),
-('ug_l', 'microgram per liter', 'µg/L', 'concentration', 1),
-('deg', 'degree', 'deg', 'angle', 1),
-('min', 'minute', 'min', 'time', 60),
-('h', 'hour', 'h', 'time', 3600),
-('c', 'Celsius', '°C', 'temperature', 1),
-('l', 'liter', 'L', 'volume', 1),
-('um', 'micrometer', 'µm', 'length', 1e-6),
-('m', 'meter', 'm', 'length', 1)
-ON CONFLICT ("unit_id") DO NOTHING;
-
-INSERT INTO "reference"."personal" ("person_id", "full_name", "password_hash") VALUES
-('system_user', 'System Automation', 'no_password_needed_for_system')
-ON CONFLICT ("person_id") DO NOTHING;
 
 -- Insert statement for "reference"."Status"
 INSERT INTO "reference"."status" ("status_id", "notes") VALUES
@@ -5618,7 +5549,7 @@ INSERT INTO "reference"."samples_type" ("sample_type_id", "sample_type_abrv", "n
 ('Sediments', 'S', 'Sedi ment sample'),
 ('Tissue', 'T', 'Tissue sample'),
 ('Fish', 'F', 'Fish sample'),
-('Sequencing', 'Q', 'Sequencing run output'),
+('Sequencing', 'Seq', 'Sequencing run output'),
 ('Dataset', 'Z', 'Processed dataset'),
 ('Publication', 'PUB', 'Research Publication')
 ON CONFLICT ("sample_type_id") DO NOTHING;
@@ -5648,383 +5579,49 @@ ON CONFLICT ("gene_id") DO NOTHING;
 
 
 
--- --- ---- -----
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- ========================================================================= 
 --
---
---
---
--- --- ---- -----
--- ======================================================================
--- 14. Initial Data Population (Continued with "Test_db" Data)
--- ======================================================================
-
--- Reference Schema Tables - Basic Entries for FKs
-INSERT INTO "reference"."personal" ("person_id", "full_name", "password_hash") VALUES
-('Test_db', 'Test_db Full Name', 'Test_db_hashed_password')
-ON CONFLICT ("person_id") DO NOTHING;
-
-INSERT INTO "reference"."status" ("status_id", "notes") VALUES
-('Test_db', 'Test_db Status Notes')
-ON CONFLICT ("status_id") DO NOTHING;
-
-INSERT INTO "reference"."room" ("room_id", "etage", "address") VALUES
-('Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("room_id") DO NOTHING;
-
-INSERT INTO "reference"."vessel" ("vessel_id", "vessel_name") VALUES
-('Test_db', 'Test_db')
-ON CONFLICT ("vessel_id") DO NOTHING;
-
-INSERT INTO "reference"."region" ("region_id", "region_abrv", "country") VALUES
-('Test_db', 'TestDB', 'Test_db')
-ON CONFLICT ("region_id") DO NOTHING;
-
-INSERT INTO "reference"."ecosystem" ("ecosystem_id", "ecosystem_abrv", "country") VALUES
-('Test_db', 'TestDB', 'Test_db')
-ON CONFLICT ("ecosystem_id") DO NOTHING;
-
-INSERT INTO "reference"."category" ("category_id") VALUES
-('Test_db')
-ON CONFLICT ("category_id") DO NOTHING;
-
-INSERT INTO "reference"."samples_type" ("sample_type_id", "sample_type_abrv", "notes") VALUES
-('Test_db', 'TestDB', 'Test_db')
-ON CONFLICT ("sample_type_id") DO NOTHING;
-
-INSERT INTO "reference"."gene" ("gene_id") VALUES
-('Test_db')
-ON CONFLICT ("gene_id") DO NOTHING;
-
-INSERT INTO "reference"."taxon" ("taxon_id", "de_name", "en_name", "rank") VALUES
-('Test_db', 'Test_db', 'Test_db', 'species')
-ON CONFLICT ("taxon_id") DO NOTHING;
--- Populate ltree path after inserting taxon data
-SELECT "reference".update_taxon_ltree_paths();
-
-INSERT INTO "reference"."species" ("species_id", "de_name", "en_name", "max_length_mm", "max_age_years") VALUES
-('Test_db', 'Test_db', 'Test_db', 1, 1)
-ON CONFLICT ("species_id") DO NOTHING;
-
-INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "unit_type", "conversion_factor_to_base") VALUES
-('Test_db', 'Test_db', 'TestDB', 'Test_db', 1)
-ON CONFLICT ("unit_id") DO NOTHING;
-
-
--- Lims Schema Tables
-INSERT INTO "lims"."external_contacts" ("contact_id", "full_name") VALUES
-('Test_db', 'Test_db')
-ON CONFLICT ("contact_id") DO NOTHING;
-
-INSERT INTO "lims"."customers" ("customer_id", "customer_name", "customer_abrv") OVERRIDING SYSTEM VALUE VALUES
-(1, 'Test_db', 'TestDB')
-ON CONFLICT ("customer_id") DO NOTHING;
-
-INSERT INTO "lims"."projects" ("project_id", "title", "status_id", "pi_person_id", "customer_id", "start_date") VALUES
-('Test_db', 'Test_db', 'Test_db', 'Test_db', 1, '2025-07-01')
-ON CONFLICT ("project_id") DO NOTHING;
-
-INSERT INTO "lims"."project_persons" ("project_id", "person_id", "role") VALUES
-('Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("project_id", "person_id") DO NOTHING;
-
-INSERT INTO "lab"."storage" ("storage_id", "room_id", "freezer", "etage", "temperature_c", "box", "box_size_x", "box_size_y", "storage_position_format", "project_id") VALUES
-('Test_db', 'Test_db', 'Test_db', 'Test_db', 1, 'Test_db', 1, 1, 'Test_db', 'Test_db')
-ON CONFLICT ("storage_id") DO NOTHING;
-
-INSERT INTO "lims"."cruises" ("cruise_id", "project_id", "vessel_id", "status_id", "region_id", "ecosystem_id", "capitaine_contact_id", "chief_scientist_person_id", "start_date") VALUES
-('Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', '2025-07-01')
-ON CONFLICT ("cruise_id") DO NOTHING;
-
-INSERT INTO "lims"."workflows" ("workflow_id", "workflow_name") VALUES
-('Test_db', 'Test_db')
-ON CONFLICT ("workflow_id") DO NOTHING;
-
-INSERT INTO "lims"."permits" ("permit_id", "permit_number", "issuing_authority", "valid_from") VALUES
-('Test_db', 'Test_db', 'Test_db', '2025-07-01')
-ON CONFLICT ("permit_id") DO NOTHING;
-
-INSERT INTO "lims"."primers" ("primer_id", "target_gene_id", "primer_sequence_fwd") VALUES
-('Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("primer_id") DO NOTHING;
-
-INSERT INTO "lims"."sop" ("sop_id", "title", "sop_id_origin", "version", "author_person_id", "date_realise") VALUES
-('Test_db', 'Test_db', 'Test_db_origin', '1.0', 'Test_db', '2025-07-01')
-ON CONFLICT ("sop_id") DO NOTHING;
-
-INSERT INTO "lims"."workflow_steps" ("step_id", "workflow_id", "step_number", "step_name", "sop_id", "workflow_status_id") VALUES
-('Test_db', 'Test_db', 1, 'Test_db', 'Test_db_origin_v10', 'Test_db')
-ON CONFLICT ("step_id") DO NOTHING;
-
-INSERT INTO "lims"."equipment" ("equipment_id", "equipment_name", "room_id") VALUES
-('Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("equipment_id") DO NOTHING;
-
-INSERT INTO "lims"."suppliers" ("supplier_id", "supplier_name") VALUES
-('Test_db', 'Test_db')
-ON CONFLICT ("supplier_id") DO NOTHING;
-
-INSERT INTO "lims"."inventory_items" ("item_id", "item_name", "category_id", "unit_id") VALUES
-('Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("item_id") DO NOTHING;
-
-INSERT INTO "lims"."orders" ("fi_order_nr", "item_id", "category_id", "order_date", "price", "quantity", "project_id", "supplier_id", "status_id") VALUES
-('Test_db', 'Test_db', 'Test_db', '2025-07-01', 1, 1, 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("fi_order_nr") DO NOTHING;
-
-INSERT INTO "lims"."reagents" ("reagent_id", "reagent_complete_name", "category_id", "lot", "storage_id", "storage_position", "status_id", "reception_date", "expire_date", "order_id", "project_id", "quantity_available", "quantity_unit_id") VALUES
-('Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 1, 'Test_db', '2025-07-01', '2025-07-01', 'Test_db', 'Test_db', 1, 'Test_db')
-ON CONFLICT ("reagent_id") DO NOTHING;
-
-INSERT INTO "lims"."publication_type" ("publication_type_id") VALUES
-('Test_db')
-ON CONFLICT ("publication_type_id") DO NOTHING;
-
-INSERT INTO "lims"."publications" ("publication_id", "publication_type_id", "project_id", "title", "journal", "volume", "issue", "pages", "doi", "date_publication", "date_submission", "first_author_person_id", "corresponding_author_person_id") VALUES
-('Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', '2025-07-01', '2025-07-01', 'Test_db', 'Test_db')
-ON CONFLICT ("publication_id") DO NOTHING;
-
-
--- Lab Schema Tables
-INSERT INTO "lab"."experiments" ("experiment_id", "experiment_title", "aim", "method", "sop_id", "experiment_date", "person_id", "lab_book", "status_id") VALUES
-('Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db_origin_v10', '2025-07-01', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("experiment_id", "experiment_date") DO NOTHING;
-
-INSERT INTO "lab"."experiments_projects" ("experiment_project_id", "experiment_id", "experiment_date", "project_id", "link_date") OVERRIDING SYSTEM VALUE VALUES
-(1, 'Test_db', '2025-07-01', 'Test_db', '2025-07-01')
-ON CONFLICT ("experiment_project_id") DO NOTHING;
-
-INSERT INTO "lab"."protocol_runs" ("protocol_run_id", "experiment_id", "experiment_date", "sop_id", "run_date", "person_id") VALUES
-('Test_db', 'Test_db', '2025-07-01', 'Test_db_origin_v10', '2025-07-01', 'Test_db')
-ON CONFLICT ("protocol_run_id") DO NOTHING;
-
-INSERT INTO "lab"."sampling" (
-    "sampling_id", "experiment_id", "experiment_date", "project_id", "cruise_id", "region_id",
-    "ecosystem_id", "vessel_id", "customer_id", "sampling_date", "geom", "location_name",
-    "depth_m", "start_at", "end_at", "temperature_atmospheric_c", "weather", "wind_speed"
-) VALUES (
-    'Test_db', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 'Test_db',
-    'Test_db', 'Test_db', 1, '2025-07-01', ST_SetSRID(ST_MakePoint(1, 1), 4326), 'Test_db',
-    1, '00:00:01', '00:00:01', 1, 'Test_db', 1 -- Added the two missing 'Test_db' values here
-)
-ON CONFLICT ("sampling_id", "sampling_date") DO NOTHING;
-
--- Master samples is populated by the generate_sample_id trigger.
--- Inserting into `lab.samples` will populate `master_samples`.
--- INSERT INTO "lab"."master_samples" ("sample_id") VALUES ('Test_db') ON CONFLICT ("sample_id") DO NOTHING;
-
-INSERT INTO "lab"."samples" ("external_name", "sampling_id", "sampling_date", "storage_id", "storage_position", "sampler_person_id", "receiver_person_id", "reception_date", "transport", "conservation_buffer", "sample_type_id", "sample_status_id", "workflow_id", "step_id", "project_id", "customer_id") VALUES
-('Test_db', '25TestDBTestDB0001', '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 1)
-ON CONFLICT ("sample_id", "sampling_date") DO NOTHING;
-
-INSERT INTO "lab"."fishing" ("fishing_id", "sampling_id", "sampling_date", "taxon_id", "catch_kg", "catch_fish", "customer_id") VALUES
-('Test_db_fish', '25TestDBTestDB0001', '2025-07-01', 'Test_db', 1, 1, 1)
-ON CONFLICT ("fishing_id", "sampling_date") DO NOTHING;
-
-INSERT INTO "lab"."storage_log" ("log_id", "sample_id", "sample_sampling_date", "storage_id", "person_id", "status") OVERRIDING SYSTEM VALUE VALUES
-(1, 'Test_db_sample', '2025-07-01', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("log_id") DO NOTHING;
-
-INSERT INTO "lab"."fish" ("parent_sample_id", "sampling_id", "sampling_date", "species_id", "total_length_mm", "fork_length_mm", "standard_length_mm", "weight_g", "sex", "maturity_stage", "stomach_contents", "disease_info", "tag_id", "storage_id", "storage_position", "project_id", "customer_id") VALUES
-('D25TestDBTestDB0001', '25TestDBTestDB0001', '2025-07-01', 'Test_db', 1, 1, 1, 1, 'Undetermined', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 1)
-ON CONFLICT ("sample_id", "sampling_date") DO NOTHING;
-
-INSERT INTO "lab"."tissue" ("parent_sample_id", "experiment_id", "experiment_date", "weight_mg", "tissue_type", "preservation_method", "storage_id", "storage_position", "project_id") VALUES
-('D25TestDBTestDB0001', 'Test_db', '2025-07-01', 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("sample_id", "experiment_date") DO NOTHING;
-
-INSERT INTO "lab"."otoliths" ("sample_id","experiment_id", "experiment_date", "reader_person_id", "side", "age_reading_years", "confidence", "project_id") VALUES
-('D25TestDBTestDB0001', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 1, 1, 'Test_db')
-ON CONFLICT ("otolith_id", "experiment_date") DO NOTHING;
-
-
-INSERT INTO "lab"."dna" ("sample_id", "parent_sample_id", "experiment_id", "experiment_date", "volume_ul", "concentration_ng_ul", "a260_280", "a260_230", "extraction_method", "preservation_method", "extraction_date", "extraction_number", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_dna_child', 'Test_db_sample', 'Test_db', '2025-07-01', 1, 1, 1, 1, 'Test_db', 'Test_db', '2025-07-01', 1, 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("sample_id", "experiment_date") DO NOTHING;
-
-INSERT INTO "lab"."rna" ("sample_id", "parent_sample_id", "experiment_id", "experiment_date", "volume_ul", "concentration_ng_ul", "a260_280", "a260_230", "extraction_method", "preservation_method", "extraction_date", "extraction_number", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_rna_child', 'Test_db_sample', 'Test_db', '2025-07-01', 1, 1, 1, 1, 'Test_db', 'Test_db', '2025-07-01', 1, 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("sample_id", "experiment_date") DO NOTHING;
-
-INSERT INTO "lab"."sediments" ("sample_id", "parent_sample_id", "experiment_id", "experiment_date", "project_id", "volume", "volume_unit_id", "depth_m", "sampling_method", "conservation_buffer", "storage_id", "storage_position", "external_name") VALUES
-('Test_db_sediment_child', 'Test_db_sample', 'Test_db', '2025-07-01', 'Test_db', 1, 'Test_db', 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("sample_id", "experiment_date") DO NOTHING;
-
-INSERT INTO "lab"."water" ("sample_id", "parent_sample_id", "experiment_id", "experiment_date", "volume_l", "filter", "filter_pore_size_um", "depth_m", "sampling_method", "conservation_buffer", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_water_child', 'Test_db_sample', 'Test_db', '2025-07-01', 1, 'Test_db', 1, 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("sample_id", "experiment_date") DO NOTHING;
-
-INSERT INTO "lab"."experiments_samples" ("experiment_id", "experiment_date", "sample_id") VALUES
-('Test_db', '2025-07-01', 'Test_db_sample')
-ON CONFLICT ("experiment_id", "sample_id", "experiment_date") DO NOTHING;
-
-INSERT INTO "lab"."dissections" ("dissection_id", "sample_id", "person_id", "dissection_date", "stomach_contents_jsonb", "gonad_weight_g", "liver_weight_g", "status_id") VALUES
-('Test_db_dissection', 'Test_db_sample', 'Test_db', '2025-07-01', '{}'::jsonb, 1, 1, 'Test_db')
-ON CONFLICT ("dissection_id", "dissection_date") DO NOTHING;
-
-INSERT INTO "lab"."extraction" ("extraction_id", "experiment_id", "experiment_date", "sample_id", "parent_sample_id", "sample_type_id", "extracted_dna_sample_id", "extracted_rna_sample_id", "extraction_date", "person_id", "kit", "elution_volume_ul", "yield_qubit_ng_ul", "yield_nanodrop_ng_ul", "a260_280", "a260_230", "extraction_blank_id", "status_id", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_extraction', 'Test_db', '2025-07-01', 'Test_db_sample', 'Test_db_sample', 'Test_db', NULL, NULL, '2025-07-01', 'Test_db', 'Test_db', 1, 1, 1, 1, 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("extraction_id", "extraction_date") DO NOTHING;
-
-INSERT INTO "lab"."nanodrop" ("nanodrop_id", "experiment_id", "experiment_date", "sample_id", "nanodrop_concentration", "concentration_unit_id", "a260", "a260_280", "a260_280_note", "a260_230", "a260_230_note", "measurement_date", "elution_volume_ul", "person_id", "status_id", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_nanodrop', 'Test_db', '2025-07-01', 'Test_db_sample', 1, 'Test_db', 1, 1, 'Test_db', 1, 'Test_db', '2025-07-01', 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("nanodrop_id", "measurement_date") DO NOTHING;
-
-INSERT INTO "lab"."qubit" ("qubit_id", "sample_id", "experiment_id", "experiment_date", "run_id", "assay_kit", "measurement_date", "qubit_tube_conc", "tube_unit_id", "qubit_original_sample_conc", "original_sample_unit_id", "sample_volume_ul", "elution_volume_ul", "person_id", "status_id", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_qubit', 'Test_db_sample', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', '2025-07-01', 1, 'Test_db', 1, 'Test_db', 1, 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("qubit_id", "measurement_date") DO NOTHING;
-
-INSERT INTO "lab"."tapestation" ("tapestation_id", "experiment_id", "experiment_date", "position", "measurement_date", "kit", "person_id", "sample_id", "storage_id", "storage_position", "status_id", "project_id") VALUES
-('Test_db_tape', 'Test_db', '2025-07-01', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 'Test_db_sample', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("tapestation_id", "measurement_date") DO NOTHING;
-
-INSERT INTO "lab"."pcr" ("pcr_id", "experiment_id", "experiment_date", "sample_id", "position", "primer_id", "pcr_blank_id", "pcr_date", "person_id", "kit", "storage_id", "storage_position", "status_id", "project_id", "volume_reaction_ul") VALUES
-('Test_db_pcr', 'Test_db', '2025-07-01', 'Test_db_sample', 'Test_db', 'Test_db', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 1)
-ON CONFLICT ("pcr_id", "pcr_date") DO NOTHING;
-
-INSERT INTO "lab"."gelelectrophoresis" ("gelelectrophoresis_id", "experiment_id", "experiment_date", "sample_id", "position", "ladder", "voltage", "band_size_bp", "gel_type", "run_time_minutes", "run_date", "person_id", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_gel', 'Test_db', '2025-07-01', 'Test_db_sample', 'Test_db', 'Test_db', 1, 1, 'Test_db', 1, '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("gelelectrophoresis_id", "run_date") DO NOTHING;
-
-INSERT INTO "lab"."qpcr" ("qpcr_id", "experiment_id", "experiment_date", "sample_id", "position", "qpcr_date", "person_id", "primer_id", "ct_value", "inhibitor_test_result", "pcr_blank_id", "kit", "volume_ul", "storage_id", "storage_position", "status_id", "project_id") VALUES
-('Test_db_qpcr', 'Test_db', '2025-07-01', 'Test_db_sample', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 1, 'Test_db', 'Test_db', 'Test_db', 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("qpcr_id", "qpcr_date") DO NOTHING;
-
-INSERT INTO "lab"."library" ("library_id", "experiment_id", "experiment_date", "sample_id", "library_name", "prep_date", "person_id", "library_prep_kit", "index_sequence", "read_length_bp", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_library', 'Test_db', '2025-07-01', 'Test_db_sample', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 1, 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("library_id", "prep_date") DO NOTHING;
-
-INSERT INTO "lab"."sequencing" ("sequencing_id", "experiment_id", "experiment_date", "library_id", "prep_date", "sample_id", "sequencing_date", "person_id", "sequencer", "flow_cell_id", "library_prep_kit", "index_sequence", "read_length_bp", "total_reads", "raw_data_path", "genbank_accession_number", "status_id", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_seq', 'Test_db', '2025-07-01', 'Test_db_library', '2025-07-01', 'Test_db_sample', '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 1, 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("sequencing_id", "sequencing_date") DO NOTHING;
-
-INSERT INTO "lab"."datasets" ("dataset_id", "source_type", "ecosystem_id", "region_id", "customer_id", "stored_location_id", "reception_date", "storage_path") VALUES
-('Test_db_dataset', 'Test_db', 'Test_db', 'Test_db', 1, 'Test_db', '2025-07-01', 'Test_db')
-ON CONFLICT ("dataset_id", "reception_date") DO NOTHING;
-
--- Bioinformatics Schema Tables
-INSERT INTO "bioinformatics"."reference_databases" ("db_id", "db_name", "db_version", "url", "last_updated_date") VALUES
-('Test_db', 'Test_db', 'Test_db', 'Test_db', '2025-07-01')
-ON CONFLICT ("db_id") DO NOTHING;
-
-INSERT INTO "bioinformatics"."analysis_pipelines" ("pipeline_id", "pipeline_name", "version", "repository_link") VALUES
-('Test_db_pipeline', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("pipeline_id") DO NOTHING;
-
-INSERT INTO "bioinformatics"."analysis_runs" ("run_id", "pipeline_id", "sequencing_id", "sequencing_date", "person_id", "run_date", "parameters_jsonb", "reference_db_id", "clustering_threshold", "final_output_path") VALUES
-('Test_db_run', 'Test_db_pipeline', 'Test_db_seq', '2025-07-01', 'Test_db', '2025-07-01 10:00:00+02', '{}'::jsonb, 'Test_db', 1, 'Test_db')
-ON CONFLICT ("run_id", "run_date") DO NOTHING;
-
-INSERT INTO "bioinformatics"."edna_assignments" ("assignment_id", "run_id", "run_date", "sample_id", "taxon_id", "read_count", "confidence") VALUES
-('Test_db_assignment', 'Test_db_run', '2025-07-01', 'Test_db_sample', 'Test_db', 1, 1)
-ON CONFLICT ("assignment_id") DO NOTHING;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
--- --- ----
+-- To correct the issue with partioning
 -- 
--- 
--- 
---
--- --- ----
+-- =========================================================================
 
--- Start a transaction for atomicity
-BEGIN;
-
--- 1. Drop the existing (empty) lab.fish table
--- This will also drop any existing partitions, primary key, and check constraints.
-DROP TABLE IF EXISTS "lab"."fish" CASCADE;
-
--- 2. Create the NEW lab.fish table with "sampling_date" as the partitioning key
-CREATE TABLE "lab"."fish" (
-    "sample_id" text NOT NULL,
-    "parent_sample_id" text,
-    -- Removed "experiment_id"
-    "sampling_id" text NOT NULL, -- New column for sampling_id, now part of the conceptual PK
-    "sampling_date" date NOT NULL, -- This is the new partitioning key
-    -- Removed "experiment_date" as it's replaced by "sampling_date" conceptually for partitioning
-    "species_id" text NOT NULL,
-    "total_length_mm" numeric,
-    "fork_length_mm" numeric,
-    "standard_length_mm" numeric,
-    "weight_g" numeric,
-    "sex" text,
-    "maturity_stage" text,
-    "stomach_contents" text,
-    "disease_info" text,
-    "tag_id" text,
-    "storage_id" text,
-    "storage_position" text,
-    "project_id" text,
-    "customer_id" integer,
-    "notes" text,
-    "attachment" bytea,
-    "attachment_link" text,
-    -- The primary key must include ALL partitioning columns, hence sampling_date is included.
-    PRIMARY KEY ("sample_id", "sampling_date")
-) PARTITION BY RANGE ("sampling_date"); -- Partition by sampling_date
-
--- Re-add the check constraint
-ALTER TABLE "lab"."fish" ADD CONSTRAINT chk_fish_sex_enum CHECK ("sex" IN ('Male', 'Female', 'Undetermined', NULL));
-
--- 3. Re-add Triggers (adjust if necessary for the new columns)
--- If generate_fish_child_sample_id relied on experiment_id/date, it needs updating in your functions section.
--- Otherwise, if it only uses sample_id or parent_sample_id, it might be fine.
--- Example: Assuming generate_fish_child_sample_id takes care of sample_id and doesn't rely on experiment_id.
--- Also, the create_fish_partition_if_not_exists function needs to be updated to use `NEW.sampling_date`.
-
--- Update the auto-partitioning function for fish to use sampling_date
-CREATE OR REPLACE FUNCTION "lab".create_fish_partition_if_not_exists()
-RETURNS TRIGGER AS $$
+-- Corrected Function for lab.dna partitions
+CREATE OR REPLACE FUNCTION "lab".create_dna_partition_if_not_exists_manual (p_year integer)
+RETURNS VOID AS $$
 DECLARE
-    partition_date date;
-    partition_name text;
     start_date date;
     end_date date;
+    partition_name text;
 BEGIN
-    partition_date := NEW.sampling_date; -- Changed to NEW.sampling_date
-    IF partition_date IS NULL THEN
-        RAISE EXCEPTION 'Cannot partition on NULL sampling_date for lab.fish. Please provide a sampling_date.';
-    END IF;
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'dna_y' || p_year; -- Consistent naming convention
 
-    start_date := DATE_TRUNC('year', partition_date);
-    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
-    partition_name := 'fish_y' || TO_CHAR(start_date, 'YYYY'); -- Consistent naming
-
-    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."fish"
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."dna"
              FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
-
-    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Recreate triggers that were on lab.fish
-CREATE TRIGGER trg_generate_fish_child_sample_id
-BEFORE INSERT ON "lab"."fish"
-FOR EACH ROW
-EXECUTE FUNCTION "lab".generate_fish_child_sample_id();
-
-CREATE TRIGGER trg_create_fish_partition
-BEFORE INSERT ON "lab"."fish"
-FOR EACH ROW
-EXECUTE FUNCTION "lab".create_fish_partition_if_not_exists();
-
-CREATE TRIGGER audit_trigger_fish
-AFTER INSERT OR UPDATE OR DELETE ON "lab"."fish"
-FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
-
--- You'll also need to update the manual partition creation function for fish:
--- In your "9. Functions" section, ensure this is updated:
+-- Corrected Function for lab.fish partitions
 CREATE OR REPLACE FUNCTION "lab".create_fish_partition_if_not_exists_manual(p_year integer)
 RETURNS VOID AS $$
 DECLARE
@@ -6041,109 +5638,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-
--- 4. Re-add Indexes (adjust for new columns)
-CREATE INDEX IF NOT EXISTS idx_fish_parent_sample_id ON "lab"."fish" ("parent_sample_id");
-CREATE INDEX IF NOT EXISTS idx_fish_species_id ON "lab"."fish" ("species_id");
-CREATE INDEX IF NOT EXISTS idx_fish_sampling_id ON "lab"."fish" ("sampling_id", "sampling_date"); -- Combined index for FK
-
--- 5. Re-add Foreign Key Constraints
-ALTER TABLE "lab"."fish"
-ADD CONSTRAINT "fish_sample_id_fk" FOREIGN KEY ("sample_id")
-REFERENCES "lab"."master_samples"("sample_id");
-
-ALTER TABLE "lab"."fish"
-ADD CONSTRAINT "fish_parent_sample_id_fk" FOREIGN KEY ("parent_sample_id")
-REFERENCES "lab"."master_samples"("sample_id");
-
--- This FK now links to lab.sampling using sampling_id and sampling_date
-ALTER TABLE "lab"."fish"
-ADD CONSTRAINT "fish_sampling_fk" FOREIGN KEY ("sampling_id", "sampling_date")
-REFERENCES "lab"."sampling"("sampling_id", "sampling_date");
-
-ALTER TABLE "lab"."fish"
-ADD CONSTRAINT "fish_species_id_fk" FOREIGN KEY ("species_id")
-REFERENCES "reference"."species"("species_id");
-
-ALTER TABLE "lab"."fish"
-ADD CONSTRAINT "fish_storage_id_fk" FOREIGN KEY ("storage_id")
-REFERENCES "lab"."storage"("storage_id");
-
-ALTER TABLE "lab"."fish"
-ADD CONSTRAINT "fish_project_id_fk" FOREIGN KEY ("project_id")
-REFERENCES "lims"."projects"("project_id");
-
-ALTER TABLE "lab"."fish"
-ADD CONSTRAINT "fish_customer_id_fk" FOREIGN KEY ("customer_id")
-REFERENCES "lims"."customers"("customer_id");
-
--- Commit the transaction if all steps are successful
-COMMIT;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
--- Start a transaction for atomicity
-BEGIN;
-
--- 1. Stop relevant trigger on lab.fishing
--- This trigger populates experiment_id/date, which we are removing from the table.
-DROP TRIGGER IF EXISTS trg_populate_fishing_experiment_data ON "lab"."fishing";
-DROP TRIGGER IF EXISTS trg_generate_fishing_id ON "lab"."fishing";
-DROP TRIGGER IF EXISTS trg_create_fishing_partition ON "lab"."fishing";
-DROP TRIGGER IF EXISTS audit_trigger_fishing ON "lab"."fishing";
-
--- 2. Drop the existing (empty) lab.fishing table
--- This will also drop any existing partitions, primary key, and check constraints.
-DROP TABLE IF EXISTS "lab"."fishing" CASCADE;
-
----
--- Update Functions (MUST be done before recreating triggers)
----
-
--- The populate_fishing_experiment_data function is now obsolete for lab.fishing.
--- You can drop it, or modify it if it's reused elsewhere.
-DROP FUNCTION IF EXISTS "lab".populate_fishing_experiment_data();
-
--- Ensure create_fishing_partition_if_not_exists is defined if it references sampling_date
--- Based on your existing code, it correctly uses NEW.sampling_date.
-CREATE OR REPLACE FUNCTION "lab".create_fishing_partition_if_not_exists()
-RETURNS TRIGGER AS $$
-DECLARE
-    partition_date date;
-    partition_name text;
-    start_date date;
-    end_date date;
-BEGIN
-    partition_date := NEW.sampling_date;
-    IF partition_date IS NULL THEN
-        RAISE EXCEPTION 'Cannot partition on NULL sampling_date for lab.fishing. Please provide a sampling_date.';
-    END IF;
-
-    start_date := DATE_TRUNC('year', partition_date);
-    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
-    partition_name := 'fishing_y' || TO_CHAR(start_date, 'YYYY');
-
-    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."fishing"
-             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Update the manual partition creation function for fishing
+-- Corrected Function for lab.fishing partitions
 CREATE OR REPLACE FUNCTION "lab".create_fishing_partition_if_not_exists_manual (p_year integer)
 RETURNS VOID AS $$
 DECLARE
@@ -6153,71 +5648,161 @@ DECLARE
 BEGIN
     start_date := MAKE_DATE(p_year, 1, 1);
     end_date := MAKE_DATE(p_year + 1, 1, 1);
-    partition_name := 'fishing_y' || TO_CHAR(start_date, 'YYYY');
+    partition_name := 'fishing_y' || TO_CHAR(start_date, 'YYYY'); -- Consistent naming
 
     EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."fishing"
              FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
 END;
 $$ LANGUAGE plpgsql;
 
--- The generate_fishing_id function is fine as it uses sampling_id and the sequence.
--- No change needed for this function.
+-- Corrected Function for lab.otoliths partitions
+CREATE OR REPLACE FUNCTION "lab".create_otoliths_partition_if_not_exists_manual (p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'otoliths_y' || TO_CHAR(start_date, 'YYYY'); -- Consistent naming
 
--- 3. Create the NEW lab.fishing table
-CREATE TABLE IF NOT EXISTS "lab"."fishing" (
-    "fishing_id" text NOT NULL,
-    "sampling_id" text NOT NULL,
-    "sampling_date" date NOT NULL,
-    "taxon_id" text,
-    "catch_kg" numeric,
-    "catch_fish" numeric,
-    "customer_id" integer,
-    "notes" text,
-    "attachment" bytea,
-    "attachment_link" text,
-    PRIMARY KEY ("fishing_id", "sampling_date")
-) PARTITION BY RANGE ("sampling_date");
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."otoliths"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
 
----
--- Recreate Triggers on the new lab.fishing table
----
+-- Corrected Function for lab.rna partitions
+CREATE OR REPLACE FUNCTION "lab".create_rna_partition_if_not_exists_manual (p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'rna_y' || TO_CHAR(start_date, 'YYYY'); -- Consistent naming
 
-CREATE TRIGGER trg_generate_fishing_id
-BEFORE INSERT ON "lab"."fishing"
-FOR EACH ROW EXECUTE FUNCTION "lab".generate_fishing_id();
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."rna"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_create_fishing_partition
-BEFORE INSERT ON "lab"."fishing"
-FOR EACH ROW EXECUTE FUNCTION "lab".create_fishing_partition_if_not_exists();
+-- Corrected Function for lab.sediments partitions
+CREATE OR REPLACE FUNCTION "lab".create_sediments_partition_if_not_exists_manual (p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'sediments_y' || TO_CHAR(start_date, 'YYYY'); -- Consistent naming
 
-CREATE TRIGGER audit_trigger_fishing
-AFTER INSERT OR UPDATE OR DELETE ON "lab"."fishing"
-FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."sediments"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
 
----
--- Re-add Indexes on the new lab.fishing table
----
-CREATE INDEX IF NOT EXISTS idx_fishing_sampling_id ON "lab"."fishing" ("sampling_id", "sampling_date");
-CREATE INDEX IF NOT EXISTS idx_fishing_taxon_id ON "lab"."fishing" ("taxon_id");
--- Recreate any other specific indexes that were on lab.fishing here.
+-- Corrected Function for lab.tissue partitions
+CREATE OR REPLACE FUNCTION "lab".create_tissue_partition_if_not_exists_manual (p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'tissue_y' || TO_CHAR(start_date, 'YYYY'); -- Consistent naming
 
----
--- Re-add Foreign Key Constraints for the new lab.fishing table
----
-ALTER TABLE "lab"."fishing"
-ADD CONSTRAINT "fishing_sampling_fk" FOREIGN KEY ("sampling_id", "sampling_date")
-REFERENCES "lab"."sampling"("sampling_id", "sampling_date") ON DELETE CASCADE;
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."tissue"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
 
-ALTER TABLE "lab"."fishing"
-ADD CONSTRAINT "fishing_taxon_id_fk" FOREIGN KEY ("taxon_id")
-REFERENCES "reference"."taxon"("taxon_id");
+-- Corrected Function for lab.water partitions
+CREATE OR REPLACE FUNCTION "lab".create_water_partition_if_not_exists_manual (p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'water_y' || TO_CHAR(start_date, 'YYYY'); -- Consistent naming
 
-ALTER TABLE "lab"."fishing"
-ADD CONSTRAINT "fishing_customer_id_fk" FOREIGN KEY ("customer_id")
-REFERENCES "lims"."customers"("customer_id");
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."water"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
 
--- Commit the transaction
-COMMIT;
+
+
+
+CREATE OR REPLACE FUNCTION "lab".create_rna_partition_if_not_exists()
+RETURNS TRIGGER AS $$
+DECLARE
+    partition_date date;
+    partition_name text;
+    start_date date;
+    end_date date;
+BEGIN
+    partition_date := NEW.experiment_date;
+    IF partition_date IS NULL THEN
+        RAISE EXCEPTION 'Cannot partition on NULL experiment_date for lab.rna. Please provide an experiment_date.';
+    END IF;
+
+    start_date := DATE_TRUNC('year', partition_date);
+    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
+    partition_name := 'rna_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."rna"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- And the trigger that uses it:
+CREATE TRIGGER trg_create_rna_partition
+BEFORE INSERT ON "lab"."rna"
+FOR EACH ROW
+EXECUTE FUNCTION "lab".create_rna_partition_if_not_exists();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
