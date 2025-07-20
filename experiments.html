@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Experiments - TIFI MG</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.0/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .sidebar { border-right: 1px solid #e2e8f0; }
+        .sidebar-item { color: #475569; }
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        .modal-overlay { z-index: 50; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+        .table-row-selected { background-color: #eef2ff !important; }
+        .sub-nav-link { color: #475569; padding: 8px 16px; border-radius: 0.5rem; transition: background-color: 0.2s; font-weight: 500;}
+        .sub-nav-link:hover { background-color: #f1f5f9; }
+        .sub-nav-link.active { background-color: #4f46e5; color: white; font-weight: 600; }
+        
+        /* New styles for filter/sort */
+        .sortable-header { cursor: pointer; user-select: none; }
+        .sortable-header:hover { background-color: #e2e8f0; }
+        .sort-icon { display: inline-block; width: 16px; height: 16px; vertical-align: middle; margin-left: 4px; }
+        .filter-input {
+            width: calc(100% - 10px); /* Adjust width to fit within header */
+            padding: 4px;
+            margin-top: 4px;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.25rem;
+            font-size: 0.75rem; /* text-xs */
+            box-sizing: border-box;
+        }
+        /* Accordion styles for details panel */
+        .accordion-item {
+            margin-bottom: 0.5rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        .accordion-header {
+            background-color: #f1f5f9;
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            width: 100%;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-weight: 600;
+            color: #475569;
+        }
+        .accordion-header:hover {
+            background-color: #e2e8f0;
+        }
+        .accordion-header .lucide {
+            transition: transform 0.3s ease;
+        }
+        .accordion-header.active .lucide {
+            transform: rotate(180deg);
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+            padding: 0 1rem; /* Initial padding, will expand */
+            background-color: white;
+            border-top: 1px solid #e2e8f0;
+        }
+        .accordion-content.open {
+            max-height: 500px; /* Adjust as needed for content height */
+            padding: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="main-app">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI MG</span></div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
+                <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="box" class="w-5 h-5 mr-3"></i><span>Storage Box</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="Printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+           </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t"></div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+        
+        <div id="main-content" class="ml-64 p-8">
+            <div class="flex justify-between items-center mb-2">
+                <h1 class="text-3xl font-bold text-gray-800">Experiments & Analyses</h1>
+                <div class="flex space-x-2">
+                    <button id="bulk-import-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow"><i data-lucide="upload-cloud" class="w-5 h-5 mr-2"></i>Bulk Import</button>
+                    <button id="new-item-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow"><i data-lucide="plus" class="w-5 h-5 mr-2"></i>New Entry</button>
+                </div>
+            </div>
+            
+            <div id="sub-nav-menu" class="mb-6 flex items-center space-x-2 border-b pb-2 overflow-x-auto">
+                <a href="#" class="sub-nav-link whitespace-nowrap" data-table="experiments">Main Experiments</a>
+                <a href="#" class="sub-nav-link whitespace-nowrap" data-table="experiments_projects">Experiment Projects Link</a>
+                <a href="#" class="sub-nav-link whitespace-nowrap" data-table="extraction">Extraction</a>
+                <a href="#" class="sub-nav-link whitespace-nowrap" data-table="qubit">Qubit</a>
+                <a href="#" class="sub-nav-link whitespace-nowrap" data-table="nanodrop">Nanodrop</a>
+                <a href="#" class="sub-nav-link whitespace-nowrap" data-table="tapestation">Tapestation</a>
+                <a href="#" class="sub-nav-link whitespace-nowrap" data-table="pcr">PCR</a>
+                <a href="#" class="sub-nav-link whitespace-nowrap" data-table="qpcr">qPCR</a>
+                <a href="#" class="sub-nav-link whitespace-nowrap" data-table="gelelectrophoresis">Gel Electrophoresis</a>
+                <a href="#" class="sub-nav-link whitespace-nowrap" data-table="library">Library</a>
+                <a href="#" class="sub-nav-link whitespace-nowrap" data-table="sequencing">Sequencing</a>
+                <a href="#" class="sub-nav-link whitespace-nowrap" data-table="analysis_runs">Bioinformatics Analysis</a>
+                <a href="#" class="sub-nav-link whitespace-nowrap" data-table="dissections">Dissections</a>
+            </div>
+
+            <div id="page-container">
+            </div>
+        </div>
+        <div id="modal-container"></div>
+    </div>
+
+    <script>
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') window.location.href = './login.html';
+        
+        const API_BASE_URL = '/mymglab/api'; // Changed to just '/api' assuming Flask serves it directly
+        let currentViewData = []; // This will hold the raw data from the API
+        let filteredAndSortedData = []; // This will hold the data after applying filters and sorts
+        let referenceDataCache = {};
+        let currentTableName = 'experiments'; // Default to lowercase to match DB
+        let parsedUploadData = [];
+        
+        // State for sorting and filtering
+        let sortColumn = null;
+        let sortDirection = 'asc'; // 'asc' or 'desc'
+        let columnFilters = {}; // { 'columnName': 'filterText' }
+
+        // Mappings for frontend display names to DB column names (lowercase) and PK strategy
+        const TABLE_CONFIGS = {
+            'experiments': {
+                schema: 'lab',
+                pk_columns: ['experiment_id', 'experiment_date'],
+                summary_headers: ['experiment_id', 'experiment_title', 'experiment_date', 'person_id', 'status_id'],
+                sort_col_default: 'experiment_date',
+                sort_dir_default: 'desc',
+                all_columns: ['experiment_id', 'experiment_title', 'aim', 'method', 'sop_id', 'experiment_date', 'person_id', 'notes', 'lab_book', 'status_id', 'project_ids', 'sample_ids', 'attachment', 'attachment_link']
+            },
+            'experiments_projects': {
+                schema: 'lab',
+                pk_columns: ['experiment_project_id'], // This table has a serial PK
+                summary_headers: ['experiment_project_id', 'experiment_id', 'project_id', 'link_date'],
+                sort_col_default: 'experiment_project_id',
+                sort_dir_default: 'desc',
+                all_columns: ['experiment_project_id', 'experiment_id', 'experiment_date', 'project_id', 'link_date', 'notes', 'attachment', 'attachment_link']
+            },
+            'extraction': {
+                schema: 'lab',
+                pk_columns: ['extraction_id', 'extraction_date'],
+                summary_headers: ['extraction_id', 'sample_id', 'extraction_date', 'person_id', 'kit', 'yield_qubit_ng_ul', 'a260_280', 'status_id'],
+                sort_col_default: 'extraction_date',
+                sort_dir_default: 'desc',
+                all_columns: ['extraction_id', 'experiment_id', 'experiment_date', 'sample_id', 'parent_sample_id', 'sample_type_id', 'extracted_dna_sample_id', 'extracted_rna_sample_id', 'extraction_date', 'person_id', 'kit', 'elution_volume_ul', 'yield_qubit_ng_ul', 'yield_nanodrop_ng_ul', 'a260_280', 'a260_230', 'extraction_blank_id', 'notes', 'status_id', 'storage_id', 'storage_position', 'project_id', 'attachment', 'attachment_link']
+            },
+            'qubit': {
+                schema: 'lab',
+                pk_columns: ['qubit_id', 'measurement_date'],
+                summary_headers: ['qubit_id', 'sample_id', 'measurement_date', 'person_id', 'qubit_original_sample_conc', 'qubit_total_dna_ug', 'status_id'],
+                sort_col_default: 'measurement_date',
+                sort_dir_default: 'desc',
+                all_columns: ['qubit_id', 'sample_id', 'experiment_id', 'experiment_date', 'run_id', 'assay_kit', 'measurement_date', 'qubit_tube_conc', 'tube_unit_id', 'qubit_original_sample_conc', 'original_sample_unit_id', 'sample_volume_ul', 'elution_volume_ul', 'person_id', 'notes', 'status_id', 'storage_id', 'storage_position', 'project_id', 'attachment', 'attachment_link']
+            },
+            'nanodrop': {
+                schema: 'lab',
+                pk_columns: ['nanodrop_id', 'measurement_date'],
+                summary_headers: ['nanodrop_id', 'sample_id', 'measurement_date', 'person_id', 'nanodrop_concentration', 'nanodrop_total_dna_ug', 'a260_280', 'status_id'],
+                sort_col_default: 'measurement_date',
+                sort_dir_default: 'desc',
+                all_columns: ['nanodrop_id', 'experiment_id', 'experiment_date', 'sample_id', 'nanodrop_concentration', 'concentration_unit_id', 'a260', 'a260_280', 'a260_280_note', 'a260_230', 'a260_230_note', 'measurement_date', 'elution_volume_ul', 'person_id', 'notes', 'status_id', 'attachment', 'attachment_link', 'storage_id', 'storage_position', 'project_id', 'result_date']
+            },
+            'tapestation': {
+                schema: 'lab',
+                pk_columns: ['tapestation_id', 'measurement_date'],
+                summary_headers: ['tapestation_id', 'sample_id', 'measurement_date', 'person_id', 'kit', 'status_id'],
+                sort_col_default: 'measurement_date',
+                sort_dir_default: 'desc',
+                all_columns: ['tapestation_id', 'experiment_id', 'experiment_date', 'position', 'measurement_date', 'kit', 'person_id', 'notes', 'sample_id', 'storage_id', 'storage_position', 'status_id', 'project_id', 'attachment', 'attachment_link']
+            },
+            'pcr': {
+                schema: 'lab',
+                pk_columns: ['pcr_id', 'pcr_date'],
+                summary_headers: ['pcr_id', 'sample_id', 'pcr_date', 'person_id', 'primer_id', 'status_id'],
+                sort_col_default: 'pcr_date',
+                sort_dir_default: 'desc',
+                all_columns: ['pcr_id', 'experiment_id', 'experiment_date', 'sample_id', 'position', 'primer_id', 'pcr_blank_id', 'pcr_date', 'person_id', 'kit', 'storage_id', 'storage_position', 'status_id', 'notes', 'project_id', 'attachment', 'attachment_link', 'volume_reaction_ul']
+            },
+            'qpcr': {
+                schema: 'lab',
+                pk_columns: ['qpcr_id', 'qpcr_date'],
+                summary_headers: ['qpcr_id', 'sample_id', 'qpcr_date', 'person_id', 'primer_id', 'ct_value', 'status_id'],
+                sort_col_default: 'qpcr_date',
+                sort_dir_default: 'desc',
+                all_columns: ['qpcr_id', 'experiment_id', 'experiment_date', 'sample_id', 'position', 'qpcr_date', 'person_id', 'primer_id', 'ct_value', 'inhibitor_test_result', 'pcr_blank_id', 'kit', 'volume_ul', 'storage_id', 'storage_position', 'status_id', 'notes', 'project_id', 'attachment', 'attachment_link']
+            },
+            'gelelectrophoresis': {
+                schema: 'lab',
+                pk_columns: ['gelelectrophoresis_id', 'run_date'],
+                summary_headers: ['gelelectrophoresis_id', 'sample_id', 'run_date', 'person_id', 'gel_type', 'band_size_bp'],
+                sort_col_default: 'run_date',
+                sort_dir_default: 'desc',
+                all_columns: ['gelelectrophoresis_id', 'experiment_id', 'experiment_date', 'sample_id', 'position', 'ladder', 'voltage', 'band_size_bp', 'gel_type', 'run_time_minutes', 'run_date', 'person_id', 'storage_id', 'storage_position', 'project_id', 'notes', 'attachment', 'attachment_link']
+            },
+            'library': {
+                schema: 'lab',
+                pk_columns: ['library_id', 'prep_date'],
+                summary_headers: ['library_id', 'sample_id', 'prep_date', 'person_id', 'library_prep_kit', 'index_sequence'],
+                sort_col_default: 'prep_date',
+                sort_dir_default: 'desc',
+                all_columns: ['library_id', 'experiment_id', 'experiment_date', 'sample_id', 'library_name', 'prep_date', 'person_id', 'library_prep_kit', 'index_sequence', 'read_length_bp', 'storage_id', 'storage_position', 'project_id', 'notes', 'attachment', 'attachment_link']
+            },
+            'sequencing': {
+                schema: 'lab',
+                pk_columns: ['sequencing_id', 'sequencing_date'],
+                summary_headers: ['sequencing_id', 'sample_id', 'sequencing_date', 'person_id', 'sequencer', 'total_reads', 'status_id'],
+                sort_col_default: 'sequencing_date',
+                sort_dir_default: 'desc',
+                all_columns: ['sequencing_id', 'experiment_id', 'experiment_date', 'library_id', 'prep_date', 'sample_id', 'sequencing_date', 'person_id', 'sequencer', 'flow_cell_id', 'library_prep_kit', 'index_sequence', 'read_length_bp', 'total_reads', 'raw_data_path', 'genbank_accession_number', 'status_id', 'storage_id', 'storage_position', 'project_id', 'attachment', 'attachment_link', 'notes']
+            },
+            'analysis_runs': { // This is the actual table name in 'bioinformatics' schema
+                schema: 'bioinformatics', // Correct schema
+                pk_columns: ['run_id', 'run_date'],
+                summary_headers: ['run_id', 'sequencing_id', 'run_date', 'person_id', 'pipeline_id', 'reference_db_id'],
+                sort_col_default: 'run_date',
+                sort_dir_default: 'desc',
+                all_columns: ['run_id', 'pipeline_id', 'sequencing_id', 'sequencing_date', 'person_id', 'run_date', 'parameters_jsonb', 'reference_db_id', 'clustering_threshold', 'final_output_path', 'notes', 'attachment', 'attachment_link']
+            },
+            'dissections': {
+                schema: 'lab',
+                pk_columns: ['dissection_id', 'dissection_date'],
+                summary_headers: ['dissection_id', 'sample_id', 'dissection_date', 'person_id', 'gonad_weight_g', 'liver_weight_g', 'status_id'],
+                sort_col_default: 'dissection_date',
+                sort_dir_default: 'desc',
+                all_columns: ['dissection_id', 'sample_id', 'person_id', 'dissection_date', 'experiment_id', 'experiment_date', 'stomach_contents_jsonb', 'gonad_weight_g', 'liver_weight_g', 'notes', 'status_id', 'created_at', 'attachment', 'attachment_link']
+            }
+        };
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.full_name || user.person_id}</p>`; // Use full_name if available
+            document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href = './login.html'; });
+            initializePage();
+        });
+
+        async function apiFetch(endpoint, options = {}) {
+            try {
+                // Determine if a file is being sent (FormData) or JSON
+                const isFormData = options.body instanceof FormData;
+                
+                // If it's a file upload, let the browser set Content-Type automatically.
+                // Otherwise, set to application/json.
+                if (!isFormData && options.body) {
+                    options.headers = { ...options.headers, 'Content-Type': 'application/json' };
+                    options.body = JSON.stringify(options.body);
+                }
+
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                if (!response.ok) { 
+                    const errText = await response.text();
+                    try { const errJson = JSON.parse(errText); throw new Error(errJson.error || 'API request failed'); }
+                    catch { throw new Error(errText); }
+                }
+                if (response.status === 204 || response.headers.get('content-length') === '0') return { success: true };
+                return response.json();
+            } catch (error) { console.error("API Error:", error); return { error: error.message }; }
+        }
+
+        async function getReferenceData(dbTableName, schema='reference') { // Changed tableName to dbTableName to avoid confusion with currentTableName
+            const cacheKey = `${schema}.${dbTableName}`;
+            if (referenceDataCache[cacheKey]) return referenceDataCache[cacheKey];
+            const data = await apiFetch(`table/${schema}/${dbTableName}`);
+            if(data && !data.error) referenceDataCache[cacheKey] = data;
+            return data;
+        }
+
+        function showModal(content) {
+            const container = document.getElementById('modal-container');
+            container.innerHTML = content;
+            const modal = container.querySelector('.modal-overlay');
+            const modalContent = container.querySelector('.modal-content');
+            setTimeout(() => modalContent.classList.remove('opacity-0', '-translate-y-10'), 10);
+            const closeModal = () => {
+                modalContent.classList.add('opacity-0', '-translate-y-10');
+                setTimeout(() => { container.innerHTML = ''; parsedUploadData = []; }, 300);
+            };
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+            container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+            return { closeModal };
+        }
+
+        async function loadView(tableName) {
+            currentTableName = tableName;
+            const config = TABLE_CONFIGS[currentTableName];
+            if (!config) {
+                console.error(`Configuration not found for table: ${currentTableName}`);
+                document.getElementById('page-container').innerHTML = `<p class="p-4 text-red-500">Configuration not found for table: ${currentTableName}.</p>`;
+                return;
+            }
+
+            // Reset filters and sort state when changing tables, apply default sort
+            sortColumn = config.sort_col_default;
+            sortDirection = config.sort_dir_default;
+            columnFilters = {};
+
+            document.querySelectorAll('.sub-nav-link').forEach(link => link.classList.toggle('active', link.dataset.table === tableName));
+            const container = document.getElementById('page-container');
+            container.innerHTML = `
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                    <div class="lg:col-span-3">
+                        <div class="card p-4">
+                            <div class="overflow-y-auto h-[70vh]">
+                                <div id="table-content"><p class="p-4 text-gray-500">Loading ${tableName} data...</p></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="details-container" class="lg:col-span-2">
+                        <div class="card p-6 h-full flex items-center justify-center text-gray-500">
+                            <div class="text-center"><i data-lucide="flask-round" class="mx-auto h-12 w-12"></i><p class="mt-2">Select an item to view details</p></div>
+                        </div>
+                    </div>
+                </div>`;
+            lucide.createIcons();
+            await renderTableForType(currentTableName);
+        }
+
+        async function renderTableForType(tableName) {
+            const tableContainer = document.getElementById('table-content');
+            const config = TABLE_CONFIGS[tableName];
+            if (!config) {
+                tableContainer.innerHTML = `<p class="p-4 text-red-500">Error: Table configuration not found.</p>`;
+                return;
+            }
+            
+            const result = await apiFetch(`table/${config.schema}/${tableName}`);
+            
+            if (result.error || !Array.isArray(result)) {
+                tableContainer.innerHTML = `<p class="p-4 text-red-500">Error loading data: ${result.error}</p>`;
+                return;
+            }
+            
+            currentViewData = result;
+            
+            if (currentViewData.length === 0) {
+                tableContainer.innerHTML = `<p class="p-4 text-gray-500">No entries found for ${tableName}.</p>`;
+                return;
+            }
+
+            // Use all keys from the first item as headers for the table view
+            const summaryHeaders = Object.keys(currentViewData[0]);
+
+            const tableHtml = `<table class="min-w-full text-sm">
+                <thead class="bg-gray-50 sticky top-0"><tr>
+                    ${summaryHeaders.map(h => `
+                        <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
+                            <div class="flex items-center justify-between">
+                                <span class="sortable-header" data-column="${h}">${h.replace(/_/g, ' ')}
+                                    <i data-lucide="${sortColumn === h ? (sortDirection === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon w-4 h-4 text-gray-400"></i>
+                                </span>
+                            </div>
+                            <input type="text" placeholder="Filter..." class="filter-input" data-column="${h}" value="${columnFilters[h] || ''}">
+                        </th>
+                    `).join('')}
+                    <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Actions</th>
+                </tr></thead>
+                <tbody class="divide-y divide-gray-200" id="table-body">
+                </tbody></table>`;
+            
+            tableContainer.innerHTML = tableHtml;
+            lucide.createIcons();
+
+            // Add event listeners for sorting and filtering
+            document.querySelectorAll('.sortable-header').forEach(header => {
+                header.addEventListener('click', (e) => {
+                    const column = e.currentTarget.dataset.column;
+                    if (sortColumn === column) {
+                        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        sortColumn = column;
+                        sortDirection = 'asc';
+                    }
+                    applyFiltersAndSort();
+                });
+            });
+
+            document.querySelectorAll('.filter-input').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const column = e.target.dataset.column;
+                    columnFilters[column] = e.target.value.toLowerCase();
+                    applyFiltersAndSort();
+                });
+            });
+
+            applyFiltersAndSort(); // Initial render with default sort/filters
+            addActionListeners();
+        }
+
+        function applyFiltersAndSort() {
+            let tempArray = [...currentViewData]; // Start with the raw data
+            const config = TABLE_CONFIGS[currentTableName];
+            const summaryHeaders = Object.keys(currentViewData.length > 0 ? currentViewData[0] : {});
+
+            // Apply filters
+            for (const column in columnFilters) {
+                const filterText = columnFilters[column];
+                if (filterText) {
+                    tempArray = tempArray.filter(row => 
+                        String(row[column] || '').toLowerCase().includes(filterText)
+                    );
+                }
+            }
+
+            // Apply sorting
+            if (sortColumn) {
+                tempArray.sort((a, b) => {
+                    const valA = String(a[sortColumn] || '').toLowerCase();
+                    const valB = String(b[sortColumn] || '').toLowerCase();
+
+                    // Handle numerical sorting if applicable
+                    if (!isNaN(parseFloat(valA)) && !isNaN(parseFloat(valB))) {
+                        return sortDirection === 'asc' ? parseFloat(valA) - parseFloat(valB) : parseFloat(valB) - parseFloat(valA);
+                    }
+                    // Handle date sorting if applicable
+                    if (sortColumn.toLowerCase().includes('date') || sortColumn.toLowerCase().includes('_at')) {
+                        const dateA = new Date(valA);
+                        const dateB = new Date(valB);
+                        if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) return 0; // Don't sort invalid dates
+                        return sortDirection === 'asc' ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
+                    }
+                    // Default to string comparison
+                    return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                });
+            }
+
+            filteredAndSortedData = tempArray;
+            renderTableRows(filteredAndSortedData, summaryHeaders); // Pass summaryHeaders
+            updateSortIcons();
+        }
+
+        function renderTableRows(dataToRender, headersToRender) {
+            const tableBody = document.getElementById('table-body');
+            const config = TABLE_CONFIGS[currentTableName];
+            const pkColumns = config.pk_columns;
+
+            tableBody.innerHTML = dataToRender.map(row => {
+                // Construct a composite PK string (e.g., "id1,date1")
+                // Ensure date components are formatted consistently for comparison
+                const pkValue = pkColumns.map(col => {
+                    if (col.toLowerCase().includes('date') && row[col]) {
+                        return new Date(row[col]).toISOString().split('T')[0]; // Format to YYYY-MM-DD
+                    }
+                    return row[col];
+                }).join(',');
+
+                return `<tr class="table-row hover:bg-gray-50 cursor-pointer" data-pk="${pkValue}">
+                    ${headersToRender.map(h => `<td class="px-4 py-3 whitespace-nowrap">${row[h] || ''}</td>`).join('')}
+                    <td class="px-4 py-3 flex space-x-2">
+                        <button class="edit-btn p-1 text-gray-500 hover:text-blue-600" data-pk="${pkValue}"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                        <button class="delete-btn p-1 text-gray-500 hover:text-red-600" data-pk="${pkValue}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </td>
+                </tr>`;
+            }).join('');
+            lucide.createIcons();
+            addActionListeners();
+        }
+
+        function updateSortIcons() {
+            document.querySelectorAll('.sortable-header i').forEach(icon => {
+                const column = icon.closest('.sortable-header').dataset.column;
+                icon.setAttribute('data-lucide', 'chevrons-up-down');
+            });
+            if (sortColumn) {
+                const currentSortIcon = document.querySelector(`.sortable-header[data-column="${sortColumn}"] i`);
+                if (currentSortIcon) {
+                    currentSortIcon.setAttribute('data-lucide', sortDirection === 'asc' ? 'chevron-up' : 'chevron-down');
+                }
+            }
+            lucide.createIcons();
+        }
+        
+        function renderDetails(compositePkString) {
+            const container = document.getElementById('details-container');
+            const config = TABLE_CONFIGS[currentTableName];
+            const pkColumns = config.pk_columns;
+            const pkValues = compositePkString.split(',');
+
+            // Find the item using all parts of the composite PK
+            const item = currentViewData.find(row => {
+                return pkColumns.every((col, index) => {
+                    let rowValue = String(row[col] || '');
+                    let pkValuePart = pkValues[index];
+
+                    // Special handling for date columns in PK comparison
+                    if (col.toLowerCase().includes('date')) {
+                        // Ensure both values are compared as YYYY-MM-DD strings
+                        const dateFromRow = row[col] ? new Date(row[col]).toISOString().split('T')[0] : '';
+                        const dateFromPk = pkValues[index] ? new Date(pkValues[index]).toISOString().split('T')[0] : '';
+                        return dateFromRow === dateFromPk;
+                    }
+                    return rowValue === pkValuePart;
+                });
+            });
+
+            if (!item) { container.innerHTML = `<p class="p-4 text-red-500">Could not find details.</p>`; return; }
+
+            // Determine main display ID for the heading
+            let displayId = '';
+            if (pkColumns.length > 0) {
+                displayId = item[pkColumns[0]]; // Use the first PK column for display ID
+            } else if (item.id) {
+                displayId = item.id;
+            } else {
+                displayId = Object.values(item)[0] || 'Details'; // Fallback to first value
+            }
+            
+            let detailsHtml = '<div class="space-y-2 text-sm">';
+            
+            // Iterate over ALL properties of the item to display them
+            for (const [key, value] of Object.entries(item)) {
+                // Skip internal/calculated fields if desired, though for "all info" we might show them
+                if (key.toLowerCase().includes('search_vector') || key.endsWith('_total_dna_ug')) {
+                    continue;
+                }
+
+                const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.charAt(0).toUpperCase() + l.slice(1));
+                let formattedValue = value;
+
+                if (value === null || value === undefined || value === '') {
+                    formattedValue = '<span class="text-gray-400">N/A</span>';
+                } else if (key.toLowerCase().includes('date') && !isNaN(Date.parse(value))) {
+                    formattedValue = new Date(value).toLocaleDateString();
+                } else if (typeof value === 'object' && value !== null) { // Handle JSONB and other objects
+                    formattedValue = `<pre class="whitespace-pre-wrap text-xs bg-gray-100 p-2 rounded-md">${JSON.stringify(value, null, 2)}</pre>`;
+                } else if (key === 'attachment' && value) { // Handle attachment display (base64 data)
+                    formattedValue = `<a href="data:application/octet-stream;base64,${value}" download="${displayId}_attachment" class="text-blue-600 hover:underline">Download Attachment</a>`;
+                } else if (key === 'attachment_link' && value) { // Handle attachment link
+                    formattedValue = `<a href="${value}" target="_blank" class="text-blue-600 hover:underline">View Link</a>`;
+                }
+                
+                detailsHtml += `
+                    <div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100">
+                        <dt class="font-medium text-gray-500">${formattedKey}</dt>
+                        <dd class="text-gray-900">${formattedValue}</dd>
+                    </div>
+                `;
+            }
+
+            detailsHtml += '</div>'; // Close main space-y-2 div
+
+            container.innerHTML = `<div class="card p-6 h-full flex flex-col"><div class="mb-4">
+                <h2 class="text-xl font-bold text-gray-800">${displayId || 'Details'}</h2>
+                <p class="text-sm text-gray-500">Entry in ${currentTableName}</p>
+            </div><div class="flex-grow overflow-y-auto pr-2">${detailsHtml}</div></div>`;
+
+            // No accordions needed if showing all details directly, but keeping the structure for future if needed.
+            lucide.createIcons(); // Initial render for all icons
+        }
+
+        function addActionListeners() {
+            document.querySelectorAll('.table-row').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    if (e.target.closest('button')) return;
+                    document.querySelectorAll('.table-row').forEach(r => r.classList.remove('table-row-selected'));
+                    row.classList.add('table-row-selected');
+                    renderDetails(row.dataset.pk);
+                });
+            });
+
+            document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const compositePkString = e.currentTarget.dataset.pk;
+                const config = TABLE_CONFIGS[currentTableName];
+                const pkColumns = config.pk_columns;
+                const pkValues = compositePkString.split(',');
+
+                // Find item from currentViewData (raw data) to ensure all fields are available for editing
+                const itemToEdit = currentViewData.find(row => {
+                    return pkColumns.every((col, index) => {
+                        let rowValue = String(row[col] || '');
+                        let pkValuePart = pkValues[index];
+
+                        // Special handling for date columns in PK comparison
+                        if (col.toLowerCase().includes('date')) {
+                            const dateFromRow = row[col] ? new Date(row[col]).toISOString().split('T')[0] : '';
+                            const dateFromPk = pkValues[index] ? new Date(pkValues[index]).toISOString().split('T')[0] : '';
+                            return dateFromRow === dateFromPk;
+                        }
+                        return rowValue === pkValuePart;
+                    });
+                });
+
+                if (itemToEdit) showNewItemModal(itemToEdit, compositePkString);
+            }));
+
+            document.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const compositePkString = e.currentTarget.dataset.pk;
+                const config = TABLE_CONFIGS[currentTableName];
+                const pkColumns = config.pk_columns;
+                const pkValues = compositePkString.split(',');
+
+                // Use a custom confirmation dialog instead of alert/confirm
+                const confirmDelete = await showCustomConfirm(`Are you sure you want to delete this item with ID(s): ${compositePkString}? This action cannot be undone.`);
+                
+                if (confirmDelete) {
+                    // Send composite PK as query parameters for DELETE (backend needs to support this)
+                    const queryParams = new URLSearchParams();
+                    pkColumns.forEach((col, index) => {
+                        // Ensure date components are formatted consistently for deletion request
+                        if (col.toLowerCase().includes('date') && pkValues[index]) {
+                            queryParams.append(col, new Date(pkValues[index]).toISOString().split('T')[0]);
+                        } else {
+                            queryParams.append(col, pkValues[index]);
+                        }
+                    });
+
+                    const endpoint = `table/${config.schema}/${currentTableName}?${queryParams.toString()}`;
+                    const result = await apiFetch(endpoint, { method: 'DELETE' });
+
+                    if (result.success) {
+                        showCustomAlert('Item deleted successfully!');
+                        loadView(currentTableName); // Reload the entire view to refresh data
+                    }
+                    else showCustomAlert('Failed to delete item: ' + (result.error || 'Unknown error'));
+                }
+            }));
+        }
+
+        // Custom Alert/Confirm Modals (replacing browser's alert/confirm)
+        function showCustomAlert(message) {
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-sm transform transition-all -translate-y-10 opacity-0">
+                        <h3 class="text-xl font-bold mb-4">Notification</h3>
+                        <p class="text-gray-700 mb-6">${message}</p>
+                        <div class="flex justify-end">
+                            <button id="alert-ok-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">OK</button>
+                        </div>
+                    </div>
+                </div>`;
+            const { closeModal } = showModal(modalHTML);
+            document.getElementById('alert-ok-btn').addEventListener('click', closeModal);
+        }
+
+        function showCustomConfirm(message) {
+            return new Promise(resolve => {
+                const modalHTML = `
+                    <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-sm transform transition-all -translate-y-10 opacity-0">
+                            <h3 class="text-xl font-bold mb-4">Confirm Action</h3>
+                            <p class="text-gray-700 mb-6">${message}</p>
+                            <div class="flex justify-end space-x-4">
+                                <button id="confirm-cancel-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                                <button id="confirm-ok-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Confirm</button>
+                            </div>
+                        </div>
+                    </div>`;
+                const { closeModal } = showModal(modalHTML);
+                document.getElementById('confirm-ok-btn').addEventListener('click', () => {
+                    closeModal();
+                    resolve(true);
+                });
+                document.getElementById('confirm-cancel-btn').addEventListener('click', () => {
+                    closeModal();
+                    resolve(false);
+                });
+            });
+        }
+
+
+        async function showNewItemModal(itemToEdit = null, compositePkString = null) {
+            const isEditing = itemToEdit !== null;
+            const config = TABLE_CONFIGS[currentTableName];
+            
+            const modalHTML = `<div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-2xl transform transition-all -translate-y-10 opacity-0">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold">${isEditing ? `Edit Entry in ${currentTableName}` : `New Entry for ${currentTableName}`}</h2>
+                        <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700">&times;</button>
+                    </div>
+                    <form id="item-form" class="space-y-4" ${isEditing ? '' : 'enctype="multipart/form-data"'}>
+                        <div id="dynamic-fields-container" class="max-h-[60vh] overflow-y-auto p-4 rounded-md bg-gray-50 border"></div>
+                    </form>
+                    <div class="pt-6 flex justify-end border-t mt-6">
+                        <button id="save-item-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">${isEditing ? 'Save Changes' : 'Create Entry'}</button>
+                    </div>
+                </div>
+            </div>`;
+            const { closeModal } = showModal(modalHTML);
+            
+            await renderExperimentFormFields(config.schema, currentTableName, itemToEdit);
+
+            document.getElementById('save-item-btn').onclick = async () => {
+                const form = document.getElementById('item-form');
+                if (!form.reportValidity()) return;
+                
+                const formData = new FormData(form);
+                const data = {};
+                let hasFile = false; // Track if a file is being uploaded
+
+                for (let [key, value] of formData.entries()) {
+                    if (key === 'attachment' && (value instanceof File) && value.size > 0) {
+                        data[key] = value; // Keep as File object for direct sending
+                        hasFile = true;
+                    } else if (value === '') { // Convert empty strings to null for DB
+                        data[key] = null;
+                    } else if (key.endsWith('_jsonb')) { // Attempt to parse JSONB fields
+                        try {
+                            data[key] = JSON.parse(value);
+                        } catch (e) {
+                            showCustomAlert(`Invalid JSON for field ${key}: ${e.message}`);
+                            return;
+                        }
+                    } else {
+                        data[key] = value;
+                    }
+                }
+
+                // If no new file is selected, and attachment was explicitly set to empty (e.g., in edit mode), send null
+                if (!hasFile && 'attachment' in data && (data['attachment'] === '' || (data['attachment'] === null && itemToEdit && itemToEdit.attachment))) {
+                    data['attachment'] = null;
+                }
+
+                let endpoint;
+                let method;
+                let bodyToSend;
+
+                if (isEditing) {
+                    endpoint = `table/${config.schema}/${currentTableName}/${compositePkString}`;
+                    method = 'PUT';
+                    // For PUT, if there's a file, send FormData. Otherwise, send JSON.
+                    if (hasFile) {
+                        bodyToSend = formData; // Send FormData directly if file is present
+                    } else {
+                        bodyToSend = data; // Otherwise, send as JSON
+                    }
+                } else {
+                    endpoint = `table/${config.schema}/${currentTableName}`;
+                    method = 'POST';
+                    // For POST, if there's a file, send FormData. Otherwise, send JSON.
+                    if (hasFile) {
+                        bodyToSend = formData; // Send FormData directly if file is present
+                    } else {
+                        bodyToSend = data; // Otherwise, send as JSON
+                    }
+                }
+                
+                const result = await apiFetch(endpoint, { method, body: bodyToSend });
+
+                if(result && !result.error) {
+                    closeModal();
+                    loadView(currentTableName); // Reload the entire view to refresh data including new entry/changes
+                } else {
+                    showCustomAlert('Failed to save item: ' + (result ? result.error : 'Unknown error'));
+                }
+            };
+        }
+
+        async function renderExperimentFormFields(schema, tableName, dataToPreload = null) {
+            const container = document.getElementById('dynamic-fields-container');
+            container.innerHTML = `<p class="text-center text-gray-500 p-4">Loading form fields...</p>`;
+
+            let columns = [];
+            const config = TABLE_CONFIGS[tableName];
+
+            // Prioritize `all_columns` from TABLE_CONFIGS if defined, for consistent ordering and filtering
+            if (config && config.all_columns && config.all_columns.length > 0) {
+                columns = config.all_columns;
+            } else if (currentViewData.length > 0) {
+                // Fallback to keys from existing data if no `all_columns` defined
+                columns = Object.keys(currentViewData[0]);
+            } else {
+                // Last resort: fetch one record to get column names if table is empty
+                const schemaResult = await apiFetch(`table/${schema}/${tableName}?limit=1`);
+                if (schemaResult && !schemaResult.error && schemaResult.length > 0) {
+                    columns = Object.keys(schemaResult[0]);
+                } else {
+                    container.innerHTML = `<p class="text-yellow-600 p-4 bg-yellow-50 rounded-md">Could not determine columns for empty table '${tableName}'. Please define 'all_columns' in TABLE_CONFIGS for this table.</p>`;
+                    return;
+                }
+            }
+            
+            const foreignKeyMap = {
+                'project_id': () => getReferenceData('projects', 'lims').then(data => ({ data, valueCol: 'project_id', displayCol: 'title' })),
+                'sop_id': () => getReferenceData('sop', 'lims').then(data => ({ data, valueCol: 'sop_id', displayCol: 'title' })),
+                'person_id': () => getReferenceData('personal', 'reference').then(data => ({ data, valueCol: 'person_id', displayCol: 'full_name' })),
+                'sample_id': () => getReferenceData('master_samples', 'lab').then(data => ({ data, valueCol: 'sample_id', displayCol: 'sample_id' })),
+                'parent_sample_id': () => getReferenceData('master_samples', 'lab').then(data => ({ data, valueCol: 'sample_id', displayCol: 'sample_id' })),
+                'gene_id': () => getReferenceData('gene', 'reference').then(data => ({ data, valueCol: 'gene_id', displayCol: 'gene_id' })),
+                'status_id': () => getReferenceData('status', 'reference').then(data => ({ data, valueCol: 'status_id', displayCol: 'status_id' })),
+                'storage_id': () => getReferenceData('storage', 'lab').then(data => ({ data, valueCol: 'storage_id', displayCol: 'storage_id' })),
+                'library_id': () => getReferenceData('library', 'lab').then(data => ({ data, valueCol: 'library_id', displayCol: 'library_id' })),
+                'sequencing_id': () => getReferenceData('sequencing', 'lab').then(data => ({ data, valueCol: 'sequencing_id', displayCol: 'sequencing_id' })),
+                'sample_type_id': () => getReferenceData('samples_type', 'reference').then(data => ({ data, valueCol: 'sample_type_id', displayCol: 'sample_type_abrv' })),
+                'primer_id': () => getReferenceData('primers', 'lims').then(data => ({ data, valueCol: 'primer_id', displayCol: 'primer_id' })),
+                'reference_db_id': () => getReferenceData('reference_databases', 'bioinformatics').then(data => ({ data, valueCol: 'db_id', displayCol: 'db_name' })),
+                'pipeline_id': () => getReferenceData('analysis_pipelines', 'bioinformatics').then(data => ({ data, valueCol: 'pipeline_id', displayCol: 'pipeline_name' })),
+                'tube_unit_id': () => getReferenceData('units', 'reference').then(data => ({ data, valueCol: 'unit_id', displayCol: 'unit_abbreviation' })),
+                'original_sample_unit_id': () => getReferenceData('units', 'reference').then(data => ({ data, valueCol: 'unit_id', displayCol: 'unit_abbreviation' })),
+                'concentration_unit_id': () => getReferenceData('units', 'reference').then(data => ({ data, valueCol: 'unit_id', displayCol: 'unit_abbreviation' })),
+            };
+
+            let fieldsHtml = '<div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">';
+            for (const col of columns) {
+                if (col === 'experiment_project_id' && !dataToPreload) continue;
+                if (['nanodrop_total_dna_ug', 'qubit_total_dna_ug', 'created_at'].includes(col) || col.toLowerCase().includes('search_vector')) {
+                    continue;
+                }
+                
+                const value = dataToPreload ? (dataToPreload[col] || '') : '';
+                const formattedLabel = col.replace(/_/g, ' ').replace(/\b\w/g, l => l.charAt(0).toUpperCase() + l.slice(1));
+                let field = '';
+
+                if (foreignKeyMap[col]) {
+                    try {
+                        const ref = await foreignKeyMap[col]();
+                        if (ref.data && !ref.data.error) {
+                            field = `<select name="${col}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm">
+                                <option value="">-- Select --</option>${ref.data.map(r => `<option value="${r[ref.valueCol]}" ${value == r[ref.valueCol] ? 'selected' : ''}>${r[ref.displayCol] || r[ref.valueCol]}</option>`).join('')}
+                                </select>`;
+                        } else { throw new Error('Failed to load reference data for ' + col); }
+                    } catch (e) {
+                        console.warn(`Error loading FK data for ${col}: ${e.message}`);
+                        field = `<input type="text" name="${col}" value="${value}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm bg-red-100" placeholder="Error loading options">`;
+                    }
+                } else if (col.toLowerCase().includes('date') && !col.endsWith('_jsonb')) {
+                    field = `<input type="date" name="${col}" value="${value ? String(value).split('T')[0] : ''}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm">`;
+                } else if (['notes', 'aim', 'method', 'lab_book', 'sop_protocol', 'raw_data_path', 'final_output_path'].includes(col)) {
+                    field = `<textarea name="${col}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm h-24">${value}</textarea>`;
+                } else if (col === 'attachment') { // File input for attachments
+                    const existingAttachmentLink = dataToPreload?.attachment_link;
+                    const existingAttachmentData = dataToPreload?.attachment;
+                    field = `
+                        <input type="file" name="${col}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm">
+                        ${existingAttachmentLink ? `<p class="text-xs text-gray-500 mt-1"><a href="${existingAttachmentLink}" target="_blank" class="text-blue-500 hover:underline">Existing Link</a></p>` : ''}
+                        ${existingAttachmentData ? `<p class="text-xs text-gray-500 mt-1"><a href="data:application/octet-stream;base64,${existingAttachmentData}" download="attachment" class="text-blue-500 hover:underline">Download Existing Data</a></p>` : ''}
+                    `;
+                } else if (col.endsWith('_jsonb')) {
+                    field = `<textarea name="${col}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm h-24" placeholder="Enter valid JSON (e.g., {'key': 'value'})">${value ? JSON.stringify(value, null, 2) : ''}</textarea>`;
+                } else if (['project_ids', 'sample_ids'].includes(col) && tableName === 'experiments') {
+                    field = `<textarea name="${col}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm h-24" placeholder="Enter semicolon-separated IDs (e.g., id1;id2;id3)">${value}</textarea>`;
+                }
+                else {
+                    field = `<input type="text" name="${col}" value="${value}" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm">`;
+                }
+                fieldsHtml += `<div><label class="font-medium text-sm text-gray-700">${formattedLabel}</label>${field}</div>`;
+            }
+            fieldsHtml += '</div>';
+            container.innerHTML = fieldsHtml;
+        }
+
+        async function showBulkUploadModal() {
+            parsedUploadData = [];
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-4xl transform transition-all -translate-y-10 opacity-0">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-2xl font-bold">Bulk Import for <span class="text-blue-600">${currentTableName}</span></h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700">&times;</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <h3 class="font-semibold text-lg mb-2">1. Get Your Template</h3>
+                                <p class="text-sm text-gray-600 mb-3">Download the template to ensure your column headers match the database.</p>
+                                <button id="download-template-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow-sm">
+                                    <i data-lucide="download" class="w-4 h-4 mr-2"></i>Download Template (.csv)
+                                </button>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-lg mb-2">2. Upload Your File</h3>
+                                <p class="text-sm text-gray-600 mb-3">Select a .csv or .xlsx file to upload.</p>
+                                <input type="file" id="file-input" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                                <div class="mt-4 p-3 bg-yellow-50 text-yellow-800 rounded-md text-sm">
+                                    <p class="font-semibold">Note on Updates:</p>
+                                    <p>The current backend only supports *inserting new records* via bulk upload. Bulk updating existing records is not yet implemented.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-6">
+                            <h3 class="font-semibold text-lg mb-2">3. Preview Data</h3>
+                            <div id="preview-container" class="border rounded-lg p-2 bg-gray-50 h-64 overflow-auto text-xs">
+                                <p class="text-gray-500 text-center p-4">Select a file to see a preview of the data.</p>
+                            </div>
+                        </div>
+                        <div class="pt-6 flex justify-end border-t mt-6">
+                            <button id="upload-data-btn" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg flex items-center" disabled>
+                                <i data-lucide="upload-cloud" class="w-5 h-5 mr-2"></i>Upload to Database
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            showModal(modalHTML);
+            lucide.createIcons();
+
+            document.getElementById('download-template-btn').addEventListener('click', generateAndDownloadTemplate);
+            document.getElementById('file-input').addEventListener('change', handleFileSelect);
+            document.getElementById('upload-data-btn').addEventListener('click', handleUpload);
+        }
+
+        async function generateAndDownloadTemplate() {
+            const config = TABLE_CONFIGS[currentTableName];
+            if (!config) {
+                showCustomAlert('Could not determine table schema to generate template.');
+                return;
+            }
+            let headers = [];
+            
+            // Prioritize `all_columns` from TABLE_CONFIGS for template generation
+            if (config.all_columns && config.all_columns.length > 0) {
+                headers = config.all_columns;
+            } else if (currentViewData.length > 0) {
+                // Fallback to keys from existing data if no `all_columns` defined
+                headers = Object.keys(currentViewData[0]);
+            } else {
+                // Last resort: fetch one record to get column names if table is empty
+                const schemaResult = await apiFetch(`table/${config.schema}/${currentTableName}?limit=1`);
+                if (schemaResult && !schemaResult.error && schemaResult.length > 0) {
+                    headers = Object.keys(schemaResult[0]);
+                } else {
+                    showCustomAlert(`Could not determine columns for empty table '${currentTableName}'. Please define 'all_columns' in TABLE_CONFIGS for this table to generate a template.`);
+                    return;
+                }
+            }
+
+            // Filter out internal/calculated fields for the template
+            const filteredHeaders = headers.filter(key => 
+                !key.endsWith('_total_dna_ug') && !['created_at', 'attachment', 'attachment_link'].includes(key) && !key.toLowerCase().includes('search_vector')
+            );
+            const csvContent = filteredHeaders.join(',');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `${currentTableName}_template.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const previewContainer = document.getElementById('preview-container');
+            previewContainer.innerHTML = '<p class="text-gray-500 text-center p-4">Parsing file...</p>';
+            document.getElementById('upload-data-btn').disabled = true;
+            
+            const onParseComplete = (results) => {
+                if(results.errors.length > 0) {
+                    previewContainer.innerHTML = `<p class="text-red-500 p-4">Error parsing file: ${results.errors[0].message}</p>`;
+                    return;
+                }
+                displayPreview(results.data);
+            };
+
+            if (file.name.endsWith('.csv')) {
+                Papa.parse(file, { header: true, skipEmptyLines: true, complete: onParseComplete });
+            } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, {type: 'array'});
+                        const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0] || workbook.SheetNames[0]]); // Get first sheet
+                        displayPreview(jsonData);
+                    } catch (err) {
+                        previewContainer.innerHTML = `<p class="text-red-500 text-center p-4">Error processing Excel file: ${err.message}</p>`;
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                previewContainer.innerHTML = `<p class="text-red-500 text-center p-4">Unsupported file type. Please upload .csv or .xlsx.</p>`;
+            }
+        }
+
+        function displayPreview(data) {
+            if (!data || data.length === 0) {
+                document.getElementById('preview-container').innerHTML = '<p class="text-red-500 text-center p-4">No data found in file.</p>';
+                document.getElementById('upload-data-btn').disabled = true; // Disable if no data
+                return;
+            }
+            parsedUploadData = data;
+            const headers = Object.keys(data[0]);
+            const previewHtml = `
+                <p class="text-sm font-medium p-2">Found ${parsedUploadData.length} records. Showing preview:</p>
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-100"><tr>${headers.map(h => `<th class="px-2 py-1 text-left font-medium text-gray-600">${h}</th>`).join('')}</tr></thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        ${parsedUploadData.slice(0, 5).map(row => `<tr>${headers.map(h => `<td class="px-2 py-1 whitespace-nowrap truncate max-w-[100px]">${row[h] || ''}</td>`).join('')}</tr>`).join('')}
+                    </tbody>
+                </table>`;
+            document.getElementById('preview-container').innerHTML = previewHtml;
+            document.getElementById('upload-data-btn').disabled = false;
+        }
+
+        async function handleUpload() {
+            if (parsedUploadData.length === 0) { showCustomAlert('No data to upload.'); return; }
+            const uploadBtn = document.getElementById('upload-data-btn');
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = '<i data-lucide="loader-2" class="animate-spin w-5 h-5 mr-2"></i>Uploading...';
+            lucide.createIcons();
+            
+            const config = TABLE_CONFIGS[currentTableName];
+            
+            const result = await apiFetch(`table/${config.schema}/${currentTableName}/batch_upload`, { method: 'POST', body: parsedUploadData });
+            if (result.success) {
+                showCustomAlert(`Successfully inserted ${result.inserted_rows} records into ${currentTableName}.`);
+                document.querySelector('#modal-container #close-modal-btn').click();
+                loadView(currentTableName);
+            } else {
+                showCustomAlert(`Upload failed: ${result.error}`);
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = '<i data-lucide="upload-cloud" class="w-5 h-5 mr-2"></i>Upload to Database';
+                lucide.createIcons();
+            }
+        }
+
+        function initializePage() {
+            const menu = document.getElementById('sub-nav-menu');
+            menu.querySelectorAll('.sub-nav-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    loadView(e.currentTarget.dataset.table);
+                });
+            });
+            menu.querySelector('.sub-nav-link[data-table="experiments"]').click();
+            document.getElementById('new-item-btn').addEventListener('click', () => showNewItemModal());
+            document.getElementById('bulk-import-btn').addEventListener('click', () => showBulkUploadModal());
+        }
+    </script>
+</body>
+</html>
