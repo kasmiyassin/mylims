@@ -127,6 +127,9 @@
                     <button id="bulk-modify-btn" class="bg-gray-400 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow transition-all cursor-not-allowed" disabled>
                         <i data-lucide="file-edit" class="w-5 h-5 mr-2"></i>Bulk Modify
                     </button>
+                    <button id="download-template-general-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all">
+                        <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download Template
+                    </button>
                 </div>
             </div>
 
@@ -176,6 +179,33 @@
     </div>
 
     <script>
+        // --- Custom CSV Unparse Function (replaces PapaParse.unparse for this specific use case) ---
+        function unparseCSV(data, options) {
+            options = options || {};
+            const delimiter = options.delimiter || ',';
+            const newline = options.newline || '\n';
+            const quoteChar = options.quoteChar || '"';
+
+            if (!Array.isArray(data) || data.length === 0) {
+                return '';
+            }
+
+            const rows = data;
+
+            return rows.map(row => {
+                return row.map(field => {
+                    if (field === null || field === undefined) {
+                        return '';
+                    }
+                    let stringField = String(field);
+                    if (stringField.includes(delimiter) || stringField.includes(quoteChar) || stringField.includes('\n') || stringField.includes('\r')) {
+                        return quoteChar + stringField.replace(new RegExp(quoteChar, 'g'), quoteChar + quoteChar) + quoteChar;
+                    }
+                    return stringField;
+                }).join(delimiter);
+            }).join(newline);
+        }
+
         // --- AUTH & SETUP ---
         if (sessionStorage.getItem('isLoggedIn') !== 'true') {
             localStorage.setItem('redirectUrl', window.location.href);
@@ -185,12 +215,23 @@
         const API_BASE_URL = '/tifi-lims/api'; 
         let masterCache = {}; 
         let currentTableData = []; 
-        let currentTableSchema = []; // Stores column info for the currently displayed table
-        let currentTableName = 'lims.projects'; // Default to projects table
+        let currentTableSchema = []; 
+        let currentTableName = 'lims.projects'; 
         let sortColumn = null; 
         let sortDirection = 'asc';
         let columnFilters = {};
         let allProjectTables = []; // To store list of all relevant tables for dropdown
+
+        // --- Mapping Views to Primary Underlying Base Tables ---
+        const VIEW_TO_BASE_TABLE_MAPPING = {
+            'lab.detailed_samples_view': 'lab.samples',
+            'lims.project_overview_view': 'lims.projects',
+            'lab.sample_workflow_progress_view': 'lab.samples',
+            'lims.reagent_status_view': 'lims.reagents',
+            'lab.sample_full_details_view': 'lab.samples',
+            'lims.project_personnel_view': 'lims.project_persons',
+            'lims.order_details_view': 'lims.orders',
+        };
 
         // --- DOMContentLoaded ---
         document.addEventListener('DOMContentLoaded', () => {
@@ -295,16 +336,22 @@
             const tables = await apiFetch('table_names_for_forms');
             if (tables && !tables.error) {
                 // Filter for tables relevant to projects: lims.projects, lims.project_persons
+                // EXCLUDE any table that starts with 'projects.' schema.
                 allProjectTables = tables.filter(t => 
                     t === 'lims.projects' || 
                     t === 'lims.project_persons'
+                    // Add other non-projects. schema tables here if desired, e.g., 'lims.cruises'
+                    // For now, only lims.projects and lims.project_persons are explicitly included.
                 );
-                console.log("Filtered project tables:", allProjectTables);
+                console.log("Filtered project tables (excluding 'projects' schema tables):", allProjectTables);
                 return allProjectTables;
             }
             console.error("Failed to fetch all project tables:", tables ? tables.error : 'Unknown error');
             return [];
         }
+
+        // Removed the general getAllTablesAndViews function as it's no longer needed in this specific file.
+
 
         // --- UI RENDERING ---
         function formatColumnName(columnName) {
@@ -328,7 +375,8 @@
                 return;
             }
 
-            const columnsToDisplay = schemaInfo.filter(col => !col.column_name.includes('attachment') && !col.column_name.includes('password_hash') && !col.column_name.includes('search_vector'));
+            // Exclude common binary/hash/search_vector/geometry columns
+            const columnsToDisplay = schemaInfo.filter(col => !col.column_name.includes('attachment') && !col.column_name.includes('password_hash') && !col.column_name.includes('search_vector') && !col.column_name.includes('geom'));
             
             let headerHtml = '';
             columnsToDisplay.forEach(col => {
@@ -360,6 +408,13 @@
                         }
                     }
 
+                    // Determine if the current table is a base table to enable/disable buttons
+                    const isBaseTable = currentTableSchema.length > 0 && currentTableSchema[0].table_type === 'BASE TABLE';
+                    const actionButtonsDisabled = isBaseTable ? '' : 'disabled';
+                    const actionButtonClasses = isBaseTable ? 'text-gray-500 hover:text-blue-600' : 'text-gray-300 cursor-not-allowed';
+                    const deleteButtonClasses = isBaseTable ? 'text-gray-500 hover:text-red-600' : 'text-gray-300 cursor-not-allowed';
+
+
                     let rowHtml = `<tr class="hover:bg-gray-50 cursor-pointer dynamic-table-row" data-pk-values='${JSON.stringify(formattedPkValues)}'>`;
                     columnsToDisplay.forEach(col => {
                         let value = row[col.column_name];
@@ -376,8 +431,8 @@
                     });
                     rowHtml += `
                         <td class="px-4 py-3 flex space-x-2">
-                            <button class="edit-btn p-1 text-gray-500 hover:text-blue-600" data-pk-values='${JSON.stringify(formattedPkValues)}'><i data-lucide="edit-2" class="w-4 h-4"></i></button>
-                            <button class="delete-btn p-1 text-gray-500 hover:text-red-600" data-pk-values='${JSON.stringify(formattedPkValues)}'><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                            <button class="edit-btn p-1 ${actionButtonClasses}" data-pk-values='${JSON.stringify(formattedPkValues)}' ${actionButtonsDisabled}><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                            <button class="delete-btn p-1 ${deleteButtonClasses}" data-pk-values='${JSON.stringify(formattedPkValues)}' ${actionButtonsDisabled}><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                         </td>
                     </tr>`;
                     return rowHtml;
@@ -387,6 +442,8 @@
             lucide.createIcons();
             addTableActionListeners();
             addFilterAndSortListeners();
+            // Update the main action buttons at the top based on the current table type
+            updateMainActionButtons(currentTableSchema.length > 0 ? currentTableSchema[0].table_type : null);
         }
 
         function getPkValues(row) {
@@ -439,6 +496,7 @@
 
             document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', async e => {
                 e.stopPropagation();
+                if (btn.disabled) return;
                 console.log("Edit button clicked:", e.currentTarget.dataset.pkValues);
                 const pkValues = JSON.parse(e.currentTarget.dataset.pkValues);
                 const record = currentTableData.find(r => {
@@ -456,6 +514,7 @@
 
             document.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', async e => {
                 e.stopPropagation();
+                if (btn.disabled) return;
                 console.log("Delete button clicked:", e.currentTarget.dataset.pkValues);
                 const pkValues = JSON.parse(e.currentTarget.dataset.pkValues);
                 const recordIdentifier = Object.values(pkValues).join(' / ');
@@ -472,14 +531,20 @@
 
                     const childTablesToDelete = [
                         { name: 'lims.project_persons', pkCols: ['project_id', 'person_id'] },
-                        // Add other directly dependent tables here if they don't cascade automatically
+                        // Now explicitly excluding 'projects' schema tables here for cascade delete
+                        // Add other specific lims tables that are children of projects and need cascading deletion if desired.
                     ];
 
                     let allChildrenDeleted = true;
                     for (const childTable of childTablesToDelete) {
                         try {
                             const [childSchema, childTableName] = childTable.name.split('.');
-                            let filterParams = `filter_project_id=${projectId}`;
+                            let filterParams = '';
+                            if (childTable.name === 'lims.project_persons') {
+                                filterParams = `filter_project_id=${projectId}`;
+                            } 
+                            // Add else if for other child tables here if necessary, linking them to projectId.
+                            // e.g., else if (childTable.name === 'lims.cruises') { filterParams = `filter_project_id=${projectId}`; }
                             
                             console.log(`Attempting to delete children from ${childTable.name} for project ${projectId}`);
                             const children = await apiFetch(`table/${childSchema}/${childTableName}?${filterParams}`);
@@ -560,7 +625,7 @@
                 input.removeEventListener('input', handleFilterInput);
                 input.addEventListener('input', handleFilterInput);
             });
-            updateSortIcons();
+            updateSortIcons(); 
         }
 
         function handleSortClick(e) {
@@ -828,23 +893,44 @@
             const schemaName = currentTableName.split('.')[0];
             const tableName = currentTableName.split('.')[1];
 
-            const [persons, statuses, customers] = await Promise.all([ 
-                getReferenceData('personal', 'reference'), 
+            // Fetch common reference data for dropdowns in modals
+            const [persons, statuses, projects, samplesTypes, customers, cruises, genes, units, species, externalContacts, suppliers, inventoryItems, publicationTypes, workflows, workflowSteps, equipment, primers, taxon] = await Promise.all([
+                getReferenceData('personal', 'reference'),
                 getReferenceData('status', 'reference'),
-                getReferenceData('customers', 'lims')
+                getReferenceData('projects', 'lims'),
+                getReferenceData('samples_type', 'reference'),
+                getReferenceData('customers', 'lims'),
+                getReferenceData('cruises', 'lims'),
+                getReferenceData('gene', 'reference'),
+                getReferenceData('units', 'reference'),
+                getReferenceData('species', 'reference'),
+                getReferenceData('external_contacts', 'lims'),
+                getReferenceData('suppliers', 'lims'),
+                getReferenceData('inventory_items', 'lims'),
+                getReferenceData('publication_type', 'lims'),
+                getReferenceData('workflows', 'lims'),
+                getReferenceData('workflow_steps', 'lims'),
+                getReferenceData('equipment', 'lims'),
+                getReferenceData('primers', 'lims'),
+                getReferenceData('taxon', 'reference')
             ]);
+
 
             let formFieldsHtml = '';
             targetTableSchema.forEach(col => {
-                const isAutoGenerated = col.column_name.includes('_id') && col.column_default && col.column_default.includes('nextval');
+                const isAutoGenerated = col.column_default && col.column_default.includes('nextval');
                 
-                if (col.column_name.includes('password_hash') || 
-                    col.column_name.includes('search_vector') ||
-                    (isEditing && col.is_primary_key) ||
-                    (!isEditing && isAutoGenerated)
-                ) {
+                const shouldSkip = col.column_name.includes('password_hash') ||
+                                   col.column_name.includes('search_vector') ||
+                                   col.column_name.includes('geom') || // Exclude PostGIS geometry columns
+                                   (isEditing && col.is_primary_key) || // Skip PKs if editing (they are in URL params)
+                                   (!isEditing && isAutoGenerated); // Skip auto-generated columns for new records
+
+                if (shouldSkip) {
+                    console.log(`Skipping column ${col.column_name} in modal form.`);
                     return;
                 }
+
 
                 let value = isEditing ? (record[col.column_name] || '') : (col.column_default ? col.column_default.replace(/::[a-z_]+/g, '').replace(/'/g, '') : '');
                 let inputType = 'text';
@@ -887,7 +973,7 @@
                         break;
                     case 'text':
                     case 'character varying':
-                        if (col.column_name.includes('description') || col.column_name.includes('notes')) {
+                        if (col.column_name.includes('description') || col.column_name.includes('notes') || col.column_name.includes('aim') || col.column_name.includes('method') || col.column_name.includes('sop_protocol') || col.column_name.includes('body')) {
                             formFieldsHtml += `
                                 <div class="md:col-span-2">
                                     <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
@@ -907,35 +993,52 @@
                         return;
                 }
 
-                if (col.column_name.endsWith('_id')) {
+                // Generic handler for _id fields that link to reference data
+                // Exclude specific _id fields that are part of composite PKs that shouldn't be dropdowns, or handled otherwise
+                const nonDropdownIds = ['experiment_id', 'sample_id', 'sampling_id', 'fishing_record_id', 'conversation_id', 'mail_id', 'message_id', 'run_id']; // Add more as needed
+                if (col.column_name.endsWith('_id') && !nonDropdownIds.includes(col.column_name)) {
                     let refData = [];
                     let valueKey = col.column_name;
                     let displayKey = col.column_name;
 
-                    if (col.column_name.includes('person_id') && persons) { // For pi_person_id
-                        refData = persons;
-                        displayKey = 'full_name';
-                    } else if (col.column_name.includes('status_id') && statuses) {
-                        refData = statuses;
-                        displayKey = 'status_id';
-                    } else if (col.column_name.includes('customer_id') && customers) {
-                        refData = customers;
-                        displayKey = 'customer_name';
-                    }
+                    // Map specific _id fields to appropriate reference data lists
+                    if (col.column_name.includes('person_id') && persons) { refData = persons; displayKey = 'full_name'; }
+                    else if (col.column_name.includes('status_id') && statuses) { refData = statuses; displayKey = 'status_id'; }
+                    else if (col.column_name.includes('project_id') && projects) { refData = projects; displayKey = 'title'; }
+                    else if (col.column_name.includes('sample_type_id') && samplesTypes) { refData = samplesTypes; displayKey = 'sample_type_abrv'; }
+                    else if (col.column_name.includes('customer_id') && customers) { refData = customers; displayKey = 'customer_name'; valueKey = 'customer_id'; }
+                    else if (col.column_name.includes('cruise_id') && cruises) { refData = cruises; displayKey = 'cruise_id'; }
+                    else if (col.column_name.includes('gene_id') && genes) { refData = genes; displayKey = 'gene_id'; }
+                    else if (col.column_name.includes('unit_id') && units) { refData = units; displayKey = 'unit_abbreviation'; }
+                    else if (col.column_name.includes('species_id') && species) { refData = species; displayKey = 'en_name'; }
+                    else if (col.column_name.includes('contact_id') && externalContacts) { refData = externalContacts; displayKey = 'full_name'; }
+                    else if (col.column_name.includes('supplier_id') && suppliers) { refData = suppliers; displayKey = 'supplier_name'; }
+                    else if (col.column_name.includes('item_id') && inventoryItems) { refData = inventoryItems; displayKey = 'item_name'; }
+                    else if (col.column_name.includes('publication_type_id') && publicationTypes) { refData = publicationTypes; displayKey = 'publication_type_id'; }
+                    else if (col.column_name.includes('workflow_id') && workflows) { refData = workflows; displayKey = 'workflow_name'; }
+                    else if (col.column_name.includes('step_id') && workflowSteps) { refData = workflowSteps; displayKey = 'step_name'; }
+                    else if (col.column_name.includes('equipment_id') && equipment) { refData = equipment; displayKey = 'equipment_name'; }
+                    else if (col.column_name.includes('primer_id') && primers) { refData = primers; displayKey = 'primer_id'; }
+                    else if (col.column_name.includes('taxon_id') && taxon) { refData = taxon; displayKey = 'en_name'; }
                     
+
                     if (refData.length > 0) {
                         optionsHtml = `<option value="">-- Select ${label} --</option>`;
-                        optionsHtml += refData.map(item => `<option value="${item[valueKey]}" ${value == item[valueKey] ? 'selected' : ''}>${item[displayKey] || item[valueKey]}</option>`).join('');
+                        optionsHtml += refData.map(item => {
+                            const displayValue = item[displayKey] !== undefined && item[displayKey] !== null ? item[displayKey] : item[valueKey];
+                            return `<option value="${item[valueKey]}" ${value == item[valueKey] ? 'selected' : ''}>${displayValue}</option>`;
+                        }).join('');
                         formFieldsHtml += `
                             <div>
                                 <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
-                                <select name="${col.column_name}" class="w-full mt-1 p-2 border rounded">${optionsHtml}</select>
+                                <select name="${col.column_name}" class="w-full mt-1 p-2 border rounded"${col.is_nullable === 'NO' ? ' required' : ''}>${optionsHtml}</select>
                             </div>
                         `;
-                        return;
+                        return; 
                     }
                 }
 
+                // Default input field for other columns
                 formFieldsHtml += `
                     <div>
                         <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
@@ -996,9 +1099,9 @@
                         const colSchema = targetTableSchema.find(s => s.column_name === key);
                         if (colSchema && (colSchema.data_type === 'integer' || colSchema.data_type === 'numeric' || colSchema.data_type === 'bigint')) {
                             body[key] = value === '' ? null : Number(value);
-                        } else if (colSchema && colSchema.data_type === 'boolean') {
+                        } else if (colSchema && col.data_type === 'boolean') {
                             body[key] = formElement.querySelector(`[name="${key}"]`).checked; 
-                        } else if (colSchema && colSchema.data_type === 'jsonb') {
+                        } else if (colSchema && col.data_type === 'jsonb') {
                             try {
                                 body[key] = value === '' ? null : JSON.parse(value);
                             } catch (jsonError) {
@@ -1019,13 +1122,8 @@
                     if (linkedPersonsField) {
                         linkedPersonIds = linkedPersonsField.value.split(';').map(id => id.trim()).filter(id => id !== '');
                         if (hasFileSelected) {
-                             // FormData doesn't handle arrays well for this dynamic linking;
-                             // backend will need to retrieve from form.
-                             // For simplicity and to avoid complex FormData manipulation,
-                             // we'll explicitly remove it from the main body and handle separately.
-                            body.delete('linked_person_ids'); 
+                             body.delete('linked_person_ids'); 
                         } else {
-                            // For JSON, we can just pop it as it's not a direct column
                             delete body.linked_person_ids; 
                         }
                     }
@@ -1050,7 +1148,7 @@
                     const pkQueryString = new URLSearchParams(pkValuesForApi).toString();
                     endpoint += `?${pkQueryString}`;
                     console.log("Edit endpoint with PKs:", endpoint);
-                    currentProjectId = record.project_id; // Store current project_id for linking
+                    currentProjectId = record.project_id; 
                 }
                 
                 console.log(`Submitting form: Method=${method}, Endpoint=${endpoint}, Body:`, body);
@@ -1061,13 +1159,11 @@
                     
                     // Handle linked_person_ids for lims.projects
                     if (currentTableName === 'lims.projects' && linkedPersonIds !== null) {
-                        const projectIdToLink = result.project_id || currentProjectId; // Use new ID or existing
+                        const projectIdToLink = result.project_id || currentProjectId; 
                         if (projectIdToLink) {
-                            // Fetch existing linked persons
                             const existingLinksResult = await apiFetch(`table/lims/project_persons?filter_project_id=${projectIdToLink}`);
                             const existingLinkedPersons = existingLinksResult && !existingLinksResult.error ? existingLinksResult.map(p => p.person_id) : [];
 
-                            // Persons to add
                             const personsToAdd = linkedPersonIds.filter(id => !existingLinkedPersons.includes(id));
                             for (const personId of personsToAdd) {
                                 try {
@@ -1081,7 +1177,6 @@
                                 }
                             }
 
-                            // Persons to remove
                             const personsToRemove = existingLinkedPersons.filter(id => !linkedPersonIds.includes(id));
                             for (const personId of personsToRemove) {
                                 try {
@@ -1139,7 +1234,7 @@
             `;
             const { closeModal } = showModal(modalHTML);
 
-            document.getElementById('download-csv-template-btn-modal').addEventListener('click', downloadCsvTemplate);
+            document.getElementById('download-csv-template-btn-modal').addEventListener('click', () => downloadCsvTemplate(currentTableName));
 
             document.getElementById('upload-csv-btn').addEventListener('click', () => {
                 const fileInput = document.getElementById('csv-file-input');
@@ -1167,7 +1262,6 @@
                             return;
                         }
 
-                        // Handle 'linked_person_ids' for lims.projects before sending to backend
                         let recordsToUpload = results.data.map(row => {
                             const newRow = {};
                             for (const key in row) {
@@ -1185,7 +1279,7 @@
                             const successfulProjects = [];
                             for (const record of recordsToUpload) {
                                 const linkedPersonIds = record.linked_person_ids ? record.linked_person_ids.split(';').map(id => id.trim()).filter(id => id !== '') : [];
-                                delete record.linked_person_ids; // Remove from main record body
+                                delete record.linked_person_ids; 
 
                                 const result = await apiFetch(`table/${schemaName}/${tableName}`, {
                                     method: 'POST',
@@ -1238,10 +1332,14 @@
             });
         }
 
-        async function downloadCsvTemplate() {
-            console.log("downloadCsvTemplate called.");
-            console.log("Attempting to download CSV template for:", currentTableName);
-            const [schemaName, tableName] = currentTableName.split('.');
+        async function downloadCsvTemplate(fullTableName) {
+            console.log("downloadCsvTemplate called for:", fullTableName);
+            if (!fullTableName) {
+                alert("Please select a table to download its template.");
+                return;
+            }
+
+            const [schemaName, tableName] = fullTableName.split('.');
             const schema = await getTableSchema(schemaName, tableName);
 
             if (!schema || schema.error) {
@@ -1254,24 +1352,30 @@
                 !col.column_name.includes('attachment') && 
                 !col.column_name.includes('password_hash') && 
                 !col.column_name.includes('search_vector') &&
+                !col.column_name.includes('geom') && // Exclude PostGIS geometry columns
                 !(col.column_default && col.column_default.includes('nextval')) && 
-                !col.column_name.includes('created_at')
+                !col.column_name.includes('created_at') &&
+                !col.column_name.includes('last_modified_at')
             ).map(col => col.column_name);
 
-            // Add special 'linked_person_ids' header for lims.projects
-            if (currentTableName === 'lims.projects') {
+            // Add special 'linked_person_ids' header for lims.projects if downloading its template
+            if (fullTableName === 'lims.projects') {
                 headers.push('linked_person_ids');
             }
 
-            const pkCols = masterCache[`pk.${currentTableName}`] || [];
+            const pkCols = masterCache[`pk.${fullTableName}`] || [];
             pkCols.forEach(pkCol => {
-                if (!headers.includes(pkCol)) {
-                    headers.unshift(pkCol);
+                const pkColSchema = schema.find(c => c.column_name === pkCol);
+                // Only prepend if it's a primary key not auto-generated
+                if (pkColSchema && !(pkColSchema.column_default && pkColSchema.column_default.includes('nextval'))) {
+                    if (!headers.includes(pkCol)) {
+                        headers.unshift(pkCol);
+                    }
                 }
             });
             
             console.log("CSV Template Headers:", headers);
-            const csv = PapaParse.unparse([headers], { header: false });
+            const csv = unparseCSV([headers]); // Use the custom unparseCSV function
             
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
@@ -1283,6 +1387,7 @@
             URL.revokeObjectURL(link.href);
             console.log("CSV template download initiated.");
         }
+
 
         async function showBulkModifyModal() {
             const modalHTML = `
@@ -1308,7 +1413,7 @@
             `;
             const { closeModal } = showModal(modalHTML);
 
-            document.getElementById('download-bulk-modify-template-btn-modal').addEventListener('click', downloadBulkModifyTemplate);
+            document.getElementById('download-bulk-modify-template-btn-modal').addEventListener('click', () => downloadBulkModifyTemplate(currentTableName));
 
 
             document.getElementById('perform-bulk-modify-btn').addEventListener('click', () => {
@@ -1334,45 +1439,25 @@
                                 throw new Error("JSON file must contain an array of objects.");
                             }
                         } else if (file.type === 'text/csv') {
-                            const parseResult = PapaParse.parse(e.target.result, { header: true, skipEmptyLines: true });
-                            if (parseResult.errors.length) {
-                                throw new Error(`CSV parsing errors: ${parseResult.errors.map(err => err.message).join(', ')}`);
-                            }
-                            recordsToModify = parseResult.data;
+                            const script = document.createElement('script');
+                            script.src = "https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js";
+                            script.onload = () => {
+                                const parseResult = PapaParse.parse(e.target.result, { header: true, skipEmptyLines: true });
+                                if (parseResult.errors.length) {
+                                    throw new Error(`CSV parsing errors: ${parseResult.errors.map(err => err.message).join(', ')}`);
+                                }
+                                recordsToModify = parseResult.data;
+                                processBulkModifyRecords(recordsToModify, statusDiv, closeModal);
+                            };
+                            script.onerror = () => {
+                                statusDiv.innerHTML = `<p class="text-red-500">Error loading PapaParse library for CSV parsing. Please check network connection.</p>`;
+                            };
+                            document.head.appendChild(script);
+                            return; 
                         } else {
                             throw new Error("Unsupported file type. Please upload a CSV or JSON file.");
                         }
-
-                        if (!recordsToModify.length) {
-                            statusDiv.innerHTML = `<p class="text-red-500">No records found in the file.</p>`;
-                            return;
-                        }
-
-                        const recordsToModifyCleaned = recordsToModify.map(row => {
-                            const newRow = {};
-                            for (const key in row) {
-                                newRow[key] = row[key] === '' ? null : row[key];
-                            }
-                            return newRow;
-                        });
-
-                        statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Performing bulk update on ${recordsToModifyCleaned.length} records...</p>`;
-                        lucide.createIcons();
-
-                        const [schemaName, tableName] = currentTableName.split('.');
-                        const result = await apiFetch(`table/${schemaName}/${tableName}/batch_update`, {
-                            method: 'PUT',
-                            body: recordsToModifyCleaned
-                        });
-
-                        if (result && result.success) {
-                            statusDiv.innerHTML = `<p class="text-green-600">Successfully updated ${result.updated_rows} records!</p>`;
-                            loadAndRenderTable(currentTableName);
-                            setTimeout(closeModal, 2000);
-                        } else {
-                            statusDiv.innerHTML = `<p class="text-red-500">Bulk modify failed: ${result ? result.error : 'Unknown error'}</p>`;
-                        }
-                        lucide.createIcons();
+                        processBulkModifyRecords(recordsToModify, statusDiv, closeModal);
 
                     } catch (error) {
                         console.error("Bulk modify file processing error:", error);
@@ -1384,12 +1469,50 @@
             });
         }
 
-        async function downloadBulkModifyTemplate() {
-            console.log("downloadBulkModifyTemplate called.");
-            console.log("Attempting to download Bulk Modify template for:", currentTableName);
+        async function processBulkModifyRecords(recordsToModify, statusDiv, closeModal) {
+            if (!recordsToModify.length) {
+                statusDiv.innerHTML = `<p class="text-red-500">No records found in the file.</p>`;
+                return;
+            }
+
+            const recordsToModifyCleaned = recordsToModify.map(row => {
+                const newRow = {};
+                for (const key in row) {
+                    newRow[key] = row[key] === '' ? null : row[key];
+                }
+                return newRow;
+            });
+
+            statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Performing bulk update on ${recordsToModifyCleaned.length} records...</p>`;
+            lucide.createIcons();
+
             const [schemaName, tableName] = currentTableName.split('.');
+            const result = await apiFetch(`table/${schemaName}/${tableName}/batch_update`, {
+                method: 'PUT',
+                body: recordsToModifyCleaned
+            });
+
+            if (result && result.success) {
+                statusDiv.innerHTML = `<p class="text-green-600">Successfully updated ${result.updated_rows} records!</p>`;
+                loadAndRenderTable(currentTableName);
+                setTimeout(closeModal, 2000);
+            } else {
+                statusDiv.innerHTML = `<p class="text-red-500">Bulk modify failed: ${result ? result.error : 'Unknown error'}</p>`;
+            }
+            lucide.createIcons();
+        }
+
+
+        async function downloadBulkModifyTemplate(fullTableName) {
+            console.log("downloadBulkModifyTemplate called for:", fullTableName);
+            if (!fullTableName) {
+                alert("Please select a table to download its bulk modify template.");
+                return;
+            }
+
+            const [schemaName, tableName] = fullTableName.split('.');
             const schema = await getTableSchema(schemaName, tableName);
-            const pkColumns = masterCache[`pk.${currentTableName}`] || [];
+            const pkColumns = masterCache[`pk.${fullTableName}`] || [];
 
             if (!schema || schema.error) {
                 console.error("Failed to fetch table schema for template:", schema ? schema.error : 'Unknown error');
@@ -1404,6 +1527,7 @@
                 !col.column_name.includes('attachment') && 
                 !col.column_name.includes('password_hash') && 
                 !col.column_name.includes('search_vector') &&
+                !col.column_name.includes('geom') && 
                 !col.column_name.includes('created_at') &&
                 !(col.column_default && col.column_default.includes('nextval'))
             ).map(col => col.column_name);
@@ -1411,7 +1535,7 @@
             headers = [...new Set([...headers, ...commonEditableColumns])];
 
             console.log("Bulk Modify Template Headers:", headers);
-            const csv = PapaParse.unparse([headers], { header: false });
+            const csv = unparseCSV([headers], { header: false });
             
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
@@ -1424,6 +1548,92 @@
             console.log("Bulk modify template download initiated.");
         }
 
+
+        // The showDownloadTemplateModal function is no longer needed since the download functionality is now
+        // directly integrated into the Bulk Upload/Modify modals or a direct call for the current table.
+        // If you still want a general "Download Template" button that opens a selection modal, you can
+        // re-add this function and its associated button in the HTML.
+        /*
+        async function showDownloadTemplateModal() {
+            const allSchemaTableNames = await getAllTablesAndViews(); 
+            let optionsHtml = '<option value="">-- Select Table for Template --</option>';
+            allSchemaTableNames.forEach(name => {
+                optionsHtml += `<option value="${name}">${name}</option>`;
+            });
+
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl transform transition-all -translate-y-10 opacity-0">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl font-bold">Download CSV Template</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                        </div>
+                        <p class="text-gray-700 mb-4">Select a table to download an empty CSV template with its column headers.</p>
+                        <select id="template-table-select" class="w-full p-2 border rounded mb-4">
+                            ${optionsHtml}
+                        </select>
+                        <div class="flex justify-end">
+                            <button id="confirm-download-template-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
+                                <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download
+                            </button>
+                        </div>
+                        <div id="template-download-status" class="mt-4 text-center text-sm"></div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+
+            document.getElementById('confirm-download-template-btn').addEventListener('click', async () => {
+                const selectedTable = document.getElementById('template-table-select').value;
+                const statusDiv = document.getElementById('template-download-status');
+
+                if (!selectedTable) {
+                    statusDiv.innerHTML = `<p class="text-red-500">Please select a table.</p>`;
+                    return;
+                }
+
+                statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Generating template...</p>`;
+                lucide.createIcons();
+
+                try {
+                    await downloadCsvTemplate(selectedTable); 
+                    statusDiv.innerHTML = `<p class="text-green-600">Template downloaded successfully!</p>`;
+                    setTimeout(closeModal, 1500);
+                } catch (error) {
+                    console.error("Error during template download:", error);
+                    statusDiv.innerHTML = `<p class="text-red-500">Error generating or downloading template: ${error.message}</p>`;
+                }
+                lucide.createIcons();
+            });
+        }
+        */
+
+
+        // Function to update the main action buttons' disabled state and tooltips
+        function updateMainActionButtons(tableType) {
+            const isBaseTable = tableType === 'BASE TABLE';
+
+            document.getElementById('add-single-entry-btn').disabled = !isBaseTable;
+            document.getElementById('bulk-csv-upload-btn').disabled = !isBaseTable;
+            document.getElementById('bulk-modify-btn').disabled = !isBaseTable;
+            // The general download button should be removed if its functionality is integrated elsewhere.
+            // If you still want a general download button (e.g., to download template for *current* table)
+            // you can re-enable it here and link it to downloadCsvTemplate(currentTableName).
+            document.getElementById('download-template-general-btn').disabled = !currentTableName; 
+
+            // For tooltips (assuming they are always present and just show/hide)
+            // You might need to add tooltip elements similar to data_management.html if they don't exist
+            // For now, let's just log a warning if they are not found.
+            const addTooltip = document.getElementById('add-tooltip');
+            const uploadTooltip = document.getElementById('upload-tooltip');
+            const modifyTooltip = document.getElementById('modify-tooltip');
+
+            if (addTooltip) addTooltip.style.display = isBaseTable ? 'none' : 'block'; else console.warn("Add tooltip not found.");
+            if (uploadTooltip) uploadTooltip.style.display = isBaseTable ? 'none' : 'block'; else console.warn("Upload tooltip not found.");
+            if (modifyTooltip) modifyTooltip.style.display = isBaseTable ? 'none' : 'block'; else console.warn("Modify tooltip not found.");
+        }
+
+
         // --- PAGE INITIALIZATION & TAB LOGIC ---
         async function initializePage() {
             setupTabListeners();
@@ -1433,6 +1643,8 @@
             document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal());
             document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal);
             document.getElementById('bulk-modify-btn').addEventListener('click', showBulkModifyModal);
+            // This button now directly calls downloadCsvTemplate for the currently active table.
+            document.getElementById('download-template-general-btn').addEventListener('click', () => downloadCsvTemplate(currentTableName));
         }
 
         function setupTabListeners() {
@@ -1457,7 +1669,7 @@
 
         async function populateDynamicTableSelect() {
             const select = document.getElementById('dynamic-table-select');
-            const projectTables = await getAllProjectTables();
+            const projectTables = await getAllProjectTables(); 
             
             select.innerHTML = '<option value="">-- Select Related Table --</option>';
             select.innerHTML += `<option value="lims.projects">lims.projects (Main)</option>`;
@@ -1473,6 +1685,7 @@
 
         async function loadAndRenderTable(fullTableName) {
             console.log(`loadAndRenderTable: Attempting to load data for ${fullTableName}`);
+            currentTableName = fullTableName;
             const [schemaName, tableName] = fullTableName.split('.');
             
             sortColumn = null;
@@ -1485,10 +1698,10 @@
             lucide.createIcons();
 
             let dataFilter = '';
-            if (tableName === 'projects') { // Assuming lims.projects
-                dataFilter = '?filter_status_id=Active'; // Only load active projects initially
-            } else if (tableName === 'sop') { // Assuming lims.sop
-                 dataFilter = '?filter_status_id!=Archived'; // Exclude archived protocols
+            if (tableName === 'projects') { 
+                dataFilter = '?filter_status_id=Active'; 
+            } else if (tableName === 'sop') { 
+                 dataFilter = '?filter_status_id!=Archived'; 
             }
 
             const [data, schema, pkInfo] = await Promise.all([
@@ -1502,10 +1715,17 @@
                 currentTableData = data;
                 currentTableSchema = schema;
                 masterCache[`pk.${fullTableName}`] = pkInfo;
+                
+                // Determine table type for action button enablement
+                const tableType = schema.length > 0 ? schema[0].table_type : null;
+                updateMainActionButtons(tableType);
+
                 applyFiltersAndSort();
             } else {
                 console.error(`Failed to load data for ${fullTableName}. Data error: ${data ? data.error : 'N/A'}, Schema error: ${schema ? schema.error : 'N/A'}`);
                 tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-red-500">Error loading data for ${fullTableName}: ${data ? data.error : schema ? schema.error : 'Unknown error'}</td></tr>`;
+                // Ensure buttons are disabled if loading fails
+                updateMainActionButtons(null); // Pass null to disable all
             }
         }
 

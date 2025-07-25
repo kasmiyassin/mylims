@@ -222,6 +222,7 @@ CREATE TABLE IF NOT EXISTS "lims"."project_persons" (
     "person_id" text,
     "role" text,
     PRIMARY KEY ("project_id", "person_id"),
+    "link_date" date,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text

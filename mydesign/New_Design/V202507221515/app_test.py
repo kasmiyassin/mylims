@@ -106,26 +106,48 @@ PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     ('bioinformatics', 'analysis_runs'): ['run_id', 'run_date'], # Composite PK
     ('bioinformatics', 'edna_assignments'): 'assignment_id',
 
+    # Schema: Projects (for ProjectWanderfische tables)
+    ('projects', 'projectwanderfische_fishingdata'): ['fishing_record_id', 'record_date'], # Composite PK
+    ('projects', 'projectwanderfische_fishcatch'): 'fish_catch_id', # Serial PK
+    ('projects', 'projectwanderfische_mail'): 'mail_id', # Serial PK
+    ('projects', 'projectwanderfische_conversation'): 'conversation_id', # Serial PK
+    ('projects', 'projectwanderfische_chatmessage'): 'message_id', # Serial PK
+
     # Views (for read-only access, PKs here are for conceptual filtering, not for PUT/DELETE)
     ('reference', 'complete_species_taxon_view'): 'taxon_id',
-    ('lab', 'detailed_samples_view'): 'sample_id',
-    ('lims', 'project_overview_view'): 'project_id',
-    ('lab', 'sample_workflow_progress_view'): 'sample_id',
-    ('lab', 'storage_inventory_view'): 'storage_id',
-    ('lab', 'experiment_summary_view'): 'experiment_id',
-    ('bioinformatics', 'analysis_results_summary'): 'run_id',
-    ('lims', 'project_financial_summary_view'): 'project_id',
-    ('bioinformatics', 'full_analysis_results_view'): 'project_id',
-    ('lab', 'storage_occupancy_view'): 'storage_id',
-    ('lims', 'project_comprehensive_summary_view'): 'project_id',
-    ('lab', 'experiment_progress_overview_view'): 'experiment_id',
-    ('lims', 'reagent_status_view'): 'reagent_complete_name',
-    ('lab', 'sample_full_details_view'): 'sample_id',
-    ('reference', 'taxon_hierarchy_view'): 'taxon_id',
-    ('lab', 'monthly_sample_reception_mv'): 'reception_month',
-    ('lims', 'project_personnel_view'): ['project_person_id'], # Added this view PK
-    ('lims', 'order_details_view'): ['fi_order_nr'], # Added this view PK
+    ('lab', 'detailed_samples_view'): 'sample_id', # This view's underlying table is lab.samples
+    ('lims', 'project_overview_view'): 'project_id', # This view's underlying table is lims.projects
+    ('lab', 'sample_workflow_progress_view'): 'sample_id', # Underlying: lab.samples
+    ('lab', 'storage_inventory_view'): 'storage_id', # Underlying: lab.storage, lab.samples
+    ('lab', 'experiment_summary_view'): 'experiment_id', # Underlying: lab.experiments
+    ('bioinformatics', 'analysis_results_summary'): 'run_id', # Underlying: multiple bioinfo tables
+    ('lims', 'project_financial_summary_view'): 'project_id', # Underlying: lims.projects, lims.orders
+    ('bioinformatics', 'full_analysis_results_view'): 'project_id', # Underlying: multiple bioinfo tables
+    ('lab', 'storage_occupancy_view'): 'storage_id', # Underlying: lab.storage, lab.samples
+    ('lims', 'project_comprehensive_summary_view'): 'project_id', # Underlying: lims.projects, lab.experiments_projects, etc.
+    ('lab', 'experiment_progress_overview_view'): 'experiment_id', # Underlying: lab.experiments, etc.
+    ('lims', 'reagent_status_view'): 'reagent_complete_name', # Underlying: lims.reagents
+    ('lab', 'sample_full_details_view'): 'sample_id', # Underlying: lab.samples, and many others
+    ('reference', 'taxon_hierarchy_view'): 'taxon_id', # Underlying: reference.taxon, reference.species
+    ('lab', 'monthly_sample_reception_mv'): 'reception_month', # Materialized view
+    ('lims', 'project_personnel_view'): ['project_id', 'person_id'], # Underlying: lims.project_persons
+    ('lims', 'order_details_view'): 'fi_order_nr', # Underlying: lims.orders
 }
+
+# --- Mapping Views to Primary Underlying Base Tables ---
+# This dictionary helps the frontend suggest navigating to the base table for modification.
+# Format: 'schema.view_name': 'schema.base_table_name'
+VIEW_TO_BASE_TABLE_MAPPING: Dict[str, str] = {
+    'lab.detailed_samples_view': 'lab.samples',
+    'lims.project_overview_view': 'lims.projects',
+    'lab.sample_workflow_progress_view': 'lab.samples',
+    'lims.reagent_status_view': 'lims.reagents',
+    'lab.sample_full_details_view': 'lab.samples',
+    'lims.project_personnel_view': 'lims.project_persons',
+    'lims.order_details_view': 'lims.orders',
+    # Add more mappings as needed for other views
+}
+
 
 # --- Database Connection ---
 def get_db_connection():
@@ -471,7 +493,7 @@ def table_names_for_forms():
             query = """
             SELECT table_schema || '.' || table_name
             FROM information_schema.tables
-            WHERE table_schema IN ('lab', 'lims', 'reference', 'bioinformatics', 'audit')
+            WHERE table_schema IN ('lab', 'lims', 'reference', 'bioinformatics', 'audit', 'projects') -- Added 'projects' schema
               AND table_type IN ('BASE TABLE', 'VIEW', 'MATERIALIZED VIEW')
               AND table_name NOT LIKE '%_seq'
               AND table_name NOT LIKE '%_y%'
@@ -491,17 +513,25 @@ def get_table_schema(schema: str, table: str):
     """
     try:
         conn = g.db_conn
+
         resolved_names = _resolve_table_casing(conn, schema, table)
         if not resolved_names:
             return jsonify({"error": f"Table or view '{schema}.{table}' not found or inaccessible."}), 404
         
         actual_schema, actual_table = resolved_names
 
+        # Query to get column information AND table_type
         query = """
-            SELECT column_name, data_type, is_nullable, column_default
-            FROM information_schema.columns
-            WHERE table_schema = %s AND table_name = %s
-            ORDER BY ordinal_position;
+            SELECT 
+                c.column_name, 
+                c.data_type, 
+                c.is_nullable, 
+                c.column_default,
+                t.table_type -- Fetch table_type from information_schema.tables
+            FROM information_schema.columns c
+            JOIN information_schema.tables t ON c.table_schema = t.table_schema AND c.table_name = t.table_name
+            WHERE c.table_schema = %s AND c.table_name = %s
+            ORDER BY c.ordinal_position;
         """
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(query, (actual_schema, actual_table))
@@ -1000,7 +1030,7 @@ def update_record(schema: str, table: str):
                     pass
             values.append(pk_val) # Add PK values to the end of the 'values' list
 
-        query = f'UPDATE "{actual_schema}"."{actual_table}" SET {", ".join(set_clauses)} WHERE {" AND ".join(where_pk_clauses)} RETURNING *;'
+        query = f'UPDATE "{actual_schema}"."{actual_table}" SET {", ".join(set_clauses)} WHERE {" AND ".join(pk_where_clauses)} RETURNING *;'
         
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             print(f"Executing PUT query: {query} with values: {values}")

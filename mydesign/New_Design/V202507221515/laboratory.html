@@ -1,0 +1,1845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Management - TIFI MG LIMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        /* Base body styles using Inter font and light background */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f8fafc; 
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        /* Sidebar styling */
+        .sidebar { 
+            transition: width 0.3s ease;
+            border-right: 1px solid #e2e8f0; 
+        }
+        .sidebar-item { 
+            transition: all 0.2s ease;
+            color: #475569; 
+        }
+        .sidebar-item.active, .sidebar-item.active i { 
+            background-color: #eef2ff; 
+            color: #4f46e5; 
+            font-weight: 600; 
+        }
+        .sidebar-item:hover { 
+            background-color: #f1f5f9; 
+            color: #1e293b; 
+        }
+        /* Card styling for content sections */
+        .card { 
+            background-color: white; 
+            border-radius: 0.75rem; 
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); 
+        }
+        /* Modal overlay for alerts and popups */
+        .modal-overlay { 
+            position: fixed;
+            inset: 0;
+            z-index: 50; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(0,0,0,0.5); 
+            backdrop-filter: blur(4px); 
+        }
+        /* Modal content styling */
+        .modal-content {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            padding: 2rem; /* p-8 */
+            width: 100%;
+            max-width: 64rem; /* max-w-4xl */
+            max-height: 90vh;
+            display: flex; /* Use flex for internal layout */
+            flex-direction: column; /* Stack children vertically */
+            transform: translateY(-2.5rem); /* -translate-y-10 */
+            opacity: 0;
+            transition: all 0.3s ease-out;
+        }
+        .modal-content.open {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* Form fields within modal */
+        .modal-content form {
+            flex-grow: 1; /* Allow form to take available space */
+            overflow-y: auto; /* Enable scrolling for form content */
+            padding-right: 1rem; /* pr-4, to account for scrollbar */
+        }
+        .modal-content form .grid {
+            margin-right: -1rem; /* Counteract padding-right on form for grid gap */
+        }
+
+        /* Ensure inputs and textareas respect padding/border in their total size */
+        input[type="text"],
+        input[type="number"],
+        input[type="date"],
+        input[type="datetime-local"],
+        input[type="url"],
+        textarea,
+        select {
+            box-sizing: border-box;
+        }
+
+        /* Table row selected state */
+        .table-row-selected { background-color: #eef2ff !important; }
+        /* Sortable header styling */
+        .sortable-header { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; padding-right: 8px; }
+        .sortable-header:hover { background-color: #e2e8f0; }
+        .sort-icon { display: inline-block; width: 16px; height: 16px; vertical-align: middle; margin-left: 4px; flex-shrink: 0; }
+        /* Filter input styling */
+        .filter-input { 
+            width: calc(100% - 10px); 
+            padding: 4px; 
+            margin-top: 4px; 
+            border: 1px solid #cbd5e1; 
+            border-radius: 0.25rem; 
+            font-size: 0.75rem; 
+            box-sizing: border-box; 
+        }
+        /* Accordion styles (reused for details display) */
+        .accordion-item { margin-bottom: 0.5rem; border: 1px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; }
+        .accordion-header { background-color: #f1f5f9; padding: 0.75rem 1rem; cursor: pointer; width: 100%; text-align: left; display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: #475569; }
+        .accordion-header:hover { background-color: #e2e8f0; }
+        .accordion-header .lucide { transition: transform 0.3s ease; }
+        .accordion-header.active .lucide { transform: rotate(180deg); }
+        .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, padding 0.3s ease-out; padding: 0 1rem; background-color: white; border-top: 1px solid #e2e8f0; }
+        .accordion-content.open { max-height: 500px; padding: 1rem; }
+        /* Tab styles */
+        .tab-link { cursor: pointer; }
+        .tab-link.active { color: #4f46e5; border-color: #4f46e5; }
+
+        /* Custom scrollbar for tables */
+        .overflow-y-auto::-webkit-scrollbar {
+            width: 8px;
+        }
+        .overflow-y-auto::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .overflow-y-auto::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        /* Tooltip styles */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 0;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%; /* Position above the button */
+            left: 50%;
+            margin-left: -100px; /* Center the tooltip */
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.75rem;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="main-app" class="flex">
+        <!-- Sidebar -->
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col z-20">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0">
+                <i data-lucide="flask-conical" class="inline-block mr-2 text-blue-600"></i><span>TIFI MG</span>
+            </div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (SOP)</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
+                <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="box" class="w-5 h-5 mr-3"></i><span>Storage Box</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+                <a href="data_management.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="database" class="w-5 h-5 mr-3"></i><span>Data Management</span></a>
+            </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t flex items-center text-gray-800">
+                </div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div id="main-content" class="ml-64 p-8 flex-grow">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800">Dynamic Data Management</h1>
+                    <p class="mt-1 text-md text-gray-600">Explore, add, modify, and delete data across schemas, tables, and views.</p>
+                </div>
+                <div class="flex space-x-3">
+                    <div class="tooltip">
+                        <button id="add-single-entry-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all" disabled>
+                            <i data-lucide="plus" class="w-5 h-5 mr-2"></i>Add Single Entry
+                        </button>
+                        <span id="add-tooltip" class="tooltiptext">CRUD operations are only available for base tables.</span>
+                    </div>
+                    <div class="tooltip">
+                        <button id="bulk-csv-upload-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all" disabled>
+                            <i data-lucide="upload" class="w-5 h-5 mr-2"></i>Bulk CSV Upload
+                        </button>
+                        <span id="upload-tooltip" class="tooltiptext">Bulk upload is only available for base tables.</span>
+                    </div>
+                    <div class="tooltip">
+                        <button id="bulk-modify-btn" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all" disabled>
+                            <i data-lucide="file-edit" class="w-5 h-5 mr-2"></i>Bulk Modify
+                        </button>
+                        <span id="modify-tooltip" class="tooltiptext">Bulk modify is only available for base tables.</span>
+                    </div>
+                    <button id="download-template-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all" disabled>
+                        <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download Template
+                    </button>
+                </div>
+            </div>
+
+            <div class="border-b border-gray-200 mb-6">
+                <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                    <div class="flex items-center">
+                        <label for="schema-select" class="mr-2 text-sm font-medium text-gray-700">Select Schema:</label>
+                        <select id="schema-select" class="py-2 px-3 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"></select>
+                    </div>
+                    <div class="flex items-center">
+                        <label for="table-select" class="mr-2 text-sm font-medium text-gray-700">Select Table/View:</label>
+                        <select id="table-select" class="py-2 px-3 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"></select>
+                    </div>
+                </nav>
+            </div>
+
+            <div id="content-display" class="grid grid-cols-1 lg:grid-cols-5 gap-8 mt-6">
+                <!-- Table Display Area -->
+                <div class="lg:col-span-3">
+                    <div class="card p-4">
+                        <div class="overflow-y-auto h-[65vh] relative">
+                            <table class="min-w-full">
+                                <thead class="bg-gray-50 sticky top-0 z-10">
+                                    <tr id="table-headers">
+                                        <!-- Dynamic headers will be loaded here -->
+                                    </tr>
+                                </thead>
+                                <tbody id="dynamic-table-body" class="divide-y divide-gray-200">
+                                    <tr><td colspan="100%" class="text-center p-4 text-gray-500">
+                                        <div class="flex items-center justify-center">
+                                            <i data-lucide="database" class="inline-block mr-2 text-blue-600"></i>
+                                            <span>Please select a schema and table/view to display data.</span>
+                                        </div>
+                                    </td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Details/Info Area (initially empty or with a placeholder) -->
+                <div id="record-details-container" class="lg:col-span-2">
+                    <div class="card p-6 h-full flex items-center justify-center text-gray-500">
+                        <div class="text-center">
+                            <i data-lucide="info" class="mx-auto h-12 w-12"></i>
+                            <p class="mt-2">Select a record to view its details</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Modal Container -->
+        <div id="modal-container"></div>
+    </div>
+
+    <script>
+        // --- Custom CSV Unparse Function (replaces PapaParse.unparse for this specific use case) ---
+        function unparseCSV(data, options) {
+            options = options || {};
+            const delimiter = options.delimiter || ',';
+            const newline = options.newline || '\n';
+            const quoteChar = options.quoteChar || '"';
+
+            if (!Array.isArray(data) || data.length === 0) {
+                return '';
+            }
+
+            // Assume data[0] contains the headers if options.header is false (which it is in our case)
+            const rows = data;
+
+            return rows.map(row => {
+                return row.map(field => {
+                    if (field === null || field === undefined) {
+                        return '';
+                    }
+                    let stringField = String(field);
+                    // Quote field if it contains delimiter, quoteChar, or newline
+                    if (stringField.includes(delimiter) || stringField.includes(quoteChar) || stringField.includes('\n') || stringField.includes('\r')) {
+                        return quoteChar + stringField.replace(new RegExp(quoteChar, 'g'), quoteChar + quoteChar) + quoteChar;
+                    }
+                    return stringField;
+                }).join(delimiter);
+            }).join(newline);
+        }
+
+        // --- AUTH & SETUP ---
+        // Redirect to login if not logged in
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') {
+            localStorage.setItem('redirectUrl', window.location.href);
+            window.location.href = './login.html';
+        }
+        
+        const API_BASE_URL = '/tifi-lims/api'; 
+        let masterCache = {}; // Cache for reference data, schemas, and PKs
+        let allTablesAndViews = []; // Stores the full list of schema.table/view names
+        let currentTableData = []; // Stores the data for the currently displayed table
+        let currentTableSchema = []; // Stores column info for the currently displayed table
+        let currentTableName = null; // Stores the currently selected full table name (e.g., 'lab.samples')
+        let currentSchemaName = null; // Stores the currently selected schema name (e.g., 'lab')
+        let sortColumn = null; // Current column being sorted
+        let sortDirection = 'asc'; // Current sort direction ('asc' or 'desc')
+        let columnFilters = {}; // Stores filter text for each column
+        let isCurrentTableBase = false; // Flag to indicate if the current table is a base table
+        let currentTableType = null; // Stores the table_type from schema API ('BASE TABLE', 'VIEW', 'MATERIALIZED VIEW')
+
+        // --- Mapping Views to Primary Underlying Base Tables ---
+        // This dictionary helps the frontend suggest navigating to the base table for modification.
+        // It must be kept in sync with the backend's VIEW_TO_BASE_TABLE_MAPPING.
+        const VIEW_TO_BASE_TABLE_MAPPING = {
+            'lab.detailed_samples_view': 'lab.samples',
+            'lims.project_overview_view': 'lims.projects',
+            'lab.sample_workflow_progress_view': 'lab.samples',
+            'lims.reagent_status_view': 'lims.reagents',
+            'lab.sample_full_details_view': 'lab.samples',
+            'lims.project_personnel_view': 'lims.project_persons',
+            'lims.order_details_view': 'lims.orders',
+            // Add more mappings as needed for other views
+        };
+
+
+        // --- DOMContentLoaded ---
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("DOMContentLoaded: Initializing Data Management page.");
+            lucide.createIcons(); // Initialize Lucide icons
+            
+            // Display logged-in user info in sidebar
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if (user) {
+                let userName = 'User';
+                if (user.full_name) userName = user.full_name;
+                else if (user.person_id) userName = user.person_id;
+                else if (user.customer_name) userName = user.customer_name;
+                else if (user.contact_id) userName = user.contact_id;
+                document.getElementById('user-profile').innerHTML = `
+                    <span class="mr-2 p-2 bg-blue-500 text-white rounded-full text-xs font-bold">${userName.charAt(0).toUpperCase()}</span>
+                    <p class="font-semibold text-sm text-gray-800">${userName}</p>
+                `;
+            }
+            
+            // Logout button functionality
+            document.getElementById('logout-button').addEventListener('click', () => { 
+                console.log("Logout button clicked.");
+                sessionStorage.clear(); 
+                window.location.href = './login.html'; 
+            });
+            
+            initializePage();
+        });
+
+        // --- API & Data Handling ---
+
+        /**
+         * Generic API fetch helper function.
+         * Handles JSON and FormData (for file uploads), and error responses.
+         * @param {string} endpoint - The API endpoint to call (e.g., 'table/lab/samples').
+         * @param {object} options - Fetch options (method, body, headers).
+         * @returns {Promise<object>} - The JSON response from the API or an error object.
+         */
+        async function apiFetch(endpoint, options = {}) {
+            console.log(`API Fetch: Calling ${endpoint} with options:`, options);
+            try {
+                const isFormData = options.body instanceof FormData;
+                if (!isFormData && options.body && typeof options.body === 'object') {
+                    options.headers = { ...options.headers, 'Content-Type': 'application/json' };
+                    options.body = JSON.stringify(options.body);
+                }
+
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                
+                if (!response.ok) { 
+                    const errText = await response.text();
+                    console.error(`API Error Response for ${endpoint} (Status: ${response.status}):`, errText);
+                    try { 
+                        const errJson = JSON.parse(errText); 
+                        throw new Error(errJson.error || `API request failed with status ${response.status}`); 
+                    } catch (parseError) { 
+                        throw new Error(`API request failed: ${errText} (Status: ${response.status})`); 
+                    }
+                }
+                // Handle No Content response (204) or empty body
+                if (response.status === 204 || response.headers.get('content-length') === '0') {
+                    console.log(`API Fetch: Received empty response for ${endpoint}.`);
+                    return { success: true }; // Indicate success for operations like DELETE
+                }
+                const jsonResponse = await response.json();
+                console.log(`API Fetch: Successful response for ${endpoint}:`, jsonResponse);
+                return jsonResponse;
+            }
+            catch (error) { 
+                console.error(`API Error on ${endpoint}:`, error); 
+                return { error: error.message }; 
+            }
+        }
+
+        /**
+         * Fetches reference data for dropdowns (e.g., lists of persons, statuses).
+         * Caches results to avoid repeated API calls.
+         * @param {string} tableName - The table name (e.g., 'personal', 'status').
+         * @param {string} [schema='reference'] - The schema name.
+         * @returns {Promise<Array>} - The array of data records.
+         */
+        async function getReferenceData(tableName, schema = 'reference') {
+            const cacheKey = `${schema}.${tableName}`;
+            if (masterCache[cacheKey]) {
+                console.log(`Cache hit for reference data: ${cacheKey}`);
+                return masterCache[cacheKey];
+            }
+            console.log(`Fetching reference data for: ${cacheKey}`);
+            const data = await apiFetch(`table/${schema}/${tableName}`);
+            if(data && !data.error) {
+                masterCache[cacheKey] = data;
+            } else {
+                console.error(`Failed to fetch reference data for ${cacheKey}:`, data ? data.error : 'Unknown error');
+            }
+            return data;
+        }
+
+        /**
+         * Fetches the schema (column definitions) for a given table or view.
+         * Caches results.
+         * @param {string} schema - The schema name.
+         * @param {string} table - The table or view name.
+         * @returns {Promise<Array>} - An array of column objects.
+         */
+        async function getTableSchema(schema, table) {
+            const cacheKey = `schema.${schema}.${table}`;
+            if (masterCache[cacheKey]) {
+                console.log(`Cache hit for schema: ${cacheKey}`);
+                return masterCache[cacheKey];
+            }
+            console.log(`Fetching schema for: ${cacheKey}`);
+            const schemaData = await apiFetch(`table/${schema}/${table}/schema`);
+            if (schemaData && !schemaData.error) {
+                masterCache[cacheKey] = schemaData;
+            } else {
+                console.error(`Failed to fetch schema for ${cacheKey}:`, schemaData ? schemaData.error : 'Unknown error');
+            }
+            return schemaData;
+        }
+
+        /**
+         * Fetches all available table and view names from the backend.
+         * Caches results.
+         * @returns {Promise<Array>} - An array of full table/view names (e.g., 'lab.samples').
+         */
+        async function getAllTablesAndViews() {
+            if (allTablesAndViews.length > 0) {
+                console.log("Returning cached table and view names.");
+                return allTablesAndViews;
+            }
+            console.log("Fetching all table and view names.");
+            const tables = await apiFetch('table_names_for_forms');
+            if (tables && !tables.error) {
+                allTablesAndViews = tables;
+                return allTablesAndViews;
+            }
+            console.error("Failed to fetch all table names:", tables ? tables.error : 'Unknown error');
+            return [];
+        }
+
+        // --- UI Rendering ---
+
+        /**
+         * Formats a database column name into a more readable title.
+         * @param {string} columnName - The original column name (e.g., 'first_name').
+         * @returns {string} - The formatted name (e.g., 'First Name').
+         */
+        function formatColumnName(columnName) {
+            return columnName.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+        }
+        
+        /**
+         * Renders the main data table with provided data and schema.
+         * Includes dynamic headers with sorting and filtering inputs.
+         * @param {Array} dataToDisplay - The array of records to display.
+         * @param {Array} schemaInfo - The schema information for the columns.
+         */
+        function renderTable(dataToDisplay, schemaInfo) {
+            console.log("Rendering table with data:", dataToDisplay, "and schema:", schemaInfo);
+            const tableHeaders = document.getElementById('table-headers');
+            const tableBody = document.getElementById('dynamic-table-body');
+            if (!tableHeaders || !tableBody) {
+                console.error("Table elements not found for rendering.");
+                return;
+            }
+
+            // Clear previous content
+            tableHeaders.innerHTML = '';
+            tableBody.innerHTML = '';
+
+            if (!schemaInfo || schemaInfo.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500">No schema information available for this table.</td></tr>`;
+                return;
+            }
+
+            // Filter out specific columns that should not be displayed (e.g., large binary data, hashes)
+            const columnsToDisplay = schemaInfo.filter(col => 
+                !col.column_name.includes('attachment') && 
+                !col.column_name.includes('password_hash') && 
+                !col.column_name.includes('search_vector') &&
+                !col.column_name.includes('geom') // Exclude PostGIS geometry columns from direct display
+            );
+            
+            let headerHtml = '';
+            columnsToDisplay.forEach(col => {
+                headerHtml += `
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        <div class="sortable-header" data-column="${col.column_name}">
+                            <span>${formatColumnName(col.column_name)}</span>
+                            <i data-lucide="chevrons-up-down" class="sort-icon text-gray-400"></i>
+                        </div>
+                        <input type="text" placeholder="Filter ${formatColumnName(col.column_name)}..." class="filter-input" data-column="${col.column_name}" value="${columnFilters[col.column_name] || ''}">
+                    </th>
+                `;
+            });
+            headerHtml += `<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>`;
+            tableHeaders.innerHTML = headerHtml;
+
+            // Populate table body
+            if (!dataToDisplay || dataToDisplay.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="${columnsToDisplay.length + 1}" class="text-center p-4 text-gray-500">No data available for this table.</td></tr>`;
+            } else {
+                tableBody.innerHTML = dataToDisplay.map(row => {
+                    // Ensure date PKs are formatted for data-pk-values attribute
+                    const pkValues = getPkValues(row);
+                    const formattedPkValues = {};
+                    for (const key in pkValues) {
+                        const colSchema = schemaInfo.find(s => s.column_name === key);
+                        if (colSchema && col.data_type === 'date') { // Check col.data_type here
+                            formattedPkValues[key] = formatDateForInput(pkValues[key]);
+                        } else {
+                            formattedPkValues[key] = pkValues[key];
+                        }
+                    }
+
+                    let rowHtml = `<tr class="hover:bg-gray-50 cursor-pointer dynamic-table-row" data-pk-values='${JSON.stringify(formattedPkValues)}'>`;
+                    columnsToDisplay.forEach(col => {
+                        let value = row[col.column_name];
+                        if (value === null || value === undefined) {
+                            value = 'N/A';
+                        } else if (col.data_type === 'date' && value) {
+                            try { value = new Date(value).toLocaleDateString('en-CA'); } catch (e) { /* keep original */ }
+                        } else if (col.data_type === 'timestamp with time zone' && value) {
+                            try { value = new Date(value).toLocaleString(); } catch (e) { /* keep original */ }
+                        } else if (typeof value === 'object') { // Handle JSONB or other complex types
+                            value = JSON.stringify(value);
+                        }
+                        rowHtml += `<td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${value}</td>`;
+                    });
+                    // Only enable edit/delete buttons if it's a base table
+                    const actionButtonsDisabled = isCurrentTableBase ? '' : 'disabled';
+                    const actionButtonClasses = isCurrentTableBase ? 'text-gray-500 hover:text-blue-600' : 'text-gray-300 cursor-not-allowed';
+                    const deleteButtonClasses = isCurrentTableBase ? 'text-gray-500 hover:text-red-600' : 'text-gray-300 cursor-not-allowed';
+
+                    rowHtml += `
+                        <td class="px-4 py-3 flex space-x-2">
+                            <button class="edit-btn p-1 ${actionButtonClasses}" data-pk-values='${JSON.stringify(formattedPkValues)}' ${actionButtonsDisabled}><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                            <button class="delete-btn p-1 ${deleteButtonClasses}" data-pk-values='${JSON.stringify(formattedPkValues)}' ${actionButtonsDisabled}><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </td>
+                    </tr>`;
+                    return rowHtml;
+                }).join('');
+            }
+            
+            lucide.createIcons(); // Re-render Lucide icons after content is added
+            addTableActionListeners();
+            addFilterAndSortListeners();
+        }
+
+        /**
+         * Extracts primary key values from a given row based on the current table's PK definition.
+         * @param {object} row - The data row.
+         * @returns {object} - An object containing primary key column names and their values.
+         */
+        function getPkValues(row) {
+            const pkColumns = masterCache[`pk.${currentTableName}`] || [];
+            const pkValues = {};
+            pkColumns.forEach(pkCol => {
+                if (row[pkCol] !== undefined) {
+                    pkValues[pkCol] = row[pkCol];
+                }
+            });
+            console.log("Extracted PK Values:", pkValues);
+            return pkValues;
+        }
+
+        /**
+         * Formats a date string into 'YYYY-MM-DD' for HTML date inputs.
+         * @param {string} dateString - The date string from the database.
+         * @returns {string} - Formatted date string or empty string.
+         */
+        const formatDateForInput = (dateString) => {
+            if (!dateString) return '';
+            try {
+                const date = new Date(dateString);
+                return isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0];
+            } catch (e) {
+                console.warn("Failed to format date for input:", dateString, e);
+                return '';
+            }
+        };
+
+        /**
+         * Formats a datetime string into 'YYYY-MM-DDTHH:MM' for HTML datetime-local inputs.
+         * @param {string} dateTimeString - The datetime string from the database.
+         * @returns {string} - Formatted datetime string or empty string.
+         */
+        const formatDateTimeForInput = (dateTimeString) => {
+            if (!dateTimeString) return '';
+            try {
+                const date = new Date(dateTimeString);
+                return isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 16);
+            } catch (e) {
+                console.warn("Failed to format datetime for input:", dateTimeString, e);
+                return '';
+            }
+        };
+
+        /**
+         * Adds event listeners for table row clicks (to view details), edit buttons, and delete buttons.
+         */
+        function addTableActionListeners() {
+            console.log("Adding table action listeners.");
+            document.querySelectorAll('.dynamic-table-row').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    // Prevent row click from triggering if a button inside the row was clicked
+                    if (e.target.closest('button')) return; 
+                    console.log("Row clicked:", row.dataset.pkValues);
+                    // Remove 'selected' class from all rows
+                    document.querySelectorAll('.dynamic-table-row').forEach(r => r.classList.remove('table-row-selected'));
+                    // Add 'selected' class to the clicked row
+                    row.classList.add('table-row-selected');
+                    const pkValues = JSON.parse(row.dataset.pkValues);
+                    renderRecordDetails(pkValues); // Render details for the selected record
+                });
+            });
+
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                // Remove existing listener to prevent duplicates if this function is called multiple times
+                btn.removeEventListener('click', handleEditButtonClick);
+                btn.addEventListener('click', handleEditButtonClick);
+            });
+
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                // Remove existing listener to prevent duplicates
+                btn.removeEventListener('click', handleDeleteButtonClick);
+                btn.addEventListener('click', handleDeleteButtonClick);
+            });
+        }
+
+        async function handleEditButtonClick(e) {
+            e.stopPropagation(); // Prevent row click event from firing
+            const btn = e.currentTarget;
+            if (btn.disabled) return; // Do nothing if button is disabled
+
+            console.log("Edit button clicked:", btn.dataset.pkValues);
+            const pkValues = JSON.parse(btn.dataset.pkValues);
+            const record = currentTableData.find(r => {
+                return Object.keys(pkValues).every(key => {
+                    const colSchema = currentTableSchema.find(s => s.column_name === key);
+                    if (colSchema && colSchema.data_type === 'date') {
+                        return formatDateForInput(r[key]) === pkValues[key];
+                    }
+                    return String(r[key]) === String(pkValues[key]);
+                });
+            });
+            if (record) showCreateEditModal(record);
+            else console.error("Record not found for editing with PKs:", pkValues);
+        }
+
+        async function handleDeleteButtonClick(e) {
+            e.stopPropagation(); // Prevent row click event from firing
+            const btn = e.currentTarget;
+            if (btn.disabled) return; // Do nothing if button is disabled
+
+            console.log("Delete button clicked:", btn.dataset.pkValues);
+            const pkValues = JSON.parse(btn.dataset.pkValues);
+            const recordIdentifier = Object.values(pkValues).join(' / ');
+            
+            if (!confirm(`Are you sure you want to delete this record (${recordIdentifier}) from ${currentTableName}? This action cannot be undone.`)){
+                console.log("Delete cancelled by user.");
+                return;
+            }
+
+            let success = false;
+            const queryString = new URLSearchParams(pkValues).toString();
+            const [schemaName, tableName] = currentTableName.split('.');
+            const result = await apiFetch(`table/${schemaName}/${tableName}?${queryString}`, { method: 'DELETE' });
+            
+            if(result.success) {
+                success = true;
+            } else {
+                console.error("Failed to delete record:", result.error);
+                alert('Failed to delete record: ' + (result ? result.error : 'Unknown error'));
+            }
+            
+            if (success) {
+                console.log("Record deleted successfully. Reloading table.");
+                alert('Record deleted successfully!');
+                loadAndRenderTable(currentTableName);
+                document.getElementById('record-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="info" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a record to view its details</p></div></div>`;
+                lucide.createIcons();
+            }
+        }
+
+
+        /**
+         * Adds event listeners for sortable headers and filter inputs.
+         */
+        function addFilterAndSortListeners() {
+            console.log("Adding filter and sort listeners.");
+            document.querySelectorAll('.sortable-header').forEach(header => {
+                header.removeEventListener('click', handleSortClick); // Remove old listener to prevent duplicates
+                header.addEventListener('click', handleSortClick);
+            });
+            document.querySelectorAll('.filter-input').forEach(input => {
+                input.removeEventListener('input', handleFilterInput); // Remove old listener
+                input.addEventListener('input', handleFilterInput);
+            });
+            updateSortIcons(); // Update icons after (re)adding listeners
+        }
+
+        /**
+         * Handles click events on sortable table headers to apply sorting.
+         * @param {Event} e - The click event.
+         */
+        function handleSortClick(e) {
+            const column = e.currentTarget.dataset.column;
+            if (sortColumn === column) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = column;
+                sortDirection = 'asc';
+            }
+            applyFiltersAndSort(); // Re-apply filters and sort
+        }
+
+        /**
+         * Handles input events on filter fields to apply filtering.
+         * @param {Event} e - The input event.
+         */
+        function handleFilterInput(e) {
+            const column = e.target.dataset.column;
+            columnFilters[column] = e.target.value.toLowerCase();
+            applyFiltersAndSort(); // Re-apply filters and sort
+        }
+
+        /**
+         * Applies current filters and sorting to the `currentTableData` and re-renders the table.
+         */
+        function applyFiltersAndSort() {
+            let tempArray = [...currentTableData]; // Create a mutable copy
+
+            // Apply filters
+            for (const column in columnFilters) {
+                const filterText = columnFilters[column];
+                if (filterText) {
+                    tempArray = tempArray.filter(row => 
+                        String(row[column] || '').toLowerCase().includes(filterText)
+                    );
+                }
+            }
+
+            // Apply sorting
+            if (sortColumn) {
+                tempArray.sort((a, b) => {
+                    const valA = String(a[sortColumn] || '').toLowerCase();
+                    const valB = String(b[sortColumn] || '').toLowerCase();
+                    const colSchema = currentTableSchema.find(c => c.column_name === sortColumn);
+
+                    // Special handling for date/timestamp columns
+                    if (colSchema && ['date', 'timestamp with time zone', 'timestamp without time zone'].includes(colSchema.data_type)) { 
+                        const dateA = new Date(a[sortColumn]), dateB = new Date(b[sortColumn]);
+                        if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) return 0; // Handle invalid dates
+                        return sortDirection === 'asc' ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
+                    }
+                    // Default alphabetical sort for other types
+                    return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                });
+            }
+            renderTable(tempArray, currentTableSchema); // Render the sorted and filtered data
+            updateSortIcons(); // Update sort icons visually
+        }
+
+        /**
+         * Updates the visual sort icons in the table headers.
+         */
+        function updateSortIcons() {
+            // Reset all icons to default
+            document.querySelectorAll('.sortable-header i').forEach(icon => icon.setAttribute('data-lucide', 'chevrons-up-down'));
+            // Set icon for the currently sorted column
+            if (sortColumn) {
+                const currentSortIcon = document.querySelector(`.sortable-header[data-column="${sortColumn}"] i`);
+                if (currentSortIcon) currentSortIcon.setAttribute('data-lucide', sortDirection === 'asc' ? 'chevron-up' : 'chevron-down');
+            }
+            lucide.createIcons(); // Re-render icons
+        }
+
+        /**
+         * Renders detailed information for a selected record in the details panel.
+         * @param {object} pkValues - The primary key values of the selected record.
+         */
+        async function renderRecordDetails(pkValues) {
+            console.log("Rendering record details for PKs:", pkValues);
+            const container = document.getElementById('record-details-container');
+            container.innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="loader-2" class="animate-spin mx-auto h-12 w-12 text-blue-600"></i><p class="mt-2">Loading record details...</p></div></div>`;
+            lucide.createIcons();
+
+            // Find the full record object from the current table data
+            const record = currentTableData.find(r => {
+                return Object.keys(pkValues).every(key => {
+                    const colSchema = currentTableSchema.find(cs => cs.column_name === key);
+                    // Special handling for date PKs to ensure correct comparison
+                    if (colSchema && colSchema.data_type === 'date') {
+                        return formatDateForInput(r[key]) === pkValues[key];
+                    }
+                    return String(r[key]) === String(pkValues[key]);
+                });
+            });
+
+            if (!record) { 
+                console.error("Record not found in currentTableData for PKs:", pkValues);
+                container.innerHTML = `<div class="card p-6 text-red-500">Error: Record details not found.</div>`; 
+                return; 
+            }
+
+            // Helper for formatting dates for display
+            const formatDate = (dateString) => {
+                if (!dateString) return 'N/A';
+                try {
+                    const date = new Date(dateString);
+                    return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString('en-CA');
+                } catch (e) {
+                    console.warn("Failed to format date for display:", dateString, e);
+                    return 'N/A';
+                }
+            };
+
+            // Helper for formatting datetimes for display
+            const formatDateTime = (dateString) => {
+                if (!dateString) return 'N/A';
+                try {
+                    const date = new Date(dateString);
+                    return isNaN(date.getTime()) ? 'N/A' : date.toLocaleString();
+                } catch (e) {
+                    console.warn("Failed to format datetime for display:", dateString, e);
+                    return 'N/A';
+                }
+            };
+
+            // Helper for rendering a single detail row
+            const renderDetailRow = (label, value) => {
+                if (value === null || value === undefined || String(value).trim() === '' || value === 'N/A') {
+                    return ''; // Don't render empty rows
+                }
+                return `<div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100"><dt class="font-medium text-gray-500">${label}</dt><dd class="text-gray-900 break-all">${value}</dd></div>`;
+            };
+
+            let detailsHtml = `<div class="space-y-3 text-sm">`;
+            detailsHtml += `
+                <div class="accordion-item">
+                    <button class="accordion-header active" data-accordion="core-info">
+                        <span class="flex items-center"><i data-lucide="info" class="w-5 h-5 mr-2"></i> Core Information</span>
+                        <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                    </button>
+                    <div class="accordion-content open">
+                        <dl class="space-y-2 py-2">
+                            ${currentTableSchema.filter(col => 
+                                !col.column_name.includes('attachment') && 
+                                !col.column_name.includes('password_hash') && 
+                                !col.column_name.includes('search_vector') &&
+                                !col.column_name.includes('geom') // Exclude PostGIS geometry columns
+                            ).map(col => {
+                                let value = record[col.column_name];
+                                if (value === null || value === undefined) {
+                                    value = 'N/A';
+                                } else if (col.data_type === 'date') {
+                                    value = formatDate(value);
+                                } else if (['timestamp with time zone', 'timestamp without time zone'].includes(col.data_type)) {
+                                    value = formatDateTime(value);
+                                } else if (typeof value === 'object') { // For JSONB
+                                    value = JSON.stringify(value, null, 2); // Pretty print JSON
+                                } else if (col.column_name === 'attachment_link') {
+                                    value = `<a href="${value}" target="_blank" class="text-blue-600 hover:underline">${value}</a>`;
+                                }
+                                return renderDetailRow(formatColumnName(col.column_name), value);
+                            }).join('')}
+                        </dl>
+                    </div>
+                </div>
+            `;
+
+            // Add "Go to Base Table" button for views
+            if (currentTableType === 'VIEW' || currentTableType === 'MATERIALIZED VIEW') {
+                const baseTable = VIEW_TO_BASE_TABLE_MAPPING[currentTableName];
+                if (baseTable) {
+                    detailsHtml += `
+                        <div class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md text-yellow-800">
+                            <p class="font-semibold mb-2">This is a View.</p>
+                            <p class="mb-2">Direct modification is not possible. To modify data, navigate to its underlying base table:</p>
+                            <button id="go-to-base-table-btn" data-base-table="${baseTable}" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow transition-all">
+                                <i data-lucide="arrow-right" class="w-5 h-5 mr-2"></i>Go to ${baseTable}
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    detailsHtml += `
+                        <div class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md text-yellow-800">
+                            <p class="font-semibold mb-2">This is a View.</p>
+                            <p>Direct modification is not possible. This view is complex or its base table is not mapped. Please navigate to the relevant base tables manually to modify data.</p>
+                        </div>
+                    `;
+                }
+            }
+
+
+            detailsHtml += `</div>`; // Close main space-y-3 div
+
+            container.innerHTML = `<div class="card p-6 h-full flex flex-col"><div class="flex justify-between items-start mb-4"><div><h2 class="text-2xl font-bold text-gray-800">${record[currentTableSchema.find(c => c.is_primary_key)?.column_name] || 'Record Details'}</h2><p class="text-sm text-gray-500">${currentTableName}</p></div></div><div class="flex-grow overflow-y-auto pr-2">${detailsHtml}</div></div>`;
+            lucide.createIcons(); 
+            // Re-attach accordion listeners for newly rendered content
+            document.querySelectorAll('.accordion-header').forEach(header => {
+                header.addEventListener('click', () => {
+                    const content = header.nextElementSibling;
+                    header.classList.toggle('active');
+                    content.classList.toggle('open');
+                    lucide.createIcons();
+                });
+            });
+
+            // Add listener for "Go to Base Table" button
+            const goToBaseTableBtn = document.getElementById('go-to-base-table-btn');
+            if (goToBaseTableBtn) {
+                goToBaseTableBtn.addEventListener('click', (e) => {
+                    const baseTableName = e.currentTarget.dataset.baseTable;
+                    const [baseSchema, baseTable] = baseTableName.split('.');
+                    document.getElementById('schema-select').value = baseSchema;
+                    populateTableSelect(baseSchema); // Re-populate table select for the new schema
+                    document.getElementById('table-select').value = baseTableName;
+                    loadAndRenderTable(baseTableName);
+                });
+            }
+        }
+
+        // --- Modal Logic ---
+
+        /**
+         * Displays a generic modal with provided content.
+         * @param {string} content - The HTML content for the modal body.
+         * @returns {object} - An object containing a `closeModal` function.
+         */
+        function showModal(content) {
+            const container = document.getElementById('modal-container');
+            container.innerHTML = content;
+            const modal = container.querySelector('.modal-overlay');
+            const modalContent = container.querySelector('.modal-content');
+            // Animate modal entry
+            setTimeout(() => modalContent.classList.add('open'), 10); // Add 'open' class for animation
+
+            const closeModal = () => {
+                // Animate modal exit
+                modalContent.classList.remove('open'); // Remove 'open' class
+                setTimeout(() => container.innerHTML = '', 300); // Remove from DOM after animation
+            };
+            // Close modal when clicking outside content or on close button
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+            container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+            return { closeModal };
+        }
+
+        /**
+         * Displays a modal for creating or editing a record.
+         * Dynamically generates form fields based on the current table's schema.
+         * @param {object} [record=null] - The record object to edit, or null for a new record.
+         */
+        async function showCreateEditModal(record = null) {
+            console.log("Showing create/edit modal. Record:", record);
+            const isEditing = record !== null;
+            const targetTableSchema = currentTableSchema;
+            const schemaName = currentSchemaName;
+            const tableName = currentTableName.split('.')[1]; // Get just the table name
+
+            // Fetch common reference data for dropdowns
+            const [persons, statuses, projects, samplesTypes, customers, cruises, genes, units, species, externalContacts, suppliers, inventoryItems, publicationTypes, workflows, workflowSteps, equipment, primers, taxon] = await Promise.all([ 
+                getReferenceData('personal', 'reference'), 
+                getReferenceData('status', 'reference'),
+                getReferenceData('projects', 'lims'),
+                getReferenceData('samples_type', 'reference'),
+                getReferenceData('customers', 'lims'),
+                getReferenceData('cruises', 'lims'),
+                getReferenceData('gene', 'reference'),
+                getReferenceData('units', 'reference'),
+                getReferenceData('species', 'reference'),
+                getReferenceData('external_contacts', 'lims'),
+                getReferenceData('suppliers', 'lims'),
+                getReferenceData('inventory_items', 'lims'),
+                getReferenceData('publication_type', 'lims'),
+                getReferenceData('workflows', 'lims'),
+                getReferenceData('workflow_steps', 'lims'),
+                getReferenceData('equipment', 'lims'),
+                getReferenceData('primers', 'lims'),
+                getReferenceData('taxon', 'reference')
+            ]);
+
+            let formFieldsHtml = '';
+            targetTableSchema.forEach(col => {
+                console.log(`Processing column: ${col.column_name}, Data Type: ${col.data_type}, Is Primary Key: ${col.is_primary_key}, Column Default: ${col.column_default}`);
+                const isAutoGenerated = col.column_default && col.column_default.includes('nextval');
+                
+                const shouldSkip = col.column_name.includes('password_hash') ||
+                                   col.column_name.includes('search_vector') ||
+                                   col.column_name.includes('geom') ||
+                                   (isEditing && col.is_primary_key) || // Skip PKs if editing
+                                   (!isEditing && isAutoGenerated && col.is_primary_key); // Skip auto-generated PKs for new entries
+
+                console.log(`  is_primary_key: ${col.is_primary_key}, isAutoGenerated: ${isAutoGenerated}, isEditing: ${isEditing}, shouldSkip: ${shouldSkip}`);
+
+                if (shouldSkip) {
+                    console.log(`  Skipping column: ${col.column_name}`);
+                    return; // Skip this column
+                }
+
+                let value = isEditing ? (record[col.column_name] || '') : (col.column_default ? col.column_default.replace(/::[a-z_]+/g, '').replace(/'/g, '') : '');
+                let inputType = 'text'; // Default to text to allow flexible input
+                let extraAttrs = '';
+                let label = formatColumnName(col.column_name);
+                let optionsHtml = '';
+
+                // Special handling for file attachments
+                if (col.column_name === 'attachment') {
+                    formFieldsHtml += `
+                        <div>
+                            <label class="block text-gray-700 text-sm font-bold mb-1">${label} (File)</label>
+                            <input type="file" name="${col.column_name}" class="w-full mt-1 p-2 border rounded">
+                            ${isEditing && record.attachment ? `<p class="text-xs text-gray-500 mt-1">Existing attachment present. Uploading new file will replace it.</p>` : ''}
+                        </div>
+                    `;
+                    return;
+                } else if (col.column_name === 'attachment_link') {
+                    inputType = 'url';
+                }
+
+                // Determine input type based on data type
+                switch (col.data_type) {
+                    case 'integer':
+                    case 'numeric':
+                    case 'bigint':
+                        inputType = 'number'; // Use number type for numeric inputs
+                        break;
+                    case 'date':
+                        inputType = 'date';
+                        if (isEditing) value = formatDateForInput(value);
+                        break;
+                    case 'timestamp with time zone':
+                    case 'timestamp without time zone':
+                        inputType = 'datetime-local';
+                        if (isEditing) value = formatDateTimeForInput(value);
+                        break;
+                    case 'boolean':
+                        inputType = 'checkbox';
+                        if (isEditing) extraAttrs = value ? 'checked' : '';
+                        value = ''; // Checkboxes don't use value attribute for checked state
+                        break;
+                    case 'text':
+                    case 'character varying':
+                        // Use textarea for long text fields (notes, aim, method, protocol_text)
+                        if (col.column_name.includes('notes') || col.column_name.includes('aim') || col.column_name.includes('method') || col.column_name.includes('protocol_text') || col.column_name.includes('description') || col.column_name.includes('body')) {
+                            formFieldsHtml += `
+                                <div class="md:col-span-2">
+                                    <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
+                                    <textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-24">${value}</textarea>
+                                </div>
+                            `;
+                            return;
+                        }
+                        break;
+                    case 'jsonb':
+                        // Use textarea for JSONB fields, pre-filling with pretty-printed JSON
+                        formFieldsHtml += `
+                            <div class="md:col-span-2">
+                                <label class="block text-gray-700 text-sm font-bold mb-1">${label} (JSON)</label>
+                                <textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-24">${value ? JSON.stringify(value, null, 2) : ''}</textarea>
+                            </div>
+                        `;
+                        return;
+                }
+
+                // Special handling for dropdowns based on common FK patterns
+                if (col.column_name.endsWith('_id') && col.column_name !== 'experiment_id' && col.column_name !== 'sample_id' && col.column_name !== 'sampling_id' && col.column_name !== 'fishing_record_id' && col.column_name !== 'conversation_id') {
+                    let refData = [];
+                    let valueKey = col.column_name; // Default value key for option
+                    let displayKey = col.column_name; // Default display key for option
+
+                    // Map common foreign key patterns to their respective reference data
+                    // Ensure displayKey exists in refData, otherwise fallback to valueKey or a generic message
+                    const getDisplayValue = (item, displayKey, valueKey) => {
+                        if (item && item[displayKey] !== undefined && item[displayKey] !== null) return item[displayKey];
+                        if (item && item[valueKey] !== undefined && item[valueKey] !== null) return item[valueKey];
+                        return `ID: ${item[valueKey]}`; // Fallback if no displayable key
+                    };
+
+                    if (col.column_name.includes('person_id') && persons) {
+                        refData = persons;
+                        displayKey = 'full_name';
+                    } else if (col.column_name.includes('status_id') && statuses) {
+                        refData = statuses;
+                        displayKey = 'status_id'; 
+                    } else if (col.column_name.includes('project_id') && projects) {
+                        refData = projects;
+                        displayKey = 'title';
+                    } else if (col.column_name.includes('sample_type_id') && samplesTypes) {
+                        refData = samplesTypes;
+                        displayKey = 'sample_type_abrv';
+                    } else if (col.column_name.includes('customer_id') && customers) {
+                        refData = customers;
+                        displayKey = 'customer_name';
+                        valueKey = 'customer_id'; 
+                    } else if (col.column_name.includes('cruise_id') && cruises) {
+                        refData = cruises;
+                        displayKey = 'cruise_id'; 
+                    } else if (col.column_name.includes('gene_id') && genes) {
+                        refData = genes;
+                        displayKey = 'gene_id';
+                    } else if (col.column_name.includes('unit_id') && units) {
+                        refData = units;
+                        displayKey = 'unit_abbreviation';
+                    } else if (col.column_name.includes('species_id') && species) {
+                        refData = species;
+                        displayKey = 'en_name';
+                    } else if (col.column_name.includes('contact_id') && externalContacts) {
+                        refData = externalContacts;
+                        displayKey = 'full_name';
+                    } else if (col.column_name.includes('supplier_id') && suppliers) {
+                        refData = suppliers;
+                        displayKey = 'supplier_name';
+                    } else if (col.column_name.includes('item_id') && inventoryItems) {
+                        refData = inventoryItems;
+                        displayKey = 'item_name';
+                    } else if (col.column_name.includes('publication_type_id') && publicationTypes) {
+                        refData = publicationTypes;
+                        displayKey = 'publication_type_id';
+                    } else if (col.column_name.includes('workflow_id') && workflows) {
+                        refData = workflows;
+                        displayKey = 'workflow_name';
+                    } else if (col.column_name.includes('step_id') && workflowSteps) {
+                        refData = workflowSteps;
+                        displayKey = 'step_name';
+                    } else if (col.column_name.includes('equipment_id') && equipment) {
+                        refData = equipment;
+                        displayKey = 'equipment_name';
+                    } else if (col.column_name.includes('primer_id') && primers) {
+                        refData = primers;
+                        displayKey = 'primer_id';
+                    } else if (col.column_name.includes('taxon_id') && taxon) {
+                        refData = taxon;
+                        displayKey = 'en_name';
+                    }
+                    
+                    if (refData.length > 0) {
+                        console.log(`  Attempting to create dropdown for ${col.column_name}. refData length: ${refData.length}, displayKey: ${displayKey}, valueKey: ${valueKey}`);
+                        optionsHtml = `<option value="">-- Select ${label} --</option>`;
+                        optionsHtml += refData.map(item => {
+                            const displayValue = getDisplayValue(item, displayKey, valueKey);
+                            console.log(`    Option: value=${item[valueKey]}, text=${displayValue}, selected=${value == item[valueKey]}`);
+                            return `<option value="${item[valueKey]}" ${value == item[valueKey] ? 'selected' : ''}>${displayValue}</option>`;
+                        }).join('');
+                        formFieldsHtml += `
+                            <div>
+                                <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
+                                <select name="${col.column_name}" class="w-full mt-1 p-2 border rounded">${optionsHtml}</select>
+                            </div>
+                        `;
+                        return; // Skip default input if dropdown is generated
+                    } else {
+                        console.log(`  No reference data found for ${col.column_name}. Falling back to text input.`);
+                    }
+                }
+
+                // Default input field for other columns
+                formFieldsHtml += `
+                    <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
+                        <input type="${inputType}" name="${col.column_name}" ${col.is_nullable === 'NO' && !col.column_default ? 'required' : ''} class="w-full mt-1 p-2 border rounded" value="${value}" ${extraAttrs}>
+                    </div>
+                `;
+            });
+
+            const modalHTML = `
+                <div class="modal-overlay">
+                    <div class="modal-content">
+                        <div class="flex justify-between items-center mb-6 shrink-0">
+                            <h2 class="text-2xl font-bold">${isEditing ? 'Edit' : 'Create'} ${formatColumnName(tableName)} Record</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                        </div>
+                        <form id="record-form" class="flex-grow overflow-y-auto pr-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                ${formFieldsHtml}
+                            </div>
+                        </form>
+                        <div class="pt-4 flex justify-end shrink-0">
+                            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">
+                                ${isEditing ? 'Save Changes' : 'Create Record'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+
+            document.getElementById('record-form').onsubmit = async (e) => {
+                e.preventDefault();
+                
+                const formElement = e.target;
+                const attachmentInput = formElement.querySelector('input[name="attachment"]');
+                const hasFileSelected = attachmentInput && attachmentInput.files && attachmentInput.files.length > 0;
+                
+                let body;
+                if (hasFileSelected) {
+                    console.log("File detected. Using FormData for submission.");
+                    body = new FormData(formElement); // Use FormData for file uploads
+                } else {
+                    console.log("No file selected. Using JSON for submission.");
+                    body = {};
+                    const formData = new FormData(formElement); // Still use FormData to easily get all fields
+                    formData.forEach((value, key) => {
+                        const colSchema = targetTableSchema.find(s => s.column_name === key);
+                        if (colSchema && (colSchema.data_type === 'integer' || colSchema.data_type === 'numeric' || colSchema.data_type === 'bigint')) {
+                            // Convert numeric inputs, allowing for comma as decimal separator
+                            body[key] = value === '' ? null : Number(value.replace(',', '.'));
+                        } else if (colSchema && col.data_type === 'boolean') { 
+                            // Checkbox value is 'on' if checked, '' if unchecked
+                            body[key] = formElement.querySelector(`[name="${key}"]`).checked; 
+                        } else if (colSchema && col.data_type === 'jsonb') {
+                            try {
+                                body[key] = value === '' ? null : JSON.parse(value);
+                            } catch (jsonError) {
+                                alert(`Invalid JSON for ${formatColumnName(key)}: ${jsonError.message}`);
+                                throw new Error(`Invalid JSON for ${formatColumnName(key)}`); // Stop submission
+                            }
+                        }
+                        else {
+                            body[key] = value === '' ? null : value;
+                        }
+                    });
+                }
+
+                const method = isEditing ? 'PUT' : 'POST';
+                
+                let endpoint = `table/${schemaName}/${tableName}`;
+                if (isEditing) {
+                    const pkValuesForApi = {};
+                    // Iterate over the original 'record' (which contains the PKs)
+                    // and format them correctly for the URLSearchParams
+                    const originalPkValues = getPkValues(record); // Get PKs from the original record
+                    for (const key in originalPkValues) {
+                        const colSchema = targetTableSchema.find(s => s.column_name === key);
+                        if (colSchema && colSchema.data_type === 'date') {
+                            pkValuesForApi[key] = formatDateForInput(originalPkValues[key]);
+                        } else {
+                            pkValuesForApi[key] = originalPkValues[key];
+                        }
+                    }
+                    const pkQueryString = new URLSearchParams(pkValuesForApi).toString();
+                    endpoint += `?${pkQueryString}`;
+                    console.log("Edit endpoint with PKs:", endpoint);
+                }
+                
+                console.log(`Submitting form: Method=${method}, Endpoint=${endpoint}, Body:`, body);
+                const result = await apiFetch(endpoint, { method, body });
+                if (result && !result.error) { 
+                    console.log("API call successful:", result);
+                    alert(`${isEditing ? 'Updated' : 'Created'} record successfully!`);
+                    closeModal(); 
+                    loadAndRenderTable(currentTableName); 
+                    // If editing, re-select the row and re-render details
+                    if (isEditing) {
+                         const updatedRecordPkValues = {};
+                         const originalPkValues = getPkValues(record); // Still use original for re-fetch
+                         for (const key in originalPkValues) {
+                            const colSchema = targetTableSchema.find(s => s.column_name === key);
+                            if (colSchema && colSchema.data_type === 'date') {
+                                // For dates, use the value from the form (which is already YYYY-MM-DD)
+                                updatedRecordPkValues[key] = formElement.querySelector(`[name="${key}"]`)?.value || originalPkValues[key];
+                            } else {
+                                updatedRecordPkValues[key] = formElement.querySelector(`[name="${key}"]`)?.value || originalPkValues[key];
+                            }
+                         }
+                         // Re-select the row and re-render details to show updated data
+                         setTimeout(() => {
+                            const row = document.querySelector(`.dynamic-table-row[data-pk-values='${JSON.stringify(updatedRecordPkValues)}']`);
+                            if (row) { 
+                                document.querySelectorAll('.dynamic-table-row').forEach(r => r.classList.remove('table-row-selected'));
+                                row.classList.add('table-row-selected');
+                                renderRecordDetails(updatedRecordPkValues); 
+                            }
+                        }, 100);
+                    }
+                } else {
+                    console.error("API call failed:", result);
+                    alert(`Failed to ${isEditing ? 'save' : 'create'} record: ` + (result ? result.error : 'Unknown error')); 
+                }
+            };
+        }
+
+        /**
+         * Displays a modal for bulk CSV upload.
+         * Allows users to upload a CSV file to insert multiple records.
+         */
+        async function showBulkUploadModal() {
+            const modalHTML = `
+                <div class="modal-overlay">
+                    <div class="modal-content">
+                        <div class="flex justify-between items-center mb-6 shrink-0">
+                            <h2 class="text-2xl font-bold">Bulk CSV Upload for ${formatColumnName(currentTableName.split('.')[1])}</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                        </div>
+                        <p class="text-gray-700 mb-4">Upload a CSV file. The first row should contain column headers matching your database table.</p>
+                        <input type="file" id="csv-file-input" accept=".csv" class="w-full p-2 border rounded mb-4">
+                        <div class="flex justify-end shrink-0">
+                            <button id="upload-csv-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
+                                <i data-lucide="upload" class="w-5 h-5 mr-2"></i>Upload CSV
+                            </button>
+                        </div>
+                        <div id="upload-status" class="mt-4 text-center text-sm"></div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+
+            document.getElementById('upload-csv-btn').addEventListener('click', () => {
+                const fileInput = document.getElementById('csv-file-input');
+                const statusDiv = document.getElementById('upload-status');
+                const file = fileInput.files[0];
+
+                if (!file) {
+                    statusDiv.innerHTML = `<p class="text-red-500">Please select a CSV file.</p>`;
+                    return;
+                }
+
+                statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Processing CSV...</p>`;
+                lucide.createIcons();
+
+                // Using the custom unparseCSV function, but for parsing, we still need PapaParse.
+                // Re-adding PapaParse for parsing only.
+                // If this still causes issues, we might need to implement a custom CSV parser as well.
+                const script = document.createElement('script');
+                script.src = "https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js";
+                script.onload = () => {
+                    PapaParse.parse(file, {
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: async (results) => {
+                            if (results.errors.length) {
+                                statusDiv.innerHTML = `<p class="text-red-500">CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}</p>`;
+                                return;
+                            }
+                            if (!results.data.length) {
+                                statusDiv.innerHTML = `<p class="text-red-500">No data found in CSV.</p>`;
+                                return;
+                            }
+
+                            // Convert empty strings to null for database insertion
+                            const recordsToUpload = results.data.map(row => {
+                                const newRow = {};
+                                for (const key in row) {
+                                    newRow[key] = row[key] === '' ? null : row[key];
+                                }
+                                return newRow;
+                            });
+
+                            statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Uploading ${recordsToUpload.length} records...</p>`;
+                            lucide.createIcons();
+
+                            const [schemaName, tableName] = currentTableName.split('.');
+                            const result = await apiFetch(`table/${schemaName}/${tableName}/batch_upload`, {
+                                method: 'POST',
+                                body: recordsToUpload
+                            });
+
+                            if (result && result.success) {
+                                statusDiv.innerHTML = `<p class="text-green-600">Successfully uploaded ${result.inserted_rows} records!</p>`;
+                                loadAndRenderTable(currentTableName);
+                                setTimeout(closeModal, 2000);
+                            } else {
+                                statusDiv.innerHTML = `<p class="text-red-500">Bulk upload failed: ${result ? result.error : 'Unknown error'}</p>`;
+                            }
+                            lucide.createIcons();
+                        }
+                    });
+                };
+                script.onerror = () => {
+                    statusDiv.innerHTML = `<p class="text-red-500">Error loading PapaParse library for CSV upload. Please check network connection.</p>`;
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        /**
+         * Displays a modal for bulk modification of records.
+         * Allows users to upload a CSV or JSON file containing records to update.
+         */
+        async function showBulkModifyModal() {
+            const modalHTML = `
+                <div class="modal-overlay">
+                    <div class="modal-content">
+                        <div class="flex justify-between items-center mb-6 shrink-0">
+                            <h2 class="text-2xl font-bold">Bulk Modify for ${formatColumnName(currentTableName.split('.')[1])}</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                        </div>
+                        <p class="text-gray-700 mb-4">Upload a CSV or JSON file containing records to update. Each record must include all primary key column(s) for identification, and any fields you wish to modify.</p>
+                        <input type="file" id="bulk-modify-file-input" accept=".csv,.json" class="w-full p-2 border rounded mb-4">
+                        <div class="flex justify-end shrink-0">
+                            <button id="perform-bulk-modify-btn" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
+                                <i data-lucide="file-edit" class="w-5 h-5 mr-2"></i>Perform Bulk Modify
+                            </button>
+                        </div>
+                        <div id="modify-status" class="mt-4 text-center text-sm"></div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+
+            document.getElementById('perform-bulk-modify-btn').addEventListener('click', () => {
+                const fileInput = document.getElementById('bulk-modify-file-input');
+                const statusDiv = document.getElementById('modify-status');
+                const file = fileInput.files[0];
+
+                if (!file) {
+                    statusDiv.innerHTML = `<p class="text-red-500">Please select a file (CSV or JSON).</p>`;
+                    return;
+                }
+
+                statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Processing file...</p>`;
+                lucide.createIcons();
+
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    let recordsToModify = [];
+                    try {
+                        if (file.type === 'application/json') {
+                            recordsToModify = JSON.parse(e.target.result);
+                            if (!Array.isArray(recordsToModify)) {
+                                throw new Error("JSON file must contain an array of objects.");
+                            }
+                        } else if (file.type === 'text/csv') {
+                            // Using PapaParse for CSV parsing
+                            const script = document.createElement('script');
+                            script.src = "https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js";
+                            script.onload = () => {
+                                const parseResult = PapaParse.parse(e.target.result, { header: true, skipEmptyLines: true });
+                                if (parseResult.errors.length) {
+                                    throw new Error(`CSV parsing errors: ${parseResult.errors.map(err => err.message).join(', ')}`);
+                                }
+                                recordsToModify = parseResult.data;
+                                // Continue with the rest of the bulk modify logic here
+                                processBulkModifyRecords(recordsToModify, statusDiv, closeModal);
+                            };
+                            script.onerror = () => {
+                                statusDiv.innerHTML = `<p class="text-red-500">Error loading PapaParse library for CSV parsing. Please check network connection.</p>`;
+                            };
+                            document.head.appendChild(script);
+                            return; // Exit here, processing continues in script.onload
+                        } else {
+                            throw new Error("Unsupported file type. Please upload a CSV or JSON file.");
+                        }
+                        // If JSON, or if CSV parsing was handled by PapaParse onload, continue here
+                        processBulkModifyRecords(recordsToModify, statusDiv, closeModal);
+
+                    } catch (error) {
+                        console.error("Bulk modify file processing error:", error);
+                        statusDiv.innerHTML = `<p class="text-red-500">Error processing file: ${error.message}</p>`;
+                        lucide.createIcons();
+                    }
+                };
+                reader.readAsText(file);
+            });
+        }
+
+        async function processBulkModifyRecords(recordsToModify, statusDiv, closeModal) {
+            if (!recordsToModify.length) {
+                statusDiv.innerHTML = `<p class="text-red-500">No records found in the file.</p>`;
+                return;
+            }
+
+            // Convert empty strings to null for database update
+            const recordsToModifyCleaned = recordsToModify.map(row => {
+                const newRow = {};
+                for (const key in row) {
+                    newRow[key] = row[key] === '' ? null : row[key];
+                }
+                return newRow;
+            });
+
+            statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Performing bulk update on ${recordsToModifyCleaned.length} records...</p>`;
+            lucide.createIcons();
+
+            const [schemaName, tableName] = currentTableName.split('.');
+            const result = await apiFetch(`table/${schemaName}/${tableName}/batch_update`, {
+                method: 'PUT',
+                body: recordsToModifyCleaned
+            });
+
+            if (result && result.success) {
+                statusDiv.innerHTML = `<p class="text-green-600">Successfully updated ${result.updated_rows} records!</p>`;
+                loadAndRenderTable(currentTableName);
+                setTimeout(closeModal, 2000);
+            } else {
+                statusDiv.innerHTML = `<p class="text-red-500">Bulk modify failed: ${result ? result.error : 'Unknown error'}</p>`;
+            }
+            lucide.createIcons();
+        }
+
+
+        /**
+         * Displays a modal for selecting a table to download a CSV template for.
+         */
+        async function showDownloadTemplateModal() {
+            const allSchemaTableNames = await getAllTablesAndViews();
+            let optionsHtml = '<option value="">-- Select Table for Template --</option>';
+            allSchemaTableNames.forEach(name => {
+                optionsHtml += `<option value="${name}">${name}</option>`;
+            });
+
+            const modalHTML = `
+                <div class="modal-overlay">
+                    <div class="modal-content">
+                        <div class="flex justify-between items-center mb-6 shrink-0">
+                            <h2 class="text-2xl font-bold">Download CSV Template</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                        </div>
+                        <p class="text-gray-700 mb-4">Select a table to download an empty CSV template with its column headers.</p>
+                        <select id="template-table-select" class="w-full p-2 border rounded mb-4">
+                            ${optionsHtml}
+                        </select>
+                        <div class="flex justify-end shrink-0">
+                            <button id="confirm-download-template-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
+                                <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download
+                            </button>
+                        </div>
+                        <div id="template-download-status" class="mt-4 text-center text-sm"></div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+
+            document.getElementById('confirm-download-template-btn').addEventListener('click', async () => {
+                const selectedTable = document.getElementById('template-table-select').value;
+                const statusDiv = document.getElementById('template-download-status');
+
+                if (!selectedTable) {
+                    statusDiv.innerHTML = `<p class="text-red-500">Please select a table.</p>`;
+                    return;
+                }
+
+                statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Generating template...</p>`;
+                lucide.createIcons();
+
+                try {
+                    const [schemaName, tableName] = selectedTable.split('.');
+                    const schema = await getTableSchema(schemaName, tableName);
+
+                    if (!schema || schema.error) {
+                        statusDiv.innerHTML = `<p class="text-red-500">Failed to fetch schema for template: ${schema ? schema.error : 'Unknown error'}</p>`;
+                        console.error("Failed to fetch schema for template:", schema);
+                        return;
+                    }
+
+                    let headers = schema.filter(col => 
+                        !col.column_name.includes('attachment') && 
+                        !col.column_name.includes('password_hash') && 
+                        !col.column_name.includes('search_vector') &&
+                        !col.column_name.includes('geom') && 
+                        !(col.column_default && col.column_default.includes('nextval')) && 
+                        !col.column_name.includes('created_at') &&
+                        !col.column_name.includes('last_modified_at')
+                    ).map(col => col.column_name);
+
+                    const pkCols = masterCache[`pk.${selectedTable}`] || [];
+                    pkCols.forEach(pkCol => {
+                        const pkColSchema = schema.find(c => c.column_name === pkCol);
+                        if (pkColSchema && !(pkColSchema.column_default && pkColSchema.column_default.includes('nextval'))) {
+                            if (!headers.includes(pkCol)) {
+                                headers.unshift(pkCol);
+                            }
+                        }
+                    });
+
+                    console.log("Generated CSV Headers:", headers);
+                    const csv = unparseCSV([headers]); // Use the custom unparseCSV function
+                    console.log("Generated CSV content:", csv);
+                    
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = `${tableName}_template.csv`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(link.href);
+                    
+                    statusDiv.innerHTML = `<p class="text-green-600">Template downloaded successfully!</p>`;
+                    setTimeout(closeModal, 1500);
+                } catch (error) {
+                    console.error("Error during template download:", error);
+                    statusDiv.innerHTML = `<p class="text-red-500">Error generating or downloading template: ${error.message}</p>`;
+                }
+            });
+        }
+
+
+        // --- Page Initialization & Dropdown Logic ---
+
+        /**
+         * Initializes the page: populates dropdowns and sets up event listeners.
+         */
+        async function initializePage() {
+            await populateSchemaSelect(); // Populate schema dropdown first
+            setupEventListeners(); // Set up all other event listeners
+        }
+
+        /**
+         * Populates the schema selection dropdown.
+         */
+        async function populateSchemaSelect() {
+            const schemaSelect = document.getElementById('schema-select');
+            schemaSelect.innerHTML = '<option value="">-- Select Schema --</option>'; // Default option
+
+            const allNames = await getAllTablesAndViews();
+            const schemas = [...new Set(allNames.map(name => name.split('.')[0]))].sort(); // Get unique schema names and sort them
+
+            schemas.forEach(schema => {
+                const option = document.createElement('option');
+                option.value = schema;
+                option.textContent = schema;
+                schemaSelect.appendChild(option);
+            });
+        }
+
+        /**
+         * Populates the table/view selection dropdown based on the selected schema.
+         * @param {string} selectedSchema - The currently selected schema name.
+         */
+        function populateTableSelect(selectedSchema) {
+            const tableSelect = document.getElementById('table-select');
+            tableSelect.innerHTML = '<option value="">-- Select Table/View --</option>'; // Default option
+
+            if (selectedSchema) {
+                const tablesInSchema = allTablesAndViews.filter(name => name.startsWith(`${selectedSchema}.`))
+                                                        .map(name => name.split('.')[1])
+                                                        .sort(); // Get table names for schema and sort them
+
+                tablesInSchema.forEach(table => {
+                    const option = document.createElement('option');
+                    option.value = `${selectedSchema}.${table}`;
+                    option.textContent = table;
+                    tableSelect.appendChild(option);
+                });
+            }
+        }
+
+        /**
+         * Loads data and schema for the selected table/view and renders the table.
+         * @param {string} fullTableName - The full name of the table/view (e.g., 'lab.samples').
+         */
+        async function loadAndRenderTable(fullTableName) {
+            console.log(`loadAndRenderTable: Attempting to load data for ${fullTableName}`);
+            currentTableName = fullTableName; // Update global currentTableName
+            const [schemaName, tableName] = fullTableName.split('.');
+            currentSchemaName = schemaName; // Update global currentSchemaName
+            
+            // Reset sorting and filtering when loading a new table
+            sortColumn = null;
+            sortDirection = 'asc';
+            columnFilters = {};
+            document.querySelectorAll('.filter-input').forEach(input => input.value = ''); // Clear filter inputs
+
+            const tableBody = document.getElementById('dynamic-table-body');
+            tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Loading data...</td></tr>`;
+            lucide.createIcons();
+
+            // Fetch data, schema, and primary key info concurrently
+            const [data, schema, pkInfo] = await Promise.all([
+                apiFetch(`table/${schemaName}/${tableName}`),
+                getTableSchema(schemaName, tableName),
+                getPrimaryKeysForTable(schemaName, tableName) // Fetch PKs
+            ]);
+
+            if (data && !data.error && schema && !schema.error && pkInfo && !pkInfo.error) {
+                console.log(`Successfully loaded data for ${fullTableName}. Data count: ${data.length}`);
+                currentTableData = data;
+                currentTableSchema = schema;
+                masterCache[`pk.${fullTableName}`] = pkInfo; // Store PK info in cache
+
+                // Determine table type from the schema response (all columns should have the same table_type)
+                currentTableType = schema.length > 0 ? schema[0].table_type : null;
+                isCurrentTableBase = (currentTableType === 'BASE TABLE');
+                
+                applyFiltersAndSort(); // This will call renderTable internally
+
+                // Enable/disable action buttons based on whether it's a base table
+                document.getElementById('add-single-entry-btn').disabled = !isCurrentTableBase;
+                document.getElementById('bulk-csv-upload-btn').disabled = !isCurrentTableBase;
+                document.getElementById('bulk-modify-btn').disabled = !isCurrentTableBase;
+                document.getElementById('download-template-btn').disabled = false; // Always enable template download
+
+                // Update tooltips visibility
+                document.getElementById('add-tooltip').style.display = isCurrentTableBase ? 'none' : 'block';
+                document.getElementById('upload-tooltip').style.display = isCurrentTableBase ? 'none' : 'block';
+                document.getElementById('modify-tooltip').style.display = isCurrentTableBase ? 'none' : 'block';
+
+            } else {
+                console.error(`Failed to load data for ${fullTableName}. Data error: ${data ? data.error : 'N/A'}, Schema error: ${schema ? schema.error : 'N/A'}`);
+                tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-red-500">Error loading data for ${fullTableName}: ${data ? data.error : schema ? schema.error : 'Unknown error'}</td></tr>`;
+                // Disable all action buttons on error
+                document.getElementById('add-single-entry-btn').disabled = true;
+                document.getElementById('bulk-csv-upload-btn').disabled = true;
+                document.getElementById('bulk-modify-btn').disabled = true;
+                document.getElementById('download-template-btn').disabled = true; // Disable template download on error
+                isCurrentTableBase = false; // Reset flag
+                currentTableType = null; // Reset table type
+                // Hide tooltips
+                document.getElementById('add-tooltip').style.display = 'none';
+                document.getElementById('upload-tooltip').style.display = 'none';
+                document.getElementById('modify-tooltip').style.display = 'none';
+            }
+        }
+
+        /**
+         * Fetches the primary key column names for a given table.
+         * Caches results.
+         * @param {string} schema - The schema name.
+         * @param {string} table - The table name.
+         * @returns {Promise<Array>} - An array of primary key column names.
+         */
+        async function getPrimaryKeysForTable(schema, table) {
+            const cacheKey = `pk.${schema}.${table}`;
+            if (masterCache[cacheKey]) return masterCache[cacheKey];
+
+            const schemaData = await getTableSchema(schema, table);
+            if (schemaData && !schemaData.error) {
+                const pkColumns = schemaData.filter(col => col.is_primary_key).map(col => col.column_name);
+                masterCache[cacheKey] = pkColumns;
+                return pkColumns;
+            }
+            return [];
+        }
+
+        /**
+         * Sets up all main event listeners for the page.
+         */
+        function setupEventListeners() {
+            const schemaSelect = document.getElementById('schema-select');
+            const tableSelect = document.getElementById('table-select');
+
+            schemaSelect.addEventListener('change', (e) => {
+                const selectedSchema = e.target.value;
+                populateTableSelect(selectedSchema);
+                tableSelect.value = ''; // Reset table selection
+                currentTableName = null; // Clear current table
+                // Clear table display and details panel
+                document.getElementById('dynamic-table-body').innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500">
+                    <div class="flex items-center justify-center">
+                        <i data-lucide="database" class="inline-block mr-2 text-blue-600"></i>
+                        <span>Please select a schema and table/view to display data.</span>
+                    </div>
+                </td></tr>`;
+                document.getElementById('record-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="info" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a record to view its details</p></div></div>`;
+                lucide.createIcons();
+                // Disable action buttons when no table is selected
+                document.getElementById('add-single-entry-btn').disabled = true;
+                document.getElementById('bulk-csv-upload-btn').disabled = true;
+                document.getElementById('bulk-modify-btn').disabled = true;
+                document.getElementById('download-template-btn').disabled = true; // Disable template download
+                isCurrentTableBase = false; // Reset flag
+                currentTableType = null; // Reset table type
+                // Hide tooltips
+                document.getElementById('add-tooltip').style.display = 'none';
+                document.getElementById('upload-tooltip').style.display = 'none';
+                document.getElementById('modify-tooltip').style.display = 'none';
+            });
+
+            tableSelect.addEventListener('change', (e) => {
+                const fullTableName = e.target.value;
+                if (fullTableName) {
+                    loadAndRenderTable(fullTableName);
+                } else {
+                    currentTableName = null;
+                    document.getElementById('dynamic-table-body').innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500">
+                        <div class="flex items-center justify-center">
+                            <i data-lucide="database" class="inline-block mr-2 text-blue-600"></i>
+                            <span>Please select a table/view to display data.</span>
+                        </div>
+                    </td></tr>`;
+                    document.getElementById('record-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="info" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a record to view its details</p></div></div>`;
+                    lucide.createIcons();
+                    // Disable action buttons when no table is selected
+                    document.getElementById('add-single-entry-btn').disabled = true;
+                    document.getElementById('bulk-csv-upload-btn').disabled = true;
+                    document.getElementById('bulk-modify-btn').disabled = true;
+                    document.getElementById('download-template-btn').disabled = true; // Disable template download
+                    isCurrentTableBase = false; // Reset flag
+                    currentTableType = null; // Reset table type
+                    // Hide tooltips
+                    document.getElementById('add-tooltip').style.display = 'none';
+                    document.getElementById('upload-tooltip').style.display = 'none';
+                    document.getElementById('modify-tooltip').style.display = 'none';
+                }
+            });
+
+            // Attach event listeners for bulk action buttons
+            document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal());
+            document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal);
+            document.getElementById('bulk-modify-btn').addEventListener('click', showBulkModifyModal);
+            document.getElementById('download-template-btn').addEventListener('click', showDownloadTemplateModal); // New listener for template download
+        }
+    </script>
+</body>
+</html>

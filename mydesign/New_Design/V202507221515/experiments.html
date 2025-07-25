@@ -14,23 +14,33 @@
         .sidebar-item { color: #475569; }
         .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
         .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
-        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
-        .modal-overlay { background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 50; }
-        .table-row-selected { background-color: #eef2ff !important; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 10px -2px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05); } /* Softer shadow */
+        .modal-overlay { background-color: rgba(0,0,0,0.6); backdrop-filter: blur(6px); z-index: 50; } /* Stronger blur */
+        .modal-content { transition: all 0.3s ease-out; }
+
+        .table-row-selected { background-color: #eef2ff !important; border-left: 4px solid #4f46e5; } /* Highlight selected row */
+        /* Table row striping and hover */
+        .table-auto tbody tr:nth-child(odd) { background-color: #ffffff; } /* Pure white for odd rows */
+        .table-auto tbody tr:nth-child(even) { background-color: #fdfdfe; } /* Very light off-white for even rows */
+        .dynamic-table-row:hover { background-color: #f0f4f8; }
+
         .sortable-header { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; padding-right: 8px; }
         .sortable-header:hover { background-color: #e2e8f0; }
         .sort-icon { display: inline-block; width: 16px; height: 16px; vertical-align: middle; margin-left: 4px; flex-shrink: 0; }
         .filter-input { width: calc(100% - 10px); padding: 4px; margin-top: 4px; border: 1px solid #cbd5e1; border-radius: 0.25rem; font-size: 0.75rem; box-sizing: border-box; }
-        .accordion-item { margin-bottom: 0.5rem; border: 1px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; }
+        
+        .accordion-item { margin-bottom: 0.75rem; border: 1px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; } /* Increased margin */
         .accordion-header { background-color: #f1f5f9; padding: 0.75rem 1rem; cursor: pointer; width: 100%; text-align: left; display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: #475569; }
         .accordion-header:hover { background-color: #e2e8f0; }
         .accordion-header .lucide { transition: transform 0.3s ease; }
         .accordion-header.active .lucide { transform: rotate(180deg); }
         .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, padding 0.3s ease-out; padding: 0 1rem; background-color: white; border-top: 1px solid #e2e8f0; }
-        .accordion-content.open { max-height: 500px; padding: 1rem; }
+        .accordion-content.open { max-height: 700px; padding: 1rem; } /* Increased max-height for more content */
+        
         /* Tab Styles */
-        .tab-link { cursor: pointer; }
-        .tab-link.active { color: #4f46e5; border-color: #4f46e5; }
+        .tab-link { cursor: pointer; border-color: transparent; } /* Default transparent border */
+        .tab-link.active { color: #4f46e5; border-color: #4f46e5; font-weight: 600; } /* Active tab styling */
+        .tab-link:hover:not(.active) { color: #1e293b; border-color: #cbd5e1; } /* Hover for inactive tabs */
 
         /* Custom scrollbar for tables */
         .overflow-y-auto::-webkit-scrollbar {
@@ -46,6 +56,20 @@
         }
         .overflow-y-auto::-webkit-scrollbar-thumb:hover {
             background: #555;
+        }
+
+        /* Loading spinner for buttons */
+        .button-spinner {
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-top-color: #fff;
+            border-radius: 50%;
+            width: 1.25rem; /* w-5 */
+            height: 1.25rem; /* h-5 */
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -81,17 +105,16 @@
             <div class="flex justify-between items-center mb-6">
                 <div>
                     <h1 class="text-3xl font-bold text-gray-800">Experiments Management</h1>
-                    <p class="mt-1 text-md text-gray-600">Manage all your laboratory experiments</p>
+                    <p class="mt-1 text-md text-gray-600">Oversee and manage all your laboratory experiments and related data</p>
                 </div>
                 <div class="flex space-x-3">
-                    <button id="add-single-entry-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all">
-                        <i data-lucide="plus" class="w-5 h-5 mr-2"></i>Add Single Entry
+                    <button id="add-single-entry-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all duration-200">
+                        <i data-lucide="plus-circle" class="w-5 h-5 mr-2"></i>Add New Experiment
                     </button>
-                    <button id="bulk-csv-upload-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all">
-                        <i data-lucide="upload" class="w-5 h-5 mr-2"></i>Bulk CSV Upload
+                    <button id="bulk-csv-upload-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all duration-200">
+                        <i data-lucide="upload" class="w-5 h-5 mr-2"></i>Bulk Upload CSV
                     </button>
-                    <!-- Download CSV Template button moved inside the bulk upload modal -->
-                    <button id="bulk-modify-btn" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all">
+                    <button id="bulk-modify-btn" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all duration-200">
                         <i data-lucide="file-edit" class="w-5 h-5 mr-2"></i>Bulk Modify
                     </button>
                 </div>
@@ -100,23 +123,20 @@
             <div class="border-b border-gray-200 mb-6">
                 <nav class="-mb-px flex space-x-8" aria-label="Tabs">
                     <a id="tab-experiments" class="tab-link whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active">
-                        Experiments
+                        All Experiments
                     </a>
                     <select id="dynamic-table-select" class="tab-link whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 bg-transparent outline-none">
-                        <!-- Options will be dynamically loaded here -->
-                    </select>
+                        </select>
                 </nav>
             </div>
 
             <div id="content-experiments" class="grid grid-cols-1 lg:grid-cols-5 gap-8 mt-6">
                 <div class="lg:col-span-2">
-                    <div class="card p-4">
-                        <div class="overflow-y-auto h-[65vh] relative">
-                            <table class="min-w-full">
-                                <thead class="bg-gray-50 sticky top-0 z-10">
+                    <div class="card p-4 h-[70vh]"> <div class="overflow-y-auto h-full relative">
+                            <table class="min-w-full table-auto">
+                                <thead class="bg-gray-100 sticky top-0 z-10 shadow-sm">
                                     <tr id="table-headers">
-                                        <!-- Dynamic headers will be loaded here -->
-                                    </tr>
+                                        </tr>
                                 </thead>
                                 <tbody id="dynamic-table-body" class="divide-y divide-gray-200">
                                     <tr><td colspan="100%" class="text-center p-4 text-gray-500">
@@ -134,8 +154,12 @@
                 <div id="experiment-details-container" class="lg:col-span-3">
                     <div class="card p-6 h-full flex items-center justify-center text-gray-500">
                         <div class="text-center">
-                            <i data-lucide="flask-conical" class="mx-auto h-12 w-12"></i>
-                            <p class="mt-2">Select an experiment to view its details</p>
+                            <i data-lucide="flask-round" class="mx-auto h-16 w-16 text-blue-400 mb-4 animate-pulse"></i>
+                            <p class="mt-2 text-lg font-semibold">Ready to explore an experiment?</p>
+                            <p class="text-sm mt-1">Select an entry from the list on the left to view its comprehensive details.</p>
+                            <button onclick="document.getElementById('add-single-entry-btn').click()" class="mt-4 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center mx-auto transition-all duration-200 shadow">
+                                <i data-lucide="plus" class="w-5 h-5 mr-2"></i>Or Create a New Experiment
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -347,7 +371,7 @@
                         } else if (col.data_type === 'timestamp with time zone' && value) {
                             try { value = new Date(value).toLocaleString(); } catch (e) { /* keep original */ }
                         } else if (typeof value === 'object') { // Handle JSONB or other complex types
-                            value = JSON.stringify(value);
+                            value = `<pre class="bg-gray-100 p-2 rounded-md text-xs overflow-auto max-h-24">${JSON.stringify(value, null, 2)}</pre>`; // Pretty print JSONB
                         }
                         rowHtml += `<td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${value}</td>`;
                     });
@@ -526,7 +550,7 @@
                     console.log("Record deleted successfully. Reloading table.");
                     alert('Record deleted successfully!');
                     loadAndRenderTable(currentTableName);
-                    document.getElementById('experiment-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="flask-conical" class="mx-auto h-12 w-12"></i><p class="mt-2">Select an experiment to view its details</p></div></div>`;
+                    document.getElementById('experiment-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="flask-round" class="mx-auto h-16 w-16 text-blue-400 mb-4 animate-pulse"></i><p class="mt-2 text-lg font-semibold">Ready to explore an experiment?</p><p class="text-sm mt-1">Select an entry from the list on the left to view its comprehensive details.</p><button onclick="document.getElementById('add-single-entry-btn').click()" class="mt-4 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center mx-auto transition-all duration-200 shadow"><i data-lucide="plus" class="w-5 h-5 mr-2"></i>Or Create a New Experiment</button></div></div>`;
                     lucide.createIcons();
                 }
             }));
@@ -647,7 +671,16 @@
                 if (value === null || value === undefined || String(value).trim() === '' || value === 'N/A') {
                     return '';
                 }
-                return `<div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100"><dt class="font-medium text-gray-500">${label}</dt><dd class="text-gray-900 break-all">${value}</dd></div>`;
+                let displayValue = value;
+                if (typeof value === 'object' && value !== null) { // Ensure value is not null before stringifying
+                    displayValue = `<pre class="bg-gray-100 p-2 rounded-md text-xs overflow-auto max-h-24">${JSON.stringify(value, null, 2)}</pre>`;
+                } else if (label.includes('Attachment Link') && typeof value === 'string') {
+                    displayValue = `<a href="${value}" target="_blank" class="text-blue-600 hover:underline">View Attachment</a>`;
+                } else if (label.includes('Attachment File') && value) {
+                    displayValue = `<span class="text-gray-500">Binary data present</span>`;
+                }
+
+                return `<div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100"><dt class="font-medium text-gray-500">${label}</dt><dd class="text-gray-900 break-all">${displayValue}</dd></div>`;
             };
 
             // Define related tables and their icons
@@ -688,8 +721,8 @@
                             ${renderDetailRow('Lab Book', experiment.lab_book)}
                             ${renderDetailRow('Status', experiment.status_id)}
                             ${renderDetailRow('Notes', experiment.notes)}
-                            ${experiment.attachment_link ? renderDetailRow('Attachment Link', `<a href="${experiment.attachment_link}" target="_blank" class="text-blue-600 hover:underline">View Attachment</a>`) : ''}
-                            ${experiment.attachment ? renderDetailRow('Attachment File', `<span class="text-gray-500">Binary data present</span>`) : ''}
+                            ${renderDetailRow('Attachment Link', experiment.attachment_link)}
+                            ${renderDetailRow('Attachment File', experiment.attachment)}
                         </dl>
                     </div>
                 </div>
@@ -723,8 +756,8 @@
                                                             value = formatDate(value);
                                                         } else if (col.data_type === 'timestamp with time zone' || col.data_type === 'timestamp without time zone') {
                                                             value = formatDateTime(value);
-                                                        } else if (typeof value === 'object') {
-                                                            value = JSON.stringify(value);
+                                                        } else if (typeof value === 'object' && value !== null) { // Ensure value is not null before stringifying
+                                                            value = JSON.stringify(value, null, 2); // Pretty print JSON
                                                         }
                                                         return renderDetailRow(formatColumnName(col.column_name), value);
                                                     }).join('')}
@@ -922,7 +955,7 @@
 
             const modalHTML = `
                 <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
-                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-4xl max-h-[90vh] overflow-y-auto transform transition-all -translate-y-10 opacity-0">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-5xl max-h-[90vh] overflow-y-auto transform transition-all -translate-y-10 opacity-0">
                         <div class="flex justify-between items-center mb-6">
                             <h2 class="text-2xl font-bold">${isEditing ? 'Edit' : 'Create'} ${formatColumnName(tableName)} Record</h2>
                             <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
@@ -932,8 +965,9 @@
                                 ${formFieldsHtml}
                             </div>
                             <div class="pt-4 flex justify-end">
-                                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">
-                                    ${isEditing ? 'Save Changes' : 'Create Record'}
+                                <button type="submit" id="modal-submit-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center transition-all duration-200">
+                                    <span id="button-text">${isEditing ? 'Save Changes' : 'Create Record'}</span>
+                                    <span id="loading-spinner" class="hidden ml-2 button-spinner"></span>
                                 </button>
                             </div>
                         </form>
@@ -949,6 +983,14 @@
                 const attachmentInput = formElement.querySelector('input[name="attachment"]');
                 const hasFileSelected = attachmentInput && attachmentInput.files && attachmentInput.files.length > 0;
                 
+                const submitBtn = document.getElementById('modal-submit-btn');
+                const btnText = document.getElementById('button-text');
+                const spinner = document.getElementById('loading-spinner');
+
+                submitBtn.disabled = true;
+                btnText.textContent = 'Processing...';
+                spinner.classList.remove('hidden');
+
                 let body;
                 if (hasFileSelected) {
                     console.log("File detected. Using FormData for submission.");
@@ -1001,6 +1043,11 @@
                 
                 console.log(`Submitting form: Method=${method}, Endpoint=${endpoint}, Body:`, body);
                 const result = await apiFetch(endpoint, { method, body });
+                
+                submitBtn.disabled = false;
+                btnText.textContent = isEditing ? 'Save Changes' : 'Create Record';
+                spinner.classList.add('hidden');
+
                 if (result && !result.error) { 
                     console.log("API call successful:", result);
                     alert(`${isEditing ? 'Updated' : 'Created'} record successfully!`);
@@ -1051,11 +1098,12 @@
                         <p class="text-gray-700 mb-4">Upload a CSV file. The first row should contain column headers matching your database table. For linking projects/samples to experiments, use 'project_ids' and 'sample_ids' columns with semicolon-separated values (e.g., P001;P002).</p>
                         <input type="file" id="csv-file-input" accept=".csv" class="w-full p-2 border rounded mb-4">
                         <div class="flex justify-between space-x-2">
-                            <button id="download-csv-template-btn-modal" class="w-1/2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
+                            <button id="download-csv-template-btn-modal" class="w-1/2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all duration-200">
                                 <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download Template
                             </button>
-                            <button id="upload-csv-btn" class="w-1/2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
-                                <i data-lucide="upload" class="w-5 h-5 mr-2"></i>Upload CSV
+                            <button id="upload-csv-btn" class="w-1/2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all duration-200">
+                                <span id="upload-button-text">Upload CSV</span>
+                                <span id="upload-spinner" class="hidden ml-2 button-spinner"></span>
                             </button>
                         </div>
                         <div id="upload-status" class="mt-4 text-center text-sm"></div>
@@ -1067,17 +1115,23 @@
             // Attach event listener for the new template button inside the modal
             document.getElementById('download-csv-template-btn-modal').addEventListener('click', downloadCsvTemplate);
 
-            document.getElementById('upload-csv-btn').addEventListener('click', () => {
+            document.getElementById('upload-csv-btn').addEventListener('click', async () => {
                 const fileInput = document.getElementById('csv-file-input');
                 const statusDiv = document.getElementById('upload-status');
                 const file = fileInput.files[0];
+                const uploadBtn = document.getElementById('upload-csv-btn');
+                const uploadBtnText = document.getElementById('upload-button-text');
+                const uploadSpinner = document.getElementById('upload-spinner');
 
                 if (!file) {
                     statusDiv.innerHTML = `<p class="text-red-500">Please select a CSV file.</p>`;
                     return;
                 }
 
-                statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Processing CSV...</p>`;
+                uploadBtn.disabled = true;
+                uploadBtnText.textContent = 'Processing...';
+                uploadSpinner.classList.remove('hidden');
+                statusDiv.innerHTML = `<p class="text-blue-500">Processing CSV...</p>`;
                 lucide.createIcons();
 
                 PapaParse.parse(file, {
@@ -1086,10 +1140,16 @@
                     complete: async (results) => {
                         if (results.errors.length) {
                             statusDiv.innerHTML = `<p class="text-red-500">CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}</p>`;
+                            uploadBtn.disabled = false;
+                            uploadBtnText.textContent = 'Upload CSV';
+                            uploadSpinner.classList.add('hidden');
                             return;
                         }
                         if (!results.data.length) {
                             statusDiv.innerHTML = `<p class="text-red-500">No data found in CSV.</p>`;
+                            uploadBtn.disabled = false;
+                            uploadBtnText.textContent = 'Upload CSV';
+                            uploadSpinner.classList.add('hidden');
                             return;
                         }
 
@@ -1102,7 +1162,7 @@
                             return newRow;
                         });
 
-                        statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Uploading ${recordsToUpload.length} records...</p>`;
+                        statusDiv.innerHTML = `<p class="text-blue-500">Uploading ${recordsToUpload.length} records...</p>`;
                         lucide.createIcons();
 
                         const [schemaName, tableName] = currentTableName.split('.');
@@ -1110,6 +1170,10 @@
                             method: 'POST',
                             body: recordsToUpload
                         });
+
+                        uploadBtn.disabled = false;
+                        uploadBtnText.textContent = 'Upload CSV';
+                        uploadSpinner.classList.add('hidden');
 
                         if (result && result.success) {
                             statusDiv.innerHTML = `<p class="text-green-600">Successfully uploaded ${result.inserted_rows} records!</p>`;
@@ -1139,7 +1203,7 @@
                 !col.column_name.includes('attachment') && 
                 !col.column_name.includes('password_hash') && 
                 !col.column_name.includes('search_vector') &&
-                !col.column_name.includes('_id') && // Exclude auto-generated IDs for template (e.g., experiment_project_id)
+                !(col.column_name.includes('_id') && col.column_default && col.column_default.includes('nextval')) && // Exclude auto-generated IDs for template (e.g., experiment_project_id)
                 !col.column_name.includes('created_at') &&
                 !col.column_default // Exclude columns with default values as they don't need user input
             ).map(col => col.column_name);
@@ -1183,11 +1247,12 @@
                         <p class="text-gray-700 mb-4">Upload a CSV or JSON file containing records to update. Each record must include all primary key column(s) for identification, and any fields you wish to modify.</p>
                         <input type="file" id="bulk-modify-file-input" accept=".csv,.json" class="w-full p-2 border rounded mb-4">
                         <div class="flex justify-between space-x-2">
-                            <button id="download-bulk-modify-template-btn-modal" class="w-1/2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
+                            <button id="download-bulk-modify-template-btn-modal" class="w-1/2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all duration-200">
                                 <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download Template
                             </button>
-                            <button id="perform-bulk-modify-btn" class="w-1/2 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
-                                <i data-lucide="file-edit" class="w-5 h-5 mr-2"></i>Perform Bulk Modify
+                            <button id="perform-bulk-modify-btn" class="w-1/2 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all duration-200">
+                                <span id="modify-button-text">Perform Bulk Modify</span>
+                                <span id="modify-spinner" class="hidden ml-2 button-spinner"></span>
                             </button>
                         </div>
                         <div id="modify-status" class="mt-4 text-center text-sm"></div>
@@ -1196,21 +1261,26 @@
             `;
             const { closeModal } = showModal(modalHTML);
 
-            // Attach event listener for the new template button inside the modal
             document.getElementById('download-bulk-modify-template-btn-modal').addEventListener('click', downloadBulkModifyTemplate);
 
 
-            document.getElementById('perform-bulk-modify-btn').addEventListener('click', () => {
+            document.getElementById('perform-bulk-modify-btn').addEventListener('click', async () => {
                 const fileInput = document.getElementById('bulk-modify-file-input');
                 const statusDiv = document.getElementById('modify-status');
                 const file = fileInput.files[0];
+                const modifyBtn = document.getElementById('perform-bulk-modify-btn');
+                const modifyBtnText = document.getElementById('modify-button-text');
+                const modifySpinner = document.getElementById('modify-spinner');
 
                 if (!file) {
                     statusDiv.innerHTML = `<p class="text-red-500">Please select a file (CSV or JSON).</p>`;
                     return;
                 }
 
-                statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Processing file...</p>`;
+                modifyBtn.disabled = true;
+                modifyBtnText.textContent = 'Processing...';
+                modifySpinner.classList.remove('hidden');
+                statusDiv.innerHTML = `<p class="text-blue-500">Processing file...</p>`;
                 lucide.createIcons();
 
                 const reader = new FileReader();
@@ -1234,6 +1304,9 @@
 
                         if (!recordsToModify.length) {
                             statusDiv.innerHTML = `<p class="text-red-500">No records found in the file.</p>`;
+                            modifyBtn.disabled = false;
+                            modifyBtnText.textContent = 'Perform Bulk Modify';
+                            modifySpinner.classList.add('hidden');
                             return;
                         }
 
@@ -1246,7 +1319,7 @@
                             return newRow;
                         });
 
-                        statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Performing bulk update on ${recordsToModify.length} records...</p>`;
+                        statusDiv.innerHTML = `<p class="text-blue-500">Performing bulk update on ${recordsToModify.length} records...</p>`;
                         lucide.createIcons();
 
                         const [schemaName, tableName] = currentTableName.split('.');
@@ -1254,6 +1327,10 @@
                             method: 'PUT',
                             body: recordsToModify
                         });
+
+                        modifyBtn.disabled = false;
+                        modifyBtnText.textContent = 'Perform Bulk Modify';
+                        modifySpinner.classList.add('hidden');
 
                         if (result && result.success) {
                             statusDiv.innerHTML = `<p class="text-green-600">Successfully updated ${result.updated_rows} records!</p>`;
@@ -1267,6 +1344,9 @@
                     } catch (error) {
                         console.error("Bulk modify file processing error:", error);
                         statusDiv.innerHTML = `<p class="text-red-500">Error processing file: ${error.message}</p>`;
+                        modifyBtn.disabled = false;
+                        modifyBtnText.textContent = 'Perform Bulk Modify';
+                        modifySpinner.classList.add('hidden');
                         lucide.createIcons();
                     }
                 };
