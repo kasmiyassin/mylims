@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporting - TIFI </title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .sidebar { border-right: 1px solid #e2e8f0; }
+        .sidebar-item { color: #475569; }
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        .tab-btn { padding: 0.5rem 1rem; font-weight: 500; color: #64748b; border-bottom: 2px solid transparent; }
+        .tab-btn.active { color: #4f46e5; border-bottom-color: #4f46e5; }
+        .report-section-title { font-size: 1.25rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 1rem; color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; }
+    </style>
+</head>
+<body>
+    <div id="main-app">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI</span></div>
+            <nav class="flex-grow space-y-2">
+                   <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Protocols</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
+                <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage Storage Box</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="test-tubes" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="bar-chart-3" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+           </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t"></div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+        
+        <div id="main-content" class="ml-64 p-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-6">Reporting & Analytics</h1>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="card p-6 lg:col-span-1">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Report Generator</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="report-type" class="block text-sm font-medium text-gray-700">1. Select Report Type</label>
+                            <select id="report-type" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm">
+                                <option value="">-- Choose a report --</option>
+                                <option value="project-summary">Project Summary</option>
+                                <option value="sample-lifecycle">Sample Lifecycle Tracking</option>
+                                <option value="inventory-report">Storage Inventory Report</option>
+                                <option value="reagent-expiry">Reagent Expiry Report</option>
+                                <option value="qc-summary">Experiment QC Summary</option>
+                                <option value="experiment-progress">Experiment Progress Overview</option>
+                                <option value="species-distribution">Species Distribution</option>
+                                <option value="sampling-location-overview">Sampling Location Overview</option>
+                            </select>
+                        </div>
+                        <div id="report-inputs-container">
+                            <!-- Dynamic inputs will be rendered here based on report type -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card p-6 lg:col-span-2">
+                    <div class="flex border-b mb-4">
+                        <button id="tab-preview" class="tab-btn active">Preview</button>
+                        <button id="tab-history" class="tab-btn">History</button>
+                    </div>
+                    <div id="preview-content">
+                        <div class="text-center text-gray-500 mt-8">
+                            <i data-lucide="search" class="mx-auto h-12 w-12"></i>
+                            <p class="mt-2">Generate a report to see a preview here.</p>
+                        </div>
+                    </div>
+                    <div id="history-content" class="hidden">
+                           <div id="recent-reports-list" class="space-y-2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') window.location.href = './login.html';
+        
+        const API_BASE_URL = `http://${window.location.hostname}:5200/api`;
+        let masterCache = {}; // Cache for all fetched table data
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.person}</p>`;
+            document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href = './login.html'; });
+            initializeReportingPage();
+        });
+
+        // --- API & DATA HANDLING ---
+        /**
+         * Generic API fetch wrapper with error handling.
+         * @param {string} endpoint - API endpoint URL.
+         * @param {object} options - Fetch options.
+         * @returns {Promise<object>} JSON response or error object.
+         */
+        async function apiFetch(endpoint, options = {}) {
+            try {
+                // Set Content-Type header to application/json for JSON bodies
+                const isJson = !(options.body instanceof FormData);
+                if (isJson && options.body) {
+                    options.headers = { ...options.headers, 'Content-Type': 'application/json' };
+                    options.body = JSON.stringify(options.body);
+                }
+
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                
+                if (!response.ok) { 
+                    const errText = await response.text();
+                    try { 
+                        const errJson = JSON.parse(errText); 
+                        throw new Error(errJson.error || `API request failed with status ${response.status}`); 
+                    }
+                    catch { 
+                        throw new Error(errText || `API request failed with status ${response.status}`); 
+                    }
+                }
+                // Handle 204 No Content responses explicitly
+                if (response.status === 204 || response.headers.get('content-length') === '0') return { success: true };
+                return response.json();
+            } catch (error) { 
+                console.error("API Error:", error); 
+                return { error: error.message }; 
+            }
+        }
+
+        /**
+         * Fetches table data and caches it.
+         * @param {string} schema - Database schema name.
+         * @param {string} tableName - Table name.
+         * @returns {Promise<Array|object>} Cached data or fetched data.
+         */
+        async function getTableData(schema, tableName) {
+            const cacheKey = `${schema}.${tableName}`;
+            if (masterCache[cacheKey]) return masterCache[cacheKey];
+            const data = await apiFetch(`table/${schema}/${tableName}`);
+            if (data && !data.error) masterCache[cacheKey] = data;
+            else console.error(`Failed to fetch ${schema}.${tableName}:`, data.error);
+            return data;
+        }
+
+        /**
+         * Pre-fetches all necessary data for reports into cache.
+         */
+        async function fetchAllData() {
+            const tablesToFetch = [
+                { schema: 'Lims', table: 'Projects' }, 
+                { schema: 'Lims', table: 'ProjectPersons' }, 
+                { schema: 'Lims', table: 'Reagents'},
+                { schema: 'Lab', table: 'Samples' }, 
+                { schema: 'Lab', table: 'Experiments' }, 
+                { schema: 'Lab', table: 'Storage' },
+                { schema: 'Lab', table: 'Extraction' }, 
+                { schema: 'Lab', table: 'Qubit' }, 
+                { schema: 'Lab', table: 'Nanodrop' },
+                { schema: 'Lab', table: 'Tapestation' },
+                { schema: 'Lab', table: 'PCR' },
+                { schema: 'Lab', table: 'qPCR' },
+                { schema: 'Lab', table: 'Library' },
+                { schema: 'Lab', table: 'Sequencing' },
+                { schema: 'Lab', table: 'Bioinformatics' },
+                { schema: 'Reference', table: 'Status' },
+                { schema: 'Reference', table: 'Species' },
+                { schema: 'Reference', table: 'Location' },
+                { schema: 'Reference', table: 'Category' },
+                { schema: 'Reference', table: 'Room' },
+                // Fetch views as well, as they are used for reports
+                { schema: 'Lab', table: 'Samples_tracking' },
+                { schema: 'Lims', table: 'Project_Summary' },
+                { schema: 'Lab', table: 'Storage_Inventory_Summary' },
+                { schema: 'Lims', table: 'Reagent_Stock_Status' },
+                { schema: 'Lab', table: 'Experiment_Progress_Overview' },
+                { schema: 'Reference', table: 'Complete_Species_Names' }
+            ];
+            await Promise.all(tablesToFetch.map(t => getTableData(t.schema, t.table)));
+        }
+
+        // --- UI & TABS ---
+        /**
+         * Switches between report preview and history tabs.
+         * @param {string} tabName - 'preview' or 'history'.
+         */
+        function switchTab(tabName) {
+            const isPreview = tabName === 'preview';
+            document.getElementById('tab-preview').classList.toggle('active', isPreview);
+            document.getElementById('tab-history').classList.toggle('active', !isPreview);
+            document.getElementById('preview-content').classList.toggle('hidden', !isPreview);
+            document.getElementById('history-content').classList.toggle('hidden', isPreview);
+            if (tabName === 'history') {
+                renderReportHistory(); // Ensure history is up-to-date when tab is opened
+            }
+        }
+
+        // --- DYNAMIC INPUT RENDERING ---
+        /**
+         * Handles the selection of a report type and renders appropriate input fields.
+         */
+        function handleReportSelection() {
+            const reportType = document.getElementById('report-type').value;
+            const container = document.getElementById('report-inputs-container');
+            container.innerHTML = ''; // Clear previous inputs
+
+            const reportRenderers = {
+                'project-summary': renderProjectSelector,
+                'sample-lifecycle': renderSampleLifecycleInputs,
+                'inventory-report': renderStorageSelector,
+                'reagent-expiry': renderReagentExpiryInputs,
+                'qc-summary': renderExperimentSelector,
+                'experiment-progress': renderExperimentProgressInputs,
+                'species-distribution': renderSpeciesDistributionInputs,
+                'sampling-location-overview': renderSamplingLocationInputs
+            };
+            if (reportRenderers[reportType]) {
+                reportRenderers[reportType]();
+            } else {
+                // Default action button if no specific inputs are needed
+                container.innerHTML = `
+                    <div class="pt-4 flex justify-end">
+                        <button id="generate-preview-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center">
+                            <i data-lucide="play" class="w-5 h-5 mr-2"></i>Generate Preview
+                        </button>
+                    </div>
+                `;
+                lucide.createIcons();
+                document.getElementById('generate-preview-btn').addEventListener('click', () => {
+                    // Call the appropriate generator directly if no specific inputs
+                    if (reportType === 'reagent-expiry' && !document.getElementById('expiry-select')) {
+                        generateReagentExpiryPreview(); // Default to 30 days if no selector is rendered
+                    } else if (reportType === 'inventory-report' && !document.getElementById('storage-select')) {
+                        generateInventoryPreview(); // Default to all storage if no selector is rendered
+                    }
+                    // Add more defaults for other reports if needed
+                });
+            }
+        }
+
+        /**
+         * Renders a generic selector (dropdown) with a generate button.
+         * @param {string} label - Label for the selector.
+         * @param {string} id - ID for the select element.
+         * @param {Array<object>} options - Array of {value, text} for select options.
+         * @param {string} generateFnName - Name of the function to call on button click.
+         * @param {boolean} includeAllOption - Whether to include an "All" option.
+         */
+        function renderSelector(label, id, options, generateFnName, includeAllOption = false) {
+            const container = document.getElementById('report-inputs-container');
+            let optionsHtml = includeAllOption ? `<option value="all">-- All ${label}s --</option>` : '<option value="">-- Select --</option>';
+            optionsHtml += options.map(o => `<option value="${o.value}">${o.text}</option>`).join('');
+
+            container.innerHTML = `<div>
+                <label for="${id}" class="block text-sm font-medium text-gray-700">2. Select ${label}</label>
+                <select id="${id}" class="w-full mt-1 p-2 border rounded-md">${optionsHtml}</select>
+            </div>
+            <div class="pt-4 flex justify-end">
+                <button id="generate-preview-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center">
+                    <i data-lucide="play" class="w-5 h-5 mr-2"></i>Generate Preview
+                </button>
+            </div>`;
+            lucide.createIcons();
+            document.getElementById('generate-preview-btn').addEventListener('click', window[generateFnName]);
+        }
+
+        async function renderProjectSelector() {
+            const projects = await getTableData('Lims', 'Projects');
+            renderSelector('Project', 'project-select', projects.map(p => ({ value: p.project_id, text: p.Title || p.project_id })), 'generateProjectSummaryPreview');
+        }
+
+        async function renderSampleLifecycleInputs() {
+            const sampleTypes = await getTableData('Reference', 'SamplesType');
+            const statuses = await getTableData('Reference', 'Status');
+            const projects = await getTableData('Lims', 'Projects');
+
+            const inputsHtml = `
+                <div>
+                    <label for="sample-type-filter" class="block text-sm font-medium text-gray-700">Filter by Sample Type:</label>
+                    <select id="sample-type-filter" class="w-full mt-1 p-2 border rounded-md">
+                        <option value="all">-- All Sample Types --</option>
+                        ${sampleTypes.map(st => `<option value="${st.sample_type}">${st.sample_type}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label for="workflow-status-filter" class="block text-sm font-medium text-gray-700">Filter by Workflow Status:</label>
+                    <select id="workflow-status-filter" class="w-full mt-1 p-2 border rounded-md">
+                        <option value="all">-- All Statuses --</option>
+                        ${statuses.map(s => `<option value="${s.status_id}">${s.Description || s.status_id}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label for="project-filter" class="block text-sm font-medium text-gray-700">Filter by Project:</label>
+                    <select id="project-filter" class="w-full mt-1 p-2 border rounded-md">
+                        <option value="all">-- All Projects --</option>
+                        ${projects.map(p => `<option value="${p.project_id}">${p.Title || p.project_id}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="pt-4 flex justify-end">
+                    <button id="generate-preview-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center">
+                        <i data-lucide="play" class="w-5 h-5 mr-2"></i>Generate Preview
+                    </button>
+                </div>
+            `;
+            document.getElementById('report-inputs-container').innerHTML = inputsHtml;
+            lucide.createIcons();
+            document.getElementById('generate-preview-btn').addEventListener('click', generateSampleLifecyclePreview);
+        }
+
+        async function renderStorageSelector() {
+            const storage = await getTableData('Lab', 'Storage');
+            renderSelector('Storage Box', 'storage-select', storage.map(s => ({ value: s.storage_id, text: `${s.storage_id} (${s.Box})` })), 'generateInventoryPreview', true);
+        }
+
+        async function renderReagentExpiryInputs() {
+            const categories = await getTableData('Reference', 'Category');
+            const statuses = await getTableData('Reference', 'Status');
+
+            const inputsHtml = `
+                <div>
+                    <label for="reagent-category-filter" class="block text-sm font-medium text-gray-700">Filter by Category:</label>
+                    <select id="reagent-category-filter" class="w-full mt-1 p-2 border rounded-md">
+                        <option value="all">-- All Categories --</option>
+                        ${categories.map(c => `<option value="${c.category}">${c.category}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label for="reagent-status-filter" class="block text-sm font-medium text-gray-700">Filter by Status:</label>
+                    <select id="reagent-status-filter" class="w-full mt-1 p-2 border rounded-md">
+                        <option value="all">-- All Statuses --</option>
+                        ${statuses.map(s => `<option value="${s.status_id}">${s.Description || s.status_id}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label for="expiry-days-filter" class="block text-sm font-medium text-gray-700">Expiring Within (Days):</label>
+                    <input type="number" id="expiry-days-filter" value="30" min="0" class="w-full mt-1 p-2 border rounded-md">
+                </div>
+                <div class="pt-4 flex justify-end">
+                    <button id="generate-preview-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center">
+                        <i data-lucide="play" class="w-5 h-5 mr-2"></i>Generate Preview
+                    </button>
+                </div>
+            `;
+            document.getElementById('report-inputs-container').innerHTML = inputsHtml;
+            lucide.createIcons();
+            document.getElementById('generate-preview-btn').addEventListener('click', generateReagentExpiryPreview);
+        }
+
+        async function renderExperimentSelector() {
+            const experiments = await getTableData('Lab', 'Experiments');
+            renderSelector('Experiment', 'experiment-select', experiments.map(e => ({ value: e.Experiment_Nr, text: `${e.Experiment_Nr} - ${e.Experiment_title || 'No Title'}` })), 'generateQCSummaryPreview');
+        }
+
+        async function renderExperimentProgressInputs() {
+            const projects = await getTableData('Lims', 'Projects');
+            const statuses = await getTableData('Reference', 'Status');
+
+            const inputsHtml = `
+                <div>
+                    <label for="exp-progress-project-filter" class="block text-sm font-medium text-gray-700">Filter by Project:</label>
+                    <select id="exp-progress-project-filter" class="w-full mt-1 p-2 border rounded-md">
+                        <option value="all">-- All Projects --</option>
+                        ${projects.map(p => `<option value="${p.project_id}">${p.Title || p.project_id}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label for="exp-progress-status-filter" class="block text-sm font-medium text-gray-700">Filter by Experiment Status:</label>
+                    <select id="exp-progress-status-filter" class="w-full mt-1 p-2 border rounded-md">
+                        <option value="all">-- All Statuses --</option>
+                        ${statuses.map(s => `<option value="${s.status_id}">${s.Description || s.status_id}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="pt-4 flex justify-end">
+                    <button id="generate-preview-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center">
+                        <i data-lucide="play" class="w-5 h-5 mr-2"></i>Generate Preview
+                    </button>
+                </div>
+            `;
+            document.getElementById('report-inputs-container').innerHTML = inputsHtml;
+            lucide.createIcons();
+            document.getElementById('generate-preview-btn').addEventListener('click', generateExperimentProgressPreview);
+        }
+
+        async function renderSpeciesDistributionInputs() {
+            const projects = await getTableData('Lims', 'Projects');
+            const locations = await getTableData('Reference', 'Location');
+
+            const inputsHtml = `
+                <div>
+                    <label for="species-dist-project-filter" class="block text-sm font-medium text-gray-700">Filter by Project:</label>
+                    <select id="species-dist-project-filter" class="w-full mt-1 p-2 border rounded-md">
+                        <option value="all">-- All Projects --</option>
+                        ${projects.map(p => `<option value="${p.project_id}">${p.Title || p.project_id}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label for="species-dist-location-filter" class="block text-sm font-medium text-gray-700">Filter by Location:</label>
+                    <select id="species-dist-location-filter" class="w-full mt-1 p-2 border rounded-md">
+                        <option value="all">-- All Locations --</option>
+                        ${locations.map(l => `<option value="${l.place}">${l.place}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="pt-4 flex justify-end">
+                    <button id="generate-preview-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center">
+                        <i data-lucide="play" class="w-5 h-5 mr-2"></i>Generate Preview
+                    </button>
+                </div>
+            `;
+            document.getElementById('report-inputs-container').innerHTML = inputsHtml;
+            lucide.createIcons();
+            document.getElementById('generate-preview-btn').addEventListener('click', generateSpeciesDistributionPreview);
+        }
+
+        async function renderSamplingLocationInputs() {
+            const projects = await getTableData('Lims', 'Projects');
+            const years = [...new Set((masterCache['Lab.Sampling'] || []).map(s => new Date(s.sampling_date).getFullYear()).filter(y => !isNaN(y)))].sort((a,b) => b-a);
+
+            const inputsHtml = `
+                <div>
+                    <label for="sampling-loc-project-filter" class="block text-sm font-medium text-gray-700">Filter by Project:</label>
+                    <select id="sampling-loc-project-filter" class="w-full mt-1 p-2 border rounded-md">
+                        <option value="all">-- All Projects --</option>
+                        ${projects.map(p => `<option value="${p.project_id}">${p.Title || p.project_id}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label for="sampling-loc-year-filter" class="block text-sm font-medium text-gray-700">Filter by Year:</label>
+                    <select id="sampling-loc-year-filter" class="w-full mt-1 p-2 border rounded-md">
+                        <option value="all">-- All Years --</option>
+                        ${years.map(y => `<option value="${y}">${y}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="pt-4 flex justify-end">
+                    <button id="generate-preview-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center">
+                        <i data-lucide="play" class="w-5 h-5 mr-2"></i>Generate Preview
+                    </button>
+                </div>
+            `;
+            document.getElementById('report-inputs-container').innerHTML = inputsHtml;
+            lucide.createIcons();
+            document.getElementById('generate-preview-btn').addEventListener('click', generateSamplingLocationOverviewPreview);
+        }
+
+        // --- REPORT PREVIEW GENERATORS ---
+
+        /**
+         * Renders the report preview content and sets up PDF download.
+         * @param {string} title - Title of the report.
+         * @param {string} htmlContent - HTML string for the report body.
+         * @param {Function} downloadFn - Function to call for PDF download.
+         */
+        function renderPreview(title, htmlContent, downloadFn) {
+            switchTab('preview');
+            const container = document.getElementById('preview-content');
+            container.innerHTML = `
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold">${title}</h3>
+                    <button id="download-pdf-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-lg flex items-center">
+                        <i data-lucide="file-down" class="w-5 h-5 mr-2"></i>Download PDF
+                    </button>
+                </div>
+                <div id="preview-body" class="space-y-4 h-[60vh] overflow-y-auto pr-2">${htmlContent}</div>`;
+            lucide.createIcons();
+            document.getElementById('download-pdf-btn').addEventListener('click', downloadFn);
+        }
+
+        async function generateProjectSummaryPreview() {
+            const projectId = document.getElementById('project-select').value;
+            const project = (await getTableData('Lims', 'Projects')).find(p => p.project_id === projectId);
+            
+            if (!project) {
+                renderPreview('Project Summary', '<p class="text-red-500">Project not found.</p>', () => {});
+                return;
+            }
+
+            const projectSummary = (await getTableData('Lims', 'Project_Summary')).find(ps => ps.project_id === projectId);
+            const team = (await getTableData('Lims', 'ProjectPersons')).filter(p => p.project_id === projectId);
+            const experiments = (await getTableData('Lab', 'Experiments')).filter(e => e.project_id === projectId);
+            const samplesInProject = (await getTableData('Lab', 'Samples_tracking')).filter(s => s.exp_project === projectId);
+            const sampleTypeCounts = samplesInProject.reduce((acc, s) => { acc[s.sample_type] = (acc[s.sample_type] || 0) + 1; return acc; }, {});
+
+            let html = `
+                <h4 class="report-section-title">Project Details</h4>
+                ${renderObjectDetails(projectSummary, ['project_id', 'project_title', 'project_status', 'Funder', 'Start_date', 'End_date', 'total_allocated_budget', 'total_spent_budget'])}
+                
+                <h4 class="report-section-title">Project Team</h4>
+                <div id="project-team-table"></div>
+                
+                <h4 class="report-section-title">Experiments in Project</h4>
+                <div id="project-experiments-table"></div>
+
+                <h4 class="report-section-title">Sample Type Distribution</h4>
+                <div class="w-full h-64"><canvas id="sample-type-chart"></canvas></div>
+            `;
+            
+            renderPreview(`Project Summary: ${project.Title || project.project_id}`, html, () => generatePDF(
+                { id: 'project-details-table', title: 'Project Details' },
+                { id: 'project-team-table', title: 'Project Team' },
+                { id: 'project-experiments-table', title: 'Experiments in Project' },
+                { id: 'sample-type-chart', title: 'Sample Type Distribution' }
+            ));
+
+            renderHtmlTable('project-team-table', ['Person ID', 'Role'], team.map(t => [t.person_id, t.role]));
+            renderHtmlTable('project-experiments-table', ['Experiment ID', 'Title', 'Date'], experiments.map(e => [e.Experiment_Nr, e.Experiment_title, formatDate(e.Date)]));
+            renderPieChart('sample-type-chart', 'Sample Types', Object.keys(sampleTypeCounts), Object.values(sampleTypeCounts));
+            saveReportToHistory(`Project Summary: ${project.Title || project.project_id}`, 'project-summary', { projectId });
+        }
+        
+        async function generateSampleLifecyclePreview() {
+            const sampleTypeFilter = document.getElementById('sample-type-filter').value;
+            const workflowStatusFilter = document.getElementById('workflow-status-filter').value;
+            const projectFilter = document.getElementById('project-filter').value;
+
+            let samples = await getTableData('Lab', 'Samples_tracking');
+            if (samples.error) {
+                renderPreview('Sample Lifecycle Tracking', `<p class="text-red-500">Error loading sample data: ${samples.error}</p>`, () => {});
+                return;
+            }
+
+            samples = samples.filter(s => {
+                const matchesType = sampleTypeFilter === 'all' || s.sample_type === sampleTypeFilter;
+                const matchesStatus = workflowStatusFilter === 'all' || s.current_workflow_status === workflowStatusFilter;
+                const matchesProject = projectFilter === 'all' || s.exp_project === projectFilter;
+                return matchesType && matchesStatus && matchesProject;
+            });
+
+            const statusCounts = samples.reduce((acc, s) => { acc[s.current_workflow_status] = (acc[s.current_workflow_status] || 0) + 1; return acc; }, {});
+            const sampleHeaders = ['Sample ID', 'Type', 'Project', 'Status', 'Last Update', 'Species', 'Length', 'Weight', 'Concentration'];
+            const sampleRows = samples.map(s => [
+                s.sample_id, s.sample_type, s.exp_project || 'N/A', s.current_workflow_status, formatDateTime(s.last_status_update),
+                s.species_scientific_name || 'N/A', s.Length || 'N/A', s.Weight || 'N/A', s.qubit_concentration || s.ext_yield_qubit || 'N/A'
+            ]);
+
+            let html = `
+                <h4 class="report-section-title">Sample Status Distribution</h4>
+                <div class="w-full h-64"><canvas id="sample-status-chart"></canvas></div>
+                <h4 class="report-section-title">Filtered Samples (${samples.length} records)</h4>
+                <div id="sample-table"></div>
+            `;
+            renderPreview('Sample Lifecycle Tracking', html, () => generatePDF(
+                { id: 'sample-status-chart', title: 'Sample Status Distribution' },
+                { id: 'sample-table', title: 'Filtered Samples' }
+            ));
+
+            renderPieChart('sample-status-chart', 'Sample Status', Object.keys(statusCounts), Object.values(statusCounts));
+            renderHtmlTable('sample-table', sampleHeaders, sampleRows);
+            saveReportToHistory('Sample Lifecycle Tracking', 'sample-lifecycle', { sampleTypeFilter, workflowStatusFilter, projectFilter });
+        }
+
+        async function generateInventoryPreview() {
+            const storageId = document.getElementById('storage-select').value;
+            let inventory = await getTableData('Lab', 'Storage_Inventory_Summary');
+            if (inventory.error) {
+                renderPreview('Storage Inventory Report', `<p class="text-red-500">Error loading inventory data: ${inventory.error}</p>`, () => {});
+                return;
+            }
+
+            if (storageId !== 'all') {
+                inventory = inventory.filter(item => item.storage_id === storageId);
+            }
+
+            const inventoryHeaders = ['Storage ID', 'Room', 'Freezer', 'Temperature', 'Box', 'Total Samples'];
+            const inventoryRows = inventory.map(item => [
+                item.storage_id, item.room_id, item.Freezer, `${item.Temperature} ${item.TemperatureUnit || ''}`, 
+                `${item.Box} (X:${item.BoxX_ABC}, Y:${item.BoxY_123})`, item.total_samples_stored
+            ]);
+
+            let html = `
+                <h4 class="report-section-title">Storage Locations Overview</h4>
+                <div id="inventory-table"></div>
+            `;
+            renderPreview('Storage Inventory Report', html, () => generatePDF(
+                { id: 'inventory-table', title: 'Storage Locations Overview' }
+            ));
+
+            renderHtmlTable('inventory-table', inventoryHeaders, inventoryRows);
+            saveReportToHistory(`Storage Inventory: ${storageId === 'all' ? 'All' : storageId}`, 'inventory-report', { storageId });
+        }
+
+        async function generateReagentExpiryPreview() {
+            const categoryFilter = document.getElementById('reagent-category-filter').value;
+            const statusFilter = document.getElementById('reagent-status-filter').value;
+            const expiryDays = parseInt(document.getElementById('expiry-days-filter').value);
+
+            let reagents = await getTableData('Lims', 'Reagent_Stock_Status');
+            if (reagents.error) {
+                renderPreview('Reagent Expiry Report', `<p class="text-red-500">Error loading reagent data: ${reagents.error}</p>`, () => {});
+                return;
+            }
+
+            reagents = reagents.filter(r => {
+                const matchesCategory = categoryFilter === 'all' || r.category === categoryFilter;
+                const matchesStatus = statusFilter === 'all' || r.current_status === statusFilter;
+                const isExpiring = r.days_until_expiry <= expiryDays && r.days_until_expiry >= 0;
+                return matchesCategory && matchesStatus && isExpiring;
+            });
+            reagents.sort((a, b) => a.days_until_expiry - b.days_until_expiry); // Sort by closest expiry
+
+            const reagentHeaders = ['Reagent Name', 'Category', 'Lot', 'Status', 'Reception Date', 'Expiry Date', 'Days Until Expiry'];
+            const reagentRows = reagents.map(r => [
+                r.Reagent_CompleteName, r.category, r.Lot, r.current_status, formatDate(r.Recieption_date),
+                formatDate(r.Expire_date), r.days_until_expiry
+            ]);
+
+            let html = `
+                <h4 class="report-section-title">Reagents Expiring Soon (within ${expiryDays} days)</h4>
+                <div id="reagent-expiry-table"></div>
+            `;
+            renderPreview('Reagent Expiry Report', html, () => generatePDF(
+                { id: 'reagent-expiry-table', title: 'Reagents Expiring Soon' }
+            ));
+
+            renderHtmlTable('reagent-expiry-table', reagentHeaders, reagentRows);
+            saveReportToHistory(`Reagent Expiry: ${expiryDays} days`, 'reagent-expiry', { categoryFilter, statusFilter, expiryDays });
+        }
+
+        async function generateQCSummaryPreview() {
+            const experimentNr = document.getElementById('experiment-select').value;
+            const experiment = (await getTableData('Lab', 'Experiments')).find(e => e.Experiment_Nr === experimentNr);
+            
+            if (!experiment) {
+                renderPreview('Experiment QC Summary', '<p class="text-red-500">Experiment not found.</p>', () => {});
+                return;
+            }
+
+            const qcData = (await getTableData('Lab', 'Samples_tracking')).filter(s => s.exp_nr === experimentNr && (s.qubit_concentration || s.ext_yield_qubit));
+            
+            const html = `
+                <h4 class="report-section-title">Experiment: ${experiment.Experiment_title || experiment.Experiment_Nr}</h4>
+                ${renderObjectDetails(experiment, ['Experiment_Nr', 'Experiment_title', 'project_id', 'aim', 'Date', 'Person', 'status_id'])}
+
+                <h4 class="report-section-title">QC Concentration Overview (Qubit/Extraction Yield)</h4>
+                <div class="w-full h-96"><canvas id="qc-chart"></canvas></div>
+                
+                <h4 class="report-section-title">Detailed QC Data</h4>
+                <div id="qc-table"></div>
+            `;
+            renderPreview(`QC Summary for ${experimentNr}`, html, () => generatePDF(
+                { id: 'qc-details-table', title: 'Experiment Details' }, // Assuming renderObjectDetails creates a div with this ID
+                { id: 'qc-chart', title: 'QC Concentration Chart' },
+                { id: 'qc-table', title: 'Detailed QC Data' }
+            ));
+            
+            // Render the object details for the experiment
+            const qcDetailsContainer = document.createElement('div');
+            qcDetailsContainer.id = 'qc-details-table'; // Give it an ID for PDF export
+            document.getElementById('preview-body').prepend(qcDetailsContainer); // Add it to the preview body
+            qcDetailsContainer.innerHTML = renderObjectDetails(experiment, ['Experiment_Nr', 'Experiment_title', 'project_id', 'aim', 'Date', 'Person', 'status_id']);
+
+
+            renderHtmlTable('qc-table', ['Sample ID', 'Qubit Conc (ng/µL)', 'Extraction Yield (ng/µL)', 'Last Update'], 
+                qcData.map(s => [s.sample_id, s.qubit_concentration || 'N/A', s.ext_yield_qubit || 'N/A', formatDateTime(s.last_status_update)]));
+            
+            renderBarChart('qc-chart', 'Qubit/Extraction Concentration', qcData.map(s => s.sample_id), 
+                qcData.map(s => s.qubit_concentration || s.ext_yield_qubit || 0), 'Concentration (ng/µL)');
+            
+            saveReportToHistory(`QC Summary: ${experimentNr}`, 'qc-summary', { experimentNr });
+        }
+
+        async function generateExperimentProgressPreview() {
+            const projectFilter = document.getElementById('exp-progress-project-filter').value;
+            const statusFilter = document.getElementById('exp-progress-status-filter').value;
+
+            let progressData = await getTableData('Lab', 'Experiment_Progress_Overview');
+            if (progressData.error) {
+                renderPreview('Experiment Progress Overview', `<p class="text-red-500">Error loading progress data: ${progressData.error}</p>`, () => {});
+                return;
+            }
+
+            progressData = progressData.filter(exp => {
+                const matchesProject = projectFilter === 'all' || exp.project_id === projectFilter;
+                const matchesStatus = statusFilter === 'all' || exp.experiment_status === statusFilter;
+                return matchesProject && matchesStatus;
+            });
+            progressData.sort((a,b) => new Date(b.experiment_start_date) - new Date(a.experiment_start_date));
+
+            const progressHeaders = [
+                'Experiment Nr', 'Title', 'Project', 'Status', 'Start Date', 'Total Samples', 
+                'Extracted', 'Qubit QC', 'Library Prep', 'Sequenced', 'Bioinfo Done'
+            ];
+            const progressRows = progressData.map(exp => [
+                exp.Experiment_Nr, exp.Experiment_title, exp.project_id, exp.experiment_status, formatDate(exp.experiment_start_date),
+                exp.total_samples_in_experiment, exp.samples_extracted_count, exp.samples_qubit_qc_count,
+                exp.samples_library_prep_count, exp.samples_sequenced_count, exp.samples_bioinformatics_done_count
+            ]);
+
+            let html = `
+                <h4 class="report-section-title">Experiment Progress Table</h4>
+                <div id="experiment-progress-table"></div>
+            `;
+            renderPreview('Experiment Progress Overview', html, () => generatePDF(
+                { id: 'experiment-progress-table', title: 'Experiment Progress Overview' }
+            ));
+
+            renderHtmlTable('experiment-progress-table', progressHeaders, progressRows);
+            saveReportToHistory('Experiment Progress Overview', 'experiment-progress', { projectFilter, statusFilter });
+        }
+
+        async function generateSpeciesDistributionPreview() {
+            const projectFilter = document.getElementById('species-dist-project-filter').value;
+            const locationFilter = document.getElementById('species-dist-location-filter').value;
+
+            let samples = await getTableData('Lab', 'Samples_tracking');
+            if (samples.error) {
+                renderPreview('Species Distribution', `<p class="text-red-500">Error loading sample data: ${samples.error}</p>`, () => {});
+                return;
+            }
+
+            samples = samples.filter(s => {
+                const matchesProject = projectFilter === 'all' || s.exp_project === projectFilter;
+                const matchesLocation = locationFilter === 'all' || s.location_name === locationFilter;
+                return matchesProject && matchesLocation && s.species_scientific_name; // Only samples with species
+            });
+
+            const speciesCounts = samples.reduce((acc, s) => { 
+                acc[s.species_scientific_name] = (acc[s.species_scientific_name] || 0) + 1; 
+                return acc; 
+            }, {});
+            
+            const speciesData = Object.entries(speciesCounts).map(([species, count]) => {
+                const speciesDetails = (masterCache['Reference.Species'] || []).find(s => s.Species === species);
+                return {
+                    species: species,
+                    count: count,
+                    genus: speciesDetails ? speciesDetails.Genus : 'N/A',
+                    de_name: speciesDetails ? speciesDetails.DE_name : 'N/A',
+                    en_name: speciesDetails ? speciesDetails.En_name : 'N/A'
+                };
+            }).sort((a,b) => b.count - a.count);
+
+            const speciesHeaders = ['Species', 'Genus', 'German Name', 'English Name', 'Count'];
+            const speciesRows = speciesData.map(s => [s.species, s.genus, s.de_name, s.en_name, s.count]);
+
+            let html = `
+                <h4 class="report-section-title">Species Count Distribution</h4>
+                <div class="w-full h-96"><canvas id="species-chart"></canvas></div>
+                <h4 class="report-section-title">Detailed Species List</h4>
+                <div id="species-table"></div>
+            `;
+            renderPreview('Species Distribution', html, () => generatePDF(
+                { id: 'species-chart', title: 'Species Count Distribution' },
+                { id: 'species-table', title: 'Detailed Species List' }
+            ));
+
+            renderBarChart('species-chart', 'Number of Samples', speciesData.map(s => s.species), speciesData.map(s => s.count), 'Number of Samples');
+            renderHtmlTable('species-table', speciesHeaders, speciesRows);
+            saveReportToHistory('Species Distribution', 'species-distribution', { projectFilter, locationFilter });
+        }
+
+        async function generateSamplingLocationOverviewPreview() {
+            const projectFilter = document.getElementById('sampling-loc-project-filter').value;
+            const yearFilter = document.getElementById('sampling-loc-year-filter').value;
+
+            let samplingEvents = await getTableData('Lab', 'Sampling');
+            if (samplingEvents.error) {
+                renderPreview('Sampling Location Overview', `<p class="text-red-500">Error loading sampling data: ${samplingEvents.error}</p>`, () => {});
+                return;
+            }
+
+            let filteredEvents = samplingEvents.filter(event => {
+                const eventYear = new Date(event.sampling_date).getFullYear();
+                const matchesYear = yearFilter === 'all' || eventYear == yearFilter;
+                
+                // Check if any experiment linked to this sampling event belongs to the filtered project
+                const samplesFromEvent = (masterCache['Lab.Samples_tracking'] || []).filter(s => s.Sampling_id === event.Sampling_id);
+                const matchesProject = projectFilter === 'all' || samplesFromEvent.some(s => s.exp_project === projectFilter);
+
+                return matchesYear && matchesProject;
+            });
+
+            const locationCounts = filteredEvents.reduce((acc, event) => { 
+                acc[event.place] = (acc[event.place] || 0) + 1; 
+                return acc; 
+            }, {});
+
+            const locationData = Object.entries(locationCounts).map(([place, count]) => {
+                const locationDetails = (masterCache['Reference.Location'] || []).find(l => l.place === place);
+                return {
+                    place: place,
+                    count: count,
+                    country: locationDetails ? locationDetails.country : 'N/A',
+                    category: locationDetails ? locationDetails.category : 'N/A'
+                };
+            }).sort((a,b) => b.count - a.count);
+
+            const locationHeaders = ['Location', 'Country', 'Category', 'Sampling Events'];
+            const locationRows = locationData.map(loc => [loc.place, loc.country, loc.category, loc.count]);
+
+            let html = `
+                <h4 class="report-section-title">Sampling Events by Location</h4>
+                <div class="w-full h-96"><canvas id="location-chart"></canvas></div>
+                <h4 class="report-section-title">Detailed Location List</h4>
+                <div id="location-table"></div>
+            `;
+            renderPreview('Sampling Location Overview', html, () => generatePDF(
+                { id: 'location-chart', title: 'Sampling Events by Location' },
+                { id: 'location-table', title: 'Detailed Location List' }
+            ));
+
+            renderBarChart('location-chart', 'Number of Sampling Events', locationData.map(loc => loc.place), locationData.map(loc => loc.count), 'Number of Events');
+            renderHtmlTable('location-table', locationHeaders, locationRows);
+            saveReportToHistory('Sampling Location Overview', 'sampling-location-overview', { projectFilter, yearFilter });
+        }
+
+
+        // --- HTML & CHART RENDERING HELPERS ---
+        /**
+         * Renders a generic HTML table.
+         * @param {string} containerId - ID of the div to render the table into.
+         * @param {Array<string>} headers - Array of column headers.
+         * @param {Array<Array<any>>} bodyRows - 2D array of table row data.
+         */
+        function renderHtmlTable(containerId, headers, bodyRows) {
+            const container = document.getElementById(containerId);
+            if (!container) return; // Ensure container exists
+            let table = `<table class="min-w-full text-sm">`;
+            if (headers && headers.length > 0) {
+                table += `<thead class="bg-gray-100"><tr>${headers.map(h => `<th class="p-2 text-left font-medium">${h}</th>`).join('')}</tr></thead>`;
+            }
+            table += `<tbody class="divide-y">${bodyRows.map(row => `<tr>${row.map(cell => `<td class="p-2">${cell === null || cell === undefined || cell === '' ? 'N/A' : cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+            container.innerHTML = table;
+        }
+
+        /**
+         * Renders a generic object's details as a definition list (key-value pairs).
+         * @param {object} obj - The object to display.
+         * @param {Array<string>} [keysToDisplay=Object.keys(obj)] - Optional array of specific keys to display.
+         * @returns {string} HTML string for the details.
+         */
+        function renderObjectDetails(obj, keysToDisplay = Object.keys(obj)) {
+            let html = '<dl class="space-y-2 text-sm">';
+            for (const key of keysToDisplay) {
+                const value = obj[key];
+                // Skip internal/unwanted keys
+                if (['nr', 'attachment', 'Attachment', 'password_hash', 'last_status_update'].includes(key) || key.endsWith('_ug')) continue;
+
+                const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                let formattedValue = value;
+
+                if ((key.toLowerCase().includes('date') || key.toLowerCase().includes('timestamp')) && value) {
+                    try {
+                        const dateObj = new Date(value);
+                        formattedValue = isNaN(dateObj.getTime()) ? 'Invalid Date' : dateObj.toLocaleString();
+                    } catch (e) {
+                        formattedValue = 'Invalid Date';
+                    }
+                } else if (value === null || value === '') {
+                    formattedValue = 'N/A';
+                }
+
+                html += `<div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100"><dt class="font-medium text-gray-500">${formattedKey}</dt><dd class="text-gray-900">${formattedValue}</dd></div>`;
+            }
+            html += '</dl>';
+            return html;
+        }
+
+        /**
+         * Renders a Pie Chart using Chart.js.
+         * @param {string} canvasId - ID of the canvas element.
+         * @param {string} label - Dataset label.
+         * @param {Array<string>} labels - X-axis labels.
+         * @param {Array<number>} data - Data values.
+         */
+        function renderPieChart(canvasId, label, labels, data) {
+            const ctx = document.getElementById(canvasId);
+            if (!ctx) return;
+            // Destroy existing chart instance to prevent redraw issues
+            if (Chart.getChart(canvasId)) {
+                Chart.getChart(canvasId).destroy();
+            }
+            new Chart(ctx, { 
+                type: 'pie', 
+                data: { 
+                    labels, 
+                    datasets: [{ 
+                        label, 
+                        data, 
+                        backgroundColor: ['#3b82f6', '#10b981', '#ef4444', '#f97316', '#8b5cf6', '#06b6d4', '#6b7280', '#ec4899', '#a855f7', '#facc15'] 
+                    }] 
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: label
+                        }
+                    }
+                }
+            });
+        }
+
+        /**
+         * Renders a Bar Chart using Chart.js.
+         * @param {string} canvasId - ID of the canvas element.
+         * @param {string} label - Dataset label.
+         * @param {Array<string>} labels - X-axis labels.
+         * @param {Array<number>} data - Data values.
+         * @param {string} yLabel - Label for the Y-axis.
+         */
+        function renderBarChart(canvasId, label, labels, data, yLabel) {
+            const ctx = document.getElementById(canvasId);
+            if (!ctx) return;
+            // Destroy existing chart instance to prevent redraw issues
+            if (Chart.getChart(canvasId)) {
+                Chart.getChart(canvasId).destroy();
+            }
+            new Chart(ctx, { 
+                type: 'bar', 
+                data: { 
+                    labels, 
+                    datasets: [{ 
+                        label, 
+                        data, 
+                        backgroundColor: '#3b82f6' 
+                    }] 
+                }, 
+                options: { 
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false // Hide legend for single dataset bar chart
+                        },
+                        title: {
+                            display: true,
+                            text: label
+                        }
+                    },
+                    scales: { 
+                        y: { 
+                            beginAtZero: true, 
+                            title: { display: true, text: yLabel } 
+                        },
+                        x: {
+                            title: { display: true, text: 'Category' }
+                        }
+                    } 
+                } 
+            });
+        }
+        
+        /**
+         * Formats a date string to a locale-specific date string.
+         * @param {string} dateString - The date string to format.
+         * @returns {string} Formatted date string or 'N/A'.
+         */
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            try {
+                const date = new Date(dateString);
+                return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString();
+            } catch (e) {
+                return 'N/A';
+            }
+        }
+
+        /**
+         * Formats a date string to a locale-specific date and time string.
+         * @param {string} dateString - The date string to format.
+         * @returns {string} Formatted date and time string or 'N/A'.
+         */
+        function formatDateTime(dateString) {
+            if (!dateString) return 'N/A';
+            try {
+                const date = new Date(dateString);
+                return isNaN(date.getTime()) ? 'N/A' : date.toLocaleString();
+            } catch (e) {
+                return 'N/A';
+            }
+        }
+
+        // --- PDF & HISTORY ---
+        /**
+         * Generates a PDF report from specified HTML elements and Chart.js canvases.
+         * @param {...object} elementsToExport - Objects with { id: string, title: string } for elements to include in PDF.
+         */
+        async function generatePDF(...elementsToExport) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4'); // 'p' for portrait, 'mm' for millimeters, 'a4' for A4 size
+            let yPos = 20; // Starting Y position for content
+
+            for (const item of elementsToExport) {
+                const element = document.getElementById(item.id);
+                if (!element) {
+                    console.warn(`Element with ID ${item.id} not found for PDF export.`);
+                    continue;
+                }
+
+                // Add a title for the section if provided
+                if (item.title) {
+                    if (yPos + 10 > doc.internal.pageSize.height - 10) { // Check if new page is needed for title
+                        doc.addPage();
+                        yPos = 20;
+                    }
+                    doc.setFontSize(16);
+                    doc.text(item.title, 14, yPos);
+                    yPos += 10; // Space after title
+                }
+
+                if (element.tagName === 'CANVAS') {
+                    // Export Chart.js canvas as image
+                    const imgData = element.toDataURL('image/png');
+                    const imgWidth = 180; // Width for image in PDF (approx. A4 width - margins)
+                    const imgHeight = (element.height * imgWidth) / element.width; // Maintain aspect ratio
+
+                    if (yPos + imgHeight > doc.internal.pageSize.height - 20) { // Check if new page is needed
+                        doc.addPage();
+                        yPos = 20;
+                    }
+                    doc.addImage(imgData, 'PNG', 14, yPos, imgWidth, imgHeight);
+                    yPos += imgHeight + 10; // Space after image
+                } else {
+                    // Export HTML table using jspdf-autotable
+                    // Ensure the table element itself is selected, not just its container
+                    const tableElement = element.querySelector('table');
+                    if (tableElement) {
+                        doc.autoTable({ 
+                            html: tableElement, 
+                            startY: yPos, 
+                            theme: 'grid',
+                            didDrawPage: function (data) {
+                                // Footer for page numbers
+                                doc.setFontSize(10);
+                                doc.text("Page " + doc.internal.getNumberOfPages(), data.settings.margin.left, doc.internal.pageSize.height - 10);
+                            },
+                            margin: { top: yPos } // Start table at current yPos
+                        });
+                        yPos = doc.autoTable.previous.finalY + 10; // Update yPos after table
+                    } else {
+                        // For generic HTML content (like renderObjectDetails output)
+                        // html2canvas is typically used for general HTML, but jspdf-autotable is for tables.
+                        // For simple key-value pairs, we can add them as text or convert to a simple table.
+                        // For now, if it's not a canvas or a direct table, we'll skip or require specific handling.
+                        console.warn(`Element with ID ${item.id} is not a canvas or a direct table, skipping for PDF.`);
+                    }
+                }
+            }
+            doc.save('report.pdf');
+        }
+
+        /**
+         * Saves generated report metadata to local storage for history.
+         * @param {string} title - Title of the report.
+         * @param {string} type - Type of report (e.g., 'project-summary').
+         * @param {object} params - Parameters used to generate the report.
+         */
+        function saveReportToHistory(title, type, params) {
+            let history = JSON.parse(localStorage.getItem('reportHistory')) || [];
+            const newReport = { title, type, params, date: new Date().toISOString() };
+            history.unshift(newReport); // Add to the beginning
+            history = history.slice(0, 10); // Keep only the last 10 reports
+            localStorage.setItem('reportHistory', JSON.stringify(history));
+            renderReportHistory(); // Update history display
+        }
+
+        /**
+         * Renders the list of recently generated reports from local storage.
+         */
+        function renderReportHistory() {
+            const history = JSON.parse(localStorage.getItem('reportHistory')) || [];
+            const container = document.getElementById('recent-reports-list');
+            if (history.length === 0) {
+                container.innerHTML = `<div class="text-center text-gray-500 mt-8"><i data-lucide="history" class="mx-auto h-12 w-12"></i><p class="mt-2">No reports generated yet.</p></div>`;
+                lucide.createIcons();
+                return;
+            }
+            container.innerHTML = history.map(h => `
+                <div class="p-3 rounded-md hover:bg-gray-100 flex justify-between items-center">
+                    <div>
+                        <p class="font-semibold">${h.title}</p>
+                        <p class="text-xs text-gray-500">${new Date(h.date).toLocaleString()}</p>
+                    </div>
+                    <button class="rerun-btn bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold py-1 px-2 rounded" data-report='${JSON.stringify(h)}'>Re-run</button>
+                </div>
+            `).join('');
+            lucide.createIcons(); // Re-create icons for history items
+            document.querySelectorAll('.rerun-btn').forEach(btn => btn.addEventListener('click', async (e) => {
+                const report = JSON.parse(e.target.dataset.report);
+                // Set the report type dropdown
+                document.getElementById('report-type').value = report.type;
+                // Trigger the selection handler to render inputs
+                handleReportSelection();
+                // Wait for inputs to render, then set their values and generate report
+                // This requires a small delay or a more sophisticated event listener for dynamic inputs
+                await new Promise(resolve => setTimeout(resolve, 50)); // Small delay
+                for (const paramKey in report.params) {
+                    const inputElement = document.getElementById(paramKey.replace(/([A-Z])/g, '-$1').toLowerCase()); // Convert camelCase to kebab-case for IDs
+                    if (inputElement) {
+                        inputElement.value = report.params[paramKey];
+                    }
+                }
+                // Manually trigger generation based on report type
+                const generateButton = document.getElementById('generate-preview-btn');
+                if (generateButton) {
+                    generateButton.click();
+                } else {
+                    console.warn('Generate button not found for re-run. Manual trigger needed.');
+                }
+            }));
+        }
+
+        // --- INITIALIZATION ---
+        /**
+         * Initializes the reporting page: sets up event listeners and pre-fetches data.
+         */
+        function initializeReportingPage() {
+            document.getElementById('report-type').addEventListener('change', handleReportSelection);
+            document.getElementById('tab-preview').addEventListener('click', () => switchTab('preview'));
+            document.getElementById('tab-history').addEventListener('click', () => switchTab('history'));
+            
+            // Pre-fetch all necessary data when the page loads
+            fetchAllData().then(() => {
+                console.log("All necessary data pre-cached for reporting.");
+                renderReportHistory(); // Render history after data is loaded
+                // If a report type is pre-selected (e.g., from URL param), trigger its rendering
+                // handleReportSelection(); 
+            }).catch(error => {
+                console.error("Failed to pre-cache all data:", error);
+                // Display a user-friendly error message on the page
+                document.getElementById('preview-content').innerHTML = `<div class="text-red-500 text-center mt-8"><i data-lucide="alert-triangle" class="mx-auto h-12 w-12"></i><p class="mt-2">Failed to load all data for reports. Please check console for errors.</p></div>`;
+                lucide.createIcons();
+            });
+        }
+    </script>
+</body>
+</html>

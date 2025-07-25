@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow Tracking - TIFI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .sidebar { border-right: 1px solid #e2e8f0; }
+        .sidebar-item { color: #475569; }
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        .kanban-board { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 1rem; min-height: 65vh; }
+        .kanban-column { min-width: 320px; max-width: 320px; background-color: #f1f5f9; border-radius: 0.75rem; display: flex; flex-direction: column; transition: background-color 0.2s ease-in-out; }
+        .kanban-column-header { padding: 1rem; }
+        .kanban-cards-container { padding: 0 1rem 1rem 1rem; flex-grow: 1; overflow-y: auto; }
+        .kanban-card { background-color: white; border-radius: 0.5rem; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1); transition: all 0.2s ease; cursor: grab; border-left-width: 4px; }
+        .kanban-card:hover { box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); transform: translateY(-2px); }
+        .kanban-card.dragging { opacity: 0.5; cursor: grabbing; transform: scale(1.05); }
+        .kanban-column.drag-valid { background-color: #dcfce7; } /* Light Green */
+        .kanban-column.drag-invalid { background-color: #fee2e2; } /* Light Red */
+        .modal-overlay { z-index: 50; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+        .border-l-blue-500 { border-left-color: #3b82f6; } .border-l-red-500 { border-left-color: #ef4444; } .border-l-pink-500 { border-left-color: #ec4899; } .border-l-amber-500 { border-left-color: #f59e0b; } .border-l-teal-500 { border-left-color: #14b8a6; } .border-l-fuchsia-500 { border-left-color: #d946ef; } .border-l-gray-500 { border-left-color: #6b7280; }
+    </style>
+</head>
+<body>
+    <div id="main-app">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI</span></div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
+                <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="box" class="w-5 h-5 mr-3"></i><span>Storage Box</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="Printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+            </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t"></div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+        
+        <div id="main-content" class="ml-64 p-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Workflow Automation & Tracking</h1>
+            <p class="text-gray-600 mb-6">Drag a sample to the next column to log a new analysis step and advance the workflow.</p>
+            
+            <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div>
+                        <label for="filter-workflow" class="text-sm font-medium text-gray-700">Filter by Workflow</label>
+                        <select id="filter-workflow" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm"></select>
+                    </div>
+                    <div>
+                        <label for="filter-project" class="text-sm font-medium text-gray-700">Filter by Project</label>
+                        <select id="filter-project" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm"></select>
+                    </div>
+                    <div>
+                        <label for="filter-type" class="text-sm font-medium text-gray-700">Filter by Sample Type</label>
+                        <select id="filter-type" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm"></select>
+                    </div>
+                    <div>
+                        <label for="filter-search" class="text-sm font-medium text-gray-700">Search Sample ID</label>
+                        <div class="flex items-center space-x-4 mt-1">
+                            <input type="text" id="filter-search" placeholder="e.g., W25iDE0001" class="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                            <div class="flex items-center whitespace-nowrap pt-2">
+                                <input type="checkbox" id="filter-workflow-only" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                <label for="filter-workflow-only" class="ml-2 block text-sm text-gray-900">Has Workflow</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="kanban-board-container" class="kanban-board">
+                <div class="w-full flex items-center justify-center h-full">
+                    <i data-lucide="loader-2" class="animate-spin h-12 w-12 text-blue-600"></i>
+                    <p class="ml-4 text-lg text-gray-600">Loading Workflow Data...</p>
+                </div>
+            </div>
+        </div>
+        <div id="modal-container"></div>
+    </div>
+
+<script>
+    if (sessionStorage.getItem('isLoggedIn') !== 'true') window.location.href = './login.html';
+    
+    // --- YOUR ORIGINAL VARIABLES AND MAPS (PRESERVED) ---
+    const API_BASE_URL = '/tifi-lims/api';
+    let masterSampleList = [];
+    const workflowSteps = [
+        'Received', 'Extracted', 'Nanodrop QC', 'Qubit QC', 'Tapestation QC',
+        'PCR Done', 'qPCR Done', 'Library Prep', 'Sequencing Done', 'Bioinformatics Done'
+    ];
+    
+    const sampleTypeColors = {
+        'Water': 'blue-500', 'DNA': 'red-500', 'RNA': 'pink-500', 'Sediment': 'amber-500',
+        'Tissue': 'teal-500', 'Library': 'fuchsia-500', 'Fish': 'gray-500', 'default': 'gray-400'
+    };
+
+    // --- CORRECTED AND COMPLETED STATUS MAP ---
+    const statusToTableMap = {
+        'Extracted': { table: 'Extraction', fields: [ { name: 'Date', type: 'date', required: true }, { name: 'Person', type: 'text', required: true }, { name: 'kit', type: 'text' }, { name: 'ElutionVolume', label: 'Elution Volume (µL)', type: 'number' } ] },
+        'Nanodrop QC': { table: 'Nanodrop', fields: [ { name: 'date', type: 'date', required: true }, { name: 'Person', type: 'text', required: true }, { name: 'Nanodrop_Concentration', label: 'Concentration (ng/µL)', type: 'number' }, { name: 'A260_280', label: 'A260/280 Ratio', type: 'number' }, { name: 'A260_230', label: 'A260/230 Ratio', type: 'number' } ] },
+        'Qubit QC': { table: 'Qubit', fields: [ { name: 'date', type: 'date', required: true }, { name: 'Person', type: 'text', required: true }, { name: 'QubitOriginal_sample_conc', label: 'Concentration (ng/µL)', type: 'number' } ] },
+        'Tapestation QC': { table: 'Tapestation', fields: [ { name: 'date', type: 'date', required: true }, { name: 'Person', type: 'text', required: true }, { name: 'kit', type: 'text' }, { name: 'Position', type: 'text' } ] },
+        'PCR Done': { table: 'PCR', fields: [ { name: 'Date', type: 'date', required: true }, { name: 'Person', type: 'text', required: true }, { name: 'gene_id', label: 'Primer ID', type: 'text' }, { name: 'kit', type: 'text' } ] },
+        'qPCR Done': { table: 'qPCR', fields: [ { name: 'Date', type: 'date', required: true }, { name: 'Person', type: 'text', required: true }, { name: 'gene_id', label: 'Primer ID', type: 'text' }, { name: 'CtValue', label: 'Ct Value', type: 'number' } ] },
+        'Library Prep': { table: 'Library', fields: [ { name: 'Library_id', type: 'text', required: true }, { name: 'Date', type: 'date', required: true }, { name: 'Person', type: 'text', required: true }, { name: 'LibraryPrepKit', type: 'text' } ] },
+        'Sequencing Done': { table: 'Sequencing', fields: [ { name: 'sequencing_id', type: 'text', required: true }, { name: 'Library_id', type: 'text', required: true }, { name: 'Date', type: 'date', required: true }, { name: 'Person', type: 'text', required: true }, { name: 'Sequencer', type: 'text' }, { name: 'TotalReads', type: 'number' } ] },
+        'Bioinformatics Done': { table: 'Bioinformatics', fields: [ { name: 'sequencing_id', type: 'text', required: true }, { name: 'Date', type: 'date', required: true }, { name: 'Person', type: 'text', required: true }, { name: 'PipelineName', type: 'text' } ] }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+        const user = JSON.parse(sessionStorage.getItem('user'));
+        if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.person}</p>`;
+        document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href = './login.html'; });
+        initializeWorkflowPage();
+    });
+
+    // --- YOUR ORIGINAL FUNCTIONS (PRESERVED) ---
+
+    async function apiFetch(endpoint, options = {}) {
+        try {
+            if (!(options.body instanceof FormData)) {
+                options.headers = { 'Content-Type': 'application/json', ...options.headers };
+                if(options.body) options.body = JSON.stringify(options.body);
+            }
+            const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+            if (!response.ok) { const err = await response.json().catch(() => ({error: 'Server error'})); throw new Error(err.error); }
+            return response.status === 204 ? { success: true } : await response.json();
+        } catch (error) { console.error("API Error:", error); return { error: error.message }; }
+    }
+
+    function renderKanbanBoard(samples) {
+        const container = document.getElementById('kanban-board-container');
+        container.innerHTML = workflowSteps.map(statusId => {
+            const samplesInColumn = samples.filter(s => s.current_workflow_status === statusId);
+            return `
+            <div class="kanban-column" data-status-id="${statusId}">
+                <div class="kanban-column-header">
+                    <h2 class="font-bold text-lg text-gray-700 flex justify-between items-center">
+                        <span>${statusId}</span>
+                        <span class="text-base font-bold text-white bg-gray-500 rounded-full px-2.5 py-1">${samplesInColumn.length}</span>
+                    </h2>
+                </div>
+                <div class="kanban-cards-container space-y-3 pr-2">
+                    ${samplesInColumn.map(sample => {
+                        const color = sampleTypeColors[sample.sample_type] || sampleTypeColors.default;
+                        const nextStepIndex = workflowSteps.indexOf(sample.current_workflow_status) + 1;
+                        const canProceed = nextStepIndex < workflowSteps.length;
+                        return `
+                        <div class="kanban-card p-3 border-l-${color}" draggable="true" data-sample-id="${sample.sample_id}">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="font-semibold text-gray-900">${sample.sample_id}</p>
+                                    <p class="text-sm text-gray-600">${sample.species_en_name || sample.sample_type}</p>
+                                </div>
+                                ${canProceed ? `<button class="proceed-btn text-gray-400 hover:text-blue-600" data-next-step="${workflowSteps[nextStepIndex]}" title="Proceed to ${workflowSteps[nextStepIndex]}"><i class="pointer-events-none" data-lucide="arrow-right-circle"></i></button>` : ''}
+                            </div>
+                            <p class="text-xs text-gray-400 mt-2">${timeSince(sample.last_status_update)} in this stage</p>
+                        </div>
+                        `}).join('')}
+                </div>
+            </div>`;
+        }).join('');
+        lucide.createIcons();
+        addEventListeners();
+    }
+
+    function addEventListeners() {
+        document.querySelectorAll('.kanban-card').forEach(card => {
+            card.addEventListener('dragstart', handleDragStart);
+            card.addEventListener('dragend', handleDragEnd);
+            card.addEventListener('click', (e) => {
+                if (!e.target.closest('.proceed-btn')) {
+                    showSampleDetailsModal(card.dataset.sampleId);
+                }
+            });
+        });
+        document.querySelectorAll('.kanban-column').forEach(column => {
+            column.addEventListener('dragover', handleDragOver);
+            column.addEventListener('dragleave', handleDragLeave);
+            column.addEventListener('drop', handleDrop);
+        });
+        document.querySelectorAll('.proceed-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const sampleId = e.target.closest('.kanban-card').dataset.sampleId;
+                const nextStep = e.target.closest('.proceed-btn').dataset.nextStep;
+                openWorkflowActionModal(sampleId, nextStep);
+            });
+        });
+    }
+
+    function handleDragStart(e) {
+        e.target.classList.add('dragging');
+        const sampleId = e.target.dataset.sampleId;
+        const sample = masterSampleList.find(s => s.sample_id === sampleId);
+        const currentIndex = workflowSteps.indexOf(sample.current_workflow_status);
+        const nextStepIndex = currentIndex + 1;
+        e.dataTransfer.setData('text/plain', sampleId);
+        
+        if (nextStepIndex < workflowSteps.length) {
+            const nextStep = workflowSteps[nextStepIndex];
+            document.querySelectorAll('.kanban-column').forEach(col => {
+                if (col.dataset.statusId === nextStep) {
+                    col.classList.add('drag-valid');
+                } else {
+                    col.classList.add('drag-invalid');
+                }
+            });
+        } else {
+            document.querySelectorAll('.kanban-column').forEach(col => col.classList.add('drag-invalid'));
+        }
+    }
+
+    function handleDragEnd(e) {
+        e.target.classList.remove('dragging');
+        document.querySelectorAll('.kanban-column').forEach(col => {
+            col.classList.remove('drag-valid', 'drag-invalid');
+        });
+    }
+
+    function handleDragOver(e) { e.preventDefault(); }
+    function handleDragLeave(e) {}
+
+    function handleDrop(e) {
+        e.preventDefault();
+        const targetColumn = e.currentTarget;
+        if (targetColumn.classList.contains('drag-valid')) {
+            const sampleId = e.dataTransfer.getData('text/plain');
+            const newStatus = targetColumn.dataset.statusId;
+            openWorkflowActionModal(sampleId, newStatus);
+        }
+    }
+
+    async function openWorkflowActionModal(sampleId, targetStatus) {
+        const actionInfo = statusToTableMap[targetStatus];
+        const sample = masterSampleList.find(s => s.sample_id === sampleId);
+        if (!actionInfo) {
+            alert(`No action defined for status: ${targetStatus}`);
+            return;
+        }
+        let formFieldsHtml = actionInfo.fields.map(field => `<div><label for="${field.name}" class="block text-sm font-medium text-gray-700">${field.label || field.name}</label><input type="${field.type}" id="${field.name}" name="${field.name}" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" ${field.required ? 'required' : ''}></div>`).join('');
+        const modalHTML = `<div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4"><div class="modal-content bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg"><div class="flex justify-between items-center mb-4 pb-4 border-b"><h2 class="text-2xl font-bold text-gray-800">Log: ${targetStatus}</h2><button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-3xl">&times;</button></div><form id="workflow-action-form" class="space-y-4"><p>For Sample: <strong class="text-blue-600">${sampleId}</strong></p>${formFieldsHtml}<div class="pt-4 flex justify-end"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Save & Advance</button></div></form></div></div>`;
+        const { closeModal } = showModal(modalHTML);
+        
+        document.getElementById('workflow-action-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            data.sample_id = sampleId;
+            data.Experiment_Nr = sample.exp_nr;
+            const actionLogResult = await apiFetch(`table/Lab/${actionInfo.table}`, { method: 'POST', body: data });
+            if (actionLogResult && !actionLogResult.error) {
+                const updateSampleStatusResult = await apiFetch(`table/Lab/Samples/${sampleId}`, { method: 'PUT', body: { workflow_status_id: targetStatus, last_status_update: new Date().toISOString() } });
+                if (updateSampleStatusResult && !updateSampleStatusResult.error) {
+                    alert('Action logged and workflow updated successfully!');
+                    closeModal();
+                    initializeWorkflowPage();
+                } else {
+                    alert(`Error updating sample workflow status: ${updateSampleStatusResult.error}. You might need to manually correct the status.`);
+                }
+            } else {
+                alert(`Error logging action: ${actionLogResult.error}`);
+            }
+        });
+    }
+
+    function timeSince(dateString) {
+        if (!dateString) return 'N/A';
+        const seconds = Math.floor((new Date() - new Date(dateString)) / 1000);
+        const interval = seconds / 86400;
+        if (interval > 1) return Math.floor(interval) + " days";
+        if (interval * 24 > 1) return Math.floor(interval * 24) + " hours";
+        if (interval * 24 * 60 > 1) return Math.floor(interval * 24 * 60) + " minutes";
+        return "Just now";
+    }
+
+    function showModal(content) {
+        const container = document.getElementById('modal-container');
+        container.innerHTML = content;
+        const modal = container.querySelector('.modal-overlay');
+        const modalContent = container.querySelector('.modal-content');
+        setTimeout(() => modalContent.classList.remove('opacity-0', '-translate-y-10'), 10);
+        const closeModal = () => { modalContent.classList.add('opacity-0', '-translate-y-10'); setTimeout(() => container.innerHTML = '', 300); };
+        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+        container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+        return { closeModal };
+    }
+
+    // --- END OF ORIGINAL CODE SECTION ---
+
+    
+    // --- NEW AND MODIFIED FUNCTIONS (ADDITIVE APPROACH) ---
+
+    // MODIFIED: This is the only function from your original code that needs changes to hook in the new features.
+    async function initializeWorkflowPage() {
+        // This part is original
+        const result = await apiFetch('table/Lab/Samples_tracking');
+        if (result && !result.error) {
+            masterSampleList = result;
+        } else {
+            document.getElementById('kanban-board-container').innerHTML = `<p class="text-red-500 text-center w-full">Error loading data. Please check the connection and try again.</p>`;
+            return;
+        }
+
+        const projects = [...new Set(masterSampleList.map(s => s.project_id).filter(Boolean))].sort();
+        const sampleTypes = [...new Set(masterSampleList.map(s => s.sample_type).filter(Boolean))].sort();
+        
+        const projectFilter = document.getElementById('filter-project');
+        projectFilter.innerHTML = '<option value="">All Projects</option>';
+        projects.forEach(p => projectFilter.innerHTML += `<option value="${p}">${p}</option>`);
+
+        const typeFilter = document.getElementById('filter-type');
+        typeFilter.innerHTML = '<option value="">All Sample Types</option>';
+        sampleTypes.forEach(t => typeFilter.innerHTML += `<option value="${t}">${t}</option>`);
+
+        // ADDED: Populate the new workflow filter dropdown
+        await populateWorkflowFilter();
+
+        // ADDED: Listeners for the new filter controls are added here
+        document.getElementById('filter-workflow').addEventListener('change', applyFilters);
+        document.getElementById('filter-workflow-only').addEventListener('change', applyFilters);
+
+        // This part is original
+        document.getElementById('filter-project').addEventListener('input', applyFilters);
+        document.getElementById('filter-type').addEventListener('input', applyFilters);
+        document.getElementById('filter-search').addEventListener('input', applyFilters);
+
+        applyFilters();
+    }
+    
+    // MODIFIED: applyFilters now handles the new filter controls
+    function applyFilters() {
+        const workflowId = document.getElementById('filter-workflow').value;
+        const projectId = document.getElementById('filter-project').value;
+        const sampleType = document.getElementById('filter-type').value;
+        const searchTerm = document.getElementById('filter-search').value.toLowerCase();
+        const workflowOnly = document.getElementById('filter-workflow-only').checked;
+
+        let filteredSamples = masterSampleList;
+
+        if (workflowOnly) {
+            filteredSamples = filteredSamples.filter(s => s.workflow_id != null);
+        }
+
+        if (workflowId) {
+            if (workflowId === 'NO_WORKFLOW') {
+                filteredSamples = filteredSamples.filter(s => s.workflow_id == null);
+            } else {
+                filteredSamples = filteredSamples.filter(s => s.workflow_id == workflowId);
+            }
+        }
+        
+        if (projectId) {
+            filteredSamples = filteredSamples.filter(s => s.project_id === projectId);
+        }
+        if (sampleType) {
+            filteredSamples = filteredSamples.filter(s => s.sample_type === sampleType);
+        }
+        if (searchTerm) {
+            filteredSamples = filteredSamples.filter(s => s.sample_id.toLowerCase().includes(searchTerm));
+        }
+        
+        renderKanbanBoard(filteredSamples);
+    }
+    
+    // MODIFIED: This now includes the new "Workflow Steps" section
+    async function showSampleDetailsModal(sampleId) {
+        const sample = masterSampleList.find(s => s.sample_id === sampleId);
+        if (!sample) { alert('Sample not found'); return; }
+
+        const modalHTML = `<div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div class="modal-content bg-white rounded-lg shadow-2xl p-6 w-full max-w-2xl">
+                <div class="flex justify-between items-center mb-4 pb-4 border-b">
+                    <h2 class="text-2xl font-bold text-gray-800">Sample: ${sample.sample_id}</h2>
+                    <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-3xl">&times;</button>
+                </div>
+                <div class="max-h-[70vh] overflow-y-auto pr-4 text-gray-700">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-6">
+                        <div><strong>Sample Type:</strong><span class="font-medium ml-2">${sample.sample_type || 'N/A'}</span></div>
+                        <div><strong>Current Status:</strong><span class="font-bold ml-2 text-blue-600">${sample.current_workflow_status}</span></div>
+                        <div><strong>Species:</strong><span class="font-medium ml-2">${sample.species_en_name || 'N/A'}</span></div>
+                        <div><strong>Location (Region):</strong><span class="font-medium ml-2">${sample.location_name || 'N/A'}</span></div>
+                        <div><strong>Ecosystem:</strong><span class="font-medium ml-2">${sample.sampling_ecosystem || 'N/A'}</span></div>
+                        <div><strong>Experiment:</strong><span class="font-medium ml-2">${sample.exp_nr || 'N/A'}</span></div>
+                        <div><strong>Project:</strong><span class="font-medium ml-2">${sample.project_id || 'N/A'}</span></div>
+                        <div><strong>Workflow ID:</strong><span class="font-medium ml-2">${sample.workflow_id || 'Not Assigned'}</span></div>
+                    </div>
+                    
+                    <div id="workflow-steps-container" class="mb-6"></div>
+                    
+                    <h3 class="font-bold text-lg mb-3">Analysis History</h3>
+                    <div class="relative pl-4 border-l-2 border-gray-200" id="history-timeline"><p>Loading history...</p></div>
+                </div>
+            </div>
+        </div>`;
+        showModal(modalHTML);
+        
+        // This calls the new function to show steps
+        loadWorkflowStepsIntoModal(sample.workflow_id, sample.current_workflow_status);
+        
+        // This is your original code for showing history, preserved and called here.
+        const historyContainer = document.getElementById('history-timeline');
+        historyContainer.innerHTML = '';
+        const analysisTables = ['Extraction', 'Qubit', 'Library', 'Sequencing', 'Bioinformatics'];
+        const dateFields = {'Extraction':'Date', 'Qubit':'date', 'Library':'Date', 'Sequencing':'Date', 'Bioinformatics':'Date'};
+        let events = [];
+        if (sample.recieption_date) {
+            events.push({ step: 'Received', date: new Date(sample.recieption_date) });
+        }
+        for (const table of analysisTables) {
+            const records = await apiFetch(`table/Lab/${table}`);
+            if (records && !records.error) {
+                records.filter(r => r.sample_id === sampleId).forEach(r => {
+                    events.push({ step: table, date: new Date(r[dateFields[table]]) });
+                });
+            }
+        }
+        events.sort((a,b) => a.date - b.date);
+        if (events.length > 0) {
+            events.forEach(event => {
+                historyContainer.innerHTML += `<div class="mb-4 relative"><div class="absolute -left-[9px] mt-1.5 w-4 h-4 bg-blue-500 rounded-full border-4 border-white"></div><time class="mb-1 text-sm font-normal leading-none text-gray-500">${event.date.toLocaleString()}</time><h4 class="text-md font-semibold text-gray-900">${event.step}</h4></div>`;
+            });
+        } else {
+            historyContainer.innerHTML = '<p>No history found.</p>';
+        }
+    }
+
+    // NEW functions added below this line
+    
+    async function populateWorkflowFilter() {
+        const workflowFilter = document.getElementById('filter-workflow');
+        const workflows = await apiFetch('table/Lims/Workflows');
+        if (workflows && !workflows.error) {
+            workflowFilter.innerHTML = '<option value="">All With Workflow</option>';
+            workflowFilter.innerHTML += '<option value="NO_WORKFLOW">Samples without Workflow</option>';
+            workflows.forEach(w => {
+                workflowFilter.innerHTML += `<option value="${w.Workflow_id}">${w.Workflow_name}</option>`;
+            });
+        }
+    }
+
+    async function loadWorkflowStepsIntoModal(workflowId, currentStatus) {
+        const stepsContainer = document.getElementById('workflow-steps-container');
+        if (!workflowId) {
+            stepsContainer.innerHTML = ''; // Hide section if no workflow
+            return;
+        }
+
+        const steps = await apiFetch(`table/Lims/Workflow_steps?Workflow_id=eq.${workflowId}&order=Step_number.asc`);
+        
+        if (steps && !steps.error && steps.length > 0) {
+            let stepsHtml = '<h3 class="font-bold text-lg mb-3">Workflow Steps</h3><ol class="list-decimal list-inside space-y-1">';
+            steps.forEach(step => {
+                const isCurrent = step.Step_name === currentStatus;
+                stepsHtml += `<li class="${isCurrent ? 'font-bold text-indigo-600' : ''}">${step.Step_number}. ${step.Step_name}</li>`;
+            });
+            stepsHtml += '</ol>';
+            stepsContainer.innerHTML = stepsHtml;
+        } else {
+            stepsContainer.innerHTML = '<h3 class="font-bold text-lg mb-3">Workflow Steps</h3><p class="text-sm text-gray-500">Could not load steps for this workflow.</p>';
+        }
+    }
+
+</script>
+</body>
+</html>

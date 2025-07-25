@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protocols - TIFI </title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <style>
+        /* Base body styles using Inter font and light background */
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        /* Sidebar styling */
+        .sidebar { border-right: 1px solid #e2e8f0; }
+        .sidebar-item { color: #475569; }
+        /* Active sidebar item styling */
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        /* Sidebar item hover effect */
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        /* Card styling for content sections */
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        /* Modal overlay for alerts and popups */
+        .modal-overlay { z-index: 50; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+        
+        /* Style for the sticky editor header */
+        .editor-sticky-header {
+            position: -webkit-sticky; /* For Safari */
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background-color: white;
+            /* Add a subtle border to separate from scrolling content */
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        /* Custom styling for the Quill toolbar container */
+        #quill-toolbar {
+            border: none;
+            padding: 0;
+        }
+        #quill-toolbar .ql-formats {
+            margin-right: 10px;
+        }
+
+        /* Quill Editor specific styles for appearance */
+        #editor-container-wrapper {
+             padding: 1.5rem; /* Replaces the old p-6 on the card */
+             padding-top: 0;
+        }
+        #editor-container {
+            min-height: 500px;
+            font-size: 1rem;
+            line-height: 1.5;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            background-color: white;
+            box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        }
+        .ql-container {
+            border: none !important; /* Remove default Quill border */
+        }
+        .ql-toolbar.ql-snow {
+            border-top-left-radius: 0.5rem;
+            border-top-right-radius: 0.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            background-color: #f8fafc;
+        }
+        .ql-editor {
+            padding: 1.5rem;
+        }
+
+        /* Style for H2 titles in the editor */
+        .ql-editor h2 {
+            font-size: 1.25rem; /* text-xl */
+            font-weight: 600; /* font-semibold */
+            color: #4338ca; /* text-indigo-700 */
+            border-bottom: 2px solid #e0e7ff; /* border-indigo-100 */
+            padding-bottom: 0.25rem; /* pb-1 */
+            margin-top: 1.5em;
+            margin-bottom: 1em;
+        }
+
+        /* Custom style for checklist items within Quill editor */
+        .ql-editor .ql-custom-checkbox-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 0.5em;
+        }
+
+        .ql-editor .ql-custom-checkbox {
+            margin-right: 0.5em;
+            vertical-align: middle;
+            width: 1.2em;
+            height: 1.2em;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            display: inline-block;
+            box-sizing: border-box;
+            line-height: 1;
+            text-align: center;
+            flex-shrink: 0;
+            margin-top: 0.2em;
+        }
+        .ql-editor .ql-custom-checkbox.ql-checked:before {
+            content: '\2713'; /* Checkmark symbol */
+            color: #4f46e5;
+            font-weight: bold;
+        }
+        .ql-editor .ql-custom-checkbox-text {
+            flex-grow: 1;
+            min-width: 0;
+        }
+
+        /* Styles for the "Run Protocol" modal checkboxes */
+        #protocol-run-modal .step-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+            padding: 1rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            background-color: #fff;
+            transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+            box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        }
+        #protocol-run-modal .step-item.completed {
+            background-color: #eff6ff; /* Light blue background for completed steps */
+            border-color: #93c5fd; /* Blue border for completed steps */
+        }
+        #protocol-run-modal .step-item input[type="checkbox"] {
+            margin-right: 1rem;
+            margin-top: 0.25rem;
+            min-width: 1.25rem;
+            min-height: 1.25rem;
+            cursor: pointer;
+        }
+        #protocol-run-modal .step-content {
+            flex-grow: 1;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+        /* Reset margins for elements within step-content to prevent double spacing */
+        #protocol-run-modal .step-content p, 
+        #protocol-run-modal .step-content ul, 
+        #protocol-run-modal .step-content ol, 
+        #protocol-run-modal .step-content h1,
+        #protocol-run-modal .step-content h2,
+        #protocol-run-modal .step-content h3,
+        #protocol-run-modal .step-content h4,
+        #protocol-run-modal .step-content h5,
+        #protocol-run-modal .step-content h6 {
+            margin-top: 0;
+            margin-bottom: 0.5em;
+        }
+        /* Styles for filter/sort inputs */
+        .sort-control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            font-size: 0.875rem; /* text-sm */
+            color: #475569; /* gray-600 */
+        }
+        .sort-control-group select {
+            padding: 4px 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.25rem;
+            background-color: white;
+            font-size: 0.875rem;
+            box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+        }
+        .sort-control-group select:focus {
+            outline: none;
+            border-color: #6366f1; /* indigo-500 */
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div id="main-app">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI</span></div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
+                <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="box" class="w-5 h-5 mr-3"></i><span>Storage Box</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="Printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+            </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t"></div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+        
+        <div id="main-content" class="ml-64 p-8 relative">
+            <h1 class="text-3xl font-bold text-gray-800 mb-6">Experiment Protocols</h1>
+
+            <div class="card p-6 mb-6">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-1">
+                        <label for="experiment-search" class="block text-sm font-medium text-gray-700">Search Experiment:</label>
+                        <input type="text" id="experiment-search" placeholder="Search by Exp. Nr or Title" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2">
+                        
+                        <div class="sort-control-group">
+                            <span>Sort by:</span>
+                            <select id="sort-column">
+                                <option value="experiment_id">Experiment Number</option>
+                                <option value="experiment_title">Title</option>
+                                <option value="experiment_date">Date</option>
+                            </select>
+                            <select id="sort-direction">
+                                <option value="asc">Ascending</option>
+                                <option value="desc">Descending</option>
+                            </select>
+                        </div>
+                        <select id="experiment-select" class="mt-2 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md" size="8"></select>
+                    </div>
+                    <div class="lg:col-span-2">
+                        <h2 class="block text-xl font-bold text-gray-800 mb-4">Selected Experiment Details:</h2>
+                        <div class="space-y-2 text-sm text-gray-700 mb-4">
+                            <p><strong>Experiment Nr:</strong> <span id="selected-exp-nr" class="font-semibold">N/A</span></p>
+                            <p><strong>Title:</strong> <span id="selected-exp-title">N/A</span></p>
+                            <p><strong>Project:</strong> <span id="selected-exp-project">N/A</span></p>
+                            <p><strong>Aim:</strong> <span id="selected-exp-aim">N/A</span></p>
+                            <p><strong>Method:</strong> <span id="selected-exp-method">N/A</span></p>
+                            <p><strong>Protocol Status:</strong> <span id="protocol-status" class="font-medium text-gray-500">Not Loaded</span></p>
+                            <p><strong>Last Protocol Run:</strong> <span id="protocol-last-run-timestamp">N/A</span></p>
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-3">
+                            <button id="create-edit-protocol-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow transition ease-in-out duration-150" disabled>
+                                <i data-lucide="file-pen" class="w-5 h-5 mr-2"></i>Create/Edit Protocol
+                            </button>
+                            <button id="run-protocol-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow transition ease-in-out duration-150" disabled>
+                                <i data-lucide="play" class="w-5 h-5 mr-2"></i>Run Protocol
+                            </button>
+                            <button id="export-original-pdf-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow transition ease-in-out duration-150" disabled>
+                                <i data-lucide="file-text" class="w-5 h-5 mr-2"></i>Export Original PDF
+                            </button>
+                            <button id="export-run-pdf-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow transition ease-in-out duration-150" disabled>
+                                <i data-lucide="file-check" class="w-5 h-5 mr-2"></i>Export Run PDF
+                            </button>
+                             <button id="delete-protocol-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow transition ease-in-out duration-150" disabled>
+                                <i data-lucide="trash-2" class="w-5 h-5 mr-2"></i>Delete Protocol
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="protocol-editor-section" class="card" style="display: none;">
+                <div class="editor-sticky-header p-6">
+                    <h2 class="text-xl font-bold text-gray-800">Protocol Content Editor</h2>
+
+                    <div id="quill-toolbar" class="mt-4">
+                        <span class="ql-formats">
+                            <select class="ql-header">
+                                <option value="1">Heading 1</option>
+                                <option value="2">Heading 2</option>
+                                <option value="3">Heading 3</option>
+                                <option selected>Normal</option>
+                            </select>
+                            <select class="ql-font"></select>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-bold"></button>
+                            <button class="ql-italic"></button>
+                            <button class="ql-underline"></button>
+                            <button class="ql-strike"></button>
+                        </span>
+                        <span class="ql-formats">
+                            <select class="ql-color"></select>
+                            <select class="ql-background"></select>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-script" value="sub"></button>
+                            <button class="ql-script" value="super"></button>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-list" value="ordered"></button>
+                            <button class="ql-list" value="bullet"></button>
+                            <button class="ql-indent" value="-1"></button>
+                            <button class="ql-indent" value="+1"></button>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-blockquote"></button>
+                            <button class="ql-code-block"></button>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-link"></button>
+                            <button class="ql-image"></button>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-clean"></button>
+                        </span>
+                    </div>
+
+                     <div class="border-t border-gray-200 mt-3 pt-3 flex flex-wrap items-center gap-3">
+                        <button id="add-checkbox-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow transition ease-in-out duration-150"><i data-lucide="check-square" class="w-5 h-5 mr-2"></i>Add Step</button>
+                        <button id="convert-to-steps-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow transition ease-in-out duration-150"><i data-lucide="list-checks" class="w-5 h-5 mr-2"></i>Convert Selected to Steps</button>
+                        
+                        <button id="save-protocol-content-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow ml-auto transition ease-in-out duration-150"><i data-lucide="save" class="w-5 h-5 mr-2"></i>Save Content</button>
+                    </div>
+                </div>
+                <div id="editor-container-wrapper">
+                    <div id="editor-container"></div>
+                </div>
+            </div>
+
+            <footer class="mt-8 pt-4 border-t text-center text-gray-500 text-sm">
+                Thuenen Institute
+            </footer>
+        </div>
+    </div>
+
+    <div id="modal-container"></div>
+
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <script>
+        // Check login status on page load
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') {
+            window.location.href = './login.html';
+        }
+        
+        const API_BASE_URL = '/tifi-lims/api'; // Corrected API base URL
+        let quill;
+        let allExperiments = [];
+        let filteredAndSortedExperiments = [];
+        let selectedExperiment = null; // Stores the full selected experiment object
+        let currentProtocolRun = null; // Stores the protocol_run object from Lab/protocol_runs table
+        let currentRunDetails = null; // Stores the parsed 'protocol_run_details' JSONB data from currentProtocolRun.protocol_run_details
+        let currentSortColumn = 'experiment_id'; 
+        let currentSortDirection = 'asc';
+
+        function showAlert(message, type = 'info') {
+            const modalContainer = document.getElementById('modal-container');
+            const alertHtml = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-sm transform transition-all ease-out duration-300 opacity-0 -translate-y-10">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-bold ${type === 'error' ? 'text-red-600' : 'text-blue-600'}">${type === 'error' ? 'Error' : 'Info'}</h3>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl">&times;</button>
+                        </div>
+                        <p class="text-gray-700">${message}</p>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(alertHtml);
+        }
+
+        function showModal(content) {
+            const container = document.getElementById('modal-container');
+            container.innerHTML = content;
+            const modal = container.querySelector('.modal-overlay');
+            const modalContent = container.querySelector('.modal-content');
+            setTimeout(() => modalContent.classList.remove('opacity-0', '-translate-y-10'), 10);
+
+            const closeModal = () => {
+                modalContent.classList.add('opacity-0', '-translate-y-10');
+                setTimeout(() => container.innerHTML = '', 300);
+            };
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeModal();
+            });
+            container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+            return { closeModal };
+        }
+
+        async function apiFetch(endpoint, options = {}) {
+            try {
+                const isJson = !(options.body instanceof FormData);
+                if (isJson && options.body) {
+                    options.headers = { ...options.headers, 'Content-Type': 'application/json' };
+                    options.body = JSON.stringify(options.body);
+                }
+
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                
+                if (!response.ok) {
+                    const errText = await response.text();
+                    try {
+                        const errJson = JSON.parse(errText);
+                        throw new Error(errJson.error || 'API request failed');
+                    } catch (e) {
+                        throw new Error(errText || 'API request failed with unknown error');
+                    }
+                }
+
+                if (response.status === 204 || response.headers.get('content-length') === '0') {
+                    return { success: true };
+                }
+
+                return response.json(); 
+            } catch (error) {
+                console.error("API Error:", error);
+                return { error: error.message };
+            }
+        }
+
+        async function loadAllExperiments() {
+            // Fetch from lab.experiments, which has experiment_id and experiment_title
+            const result = await apiFetch('table/Lab/experiments');
+            if (result.error) {
+                showAlert('Error fetching experiments: ' + result.error, 'error');
+                return;
+            }
+            allExperiments = result;
+            applyExperimentFiltersAndSort();
+        }
+
+        function applyExperimentFiltersAndSort() {
+            const searchTerm = document.getElementById('experiment-search').value.toLowerCase();
+            const sortColumn = document.getElementById('sort-column').value; 
+            const sortDirection = document.getElementById('sort-direction').value;
+            
+            let tempExperiments = [...allExperiments];
+
+            filteredAndSortedExperiments = tempExperiments.filter(exp => 
+                (String(exp.experiment_id || '').toLowerCase().includes(searchTerm)) || 
+                (String(exp.experiment_title || '').toLowerCase().includes(searchTerm)) || 
+                (String(exp.project_id || '').toLowerCase().includes(searchTerm))
+            );
+
+            filteredAndSortedExperiments.sort((a, b) => {
+                let valA = String(a[sortColumn] || '').toLowerCase();
+                let valB = String(b[sortColumn] || '').toLowerCase();
+
+                if (sortColumn === 'experiment_date') {
+                    const dateA = new Date(valA);
+                    const dateB = new Date(valB);
+                    if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) return 0;
+                    return sortDirection === 'asc' ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
+                } else if (sortColumn === 'experiment_id') {
+                    // Assuming experiment_id might have numbers and strings, similar sorting logic
+                    const numA = parseInt(valA.replace(/\D/g, '') || '0');
+                    const numB = parseInt(valB.replace(/\D/g, '') || '0');
+                    const stringA = valA.replace(/\d/g, '');
+                    const stringB = valB.replace(/\d/g, '');
+                    if (stringA === stringB) {
+                        return sortDirection === 'asc' ? numA - numB : numB - numA;
+                    }
+                    return sortDirection === 'asc' ? stringA.localeCompare(stringB) : stringB.localeCompare(stringA);
+                } else {
+                    return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                }
+            });
+
+            renderExperimentSelectOptions();
+        }
+
+        function renderExperimentSelectOptions() {
+            const selectElement = document.getElementById('experiment-select');
+            selectElement.innerHTML = '';
+
+            if (filteredAndSortedExperiments.length === 0) {
+                selectElement.innerHTML = '<option value="">No matching experiments found</option>';
+                resetControlButtonsAndInfo();
+                return;
+            }
+
+            filteredAndSortedExperiments.forEach(exp => {
+                const option = document.createElement('option');
+                // Store composite key (experiment_id and experiment_date) in the option value
+                option.value = JSON.stringify({ id: exp.experiment_id, date: exp.experiment_date }); 
+                option.textContent = `${exp.experiment_id} - ${exp.experiment_title || 'No Title'} (Project: ${exp.project_id || 'N/A'})`; 
+                selectElement.appendChild(option);
+            });
+            
+            // Re-select the previously selected experiment if it's still in the list
+            if (selectedExperiment) {
+                const selectedValue = JSON.stringify({ id: selectedExperiment.experiment_id, date: selectedExperiment.experiment_date });
+                if (filteredAndSortedExperiments.some(exp => exp.experiment_id === selectedExperiment.experiment_id && exp.experiment_date === selectedExperiment.experiment_date)) {
+                    selectElement.value = selectedValue;
+                } else {
+                    selectElement.selectedIndex = 0; // Select first if old one not found
+                    selectExperiment(selectElement.value);
+                }
+            } else if (filteredAndSortedExperiments.length > 0) {
+                selectElement.selectedIndex = 0; // Select first if nothing was selected
+                selectExperiment(selectElement.value);
+            } else {
+                resetControlButtonsAndInfo();
+            }
+        }
+
+        function resetControlButtonsAndInfo() {
+            document.getElementById('create-edit-protocol-btn').disabled = true;
+            document.getElementById('run-protocol-btn').disabled = true;
+            document.getElementById('export-original-pdf-btn').disabled = true;
+            document.getElementById('export-run-pdf-btn').disabled = true;
+            document.getElementById('delete-protocol-btn').disabled = true;
+
+            document.getElementById('selected-exp-nr').textContent = 'N/A';
+            document.getElementById('selected-exp-title').textContent = 'N/A';
+            document.getElementById('selected-exp-project').textContent = 'N/A';
+            document.getElementById('selected-exp-aim').textContent = 'N/A';
+            document.getElementById('selected-exp-method').textContent = 'N/A';
+            document.getElementById('protocol-status').textContent = 'Not Loaded';
+            document.getElementById('protocol-last-run-timestamp').textContent = 'N/A';
+
+            if (quill) quill.setContents([]);
+            document.getElementById('protocol-editor-section').style.display = 'none';
+            selectedExperiment = null;
+            currentProtocolRun = null; // Reset to null
+            currentRunDetails = null; // Reset to null
+        }
+
+        async function selectExperiment(jsonStringOfCompositeKey) {
+            // Parse the composite key from the option value
+            const { id, date } = JSON.parse(jsonStringOfCompositeKey);
+            selectedExperiment = allExperiments.find(exp => exp.experiment_id === id && exp.experiment_date === date);
+
+            if (!selectedExperiment) {
+                resetControlButtonsAndInfo();
+                return;
+            }
+
+            document.getElementById('selected-exp-nr').textContent = selectedExperiment.experiment_id; 
+            document.getElementById('selected-exp-title').textContent = selectedExperiment.experiment_title || 'N/A';
+            document.getElementById('selected-exp-project').textContent = selectedExperiment.project_id || 'N/A';
+            document.getElementById('selected-exp-aim').textContent = selectedExperiment.aim || 'N/A';
+            document.getElementById('selected-exp-method').textContent = selectedExperiment.method || 'N/A'; 
+
+            document.getElementById('create-edit-protocol-btn').disabled = false;
+            document.getElementById('run-protocol-btn').disabled = true; 
+            document.getElementById('export-original-pdf-btn').disabled = true;
+            document.getElementById('export-run-pdf-btn').disabled = true;
+            document.getElementById('delete-protocol-btn').disabled = true;
+
+            await loadLatestProtocolRun(); // Changed to loadLatestProtocolRun
+        }
+
+        // Helper function to format date to YYYY-MM-DD
+        function formatDateToYYYYMMDD(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            // Ensure it's a valid date object
+            if (isNaN(date.getTime())) {
+                // If it's already in YYYY-MM-DD format, return it directly
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+                    return dateString;
+                }
+                console.warn("Invalid date string provided to formatDateToYYYYMMDD:", dateString);
+                return ''; // Or handle error appropriately
+            }
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        async function loadLatestProtocolRun() { // Renamed from loadProtocol
+            document.getElementById('protocol-status').textContent = 'Loading...';
+            currentProtocolRun = null;
+            if (quill) quill.setContents([]);
+
+            // Fetch from the lab.protocol_runs table
+            // Ensure experiment_date is formatted to YYYY-MM-DD for the filter
+            const protocolRuns = await apiFetch(`table/Lab/protocol_runs?filter_experiment_id=${selectedExperiment.experiment_id}&filter_experiment_date=${formatDateToYYYYMMDD(selectedExperiment.experiment_date)}&order_by=run_date&order_direction=desc&limit=1`);
+            
+            if (protocolRuns.error) {
+                showAlert('Error loading protocol run: ' + protocolRuns.error, 'error');
+                document.getElementById('protocol-status').textContent = 'Error';
+                return;
+            }
+
+            if (protocolRuns.length > 0) {
+                currentProtocolRun = protocolRuns[0]; // Get the latest protocol run
+                if (currentProtocolRun.protocol_text) { // Use protocol_text for Quill content
+                    quill.setContents([]);
+                    quill.clipboard.dangerouslyPasteHTML(currentProtocolRun.protocol_text);
+                    lucide.createIcons();
+                } else {
+                    quill.setContents([]);
+                }
+                document.getElementById('protocol-status').textContent = 'Exists';
+                document.getElementById('run-protocol-btn').disabled = false;
+                document.getElementById('export-original-pdf-btn').disabled = false;
+                document.getElementById('delete-protocol-btn').disabled = false;
+                
+                if (currentProtocolRun.protocol_run_details) { // Use protocol_run_details for run data
+                    try {
+                        currentRunDetails = JSON.parse(currentProtocolRun.protocol_run_details);
+                        if (currentRunDetails.lastRunUpdated) {
+                            document.getElementById('protocol-last-run-timestamp').textContent = new Date(currentRunDetails.lastRunUpdated).toLocaleString();
+                            document.getElementById('export-run-pdf-btn').disabled = false;
+                        } else {
+                            document.getElementById('protocol-last-run-timestamp').textContent = 'N/A';
+                            document.getElementById('export-run-pdf-btn').disabled = true;
+                        }
+                    } catch (e) {
+                        console.error("Error parsing run details:", e);
+                        document.getElementById('protocol-last-run-timestamp').textContent = 'Invalid Run Data';
+                        document.getElementById('export-run-pdf-btn').disabled = true;
+                    }
+                } else {
+                    document.getElementById('protocol-last-run-timestamp').textContent = 'N/A';
+                    document.getElementById('export-run-pdf-btn').disabled = true;
+                }
+                
+                document.getElementById('protocol-editor-section').style.display = 'block';
+
+            } else {
+                document.getElementById('protocol-status').textContent = 'Not Exists';
+                document.getElementById('run-protocol-btn').disabled = true;
+                document.getElementById('export-original-pdf-btn').disabled = true;
+                document.getElementById('export-run-pdf-btn').disabled = true;
+                document.getElementById('delete-protocol-btn').disabled = true;
+                document.getElementById('protocol-last-run-timestamp').textContent = 'N/A';
+                document.getElementById('protocol-editor-section').style.display = 'none'; 
+            }
+        }
+
+        async function createEditProtocol() {
+            if (!selectedExperiment) {
+                showAlert('Please select an experiment first.', 'error');
+                return;
+            }
+            document.getElementById('protocol-editor-section').style.display = 'block';
+
+            // When creating/editing, we load the existing content if any, or provide a template
+            if (currentProtocolRun && currentProtocolRun.protocol_text) {
+                quill.setContents([]);
+                quill.clipboard.dangerouslyPasteHTML(currentProtocolRun.protocol_text);
+            } else {
+                quill.setContents([]); 
+                quill.clipboard.dangerouslyPasteHTML(`
+                    <h2>Samples</h2><p><br></p>
+                    <h2>Procedure</h2><p><br></p>
+                    <h2>Notes</h2><p><br></p>
+                `);
+            }
+            lucide.createIcons();
+        }
+
+        async function saveProtocolContent() {
+            if (!selectedExperiment) {
+                showAlert('No experiment selected to save the protocol for.', 'error');
+                return;
+            }
+
+            const protocolContent = quill.root.innerHTML;
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            const personId = user ? user.person_id : 'Unknown'; // Assuming person_id is available in user session
+
+            const data = {
+                "protocol_text": protocolContent, // Map to protocol_text
+                "experiment_id": selectedExperiment.experiment_id, 
+                "experiment_date": formatDateToYYYYMMDD(selectedExperiment.experiment_date), // Ensure YYYY-MM-DD
+                "run_date": new Date().toISOString().split('T')[0], // Set current date for the run
+                "person_id": personId, // Set the current user as the person who saved
+                "protocol_run_details": JSON.stringify({ // Initialize run details if not present
+                    runStarted: new Date().toISOString(),
+                    lastRunUpdated: new Date().toISOString(),
+                    steps: [], // Empty steps for a fresh save
+                    overallStatus: 'Saved'
+                }),
+                "notes": `Protocol content saved for ${selectedExperiment.experiment_id} by ${personId}`
+            };
+
+            // Always POST a new record for saving content, acting as versioning
+            const result = await apiFetch('table/Lab/protocol_runs', { method: 'POST', body: data });
+
+            if (!result.error) {
+                showAlert('Protocol content saved successfully! New version created.', 'info');
+                await loadLatestProtocolRun(); // Reload the latest protocol run
+                document.getElementById('protocol-editor-section').style.display = 'block';
+            } else {
+                showAlert('Failed to save protocol content: ' + (result.error || 'Unknown error'), 'error');
+            }
+        }
+
+        /**
+         * Inserts a custom checkbox blot into the Quill editor.
+         */
+        function addCheckboxBlot() {
+            const range = quill.getSelection(true);
+            quill.insertEmbed(range.index, 'checkbox', { text: 'New protocol step' }, Quill.sources.USER);
+            quill.setSelection(range.index + 1);
+        }
+
+        function convertSelectedToSteps() {
+            const range = quill.getSelection();
+            let textToConvert = '';
+            let startIndex = 0;
+            let deleteLength = 0;
+
+            if (range && range.length > 0) {
+                textToConvert = quill.getText(range.index, range.length);
+                startIndex = range.index;
+                deleteLength = range.length;
+            } else {
+                textToConvert = quill.getText();
+                startIndex = 0;
+                deleteLength = quill.getLength();
+            }
+
+            const lines = textToConvert.split('\n').filter(line => line.trim() !== '');
+
+            if (lines.length > 0) {
+                quill.deleteText(startIndex, deleteLength);
+                let insertIndex = startIndex;
+                lines.forEach(line => {
+                    quill.insertEmbed(insertIndex, 'checkbox', { text: line.trim() }, Quill.sources.USER);
+                    insertIndex++;
+                });
+                quill.setSelection(insertIndex);
+            }
+            lucide.createIcons();
+        }
+        
+        function generatePdfHeaderHtml() {
+            if (!selectedExperiment) return '';
+            const currentDateTime = new Date().toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+            return `
+                <div style="position: relative; margin-bottom: 20px; padding: 15px; border: 1px solid #e2e8f0; border-radius: 0.5rem; background-color: #f8fafc; color: #333;">
+                    <img src="./photos/logo.png" style="position: absolute; top: 15px; right: 15px; width: 80px; height: auto;" alt="Logo">
+                    <h2 style="font-size: 1.6em; font-weight: bold; color: #1e293b; margin-bottom: 10px; border-bottom: 2px solid #4f46e5; padding-bottom: 5px;">Experiment Protocol</h2>
+                    <p style="margin-bottom: 5px;"><strong>Experiment Nr:</strong> <span style="font-weight: 600;">${selectedExperiment.experiment_id || 'N/A'}</span></p>
+                    <p style="margin-bottom: 5px;"><strong>Title:</strong> ${selectedExperiment.experiment_title || 'N/A'}</p>
+                    <p style="margin-bottom: 5px;"><strong>Project:</strong> ${selectedExperiment.project_id || 'N/A'}</p>
+                    <p style="margin-bottom: 5px;"><strong>Aim:</strong> ${selectedExperiment.aim || 'N/A'}</p>
+                    <p style="margin-bottom: 15px;"><strong>Method:</strong> ${selectedExperiment.method || 'N/A'}</p>
+                    <p style="font-size: 0.85em; text-align: right; color: #666;">Generated on: ${currentDateTime}</p>
+                </div>
+            `;
+        }
+
+        function getPdfContent(isRunExport) {
+            // For PDF export, we use the currently loaded protocol run data
+            if (isRunExport) {
+                if (!currentProtocolRun || !currentProtocolRun.protocol_run_details) {
+                    showAlert('No saved run data exists. Please run and save the protocol first.', 'error');
+                    return null;
+                }
+                try {
+                    currentRunDetails = JSON.parse(currentProtocolRun.protocol_run_details); // Parse again to ensure latest state
+                    const fileNameSuffix = '_RunLog';
+
+                    const runDetailsHtml = `
+                        <div style="margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background-color: #f0f8ff; page-break-inside: avoid;">
+                            <h3 style="margin-top: 0; font-size: 1.2rem; font-weight: bold;">Run Details</h3>
+                            <p><strong>Run Started:</strong> ${new Date(currentRunDetails.runStarted).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                            <p><strong>Last Updated:</strong> ${new Date(currentRunDetails.lastRunUpdated).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                            <p><strong>Overall Status:</strong> ${currentRunDetails.overallStatus}</p>
+                        </div>`;
+                    
+                    const protocolContainer = document.createElement('div');
+                    protocolContainer.innerHTML = currentRunDetails.protocolHtml; // Use protocolHtml from run details
+
+                    const stepElements = protocolContainer.querySelectorAll('.ql-custom-checkbox-item');
+                    stepElements.forEach((el, index) => {
+                        const stepData = currentRunDetails.steps[index];
+                        if (!stepData) return;
+
+                        el.style.border = '1px solid #e2e8f0';
+                        el.style.borderRadius = '0.5rem';
+                        el.style.padding = '0.5rem';
+                        el.style.marginBottom = '0.5rem';
+                        el.style.pageBreakInside = 'avoid';
+
+                        const checkboxEl = el.querySelector('.ql-custom-checkbox');
+                        const textEl = el.querySelector('.ql-custom-checkbox-text');
+                        
+                        if (stepData.completed) {
+                            el.style.backgroundColor = '#eff6ff';
+                            checkboxEl.innerHTML = '<span style="color: #4f46e5; font-weight: bold;">&#10003;</span>';
+
+                            const completionInfo = document.createElement('span');
+                            completionInfo.style.display = 'block';
+                            completionInfo.style.fontSize = '0.8em';
+                            completionInfo.style.color = '#666';
+                            completionInfo.style.marginTop = '4px';
+                            completionInfo.textContent = `(Completed by ${stepData.completedBy} on ${new Date(stepData.completedAt).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })})`;
+                            textEl.appendChild(completionInfo);
+                        }
+                    });
+                    
+                    const htmlContentToExport = runDetailsHtml + protocolContainer.innerHTML;
+                    return { content: htmlContentToExport, fileNameSuffix: fileNameSuffix };
+
+                } catch (e) {
+                    showAlert('Error parsing run data for PDF export: ' + e.message, 'error');
+                    return null;
+                }
+            } else {
+                const fileNameSuffix = '_Original';
+                let htmlContentToExport = '';
+                if (document.getElementById('protocol-editor-section').style.display === 'block') {
+                    htmlContentToExport = quill.root.innerHTML;
+                } else if (currentProtocolRun && currentProtocolRun.protocol_text) { // Use protocol_text
+                    htmlContentToExport = currentProtocolRun.protocol_text;
+                } else {
+                    showAlert('No protocol content to export. Please create and save a protocol first.', 'error');
+                    return null;
+                }
+                return { content: htmlContentToExport, fileNameSuffix: fileNameSuffix };
+            }
+        }
+
+        async function exportProtocolAsPdf(isRunExport = false) {
+            if (!selectedExperiment) {
+                showAlert('Please select an experiment to export.', 'error');
+                return;
+            }
+
+            const pdfData = getPdfContent(isRunExport);
+            if (!pdfData) return;
+            
+            const protocolPrintArea = document.createElement('div');
+            protocolPrintArea.style.fontFamily = 'Inter, sans-serif';
+            protocolPrintArea.style.color = '#333';
+            protocolPrintArea.style.fontSize = '10pt';
+
+            const pageBreakStyles = `
+                <style>
+                    .pdf-content p, .pdf-content li, .pdf-content blockquote, img { page-break-inside: avoid; }
+                    .pdf-content h2 { font-size: 1.2rem; font-weight: 600; color: #4338ca; border-bottom: 1px solid #9ca3af; padding-bottom: 3px; margin-top: 20px; margin-bottom: 10px; page-break-after: avoid; }
+                    .pdf-content .ql-custom-checkbox-item { border: 1px solid #d1d5db; background-color: #f9fafb; border-radius: 6px; padding: 10px; margin-bottom: 8px; page-break-inside: avoid; }
+                    .pdf-content h1, .pdf-content h3, .pdf-content h4, .pdf-content h5, .pdf-content h6 { page-break-inside: avoid; page-break-after: avoid; }
+                </style>
+            `;
+            
+            protocolPrintArea.innerHTML = pageBreakStyles + generatePdfHeaderHtml() + `<div class="pdf-content">${pdfData.content}</div>`;
+
+            const protocolTitle = selectedExperiment.experiment_title || 'Experiment Protocol'; 
+            const fileName = `${selectedExperiment.experiment_id}_${protocolTitle.replace(/[^a-zA-Z0-9]/g, '_')}${pdfData.fileNameSuffix}.pdf`; 
+
+            const opt = {
+                margin: [25, 15, 25, 15],
+                filename: fileName,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, logging: false },
+                pagebreak: { mode: ['css', 'avoid-all'] },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().from(protocolPrintArea).set(opt).toPdf().get('pdf').then(function (pdf) {
+                const totalPages = pdf.internal.getNumberOfPages();
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+
+                for (let i = 1; i <= totalPages; i++) {
+                    pdf.setPage(i);
+                    pdf.setFontSize(8);
+                    pdf.setTextColor(150);
+                    pdf.text(`Page ${i} of ${totalPages}`, pageWidth / 2, pageHeight - 15, { align: 'center' });
+                }
+            }).save().catch(err => {
+                console.error("PDF Generation Error:", err);
+                showAlert('Failed to generate PDF. See console for details.', 'error');
+            });
+        }
+
+        async function runProtocol() {
+            if (!selectedExperiment) {
+                showAlert('Please select an experiment first.', 'error');
+                return;
+            }
+
+            // Get the current protocol content from the editor
+            const protocolContent = quill.root.innerHTML;
+            const protocolHtmlHash = btoa(unescape(encodeURIComponent(protocolContent)));
+
+            let initialRunDetails = {
+                protocolHtml: protocolContent, // Store the HTML of the protocol at the time of run
+                protocolHash: protocolHtmlHash,
+                runStarted: new Date().toISOString(),
+                lastRunUpdated: null,
+                steps: [], // This will be populated in the modal
+                overallStatus: 'In Progress'
+            };
+
+            // If there's a previously loaded protocol run, try to re-use its run details if the protocol content hasn't changed
+            if (currentProtocolRun && currentProtocolRun.protocol_text === protocolContent && currentProtocolRun.protocol_run_details) {
+                try {
+                    const existingRunDetails = JSON.parse(currentProtocolRun.protocol_run_details);
+                    // Only re-use if the protocol content is identical
+                    if (existingRunDetails.protocolHash === protocolHtmlHash) {
+                        initialRunDetails = existingRunDetails;
+                    }
+                } catch (e) {
+                    console.error("Error parsing existing run details:", e);
+                }
+            }
+
+            // Populate steps from the current protocol content (from editor)
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = protocolContent;
+            const protocolStepElements = Array.from(tempDiv.querySelectorAll('.ql-custom-checkbox-item'));
+            
+            // If steps are not already populated or if the protocol content changed, re-initialize steps
+            if (!initialRunDetails.steps || initialRunDetails.steps.length === 0 || initialRunDetails.protocolHtml !== protocolContent) {
+                initialRunDetails.steps = protocolStepElements.map((el, index) => ({
+                    id: index,
+                    contentHtml: el.querySelector('.ql-custom-checkbox-text')?.innerHTML || '',
+                    completed: false,
+                    completedBy: null,
+                    completedAt: null
+                }));
+            }
+
+            currentRunDetails = initialRunDetails; // Set currentRunDetails for the modal
+
+            const modalContent = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
+                    <div id="protocol-run-modal" class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-4xl max-h-[90vh] flex flex-col transform transition-all ease-out duration-300 opacity-0 -translate-y-10">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl font-bold">Run Protocol: ${selectedExperiment.experiment_id} - ${selectedExperiment.experiment_title || 'N/A'}</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl">&times;</button>
+                        </div>
+                        <div class="flex-grow overflow-y-auto pr-4">
+                            <p class="text-sm text-gray-600 mb-4">Click checkboxes to mark steps as complete. Run started: ${new Date(currentRunDetails.runStarted).toLocaleString()}. Last saved: ${currentRunDetails.lastRunUpdated ? new Date(currentRunDetails.lastRunUpdated).toLocaleString() : 'Never'}</p>
+                            <div id="run-steps-container" class="space-y-3"></div>
+                        </div>
+                        <div class="pt-6 flex justify-end border-t mt-6">
+                            <button id="save-run-status-btn" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg flex items-center shadow">
+                                <i data-lucide="check-circle" class="w-5 h-5 mr-2"></i>Save Run Status
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalContent);
+
+            const runStepsContainer = document.getElementById('run-steps-container');
+            const currentUser = JSON.parse(sessionStorage.getItem('user')).person || 'Unknown User';
+            const currentPersonId = JSON.parse(sessionStorage.getItem('user')).person_id || 'Unknown';
+
+
+            function renderRunSteps() {
+                runStepsContainer.innerHTML = '';
+                currentRunDetails.steps.forEach(step => {
+                    const stepDiv = document.createElement('div');
+                    stepDiv.className = `step-item ${step.completed ? 'completed' : ''}`;
+                    stepDiv.innerHTML = `
+                        <input type="checkbox" data-step-id="${step.id}" ${step.completed ? 'checked disabled' : ''}>
+                        <div class="step-content">
+                            ${step.contentHtml}
+                            ${step.completed ? `<p class="text-xs text-gray-500 mt-1">Completed by ${step.completedBy} on ${new Date(step.completedAt).toLocaleString()}</p>` : ''}
+                        </div>
+                    `;
+                    runStepsContainer.appendChild(stepDiv);
+                });
+                lucide.createIcons();
+            }
+
+            renderRunSteps();
+
+            runStepsContainer.addEventListener('change', (e) => {
+                if (e.target.matches('input[type="checkbox"]')) {
+                    const stepId = parseInt(e.target.dataset.stepId);
+                    const step = currentRunDetails.steps.find(s => s.id === stepId);
+                    if (step) {
+                        step.completed = e.target.checked;
+                        step.completedBy = e.target.checked ? currentUser : null;
+                        step.completedAt = e.target.checked ? new Date().toISOString() : null;
+                        
+                        const stepItemDiv = e.target.closest('.step-item');
+                        stepItemDiv.classList.toggle('completed', e.target.checked);
+                        e.target.disabled = e.target.checked;
+
+                        let completedInfo = stepItemDiv.querySelector('.step-content .text-xs');
+                        if (e.target.checked) {
+                            if (!completedInfo) {
+                                completedInfo = document.createElement('p');
+                                completedInfo.className = 'text-xs text-gray-500 mt-1';
+                                stepItemDiv.querySelector('.step-content').appendChild(completedInfo);
+                            }
+                            completedInfo.textContent = `Completed by ${step.completedBy} on ${new Date(step.completedAt).toLocaleString()}`;
+                        } else if(completedInfo) {
+                            completedInfo.remove();
+                        }
+                    }
+                }
+            });
+
+            document.getElementById('save-run-status-btn').addEventListener('click', async () => {
+                currentRunDetails.lastRunUpdated = new Date().toISOString();
+                currentRunDetails.overallStatus = currentRunDetails.steps.every(s => s.completed) ? 'Completed' : 'In Progress';
+
+                const dataToSave = { 
+                    "protocol_text": quill.root.innerHTML, // Save current editor content as the protocol_text for this run
+                    "protocol_run_details": JSON.stringify(currentRunDetails), // Save updated run details
+                    "experiment_id": selectedExperiment.experiment_id,
+                    "experiment_date": formatDateToYYYYMMDD(selectedExperiment.experiment_date), // Ensure YYYY-MM-DD
+                    "run_date": new Date().toISOString().split('T')[0], // Set current date for the run
+                    "person_id": currentPersonId, // Set the current user as the person who performed the run
+                    "notes": `Protocol run saved for ${selectedExperiment.experiment_id} by ${currentPersonId}`
+                };
+                
+                // Always POST a new record for a protocol run
+                const result = await apiFetch('table/Lab/protocol_runs', { method: 'POST', body: dataToSave });
+
+                if (!result.error) {
+                    showAlert('Protocol run status saved successfully! New run record created.', 'info');
+                    closeModal();
+                    await loadLatestProtocolRun(); // Reload the latest protocol run
+                } else {
+                    showAlert('Failed to save run status: ' + (result.error || 'Unknown error'), 'error');
+                }
+            });
+        }
+
+        async function deleteProtocol() { // This now deletes a specific protocol_run record
+            if (!currentProtocolRun || !currentProtocolRun.protocol_run_id) {
+                showAlert('No protocol run selected for deletion.', 'error');
+                return;
+            }
+
+            if (confirm(`Are you sure you want to delete this specific protocol run (ID: ${currentProtocolRun.protocol_run_id}) for experiment ${selectedExperiment.experiment_id}? This action cannot be undone.`)) { 
+                // Use the generic DELETE endpoint with the protocol_run_id
+                const result = await apiFetch(`table/Lab/protocol_runs/${currentProtocolRun.protocol_run_id}`, { method: 'DELETE' });
+
+                if (result.success) {
+                    showAlert('Protocol run deleted successfully!', 'info');
+                    // After deleting, try to load the next latest protocol run for the experiment
+                    await loadLatestProtocolRun(); 
+                    // If no more runs exist, reset the UI
+                    if (!currentProtocolRun) {
+                        resetControlButtonsAndInfo();
+                    }
+                } else {
+                    showAlert('Failed to delete protocol run: ' + (result.error || 'Unknown error'), 'error');
+                }
+            }
+        }
+
+        function addEventListeners() {
+            document.getElementById('experiment-search').addEventListener('input', applyExperimentFiltersAndSort);
+            document.getElementById('sort-column').addEventListener('change', applyExperimentFiltersAndSort);
+            document.getElementById('sort-direction').addEventListener('change', applyExperimentFiltersAndSort);
+            document.getElementById('experiment-select').addEventListener('change', (e) => selectExperiment(e.target.value));
+            document.getElementById('create-edit-protocol-btn').addEventListener('click', createEditProtocol);
+            document.getElementById('save-protocol-content-btn').addEventListener('click', saveProtocolContent);
+            document.getElementById('run-protocol-btn').addEventListener('click', runProtocol);
+            document.getElementById('delete-protocol-btn').addEventListener('click', deleteProtocol);
+            document.getElementById('export-original-pdf-btn').addEventListener('click', () => exportProtocolAsPdf(false));
+            document.getElementById('export-run-pdf-btn').addEventListener('click', () => exportProtocolAsPdf(true));
+            document.getElementById('add-checkbox-btn').addEventListener('click', addCheckboxBlot);
+            document.getElementById('convert-to-steps-btn').addEventListener('click', convertSelectedToSteps);
+            document.getElementById('logout-button').addEventListener('click', () => { 
+                sessionStorage.clear(); 
+                window.location.href = './login.html'; 
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            // Ensure person_id is available in the session storage for the current user
+            if(user && user.full_name) { // Assuming 'full_name' is available for display
+                document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.full_name}</p>`;
+            } else {
+                document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">Guest</p>`;
+            }
+
+
+            const BlockEmbed = Quill.import('blots/block/embed');
+            class CheckboxBlot extends BlockEmbed {
+                static blotName = 'checkbox';
+                static tagName = 'div';
+                static className = 'ql-custom-checkbox-item';
+
+                static create(value) {
+                    const node = super.create(value);
+                    node.setAttribute('contenteditable', 'false');
+                    
+                    const checkbox = document.createElement('span');
+                    checkbox.className = 'ql-custom-checkbox';
+                    node.appendChild(checkbox);
+
+                    const textSpan = document.createElement('span');
+                    textSpan.className = 'ql-custom-checkbox-text';
+                    textSpan.setAttribute('contenteditable', 'true');
+                    textSpan.textContent = value.text || '';
+                    node.appendChild(textSpan);
+                    return node;
+                }
+
+                static value(node) {
+                    const textSpan = node.querySelector('.ql-custom-checkbox-text');
+                    return { text: textSpan ? textSpan.textContent : '' };
+                }
+            }
+            Quill.register(CheckboxBlot, true);
+
+            quill = new Quill('#editor-container', {
+                theme: 'snow',
+                modules: {
+                    toolbar: '#quill-toolbar',
+                    clipboard: { matchVisual: false }
+                }
+            });
+
+            const Font = Quill.import('formats/font');
+            Font.whitelist = ['Inter', 'serif', 'monospace', 'system'];
+            Quill.register(Font, true);
+            quill.root.style.fontFamily = 'Inter, sans-serif';
+
+            // --- NEW: Logic to prevent page jump on focus ---
+            const editorElement = quill.root;
+            const toolbarElement = document.querySelector('.editor-sticky-header');
+            let preventScrollOnFocus = false;
+            let lastScrollTop = 0;
+
+            toolbarElement.addEventListener('mousedown', (e) => {
+                // Prevent the editor from losing selection when clicking the toolbar
+                e.preventDefault(); 
+                preventScrollOnFocus = true;
+                lastScrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            });
+
+            editorElement.addEventListener('focus', () => {
+                if (preventScrollOnFocus) {
+                    // Restore the scroll position
+                    window.scrollTo(0, lastScrollTop);
+                    preventScrollOnFocus = false;
+                }
+            });
+
+            await loadAllExperiments();
+            addEventListeners();
+        });
+    </script>
+</body>
+</html>

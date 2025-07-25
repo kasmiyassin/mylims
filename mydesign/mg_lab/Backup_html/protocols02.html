@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protocols - TIFI MG</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <style>
+        /* Base body styles using Inter font and light background */
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        /* Sidebar styling */
+        .sidebar { transition: width 0.3s ease; border-right: 1px solid #e2e8f0; }
+        .sidebar-item { transition: all 0.2s ease; color: #475569; }
+        /* Active sidebar item styling */
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        /* Sidebar item hover effect */
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        /* Card styling for content sections */
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        /* Modal overlay for alerts and popups */
+        .modal-overlay { z-index: 50; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+        
+        /* Quill Editor specific styles for appearance */
+        #quill-editor-container {
+            min-height: 500px;
+            font-size: 1rem;
+            line-height: 1.5;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+            background-color: white;
+            box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        }
+        .ql-container {
+            border: none !important; /* Remove default Quill border */
+        }
+        .ql-toolbar.ql-snow {
+            border-top-left-radius: 0.5rem;
+            border-top-right-radius: 0.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            background-color: #f8fafc;
+        }
+        .ql-editor {
+            padding: 1.5rem;
+        }
+
+        /* Custom style for checklist items within Quill editor */
+        .ql-editor .ql-custom-checkbox-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 0.5em;
+        }
+
+        .ql-editor .ql-custom-checkbox {
+            margin-right: 0.5em;
+            vertical-align: middle;
+            width: 1.2em;
+            height: 1.2em;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            display: inline-block;
+            box-sizing: border-box;
+            line-height: 1;
+            text-align: center;
+            flex-shrink: 0;
+            margin-top: 0.2em;
+        }
+        .ql-editor .ql-custom-checkbox.ql-checked:before {
+            content: '\2713'; /* Checkmark symbol */
+            color: #4f46e5;
+            font-weight: bold;
+        }
+        .ql-editor .ql-custom-checkbox-text {
+            flex-grow: 1;
+            min-width: 0;
+        }
+
+        /* Styles for the "Run Protocol" modal checkboxes */
+        #protocol-run-modal .step-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+            padding: 1rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            background-color: #fff;
+            transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+            box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        }
+        #protocol-run-modal .step-item.completed {
+            background-color: #eff6ff; /* Light blue background for completed steps */
+            border-color: #93c5fd; /* Blue border for completed steps */
+        }
+        #protocol-run-modal .step-item input[type="checkbox"] {
+            margin-right: 1rem;
+            margin-top: 0.25rem;
+            min-width: 1.25rem;
+            min-height: 1.25rem;
+            cursor: pointer;
+        }
+        #protocol-run-modal .step-content {
+            flex-grow: 1;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+        /* Reset margins for elements within step-content to prevent double spacing */
+        #protocol-run-modal .step-content p, 
+        #protocol-run-modal .step-content ul, 
+        #protocol-run-modal .step-content ol, 
+        #protocol-run-modal .step-content h1,
+        #protocol-run-modal .step-content h2,
+        #protocol-run-modal .step-content h3,
+        #protocol-run-modal .step-content h4,
+        #protocol-run-modal .step-content h5,
+        #protocol-run-modal .step-content h6 {
+            margin-top: 0;
+            margin-bottom: 0.5em;
+        }
+        /* Styling for PDF logo when generating PDFs */
+        .pdf-logo {
+            position: absolute;
+            top: 20mm; 
+            right: 20mm; 
+            width: 80px;
+            height: auto;
+            z-index: 10;
+        }
+        /* Styles for filter/sort inputs */
+        .sort-control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            font-size: 0.875rem; /* text-sm */
+            color: #475569; /* gray-600 */
+        }
+        .sort-control-group select {
+            padding: 4px 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.25rem;
+            background-color: white;
+            font-size: 0.875rem;
+            box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+        }
+        .sort-control-group select:focus {
+            outline: none;
+            border-color: #6366f1; /* indigo-500 */
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
+        }
+
+        /* Specific styling for the protocol display area */
+        #protocol-display-area {
+            min-height: 200px;
+            background-color: #fdfdfd;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            line-height: 1.6;
+            overflow-y: auto;
+            font-size: 1rem;
+        }
+        /* Basic styling for content within the display area, similar to Quill defaults */
+        #protocol-display-area p { margin-bottom: 1em; }
+        #protocol-display-area h1 { font-size: 2em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; }
+        #protocol-display-area h2 { font-size: 1.5em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; }
+        #protocol-display-area h3 { font-size: 1.25em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; }
+        #protocol-display-area ul, #protocol-display-area ol { margin-bottom: 1em; padding-left: 1.5em; }
+        #protocol-display-area ul li { list-style-type: disc; margin-bottom: 0.5em; }
+        #protocol-display-area ol li { list-style-type: decimal; margin-bottom: 0.5em; }
+        #protocol-display-area blockquote { border-left: 4px solid #cbd5e1; padding-left: 1em; color: #64748b; font-style: italic; margin-bottom: 1em; }
+        #protocol-display-area code { background-color: #e2e8f0; padding: 0.2em 0.4em; border-radius: 0.25em; font-family: monospace; }
+        #protocol-display-area pre { background-color: #1e293b; color: #f8fafc; padding: 1em; border-radius: 0.5em; overflow-x: auto; margin-bottom: 1em; }
+        /* Style the custom checkbox items for display (without the input field) */
+        #protocol-display-area .ql-custom-checkbox-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 0.5em;
+        }
+        #protocol-display-area .ql-custom-checkbox {
+            margin-right: 0.5em;
+            vertical-align: middle;
+            width: 1.2em;
+            height: 1.2em;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            display: inline-block;
+            box-sizing: border-box;
+            line-height: 1;
+            text-align: center;
+            flex-shrink: 0;
+            margin-top: 0.2em;
+            /* Hide the actual checkbox input, just show the visual representation */
+            visibility: hidden;
+            position: relative;
+        }
+        #protocol-display-area .ql-custom-checkbox:after {
+            content: ''; /* No checkmark in view mode, or you can add a static one */
+            visibility: visible;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: white; /* Or transparent */
+        }
+        /* If you want to show a checked state in view mode */
+        #protocol-display-area .ql-custom-checkbox.ql-checked:after {
+            content: '\2713'; /* Checkmark symbol */
+            color: #4f46e5;
+            font-weight: bold;
+            visibility: visible;
+        }
+        #protocol-display-area .ql-custom-checkbox-text {
+            flex-grow: 1;
+            min-width: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="main-app">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI MG</span></div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="boat" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="file-text" class="w-5 h-5 mr-3"></i><span>Protocols</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="test-tubes" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-3" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+            </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t"></div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+        
+        <div id="main-content" class="ml-64 p-8 relative">
+            <h1 class="text-3xl font-bold text-gray-800 mb-6">Experiment Protocols</h1>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-1 card p-6 h-[calc(100vh-160px)] flex flex-col">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">Experiments</h2>
+                    <div class="mb-4">
+                        <input type="text" id="experiment-search" placeholder="Search by Exp. Nr or Title" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2">
+                        
+                        <div class="sort-control-group">
+                            <span>Sort by:</span>
+                            <select id="sort-column">
+                                <option value="Experiment_Nr">Experiment Number</option>
+                                <option value="Experiment_title">Title</option>
+                                <option value="Date">Date</option>
+                            </select>
+                            <select id="sort-direction">
+                                <option value="asc">Ascending</option>
+                                <option value="desc">Descending</option>
+                            </select>
+                        </div>
+                        <select id="experiment-select" class="mt-2 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md" size="8"></select>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2 card p-6 h-[calc(100vh-160px)] flex flex-col">
+                    <div class="flex justify-between items-center mb-4 border-b pb-2">
+                        <h2 class="text-xl font-bold text-gray-800">Protocol for Experiment: <span id="selected-exp-title-main">N/A</span></h2>
+                        <div class="flex-shrink-0">
+                            <span class="text-sm text-gray-600">ID: <span id="selected-exp-nr-main" class="font-mono">N/A</span> | Project: <span id="selected-exp-project-main">N/A</span></span>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-2 text-sm text-gray-700 mb-4">
+                        <p><strong>Protocol Status:</strong> <span id="protocol-status" class="font-medium text-gray-500">Not Loaded</span></p>
+                        <p><strong>Last Protocol Run:</strong> <span id="protocol-last-run-timestamp">N/A</span></p>
+                    </div>
+
+                    <div class="mt-4 flex flex-wrap gap-3 mb-6">
+                        <button id="create-edit-protocol-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow transition ease-in-out duration-150" disabled>
+                            <i data-lucide="file-pen" class="w-5 h-5 mr-2"></i>Create/Edit Protocol
+                        </button>
+                        <button id="run-protocol-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow transition ease-in-out duration-150" disabled>
+                            <i data-lucide="play" class="w-5 h-5 mr-2"></i>Run Protocol
+                        </button>
+                        <button id="export-original-pdf-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow transition ease-in-out duration-150" disabled>
+                            <i data-lucide="file-text" class="w-5 h-5 mr-2"></i>Export Original PDF
+                        </button>
+                        <button id="export-run-pdf-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow transition ease-in-out duration-150" disabled>
+                            <i data-lucide="file-check" class="w-5 h-5 mr-2"></i>Export Run PDF
+                        </button>
+                        <button id="delete-protocol-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow transition ease-in-out duration-150" disabled>
+                            <i data-lucide="trash-2" class="w-5 h-5 mr-2"></i>Delete Protocol
+                        </button>
+                    </div>
+
+                    <div class="flex-grow overflow-y-auto">
+                        <h3 class="text-lg font-bold text-gray-800 mb-2" id="protocol-view-title">Protocol Content</h3>
+                        <div id="protocol-display-area" class="min-h-[200px] text-gray-800">
+                            <p class="text-gray-500">Select an experiment to view its protocol content here.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <footer class="mt-8 pt-4 border-t text-center text-gray-500 text-sm">
+                Thünen Institute
+            </footer>
+        </div>
+    </div>
+
+    <div id="modal-container"></div>
+
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <script>
+        // Check login status on page load
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') {
+            window.location.href = './login.html';
+        }
+        
+        // Define your API base URL
+        const API_BASE_URL = '/mymglab/api'; // const API_BASE_URL = `http://${window.location.hostname}:5200/api`; 
+        let quill; // Quill editor instance (initialized within modal)
+        let allExperiments = []; // Stores all experiments fetched from API
+        let filteredAndSortedExperiments = []; // Stores experiments after filtering and sorting
+        let selectedExperiment = null; // The currently selected experiment object
+        let currentProtocol = null; // The protocol data for the selected experiment
+        let currentRun = null; // The current run data for the protocol
+
+        // State for sorting and filtering experiments
+        let currentSortColumn = 'Experiment_Nr'; // Default sort column
+        let currentSortDirection = 'asc'; // Default sort direction
+
+        /**
+         * Displays a customizable alert/modal.
+         * @param {string} message - The message to display.
+         * @param {string} type - 'info' or 'error' to change modal styling.
+         */
+        function showAlert(message, type = 'info') {
+            const modalContainer = document.getElementById('modal-container');
+            const alertHtml = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-sm transform transition-all ease-out duration-300 opacity-0 -translate-y-10">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-bold ${type === 'error' ? 'text-red-600' : 'text-blue-600'}">${type === 'error' ? 'Error' : 'Info'}</h3>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl">&times;</button>
+                        </div>
+                        <p class="text-gray-700">${message}</p>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(alertHtml);
+        }
+
+        /**
+         * Generic function to show a modal with given content.
+         * Handles basic modal opening/closing animations and button.
+         * @param {string} content - HTML string for the modal body.
+         * @returns {object} An object containing the closeModal function.
+         */
+        function showModal(content) {
+            const container = document.getElementById('modal-container');
+            container.innerHTML = content;
+            const modal = container.querySelector('.modal-overlay');
+            const modalContent = container.querySelector('.modal-content');
+            // Trigger animation
+            setTimeout(() => modalContent.classList.remove('opacity-0', '-translate-y-10'), 10);
+
+            const closeModal = () => {
+                modalContent.classList.add('opacity-0', '-translate-y-10');
+                setTimeout(() => container.innerHTML = '', 300); // Remove after animation
+            };
+            modal.addEventListener('click', (e) => { // Close when clicking outside content
+                if (e.target === modal) closeModal();
+            });
+            container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+            return { closeModal };
+        }
+
+        /**
+         * Fetches data from the backend API.
+         * Handles JSON serialization/deserialization and basic error checking.
+         * @param {string} endpoint - The API endpoint (e.g., 'table/Lab/Experiments').
+         * @param {object} options - Fetch options (method, headers, body, etc.).
+         * @returns {Promise<object>} The JSON response from the API or an error object.
+         */
+        async function apiFetch(endpoint, options = {}) {
+            try {
+                // Set Content-Type header to application/json for JSON bodies
+                const isJson = !(options.body instanceof FormData);
+                if (isJson && options.body) {
+                    options.headers = { ...options.headers, 'Content-Type': 'application/json' };
+                    options.body = JSON.stringify(options.body);
+                }
+
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                
+                if (!response.ok) {
+                    // Attempt to parse error message from response body
+                    const errText = await response.text();
+                    try {
+                        const errJson = JSON.parse(errText);
+                        throw new Error(errJson.error || 'API request failed');
+                    } catch (e) {
+                        // If not JSON, use raw text or a generic message
+                        throw new Error(errText || 'API request failed with unknown error');
+                    }
+                }
+
+                // Handle 204 No Content responses explicitly
+                if (response.status === 204 || response.headers.get('content-length') === '0') {
+                    return { success: true }; // Indicate success for empty responses
+                }
+
+                // For 200 OK responses with content, return the parsed JSON.
+                // The caller will need to check if 'error' property exists on the returned object.
+                return response.json(); 
+            } catch (error) {
+                console.error("API Error:", error);
+                return { error: error.message }; // Return error object for client-side handling
+            }
+        }
+
+        /**
+         * Loads all experiments from the backend and populates the selection list.
+         */
+        async function loadAllExperiments() {
+            const result = await apiFetch('table/Lab/Experiments'); // Assumes an endpoint for experiments
+            if (result.error) {
+                showAlert('Error fetching experiments: ' + result.error, 'error');
+                return;
+            }
+            allExperiments = result;
+            applyExperimentFiltersAndSort(); // Apply filters and sort on initial load
+        }
+
+        /**
+         * Applies search filter and sorting to the experiments list and re-renders.
+         */
+        function applyExperimentFiltersAndSort() {
+            const searchTerm = document.getElementById('experiment-search').value.toLowerCase();
+            const sortColumn = document.getElementById('sort-column').value;
+            const sortDirection = document.getElementById('sort-direction').value;
+            
+            let tempExperiments = [...allExperiments]; // Create a mutable copy
+
+            // Apply filter
+            filteredAndSortedExperiments = tempExperiments.filter(exp => 
+                (String(exp.Experiment_Nr || '').toLowerCase().includes(searchTerm)) ||
+                (String(exp.Experiment_title || '').toLowerCase().includes(searchTerm)) ||
+                (String(exp.project_id || '').toLowerCase().includes(searchTerm))
+            );
+
+            // Apply sort
+            filteredAndSortedExperiments.sort((a, b) => {
+                let valA = String(a[sortColumn] || '').toLowerCase();
+                let valB = String(b[sortColumn] || '').toLowerCase();
+
+                if (sortColumn === 'Date') {
+                    const dateA = new Date(valA);
+                    const dateB = new Date(valB);
+                    if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) return 0; // Handle invalid dates
+                    return sortDirection === 'asc' ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
+                } else if (sortColumn === 'Experiment_Nr') {
+                    // Custom sort for Experiment_Nr to handle alphanumeric (e.g., Exp1, Exp10, Exp2)
+                    const numA = parseInt(valA.replace(/\D/g, '') || '0');
+                    const numB = parseInt(valB.replace(/\D/g, '') || '0');
+                    const stringA = valA.replace(/\d/g, '');
+                    const stringB = valB.replace(/\d/g, '');
+
+                    if (stringA === stringB) {
+                        return sortDirection === 'asc' ? numA - numB : numB - numA;
+                    }
+                    return sortDirection === 'asc' ? stringA.localeCompare(stringB) : stringB.localeCompare(stringA);
+
+                } else {
+                    return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                }
+            });
+
+            renderExperimentSelectOptions();
+        }
+
+        /**
+         * Renders the filtered and sorted experiments into the select dropdown.
+         */
+        function renderExperimentSelectOptions() {
+            const selectElement = document.getElementById('experiment-select');
+            selectElement.innerHTML = ''; // Clear existing options
+
+            if (filteredAndSortedExperiments.length === 0) {
+                selectElement.innerHTML = '<option value="">No matching experiments found</option>';
+                resetControlButtonsAndInfo(); // Disable buttons if no experiments
+                return;
+            }
+
+            filteredAndSortedExperiments.forEach(exp => {
+                const option = document.createElement('option');
+                option.value = exp.nr; // Use the internal 'nr' for selection
+                option.textContent = `${exp.Experiment_Nr} - ${exp.Experiment_title || 'No Title'} (Project: ${exp.project_id || 'N/A'})`;
+                selectElement.appendChild(option);
+            });
+            
+            // Re-select the previously selected experiment if it's still in the filtered list
+            if (selectedExperiment && filteredAndSortedExperiments.some(exp => exp.nr === selectedExperiment.nr)) {
+                selectElement.value = selectedExperiment.nr;
+                selectExperiment(selectedExperiment.nr); // Re-load its details
+            } else if (filteredAndSortedExperiments.length > 0) {
+                // Otherwise, select the first item and load its details
+                selectElement.selectedIndex = 0;
+                selectExperiment(selectElement.value);
+            } else {
+                selectElement.selectedIndex = -1; // No selection
+                resetControlButtonsAndInfo();
+            }
+        }
+
+        /**
+         * Resets the UI elements related to the selected experiment and protocol.
+         */
+        function resetControlButtonsAndInfo() {
+            document.getElementById('create-edit-protocol-btn').disabled = true;
+            document.getElementById('run-protocol-btn').disabled = true;
+            document.getElementById('export-original-pdf-btn').disabled = true;
+            document.getElementById('export-run-pdf-btn').disabled = true;
+            document.getElementById('delete-protocol-btn').disabled = true;
+
+            // Clear selected experiment details
+            document.getElementById('selected-exp-nr-main').textContent = 'N/A';
+            document.getElementById('selected-exp-title-main').textContent = 'N/A';
+            document.getElementById('selected-exp-project-main').textContent = 'N/A';
+            document.getElementById('protocol-status').textContent = 'Not Loaded';
+            document.getElementById('protocol-last-run-timestamp').textContent = 'N/A';
+            document.getElementById('protocol-view-title').textContent = 'Protocol Content';
+            document.getElementById('protocol-display-area').innerHTML = '<p class="text-gray-500">Select an experiment to view its protocol content here.</p>';
+
+            selectedExperiment = null;
+            currentProtocol = null;
+            currentRun = null;
+        }
+
+        /**
+         * Selects an experiment by its internal 'nr' and loads its associated protocol.
+         * @param {number} internalNr - The internal 'nr' (primary key) of the experiment.
+         */
+        async function selectExperiment(internalNr) {
+            selectedExperiment = allExperiments.find(exp => exp.nr == internalNr);
+            if (!selectedExperiment) {
+                resetControlButtonsAndInfo();
+                return;
+            }
+
+            // Update UI with selected experiment details
+            document.getElementById('selected-exp-nr-main').textContent = selectedExperiment.Experiment_Nr;
+            document.getElementById('selected-exp-title-main').textContent = selectedExperiment.Experiment_title || 'N/A';
+            document.getElementById('selected-exp-project-main').textContent = selectedExperiment.project_id || 'N/A';
+            
+            // Enable create/edit button initially
+            document.getElementById('create-edit-protocol-btn').disabled = false;
+            // Disable other buttons until protocol status is known
+            document.getElementById('run-protocol-btn').disabled = true; 
+            document.getElementById('export-original-pdf-btn').disabled = true;
+            document.getElementById('export-run-pdf-btn').disabled = true;
+            document.getElementById('delete-protocol-btn').disabled = true;
+
+            await loadProtocol(); // Load protocol for the selected experiment
+        }
+
+        /**
+         * Loads the protocol for the currently selected experiment from the database.
+         * Updates UI elements based on protocol existence and run status.
+         */
+        async function loadProtocol() {
+            document.getElementById('protocol-status').textContent = 'Loading...';
+            currentProtocol = null; // Reset current protocol data
+            document.getElementById('protocol-display-area').innerHTML = '<p class="text-gray-500">Loading protocol content...</p>'; // Show loading message
+            document.getElementById('protocol-view-title').textContent = 'Protocol Content'; // Reset title
+
+
+            // Fetch protocol using Experiment_Nr (which is the foreign key in Lab.protocols)
+            const protocols = await apiFetch(`table/Lab/protocols?filter_Experiments_Nr=${selectedExperiment.Experiment_Nr}`);
+            
+            if (protocols.error) {
+                showAlert('Error loading protocol: ' + protocols.error, 'error');
+                document.getElementById('protocol-status').textContent = 'Error';
+                document.getElementById('protocol-display-area').innerHTML = '<p class="text-red-500">Error loading protocol content.</p>';
+                return;
+            }
+
+            if (protocols.length > 0) {
+                currentProtocol = protocols[0]; // Assuming one protocol per Experiment_Nr
+                
+                document.getElementById('protocol-display-area').innerHTML = currentProtocol.protocol || '<p class="text-gray-500">No content provided for this protocol.</p>';
+                document.getElementById('protocol-view-title').textContent = currentProtocol.Notes || 'Untitled Protocol'; // Display protocol title
+
+                document.getElementById('protocol-status').textContent = 'Exists';
+                document.getElementById('run-protocol-btn').disabled = false;
+                document.getElementById('export-original-pdf-btn').disabled = false;
+                document.getElementById('delete-protocol-btn').disabled = false;
+                
+                // Check and display run data
+                if (currentProtocol.run && currentProtocol.run.trim() !== '' && currentProtocol.run.trim() !== '{}') {
+                    try {
+                        const runData = JSON.parse(currentProtocol.run);
+                        if (runData.lastRunUpdated) {
+                            document.getElementById('protocol-last-run-timestamp').textContent = new Date(runData.lastRunUpdated).toLocaleString();
+                            document.getElementById('export-run-pdf-btn').disabled = false;
+                        } else {
+                            document.getElementById('protocol-last-run-timestamp').textContent = 'N/A';
+                            document.getElementById('export-run-pdf-btn').disabled = true;
+                        }
+                    } catch (e) {
+                        console.error("Error parsing run data:", e);
+                        document.getElementById('protocol-last-run-timestamp').textContent = 'Invalid Run Data';
+                        document.getElementById('export-run-pdf-btn').disabled = true;
+                    }
+                } else {
+                    document.getElementById('protocol-last-run-timestamp').textContent = 'N/A';
+                    document.getElementById('export-run-pdf-btn').disabled = true;
+                }
+                lucide.createIcons(); // Re-render icons in display area
+            } else {
+                // No protocol found for this experiment
+                document.getElementById('protocol-status').textContent = 'Not Exists';
+                document.getElementById('run-protocol-btn').disabled = true;
+                document.getElementById('export-original-pdf-btn').disabled = true;
+                document.getElementById('export-run-pdf-btn').disabled = true;
+                document.getElementById('delete-protocol-btn').disabled = true;
+                document.getElementById('protocol-last-run-timestamp').textContent = 'N/A';
+                document.getElementById('protocol-display-area').innerHTML = '<p class="text-gray-500">No protocol found for this experiment. Click "Create/Edit Protocol" to add one.</p>';
+            }
+        }
+
+        /**
+         * Opens the protocol editor modal and loads content (or default template).
+         */
+        async function openProtocolEditorModal() {
+            if (!selectedExperiment) {
+                showAlert('Please select an experiment first.', 'error');
+                return;
+            }
+
+            const editorModalContent = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
+                    <div id="editor-modal" class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-5xl max-h-[95vh] flex flex-col transform transition-all ease-out duration-300 opacity-0 -translate-y-10">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl font-bold" id="editor-modal-title">Create/Edit Protocol for ${selectedExperiment.Experiment_Nr}</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl">&times;</button>
+                        </div>
+                        <div class="mb-4">
+                            <label for="protocol-name-input" class="block text-sm font-medium text-gray-700">Protocol Title / Identifier</label>
+                            <input type="text" id="protocol-name-input" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2" placeholder="e.g., DNA Extraction v1.0" required>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3 mb-4">
+                            <button id="add-checkbox-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow transition ease-in-out duration-150"><i data-lucide="check-square" class="w-5 h-5 mr-2"></i>Add Step</button>
+                            <button id="convert-to-steps-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow transition ease-in-out duration-150"><i data-lucide="list-checks" class="w-5 h-5 mr-2"></i>Convert Selected to Steps</button>
+                        </div>
+                        <div id="quill-editor-container" class="flex-grow"></div>
+                        <div class="pt-6 flex justify-end border-t mt-6">
+                            <button id="save-protocol-editor-btn" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg flex items-center shadow">
+                                <i data-lucide="save" class="w-5 h-5 mr-2"></i>Save Protocol
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(editorModalContent);
+
+            // Initialize Quill after modal is in DOM
+            quill = new Quill('#quill-editor-container', {
+                theme: 'snow',
+                modules: {
+                    toolbar: [
+                        [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+                        [{ 'font': [] }],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        ['blockquote', 'code-block'],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        [{ 'indent': '-1'}, { 'indent': '+1' }],
+                        [{ 'direction': 'rtl' }],
+                        [{ 'align': [] }],
+                        ['link', 'image'],
+                        ['clean']
+                    ],
+                    clipboard: {
+                        matchVisual: false
+                    }
+                }
+            });
+
+            // Set default font for Quill (if 'Inter' is available/loaded)
+            const Font = Quill.import('formats/font');
+            Font.whitelist = ['Inter', 'serif', 'monospace', 'system'];
+            Quill.register(Font, true);
+            quill.root.style.fontFamily = 'Inter, sans-serif';
+
+            // Load content into Quill or set default template
+            if (currentProtocol && currentProtocol.protocol) {
+                quill.clipboard.dangerouslyPasteHTML(currentProtocol.protocol);
+                document.getElementById('protocol-name-input').value = currentProtocol.Notes || '';
+            } else {
+                quill.clipboard.dangerouslyPasteHTML(`
+                    <h2>Samples</h2><p><br></p>
+                    <h2>Procedure</h2><p><br></p>
+                    <h2>Notes</h2><p><br></p>
+                `);
+                document.getElementById('protocol-name-input').value = ''; // Clear for new protocol
+            }
+            lucide.createIcons(); // Re-render icons in editor toolbar and content
+
+            // Add event listeners for Quill-related buttons
+            document.getElementById('add-checkbox-btn').addEventListener('click', addCheckboxBlot);
+            document.getElementById('convert-to-steps-btn').addEventListener('click', convertSelectedToSteps);
+            document.getElementById('save-protocol-editor-btn').addEventListener('click', saveProtocolContent);
+            
+            // Set modal title correctly based on context
+            document.getElementById('editor-modal-title').textContent = currentProtocol ? `Edit Protocol: ${currentProtocol.Notes || 'Untitled'}` : `Create New Protocol for ${selectedExperiment.Experiment_Nr}`;
+        }
+
+        /**
+         * Saves the current content of the Quill editor to the database.
+         * Performs either a POST (new) or PUT (update) request.
+         */
+        async function saveProtocolContent() {
+            if (!selectedExperiment) {
+                showAlert('No experiment selected to save the protocol for.', 'error');
+                return;
+            }
+
+            const protocolContentHtml = quill.root.innerHTML; // Get HTML content from Quill
+            const protocolName = document.getElementById('protocol-name-input').value.trim();
+
+            if (!protocolName) {
+                showAlert('Protocol Title / Identifier cannot be empty.', 'error');
+                return;
+            }
+            
+            const data = {
+                "protocol": protocolContentHtml,
+                "Experiments_Nr": selectedExperiment.Experiment_Nr, // Link to experiment
+                "Notes": protocolName // Protocol Title / Identifier
+            };
+
+            // If it's a new protocol, initialize 'run' to an empty JSON object string
+            if (!currentProtocol) {
+                data.run = '{}'; // Initialize empty run log for new protocols
+            } else {
+                 // For existing protocols, ensure 'run' field is included in PUT if it exists
+                 if (currentProtocol.run) {
+                    data.run = currentProtocol.run;
+                 } else {
+                    data.run = '{}';
+                 }
+            }
+
+
+            let result;
+            if (currentProtocol && currentProtocol.nr) {
+                // Update existing protocol
+                result = await apiFetch(`table/Lab/protocols/${currentProtocol.nr}`, {
+                    method: 'PUT',
+                    body: data
+                });
+            } else {
+                // Create new protocol
+                result = await apiFetch('table/Lab/protocols', {
+                    method: 'POST',
+                    body: data
+                });
+            }
+
+            if (!result.error) {
+                showAlert('Protocol content saved successfully!', 'info');
+                document.getElementById('modal-container').innerHTML = ''; // Close modal
+                await loadProtocol(); // Reload protocol to update status and display area
+            } else {
+                showAlert('Failed to save protocol content: ' + (result ? result.error : 'Unknown error'), 'error');
+            }
+        }
+
+        /**
+         * Inserts a custom checkbox blot (step) into the Quill editor at the current selection.
+         */
+        function addCheckboxBlot() {
+            const range = quill.getSelection(true);
+            quill.insertEmbed(range.index, 'checkbox', { checked: false, text: 'New protocol step' }, Quill.sources.USER);
+            quill.setSelection(range.index + 1); // Move cursor after the inserted checkbox
+            quill.focus();
+        }
+
+        /**
+         * Converts selected text or entire editor content into custom checkbox steps.
+         */
+        function convertSelectedToSteps() {
+            const range = quill.getSelection();
+            let textToConvert = '';
+            let startIndex = 0;
+            let deleteLength = 0;
+
+            if (range && range.length > 0) {
+                textToConvert = quill.getText(range.index, range.length);
+                startIndex = range.index;
+                deleteLength = range.length;
+            } else {
+                textToConvert = quill.getText();
+                startIndex = 0;
+                deleteLength = quill.getLength();
+            }
+
+            const lines = textToConvert.split('\n').filter(line => line.trim() !== '');
+
+            if (lines.length > 0) {
+                quill.deleteText(startIndex, deleteLength); // Delete original text
+                let insertIndex = startIndex;
+                lines.forEach(line => {
+                    quill.insertEmbed(insertIndex, 'checkbox', { checked: false, text: line.trim() }, Quill.sources.USER);
+                    insertIndex++; // Move past the embed
+                    quill.insertText(insertIndex, '\n', Quill.sources.USER); // Add a newline after each checkbox
+                    insertIndex++; // Move past the newline
+                });
+                quill.setSelection(insertIndex); // Place cursor at the end
+            }
+            lucide.createIcons(); // Re-render icons if any in new content
+        }
+
+        /**
+         * Generates the HTML for the PDF header with experiment details.
+         * @returns {string} HTML string for the PDF header.
+         */
+        function generatePdfHeaderHtml() {
+            if (!selectedExperiment) return '';
+            const currentDateTime = new Date().toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+            return `
+                <div style="margin-bottom: 20px; padding: 15px; border: 1px solid #e2e8f0; border-radius: 0.5rem; background-color: #f8fafc; font-family: 'Inter', sans-serif; color: #333;">
+                    <h2 style="font-size: 1.6rem; font-weight: bold; color: #1e293b; margin-bottom: 10px; border-bottom: 2px solid #4f46e5; padding-bottom: 5px;">Experiment Protocol</h2>
+                    <p style="font-size: 0.95rem; margin-bottom: 5px;"><strong>Experiment Nr:</strong> <span style="font-weight: 600;">${selectedExperiment.Experiment_Nr || 'N/A'}</span></p>
+                    <p style="font-size: 0.95rem; margin-bottom: 5px;"><strong>Title:</strong> ${selectedExperiment.Experiment_title || 'N/A'}</p>
+                    <p style="font-size: 0.95rem; margin-bottom: 5px;"><strong>Project:</strong> ${selectedExperiment.project_id || 'N/A'}</p>
+                    <p style="font-size: 0.95rem; margin-bottom: 5px;"><strong>Aim:</strong> ${selectedExperiment.aim || 'N/A'}</p>
+                    <p style="font-size: 0.95rem; margin-bottom: 15px;"><strong>Method:</strong> ${selectedExperiment.Method || 'N/A'}</p>
+                    <p style="font-size: 0.85rem; text-align: right; color: #666;">Generated on: ${currentDateTime}</p>
+                </div>
+            `;
+        }
+
+        /**
+         * Exports the protocol content (original or run log) as a PDF.
+         * @param {boolean} isRunExport - True to export run log, false for original protocol.
+         */
+        async function exportProtocolAsPdf(isRunExport = false) {
+            if (!selectedExperiment) {
+                showAlert('Please select an experiment to export a protocol for.', 'error');
+                return;
+            }
+            if (isRunExport && (!currentProtocol || !currentProtocol.run || currentProtocol.run.trim() === '{}')) {
+                showAlert('No saved run data exists for this protocol. Please run and save the protocol first.', 'error');
+                return;
+            }
+
+            let htmlContentToRender = '';
+            let fileNameSuffix = '';
+            
+            // Add a temporary logo element for PDF generation
+            const pdfLogo = document.createElement('img');
+            pdfLogo.src = './photos/logo.png'; // Ensure this path is correct
+            pdfLogo.alt = 'Company Logo';
+            pdfLogo.classList.add('pdf-logo');
+            document.body.appendChild(pdfLogo); // Temporarily add to DOM for html2canvas
+
+            const headerHtml = generatePdfHeaderHtml();
+
+            if (isRunExport) {
+                try {
+                    currentRun = JSON.parse(currentProtocol.run); // Ensure currentRun is up-to-date
+                    fileNameSuffix = '_RunLog';
+                    let stepsHtml = '';
+                    currentRun.steps.forEach(step => {
+                        let stepContent = step.contentHtml;
+                        // Add completion info for completed steps
+                        if (step.completed) {
+                            stepContent += `<span style="font-size: 0.8em; color: #666; display: block;">(Completed by ${step.completedBy} on ${new Date(step.completedAt).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })})</span>`;
+                        }
+                        stepsHtml += `
+                            <div class="ql-custom-checkbox-item" style="display: flex; align-items: flex-start; margin-bottom: 0.5em; page-break-inside: avoid;">
+                                <span style="margin-right: 0.5em; vertical-align: top; width: 1.2em; height: 1.2em; border: 1px solid #ccc; border-radius: 3px; display: inline-block; box-sizing: border-box; line-height: 1; text-align: center; flex-shrink: 0; margin-top: 0.2em; background-color: ${step.completed ? '#e6f0ff' : 'white'};">${step.completed ? '&#10003;' : ''}</span>
+                                <span style="flex-grow: 1; min-width: 0;">${stepContent}</span>
+                            </div>
+                        `;
+                    });
+
+                    const runDetailsHtml = `
+                        <div style="margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background-color: #f0f8ff;">
+                            <h3 style="margin-top: 0; font-size: 1.2rem; font-weight: bold;">Run Details</h3>
+                            <p style="font-size: 0.9rem;"><strong>Run Started:</strong> ${new Date(currentRun.runStarted).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                            <p style="font-size: 0.9rem;"><strong>Last Updated:</strong> ${new Date(currentRun.lastRunUpdated).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                            <p style="font-size: 0.9rem;"><strong>Overall Status:</strong> ${currentRun.overallStatus}</p>
+                        </div>
+                        <h2 style="font-size: 1.4rem; font-weight: bold; margin-top: 20px; margin-bottom: 10px;">Procedure (Run Log)</h2>
+                    `;
+                    
+                    htmlContentToRender = runDetailsHtml + stepsHtml;
+
+                } catch (e) {
+                    showAlert('Error parsing run data for PDF export: ' + e.message, 'error');
+                    document.body.removeChild(pdfLogo); // Clean up logo
+                    return;
+                }
+            } else {
+                fileNameSuffix = '_Original';
+                // Use content from protocol object, which is always available after loadProtocol
+                if (currentProtocol && currentProtocol.protocol) {
+                    htmlContentToRender = currentProtocol.protocol;
+                } else {
+                    showAlert('There is no protocol content to export. Please create and save a protocol first.', 'error');
+                    document.body.removeChild(pdfLogo); // Clean up logo
+                    return;
+                }
+            }
+
+            // Create a temporary div to render content for html2canvas
+            const protocolPrintArea = document.createElement('div');
+            protocolPrintArea.innerHTML = headerHtml + htmlContentToRender;
+            protocolPrintArea.style.padding = '20mm'; // Standard A4 margins
+            protocolPrintArea.style.backgroundColor = 'white';
+            protocolPrintArea.style.fontFamily = 'Inter, sans-serif'; // Ensure font is consistent
+            protocolPrintArea.style.color = '#333'; // Ensure text color for print
+            protocolPrintArea.style.width = '210mm'; // Set explicit width for A4
+            protocolPrintArea.style.boxSizing = 'border-box'; // Include padding in width
+            document.body.appendChild(protocolPrintArea); // Temporarily add to DOM
+
+            lucide.createIcons(); // Re-render any lucide icons that might be in the content (though unlikely for protocol text)
+
+            const protocolTitle = selectedExperiment.Experiment_title || 'Experiment Protocol';
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4'); // 'p' for portrait, 'mm' for millimeters, 'a4' for A4 size
+
+            // Convert HTML to canvas, then canvas to PDF
+            html2canvas(protocolPrintArea, { 
+                scale: 2, // Increase scale for better resolution in PDF
+                logging: false, // Disable verbose logging
+                useCORS: true, // Needed if you have external images/resources (like your logo)
+                ignoreElements: (element) => {
+                    // Ignore elements that are part of the Quill toolbar if they somehow appear
+                    return element.classList.contains('ql-toolbar');
+                }
+            }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const imgWidth = 210; // A4 width in mm
+                const pageHeight = 297; // A4 height in mm
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 0;
+
+                doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+
+                while (heightLeft > 0) {
+                    position = heightLeft - imgHeight;
+                    doc.addPage();
+                    doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+
+                doc.save(`${selectedExperiment.Experiment_Nr}_${protocolTitle.replace(/[^a-zA-Z0-9]/g, '_')}${fileNameSuffix}.pdf`);
+            }).catch(error => {
+                console.error("Error generating PDF:", error);
+                showAlert("Failed to generate PDF. Please try again. Error: " + error.message, 'error');
+            }).finally(() => {
+                // Clean up temporary elements
+                document.body.removeChild(protocolPrintArea);
+                document.body.removeChild(pdfLogo);
+            });
+        }
+
+        /**
+         * Opens the protocol running modal.
+         * Displays steps with checkboxes and handles saving run status.
+         */
+        async function runProtocolModal() {
+            if (!currentProtocol || !currentProtocol.protocol) {
+                showAlert('No protocol loaded to run.', 'error');
+                return;
+            }
+
+            let runData = null;
+            // Attempt to load existing run data if available and valid
+            if (currentProtocol.run && currentProtocol.run.trim() !== '' && currentProtocol.run.trim() !== '{}') {
+                try {
+                    runData = JSON.parse(currentProtocol.run);
+                } catch (e) {
+                    console.error("Error parsing currentProtocol.run:", e);
+                    showAlert("Error loading previous run data. Starting a new run.", "error");
+                    runData = null; // Force new run if parsing fails
+                }
+            }
+            
+            // Get all 'steps' from the current protocol HTML, only the custom checkbox items
+            const tempDivForParsing = document.createElement('div');
+            tempDivForParsing.innerHTML = currentProtocol.protocol;
+            const protocolStepElements = Array.from(tempDivForParsing.querySelectorAll('.ql-custom-checkbox-item'));
+
+            const currentProtocolHtmlHash = btoa(unescape(encodeURIComponent(currentProtocol.protocol))); // Simple hash for content changes
+
+            // If no runData or protocol has changed, initialize a new run
+            if (!runData || runData.protocolHash !== currentProtocolHtmlHash) {
+                currentRun = {
+                    protocolHtml: currentProtocol.protocol, // Store the original protocol HTML for this run
+                    protocolHash: currentProtocolHtmlHash,
+                    runStarted: new Date().toISOString(),
+                    lastRunUpdated: null,
+                    steps: protocolStepElements.map((el, index) => {
+                        const textSpan = el.querySelector('.ql-custom-checkbox-text');
+                        return {
+                            id: index, // Simple index as ID for steps
+                            contentHtml: textSpan ? textSpan.innerHTML : '', // Store HTML content of the step
+                            completed: false,
+                            completedBy: null,
+                            completedAt: null
+                        };
+                    }),
+                    overallStatus: 'In Progress'
+                };
+            } else {
+                currentRun = runData; // Continue with existing run data
+            }
+
+            const modalContent = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
+                    <div id="protocol-run-modal" class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-4xl max-h-[90vh] flex flex-col transform transition-all ease-out duration-300 opacity-0 -translate-y-10">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl font-bold">Run Protocol: ${selectedExperiment.Experiment_Nr} - ${selectedExperiment.Experiment_title || 'N/A'}</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl">&times;</button>
+                        </div>
+                        <div class="flex-grow overflow-y-auto pr-4">
+                            <p class="text-sm text-gray-600 mb-4">Click checkboxes to mark steps as complete. Run started: ${new Date(currentRun.runStarted).toLocaleString()}. Last saved: ${currentRun.lastRunUpdated ? new Date(currentRun.lastRunUpdated).toLocaleString() : 'Never'}</p>
+                            <div id="run-steps-container" class="space-y-3"></div>
+                        </div>
+                        <div class="pt-6 flex justify-end border-t mt-6">
+                            <button id="save-run-status-btn" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg flex items-center shadow">
+                                <i data-lucide="check-circle" class="w-5 h-5 mr-2"></i>Save Run Status
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalContent);
+
+            const runStepsContainer = document.getElementById('run-steps-container');
+            const currentUser = JSON.parse(sessionStorage.getItem('user')).person || 'Unknown User';
+
+            /**
+             * Renders the protocol steps into the run modal.
+             */
+            function renderRunSteps() {
+                runStepsContainer.innerHTML = '';
+                currentRun.steps.forEach(step => {
+                    const stepDiv = document.createElement('div');
+                    stepDiv.className = `step-item ${step.completed ? 'completed' : ''}`;
+                    stepDiv.innerHTML = `
+                        <input type="checkbox" data-step-id="${step.id}" ${step.completed ? 'checked' : ''} ${step.completed ? 'disabled' : ''}>
+                        <div class="step-content">
+                            ${step.contentHtml}
+                            ${step.completed ? `<p class="text-xs text-gray-500 mt-1">Completed by ${step.completedBy} on ${new Date(step.completedAt).toLocaleString()}</p>` : ''}
+                        </div>
+                    `;
+                    runStepsContainer.appendChild(stepDiv);
+                });
+                lucide.createIcons(); // Re-render icons inside modal
+            }
+
+            renderRunSteps();
+
+            // Event listener for step checkboxes in the modal
+            runStepsContainer.addEventListener('change', (e) => {
+                if (e.target.matches('input[type="checkbox"]')) {
+                    const stepId = parseInt(e.target.dataset.stepId);
+                    const step = currentRun.steps.find(s => s.id === stepId);
+                    if (step) {
+                        step.completed = e.target.checked;
+                        step.completedBy = e.target.checked ? currentUser : null;
+                        step.completedAt = e.target.checked ? new Date().toISOString() : null;
+                        
+                        const stepItemDiv = e.target.closest('.step-item');
+                        stepItemDiv.classList.toggle('completed', e.target.checked);
+                        e.target.disabled = e.target.checked; // Disable checkbox after completion
+
+                        let completedInfo = stepItemDiv.querySelector('.step-content .text-xs');
+                        if (e.target.checked) {
+                            if (!completedInfo) {
+                                completedInfo = document.createElement('p');
+                                completedInfo.className = 'text-xs text-gray-500 mt-1';
+                                stepItemDiv.querySelector('.step-content').appendChild(completedInfo);
+                            }
+                            completedInfo.textContent = `Completed by ${step.completedBy} on ${new Date(step.completedAt).toLocaleString()}`;
+                        } else {
+                            if (completedInfo) completedInfo.remove();
+                        }
+                    }
+                }
+            });
+
+            // Save run status button handler
+            document.getElementById('save-run-status-btn').addEventListener('click', async () => {
+                currentRun.lastRunUpdated = new Date().toISOString();
+                currentRun.overallStatus = currentRun.steps.every(s => s.completed) ? 'Completed' : 'In Progress';
+
+                const dataToSave = {
+                    "run": JSON.stringify(currentRun) // Save run object as JSON string
+                };
+
+                const result = await apiFetch(`table/Lab/protocols/${currentProtocol.nr}`, {
+                    method: 'PUT',
+                    body: dataToSave
+                });
+
+                // MODIFIED: Check for the absence of 'error' property for success
+                if (!result.error) {
+                    showAlert('Protocol run status saved successfully!', 'info');
+                    closeModal(); // Close the modal
+                    await loadProtocol(); // Reload protocol info on main page
+                } else {
+                    showAlert('Failed to save run status: ' + (result ? result.error : 'Unknown error'), 'error');
+                }
+            });
+        }
+
+        /**
+         * Deletes the currently loaded protocol from the database.
+         */
+        async function deleteProtocol() {
+            if (!currentProtocol || !currentProtocol.nr) {
+                showAlert('No protocol selected for deletion.', 'error');
+                return;
+            }
+
+            // Confirmation dialog
+            if (confirm(`Are you sure you want to delete the protocol for experiment ${selectedExperiment.Experiment_Nr}? This action cannot be undone.`)) {
+                const result = await apiFetch(`table/Lab/protocols/${currentProtocol.nr}`, {
+                    method: 'DELETE'
+                });
+
+                if (result.success) {
+                    showAlert('Protocol deleted successfully!', 'info');
+                    // Reload all experiments and re-select/clear current state
+                    await loadAllExperiments(); 
+                    resetControlButtonsAndInfo(); // Clear UI
+                } else {
+                    showAlert('Failed to delete protocol: ' + (result ? result.error : 'Unknown error'), 'error');
+                }
+            }
+        }
+
+        /**
+         * Initializes all event listeners for UI elements.
+         */
+        function addEventListeners() {
+            // Search and Sort
+            document.getElementById('experiment-search').addEventListener('input', applyExperimentFiltersAndSort);
+            document.getElementById('sort-column').addEventListener('change', applyExperimentFiltersAndSort);
+            document.getElementById('sort-direction').addEventListener('change', applyExperimentFiltersAndSort);
+
+            // Experiment Selection
+            document.getElementById('experiment-select').addEventListener('change', (e) => {
+                selectExperiment(e.target.value);
+            });
+
+            // Protocol Management Buttons
+            document.getElementById('create-edit-protocol-btn').addEventListener('click', openProtocolEditorModal);
+            document.getElementById('run-protocol-btn').addEventListener('click', runProtocolModal);
+            document.getElementById('delete-protocol-btn').addEventListener('click', deleteProtocol);
+
+            // PDF Export Buttons
+            document.getElementById('export-original-pdf-btn').addEventListener('click', () => exportProtocolAsPdf(false));
+            document.getElementById('export-run-pdf-btn').addEventListener('click', () => exportProtocolAsPdf(true));
+
+            // Logout Button
+            document.getElementById('logout-button').addEventListener('click', () => { 
+                sessionStorage.clear(); 
+                window.location.href = './login.html'; 
+            });
+        }
+
+        // --- DOMContentLoaded and Quill Initialization ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Initialize Lucide icons
+            lucide.createIcons();
+
+            // Display logged-in user
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.person}</p>`;
+
+            // Register Quill custom blot for checkboxes
+            const BlockEmbed = Quill.import('blots/block/embed');
+            class CheckboxBlot extends BlockEmbed {
+                static blotName = 'checkbox';
+                static tagName = 'div';
+                static className = 'ql-custom-checkbox-item';
+
+                static create(value) {
+                    const node = super.create(value);
+                    node.setAttribute('contenteditable', 'false'); // Make checkbox container non-editable directly
+                    
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'ql-custom-checkbox';
+                    checkbox.checked = value.checked || false;
+                    node.appendChild(checkbox);
+
+                    const textSpan = document.createElement('span');
+                    textSpan.className = 'ql-custom-checkbox-text';
+                    textSpan.setAttribute('contenteditable', 'true'); // Make text content editable
+                    textSpan.textContent = value.text || '';
+                    node.appendChild(textSpan);
+
+                    // Add event listeners for direct interaction in Quill editor
+                    checkbox.addEventListener('change', () => {
+                        const blot = Quill.find(node);
+                        if (blot) {
+                            // Update blot's format which in turn updates its value
+                            blot.format('checkbox', {
+                                checked: checkbox.checked,
+                                text: textSpan.textContent
+                            });
+                        }
+                    });
+
+                    textSpan.addEventListener('input', () => {
+                        const blot = Quill.find(node);
+                        if (blot) {
+                            // Update blot's format when text content changes
+                            blot.format('checkbox', {
+                                checked: checkbox.checked,
+                                text: textSpan.textContent
+                            });
+                        }
+                    });
+                    return node;
+                }
+
+                // How Quill gets the value from the blot's DOM node
+                static value(node) {
+                    const checkbox = node.querySelector('input[type="checkbox"]');
+                    const textSpan = node.querySelector('.ql-custom-checkbox-text');
+                    return {
+                        checked: checkbox ? checkbox.checked : false,
+                        text: textSpan ? textSpan.textContent : ''
+                    };
+                }
+
+                // How Quill gets the formats from the blot's DOM node
+                static formats(node) {
+                    return CheckboxBlot.value(node);
+                }
+
+                // How Quill sets the format on the blot's DOM node
+                format(name, value) {
+                    if (name === CheckboxBlot.blotName) {
+                        const checkbox = this.domNode.querySelector('input[type="checkbox"]');
+                        const textSpan = this.domNode.querySelector('.ql-custom-checkbox-text');
+                        if (checkbox) checkbox.checked = value.checked;
+                        if (textSpan) textSpan.textContent = value.text;
+                        this.domNode.setAttribute('data-checked', value.checked ? 'true' : 'false'); // For CSS styling if needed
+                        if (value.checked) {
+                            checkbox.classList.add('ql-checked');
+                        } else {
+                            checkbox.classList.remove('ql-checked');
+                        }
+                    } else {
+                        super.format(name, value);
+                    }
+                }
+            }
+            Quill.register(CheckboxBlot, true);
+
+            // Initialize Quill Editor (it will be initialized in the modal instead)
+            // But we still need to register the custom blot globally before any Quill instance is created.
+
+            // Load initial data and set up event listeners
+            await loadAllExperiments();
+            addEventListeners();
+        });
+    </script>
+</body>
+</html>

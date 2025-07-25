@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Storage Management - TIFI </title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .sidebar { border-right: 1px solid #e2e8f0; }
+        .sidebar-item { color: #475569; }
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        .modal-overlay { z-index: 50; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+        .item-card { transition: all 0.2s ease-in-out; }
+        .item-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); }
+        .draggable-item { cursor: grab; }
+        .draggable-item:hover { background-color: #f1f5f9; }
+        .draggable-item.dragging { opacity: 0.5; background-color: #eef2ff; }
+        /* grid-template-columns is now set by JS */
+        .box-grid { display: grid; gap: 0.5rem; }
+        .box-grid-cell {
+            aspect-ratio: 1 / 1;
+            transition: all 0.2s ease;
+            border-radius: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed #d1d5db;
+            text-align: center;
+            padding: 0.25rem;
+            overflow: hidden; /* Helps with truncating text */
+        }
+        .box-grid-cell.occupied { border-style: solid; color: white; cursor: pointer; }
+        .box-grid-cell.empty { background-color: #f9fafb; }
+        .box-grid-cell.drag-over { border-style: solid; border-color: #2563eb; background-color: #dbeafe; }
+        .box-grid-cell:hover { transform: scale(1.05); z-index: 10; box-shadow: 0 0 15px rgba(0,0,0,0.2); }
+        .box-grid-cell.selected { box-shadow: 0 0 0 4px #3b82f6; transform: scale(1.05); z-index: 20; }
+    </style>
+</head>
+<body>
+    <div id="main-app">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI </span></div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
+                <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="box" class="w-5 h-5 mr-3"></i><span>Storage Box</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="Printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+             </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t"></div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+        
+        <div id="main-content" class="ml-64 p-8">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-3xl font-bold text-gray-800">Storage Manager</h1>
+                <button id="new-storage-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all"><i data-lucide="plus" class="w-5 h-5 mr-2"></i>New Storage Unit</button>
+            </div>
+
+            <nav id="breadcrumb" class="flex items-center space-x-2 text-sm text-gray-500 mb-6"></nav>
+
+            <div id="explorer-container">
+                </div>
+        </div>
+        <div id="modal-container"></div>
+    </div>
+
+    <script>
+        if (!sessionStorage.getItem('isLoggedIn')) window.location.href = './login.html';
+        
+        const API_BASE_URL = '/tifi-lims/api'; // const API_BASE_URL = `http://${window.location.hostname}:5200/api`;
+        let storageCache = { rooms: [], storageUnits: [] };
+        let allItemsCache = [];
+
+        const storableItemTables = [
+            { schema: 'Lab', table: 'Fish', idColumn: 'sample_id', pk: 'sample_id' }, { schema: 'Lab', table: 'Tissue', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'DNA', idColumn: 'sample_id', pk: 'sample_id' }, { schema: 'Lab', table: 'RNA', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'Water', idColumn: 'sample_id', pk: 'sample_id' }, { schema: 'Lab', table: 'Sediments', idColumn: 'sample_id', pk: 'sample_id' },
+            { schema: 'Lab', table: 'Library', idColumn: 'Library_id', pk: 'nr' }, { schema: 'Lab', table: 'PCR', idColumn: 'nr', pk: 'nr' },
+            { schema: 'Lims', table: 'Reagents', idColumn: 'Reagent_Name', pk: 'nr' }, { schema: 'Lab', table: 'Extraction', idColumn: 'nr', pk: 'nr'},
+            { schema: 'Lab', table: 'Qubit', idColumn: 'nr', pk: 'nr'}
+        ];
+
+        const typeColorMap = {
+            'Fish': 'bg-blue-500', 'Tissue': 'bg-green-500', 'DNA': 'bg-purple-500', 'RNA': 'bg-pink-500', 
+            'Water': 'bg-cyan-500', 'Sediments': 'bg-yellow-600', 'Library': 'bg-indigo-500', 'PCR': 'bg-red-500', 
+            'Reagents': 'bg-slate-500', 'Extraction': 'bg-orange-500', 'Qubit': 'bg-lime-500', 'default': 'bg-gray-400'
+        };
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.person}</p>`;
+            document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href = './login.html'; });
+            initializeStoragePage();
+        });
+
+        async function apiFetch(endpoint, options = {}) {
+            try {
+                if (!(options.body instanceof FormData)) {
+                    options.headers = { 'Content-Type': 'application/json', ...options.headers };
+                    if(options.body) options.body = JSON.stringify(options.body);
+                }
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                if (!response.ok) { const err = await response.json().catch(()=>({error: 'Server error'})); throw new Error(err.error); }
+                return response.status === 204 ? { success: true } : response.json();
+            } catch (error) { console.error("API Error:", error); return { error: error.message }; }
+        }
+
+        function updateBreadcrumb(path) {
+            const breadcrumbEl = document.getElementById('breadcrumb');
+            let html = `<a href="#" class="hover:text-blue-600" onclick="renderRooms()">Rooms</a>`;
+            if (path.room) html += `<i data-lucide="chevron-right" class="w-4 h-4"></i><a href="#" class="hover:text-blue-600" onclick="renderFreezers('${path.room.room_id}')">${path.room.description || path.room.room_id}</a>`;
+            if (path.freezer) html += `<i data-lucide="chevron-right" class="w-4 h-4"></i><a href="#" class="hover:text-blue-600" onclick="renderBoxes('${path.room.room_id}', '${path.freezer}')">${path.freezer}</a>`;
+            if (path.box) html += `<i data-lucide="chevron-right" class="w-4 h-4"></i><span class="font-semibold text-gray-700">${path.box.Box}</span>`;
+            breadcrumbEl.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        function renderRooms() {
+            const container = document.getElementById('explorer-container');
+            container.innerHTML = `<h2 class="text-2xl font-bold mb-4">Select a Room</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                ${storageCache.rooms.map(room => `<div class="item-card card p-6 text-center cursor-pointer" onclick="renderFreezers('${room.room_id}')"><i data-lucide="building-2" class="mx-auto h-12 w-12 text-gray-500"></i><p class="mt-2 font-semibold">${room.description || room.room_id}</p></div>`).join('')}</div>`;
+            lucide.createIcons();
+            updateBreadcrumb({});
+        }
+        
+        function renderFreezers(roomId) {
+            const room = storageCache.rooms.find(r => r.room_id === roomId);
+            const freezers = [...new Set(storageCache.storageUnits.filter(s => s.room_id === roomId).map(s => s.Freezer))];
+            const container = document.getElementById('explorer-container');
+            container.innerHTML = `<h2 class="text-2xl font-bold mb-4">Select a Unit in ${room.description}</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                ${freezers.map(freezer => `<div class="item-card card p-6 text-center cursor-pointer" onclick="renderBoxes('${roomId}', '${freezer}')"><i data-lucide="snowflake" class="mx-auto h-12 w-12 text-blue-500"></i><p class="mt-2 font-semibold">${freezer}</p></div>`).join('')}</div>`;
+            lucide.createIcons();
+            updateBreadcrumb({ room });
+        }
+
+        function renderBoxes(roomId, freezerId) {
+            const room = storageCache.rooms.find(r => r.room_id === roomId);
+            const boxes = storageCache.storageUnits.filter(s => s.room_id === roomId && s.Freezer === freezerId);
+            const container = document.getElementById('explorer-container');
+            container.innerHTML = `<h2 class="text-2xl font-bold mb-4">Select a Box in ${freezerId}</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                ${boxes.map(box => `<div class="item-card card p-6 text-center cursor-pointer" onclick="renderBoxContents('${box.storage_id}')"><i data-lucide="archive" class="mx-auto h-12 w-12 text-green-600"></i><p class="mt-2 font-semibold">${box.Box}</p><p class="text-sm text-gray-500">${box.storage_id}</p></div>`).join('')}</div>`;
+            lucide.createIcons();
+            updateBreadcrumb({ room, freezer: freezerId });
+        }
+
+        function renderBoxContents(storageId) {
+            const box = storageCache.storageUnits.find(s => s.storage_id === storageId);
+            const room = storageCache.rooms.find(r => r.room_id === box.room_id);
+            const itemsInBox = allItemsCache.filter(s => s.storage_id === storageId);
+            const unassignedItems = allItemsCache.filter(s => !s.storage_id);
+            const container = document.getElementById('explorer-container');
+
+            const boxX = box.BoxX_ABC || 10;
+            const boxY = box.BoxY_123 || 10;
+            const gridSize = boxX * boxY;
+
+            container.innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2">
+                    <h2 class="text-xl font-bold mb-4">Box Layout: ${box.Box} (${boxX} x ${boxY})</h2>
+                    <div id="box-grid" class="box-grid p-2 bg-gray-200 rounded-lg">${
+                        Array.from({length: gridSize }, (_, i) => i + 1).map(pos => {
+                            const item = itemsInBox.find(i => parseInt(i.storage_position) === pos);
+                            const colorClass = item ? (typeColorMap[item.type] || typeColorMap['default']) : 'empty';
+                            return `<div class="box-grid-cell ${item ? 'occupied ' + colorClass : 'empty'}" 
+                                         id="pos-${pos}"
+                                         onclick="showItemDetailsPanel(this, '${item ? item.id : ''}', '${item ? item.type : ''}')"
+                                         data-position="${pos}" 
+                                         draggable="${!!item}" 
+                                         data-item-info="${item ? `${item.pk}|${item.table}` : ''}">
+                                        <span class="font-bold text-sm">${pos}</span>
+                                        ${item ? `<span class="truncate text-xs w-full font-semibold">${item.id}</span><span class="truncate text-xs w-full text-gray-200 font-medium">${item.table}</span>` : ''}
+                                    </div>`;
+                        }).join('')
+                    }</div>
+                </div>
+                <div class="lg:col-span-1">
+                    <div id="side-panel-container" class="sticky top-8">
+                        </div>
+                </div>
+            </div>`;
+            
+            const gridEl = document.getElementById('box-grid');
+            if (gridEl) {
+                gridEl.style.gridTemplateColumns = `repeat(${boxX}, minmax(0, 1fr))`;
+            }
+
+            renderUnassignedItemsPanel(unassignedItems);
+            updateBreadcrumb({ room, freezer: box.Freezer, box });
+            addDragDropListeners(storageId);
+        }
+
+        function renderUnassignedItemsPanel(unassignedItems) {
+            const panel = document.getElementById('side-panel-container');
+            panel.innerHTML = `
+                <h2 class="text-xl font-bold mb-4">Unassigned Items (${unassignedItems.length})</h2>
+                <div class="card p-4 space-y-2 h-[60vh] overflow-y-auto" id="unassigned-items-list">
+                    ${unassignedItems.map(item => `
+                        <div class="draggable-item p-2 border rounded-md shadow-sm flex justify-between items-center" draggable="true" data-item-info="${item.pk}|${item.table}">
+                            <div>
+                                <p class="font-semibold text-sm">${item.id}</p>
+                                <p class="text-xs text-gray-500">${item.type}</p>
+                            </div>
+                            <i data-lucide="grip-vertical" class="text-gray-400"></i>
+                        </div>
+                    `).join('') || '<p class="text-center text-gray-500 p-4">No unassigned items.</p>'}
+                </div>`;
+            lucide.createIcons();
+            const newDraggables = panel.querySelectorAll('[draggable="true"]');
+            newDraggables.forEach(el => {
+                el.addEventListener('dragstart', e => {
+                    e.target.classList.add('dragging');
+                    e.dataTransfer.setData('text/plain', e.target.dataset.itemInfo);
+                });
+                el.addEventListener('dragend', e => e.target.classList.remove('dragging'));
+            });
+        }
+
+        function showItemDetailsPanel(element, itemId, itemType) {
+            document.querySelectorAll('.box-grid-cell.selected').forEach(c => c.classList.remove('selected'));
+            if(element) element.classList.add('selected');
+
+            const panel = document.getElementById('side-panel-container');
+            if (!itemId) {
+                renderUnassignedItemsPanel(allItemsCache.filter(s => !s.storage_id));
+                return;
+            }
+            
+            const item = allItemsCache.find(i => i.id === itemId && i.type === itemType);
+            if (!item) { panel.innerHTML = `<div class="card p-6"><p class="text-red-500">Error: Item details not found.</p></div>`; return; }
+            
+            const ignoreKeys = ['nr', 'id', 'pk', 'table', 'type', 'storage_id', 'storage_position', 'Attachment', 'BoxX_ABC', 'BoxY_123'];
+            let detailsHtml = '';
+            for (const [key, value] of Object.entries(item)) {
+                if (value && !ignoreKeys.includes(key)) {
+                    const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    detailsHtml += `<div class="py-1"><dt class="font-medium text-gray-600">${formattedKey}</dt><dd class="text-gray-900">${value}</dd></div>`;
+                }
+            }
+
+            panel.innerHTML = `<div class="card p-4 h-[65vh] overflow-y-auto">
+                <h3 class="text-lg font-bold mb-2 text-blue-600">${item.id}</h3>
+                <div class="text-sm space-y-2 mb-4">
+                    <div><strong>Type:</strong> ${item.type}</div>
+                    <div><strong>Location:</strong> ${item.storage_id} / Pos: ${item.storage_position}</div>
+                </div>
+                <hr class="my-3">
+                <dl class="text-xs space-y-1">${detailsHtml}</dl>
+                <div class="mt-4">
+                    <button onclick="unassignItem('${item.pk}', '${item.table}', '${item.storage_id}')" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center">
+                        <i data-lucide="unlink-2" class="w-4 h-4 mr-2"></i>Remove From Position
+                    </button>
+                </div>
+            </div>`;
+            lucide.createIcons();
+        }
+
+        async function unassignItem(pkValue, sourceTable, currentStorageId) {
+            if (!confirm(`Are you sure you want to remove this item from its storage position? It will be moved to the "Unassigned Items" list.`)) return;
+            const itemConfig = storableItemTables.find(t => t.table === sourceTable);
+            const payload = { storage_id: null, storage_position: null };
+            const result = await apiFetch(`table/${itemConfig.schema}/${sourceTable}/${pkValue}`, { method: 'PUT', body: payload });
+            if (result && !result.error) {
+                await initializeStoragePage(false); // full refresh
+                renderBoxContents(currentStorageId);
+            } else { alert('Failed to unassign item: ' + (result?.error || 'Unknown error')); }
+        }
+
+        function addDragDropListeners(currentStorageId) {
+            const draggables = document.querySelectorAll('[draggable="true"]');
+            const dropTargets = document.querySelectorAll('.box-grid-cell');
+            
+            draggables.forEach(el => {
+                el.addEventListener('dragstart', e => {
+                    e.target.classList.add('dragging');
+                    e.dataTransfer.setData('text/plain', e.target.dataset.itemInfo);
+                });
+                el.addEventListener('dragend', e => e.target.classList.remove('dragging'));
+            });
+
+            dropTargets.forEach(el => {
+                el.addEventListener('dragover', e => {
+                    if (!el.classList.contains('occupied')) {
+                        e.preventDefault();
+                        el.classList.add('drag-over');
+                    }
+                });
+                el.addEventListener('dragleave', e => el.classList.remove('drag-over'));
+                el.addEventListener('drop', async e => {
+                    e.preventDefault();
+                    el.classList.remove('drag-over');
+                    if (el.classList.contains('occupied')) return;
+
+                    const [pk, table] = e.dataTransfer.getData('text/plain').split('|');
+                    const position = el.dataset.position;
+
+                    const itemConfig = storableItemTables.find(t => t.table === table);
+                    const payload = { storage_id: currentStorageId, storage_position: position };
+                    
+                    const result = await apiFetch(`table/${itemConfig.schema}/${table}/${pk}`, { method: 'PUT', body: payload });
+                    if (result && !result.error) {
+                        await initializeStoragePage(false);
+                        renderBoxContents(currentStorageId);
+                    } else {
+                        alert('Failed to move item: ' + (result?.error || 'Unknown error'));
+                    }
+                });
+            });
+        }
+
+        async function initializeStoragePage(setupEventListeners = true) {
+            const container = document.getElementById('explorer-container');
+            container.innerHTML = `<div class="text-center p-8"><i data-lucide="loader" class="mx-auto h-12 w-12 animate-spin text-gray-500"></i><p class="mt-2 text-gray-600">Loading all inventory data...</p></div>`;
+            lucide.createIcons();
+
+            const promises = [
+                apiFetch('table/Reference/Room'),
+                apiFetch('table/Lab/Storage'),
+                ...storableItemTables.map(itemType => 
+                    apiFetch(`table/${itemType.schema}/${itemType.table}`).then(response => {
+                        if (response.error || !Array.isArray(response)) {
+                            console.error(`Failed to load ${itemType.table} data`); return [];
+                        }
+                        // MODIFIED LOGIC HERE
+                        return response.map(item => ({
+                            ...item,
+                            type: itemType.table,
+                            table: itemType.table,
+                            // Use sample_id if it exists, otherwise fall back to the configured idColumn (like 'nr' or 'Reagent_Name')
+                            id: item.sample_id || item[itemType.idColumn], 
+                            pk: item[itemType.pk]
+                        }));
+                    })
+                )
+            ];
+
+            const [roomData, storageData, ...allItemArrays] = await Promise.all(promises);
+            
+            storageCache.rooms = (roomData && !roomData.error) ? roomData.sort((a,b) => a.room_id.localeCompare(b.room_id)) : [];
+            storageCache.storageUnits = (storageData && !storageData.error) ? storageData : [];
+            allItemsCache = allItemArrays.flat().filter(item => item && item.id);
+            
+            renderRooms();
+            if(setupEventListeners) {
+                document.getElementById('new-storage-btn').addEventListener('click', showNewStorageModal);
+            }
+        }
+        
+        function showNewStorageModal() {
+            // This would open a modal to create a new record in Lab.Storage.
+            alert("Placeholder for 'New Storage Unit' modal.");
+        }
+
+    </script>
+</body>
+</html>

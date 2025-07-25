@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projects - TIFI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .sidebar { border-right: 1px solid #e2e8f0; }
+        .sidebar-item { color: #475569; }
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        .modal-overlay { background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+        .table-row-selected { background-color: #eef2ff !important; }
+    </style>
+</head>
+<body>
+    <div id="main-app">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI </span></div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Protocols</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
+                <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage Storage Box</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="test-tubes" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-3" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+           </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t"></div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+        
+        <div id="main-content" class="ml-64 p-8">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-3xl font-bold text-gray-800">Projects Management</h1>
+                <button id="new-project-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all"><i data-lucide="plus" class="w-5 h-5 mr-2"></i>New Project</button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                <div class="lg:col-span-2">
+                    <div class="card p-4">
+                        <input type="text" id="project-search" placeholder="Search projects..." class="w-full mb-4 py-2 px-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <div class="overflow-y-auto h-[65vh]">
+                            <table class="min-w-full"><thead class="bg-gray-50 sticky top-0"><tr><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Project</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th></tr></thead><tbody id="projects-table" class="divide-y divide-gray-200"></tbody></table>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="project-details-container" class="lg:col-span-3">
+                    <div class="card p-6 h-full flex items-center justify-center text-gray-500">
+                        <div class="text-center">
+                            <i data-lucide="folder-search" class="mx-auto h-12 w-12"></i>
+                            <p class="mt-2">Select a project to view its details</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="modal-container"></div>
+    </div>
+
+    <script>
+        // --- AUTH & SETUP ---
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') window.location.href = './login.html';
+        
+        const API_BASE_URL = `http://${window.location.hostname}:5200/api`;
+        let masterCache = {};
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.person}</p>`;
+            document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href = './login.html'; });
+            initializeProjectsPage();
+        });
+
+        // --- API & DATA HANDLING ---
+        async function apiFetch(endpoint, options = {}) {
+            try {
+                if (options.body && typeof options.body === 'object' && !(options.body instanceof FormData)) {
+                    options.headers = { ...options.headers, 'Content-Type': 'application/json' };
+                    options.body = JSON.stringify(options.body);
+                }
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                if (!response.ok) { 
+                    const errText = await response.text();
+                    try { const errJson = JSON.parse(errText); throw new Error(errJson.error || 'API request failed'); }
+                    catch { throw new Error(errText); }
+                }
+                if (response.status === 204 || response.headers.get('content-length') === '0') return { success: true };
+                return response.json();
+            } catch (error) { console.error("API Error:", error); return { error: error.message }; }
+        }
+
+        async function getReferenceData(tableName, schema = 'Reference') {
+            const cacheKey = `${schema}.${tableName}`;
+            if (masterCache[cacheKey]) return masterCache[cacheKey];
+            const data = await apiFetch(`table/${schema}/${tableName}`);
+            if(data && !data.error) masterCache[cacheKey] = data;
+            return data;
+        }
+
+        // --- UI RENDERING ---
+        function renderProjects(projects) {
+            const tableBody = document.getElementById('projects-table');
+            if (!projects || !tableBody) return;
+            tableBody.innerHTML = projects.map(p => `
+                <tr class="hover:bg-gray-50 cursor-pointer project-row" data-project-id="${p.project_id}">
+                    <td class="px-4 py-3"><p class="font-medium text-gray-900">${p.Title || 'No Title'}</p><p class="text-sm text-gray-500">${p.project_id}</p></td>
+                    <td class="px-4 py-3"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${p.status_id === 'Active' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">${p.status_id}</span></td>
+                    <td class="px-4 py-3 flex space-x-2">
+                        <button class="edit-btn p-1 text-gray-500 hover:text-blue-600" data-project-id="${p.project_id}"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                        <button class="delete-btn p-1 text-gray-500 hover:text-red-600" data-project-id="${p.project_id}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </td>
+                </tr>`).join('');
+            
+            lucide.createIcons();
+            addProjectListActionListeners(projects);
+        }
+        
+        // --- *** MODIFIED: Renders only the selected project's data *** ---
+        function renderProjectDetails(projectId) {
+            const container = document.getElementById('project-details-container');
+            const project = masterCache.projects.find(p => p.project_id === projectId);
+
+            if (!project) { 
+                container.innerHTML = `<div class="card p-6 text-red-500">Error: Project details not found.</div>`; 
+                return; 
+            }
+
+            // Start building the HTML for the details view.
+            let detailsHtml = `<div class="space-y-3 text-sm">`;
+
+            // Define the order of keys to display for better consistency.
+            const displayOrder = ['project_id', 'Title', 'PI', 'Funder', 'status_id', 'Start_date', 'End_date', 'Report_date', 'Notes', 'attachment'];
+            
+            // Loop through the defined order to create a line for each piece of data.
+            displayOrder.forEach(key => {
+                let value = project[key];
+                
+                // Only display the row if there is a value.
+                if (value !== null && value !== undefined && value !== '') {
+                     // Special handling for the attachment field to show status instead of raw data.
+                    if (key === 'attachment') {
+                        value = 'File Uploaded';
+                    }
+
+                    // Format the key to be human-readable (e.g., 'project_id' becomes 'Project Id').
+                    const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+                    detailsHtml += `
+                        <div>
+                            <strong class="text-gray-500 w-32 inline-block">${formattedKey}</strong> 
+                            <span class="text-gray-800">${value}</span>
+                        </div>`;
+                }
+            });
+
+            detailsHtml += `</div>`;
+            
+            // Set the final HTML for the details container.
+            container.innerHTML = `
+                <div class="card p-6 h-full flex flex-col">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800">${project.Title}</h2>
+                            <p class="text-sm text-gray-500">${project.project_id}</p>
+                        </div>
+                    </div>
+                    <div class="flex-grow overflow-y-auto">
+                        ${detailsHtml}
+                    </div>
+                </div>`;
+        }
+
+
+        // --- MODAL LOGIC (Unchanged from previous version) ---
+        function showModal(content) {
+            const container = document.getElementById('modal-container');
+            container.innerHTML = content;
+            const modal = container.querySelector('.modal-overlay');
+            const modalContent = container.querySelector('.modal-content');
+            setTimeout(() => modalContent.classList.remove('opacity-0', '-translate-y-10'), 10);
+            const closeModal = () => {
+                modalContent.classList.add('opacity-0', '-translate-y-10');
+                setTimeout(() => container.innerHTML = '', 300);
+            };
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+            container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+            return { closeModal };
+        }
+        
+        async function showProjectModal(project = null) {
+            const isEditing = project !== null;
+            const [persons, statuses] = await Promise.all([getReferenceData('Personal'), getReferenceData('Status')]);
+            const modalHTML = `<div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center"><div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-2xl transform transition-all -translate-y-10 opacity-0"><div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold">${isEditing ? 'Edit' : 'Create'} Project</h2><button id="close-modal-btn">&times;</button></div><form id="project-form" class="space-y-4"><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label>Project ID</label><input type="text" name="project_id" required class="w-full mt-1 p-2 border rounded" ${isEditing ? 'readonly class="bg-gray-100"' : ''} value="${project ? project.project_id : ''}"></div><div><label>Title</label><input type="text" name="Title" required class="w-full mt-1 p-2 border rounded" value="${project ? project.Title : ''}"></div><div><label>PI</label><select name="PI" class="w-full mt-1 p-2 border rounded">${persons ? persons.map(p => `<option value="${p.person_id}" ${project && project.PI === p.person_id ? 'selected' : ''}>${p.person}</option>`).join('') : ''}</select></div><div><label>Funder</label><input type="text" name="Funder" class="w-full mt-1 p-2 border rounded" value="${project ? project.Funder : ''}"></div><div><label>Status</label><select name="status_id" class="w-full mt-1 p-2 border rounded">${statuses ? statuses.map(s => `<option value="${s.status_id}" ${project && project.status_id === s.status_id ? 'selected' : ''}>${s.status_id}</option>`).join('') : ''}</select></div><div><label>Attachment</label><input type="file" name="attachment" class="w-full mt-1 p-2 border rounded file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"></div><div><label>Start Date</label><input type="date" name="Start_date" class="w-full mt-1 p-2 border rounded" value="${project && project.Start_date ? project.Start_date.split('T')[0] : ''}"></div><div><label>End Date</label><input type="date" name="End_date" class="w-full mt-1 p-2 border rounded" value="${project && project.End_date ? project.End_date.split('T')[0] : ''}"></div></div><div class="pt-4 flex justify-end"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">${isEditing ? 'Save Changes' : 'Create'}</button></div></form></div></div>`;
+            const { closeModal } = showModal(modalHTML);
+
+            document.getElementById('project-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const isEditing = project !== null;
+                const method = isEditing ? 'PUT' : 'POST';
+                // For PUT, the primary key is the project_id string
+                const endpoint = isEditing ? `table/Lims/Projects/${project.project_id}` : 'table/Lims/Projects';
+                
+                let body;
+                if (isEditing) {
+                    // Convert FormData to a simple object for JSON for the PUT request.
+                    // The backend's generic PUT doesn't handle file uploads, only POST does.
+                    body = {};
+                    formData.forEach((value, key) => {
+                         if (key !== 'attachment' || (key === 'attachment' && value.size > 0)) {
+                            body[key] = value;
+                         }
+                    });
+                     if (body.attachment) {
+                        alert("File uploads on existing projects are not supported in this view. Please create a new entry if the attachment must be changed.");
+                        delete body.attachment;
+                    }
+                } else {
+                    body = formData;
+                }
+
+                const result = await apiFetch(endpoint, { method, body });
+                if (result && !result.error) { 
+                    closeModal(); 
+                    initializeProjectsPage(isEditing ? project.project_id : null); 
+                } else { 
+                    alert('Failed to save project: ' + (result ? result.error : 'Unknown error')); 
+                }
+            };
+        }
+        
+        // --- INITIALIZATION ---
+        function addProjectListActionListeners(projects) {
+            document.querySelectorAll('.project-row').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    if (e.target.closest('button')) return; 
+                    document.querySelectorAll('.project-row').forEach(r => r.classList.remove('table-row-selected'));
+                    row.classList.add('table-row-selected');
+                    renderProjectDetails(row.dataset.projectId);
+                });
+            });
+
+            document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', e => {
+                e.stopPropagation();
+                const projectId = e.currentTarget.dataset.projectId;
+                const project = projects.find(p => p.project_id == projectId);
+                if (project) {
+                    showProjectModal(project);
+                }
+            }));
+
+            document.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', async e => {
+                e.stopPropagation();
+                const projectId = e.currentTarget.dataset.projectId;
+                const project = projects.find(p => p.project_id == projectId);
+                if(project && confirm(`Are you sure you want to delete project: ${project.Title}? This cannot be undone.`)){
+                    const result = await apiFetch(`table/Lims/Projects/${project.project_id}`, { method: 'DELETE' });
+                    if(result.success) {
+                        initializeProjectsPage(); 
+                        document.getElementById('project-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="folder-search" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a project to view its details</p></div></div>`;
+                        lucide.createIcons();
+                    } else alert('Failed to delete project: ' + (result ? result.error : 'Unknown error'));
+                }
+            }));
+        }
+
+        async function initializeProjectsPage(selectedProjectId = null) {
+            masterCache = {}; 
+            const projects = await getReferenceData('Projects', 'Lims');
+            if(projects && !projects.error) {
+                masterCache.projects = projects.sort((a,b) => a.project_id.localeCompare(b.project_id));
+                renderProjects(masterCache.projects);
+
+                if (selectedProjectId) {
+                    const row = document.querySelector(`.project-row[data-project-id="${selectedProjectId}"]`);
+                    if (row) {
+                        row.classList.add('table-row-selected');
+                        renderProjectDetails(selectedProjectId);
+                    }
+                }
+            } else {
+                 document.getElementById('projects-table').innerHTML = `<tr><td colspan="3" class="text-center text-red-500 p-4">Error loading projects: ${projects ? projects.error : 'Unknown API error'}</td></tr>`;
+            }
+
+            document.getElementById('project-search').addEventListener('input', e => {
+                const searchTerm = e.target.value.toLowerCase();
+                const filteredProjects = masterCache.projects.filter(p => p.project_id.toLowerCase().includes(searchTerm) || (p.Title && p.Title.toLowerCase().includes(searchTerm)));
+                renderProjects(filteredProjects);
+            });
+            document.getElementById('new-project-btn').addEventListener('click', () => showProjectModal());
+        }
+    </script>
+</body>
+</html>

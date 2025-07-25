@@ -1,0 +1,1527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projects - TIFI MG LIMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .sidebar { border-right: 1px solid #e2e8f0; }
+        .sidebar-item { color: #475569; }
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        .modal-overlay { background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 50; }
+        .table-row-selected { background-color: #eef2ff !important; }
+        .sortable-header { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; padding-right: 8px; }
+        .sortable-header:hover { background-color: #e2e8f0; }
+        .sort-icon { display: inline-block; width: 16px; height: 16px; vertical-align: middle; margin-left: 4px; flex-shrink: 0; }
+        .filter-input { width: calc(100% - 10px); padding: 4px; margin-top: 4px; border: 1px solid #cbd5e1; border-radius: 0.25rem; font-size: 0.75rem; box-sizing: border-box; }
+        .accordion-item { margin-bottom: 0.5rem; border: 1px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; }
+        .accordion-header { background-color: #f1f5f9; padding: 0.75rem 1rem; cursor: pointer; width: 100%; text-align: left; display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: #475569; }
+        .accordion-header:hover { background-color: #e2e8f0; }
+        .accordion-header .lucide { transition: transform 0.3s ease; }
+        .accordion-header.active .lucide { transform: rotate(180deg); }
+        .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, padding 0.3s ease-out; padding: 0 1rem; background-color: white; border-top: 1px solid #e2e8f0; }
+        .accordion-content.open { max-height: 500px; padding: 1rem; }
+        /* Tab Styles */
+        .tab-link { cursor: pointer; }
+        .tab-link.active { color: #4f46e5; border-color: #4f46e5; }
+
+        /* Custom scrollbar for tables */
+        .overflow-y-auto::-webkit-scrollbar {
+            width: 8px;
+        }
+        .overflow-y-auto::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .overflow-y-auto::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        .person-tag {
+            display: inline-flex;
+            align-items: center;
+            background-color: #e0e7ff; /* light indigo */
+            color: #4f46e5; /* indigo-600 */
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px; /* pill shape */
+            font-size: 0.875rem;
+            margin: 0.25rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .person-tag:hover {
+            background-color: #c7d2fe; /* lighter indigo */
+        }
+        .person-tag .remove-icon {
+            margin-left: 0.25rem;
+            width: 0.75rem;
+            height: 0.75rem;
+            stroke-width: 3;
+        }
+        .add-person-btn {
+            background-color: #4f46e5; /* indigo-600 */
+            color: white;
+            border-radius: 9999px;
+            padding: 0.3rem 0.6rem;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            margin-left: 0.5rem;
+        }
+        .add-person-btn:hover {
+            background-color: #4338ca; /* darker indigo */
+        }
+    </style>
+</head>
+<body>
+    <div id="main-app" class="flex">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col z-20">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0">
+                <i data-lucide="flask-conical" class="inline-block mr-2 text-blue-600"></i><span>TIFI MG</span>
+            </div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (SOP)</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
+                <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="box" class="w-5 h-5 mr-3"></i><span>Storage Box</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+            </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t flex items-center text-gray-800">
+                </div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+
+        <div id="main-content" class="ml-64 p-8 flex-grow">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800">Projects Management</h1>
+                    <p class="mt-1 text-md text-gray-600">Manage your research projects</p>
+                </div>
+                <div class="flex space-x-3">
+                    <button id="add-single-entry-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all">
+                        <i data-lucide="plus" class="w-5 h-5 mr-2"></i>Add Single Entry
+                    </button>
+                    <button id="bulk-csv-upload-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all">
+                        <i data-lucide="upload" class="w-5 h-5 mr-2"></i>Bulk CSV Upload
+                    </button>
+                    <button id="bulk-modify-btn" class="bg-gray-400 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow transition-all cursor-not-allowed" disabled>
+                        <i data-lucide="file-edit" class="w-5 h-5 mr-2"></i>Bulk Modify
+                    </button>
+                </div>
+            </div>
+
+            <div class="border-b border-gray-200 mb-6">
+                <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                    <a id="tab-projects" class="tab-link whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active">
+                        Projects
+                    </a>
+                    <select id="dynamic-table-select" class="tab-link whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 bg-transparent outline-none">
+                        </select>
+                </nav>
+            </div>
+
+            <div id="content-projects" class="grid grid-cols-1 lg:grid-cols-5 gap-8 mt-6">
+                <div class="lg:col-span-2">
+                    <div class="card p-4">
+                        <div class="overflow-y-auto h-[65vh] relative">
+                            <table class="min-w-full">
+                                <thead class="bg-gray-50 sticky top-0 z-10">
+                                    <tr id="table-headers">
+                                        </tr>
+                                </thead>
+                                <tbody id="dynamic-table-body" class="divide-y divide-gray-200">
+                                    <tr><td colspan="100%" class="text-center p-4 text-gray-500">
+                                        <div class="flex items-center justify-center">
+                                            <i data-lucide="loader-2" class="animate-spin inline-block mr-2 text-blue-600"></i>
+                                            <span>Loading table data...</span>
+                                        </div>
+                                    </td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="project-details-container" class="lg:col-span-3">
+                    <div class="card p-6 h-full flex items-center justify-center text-gray-500">
+                        <div class="text-center">
+                            <i data-lucide="folder-kanban" class="mx-auto h-12 w-12"></i>
+                            <p class="mt-2">Select a project to view its details</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="modal-container"></div>
+    </div>
+
+    <script>
+        // --- AUTH & SETUP ---
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') {
+            localStorage.setItem('redirectUrl', window.location.href);
+            window.location.href = './login.html';
+        }
+        
+        const API_BASE_URL = '/tifi-lims/api'; 
+        let masterCache = {}; 
+        let currentTableData = []; 
+        let currentTableSchema = []; // Stores column info for the currently displayed table
+        let currentTableName = 'lims.projects'; // Default to projects table
+        let sortColumn = null; 
+        let sortDirection = 'asc';
+        let columnFilters = {};
+        let allProjectTables = []; // To store list of all relevant tables for dropdown
+
+        // --- DOMContentLoaded ---
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("DOMContentLoaded: Initializing page.");
+            lucide.createIcons();
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if (user) {
+                let userName = 'User';
+                if (user.full_name) userName = user.full_name;
+                else if (user.person_id) userName = user.person_id;
+                else if (user.customer_name) userName = user.customer_name;
+                else if (user.contact_id) userName = user.contact_id;
+                document.getElementById('user-profile').innerHTML = `
+                    <span class="mr-2 p-2 bg-blue-500 text-white rounded-full text-xs font-bold">${userName.charAt(0).toUpperCase()}</span>
+                    <p class="font-semibold text-sm text-gray-800">${userName}</p>
+                `;
+            }
+            
+            document.getElementById('logout-button').addEventListener('click', () => { 
+                console.log("Logout button clicked.");
+                sessionStorage.clear(); 
+                window.location.href = './login.html'; 
+            });
+            
+            initializePage();
+        });
+
+        // --- API & DATA HANDLING ---
+        async function apiFetch(endpoint, options = {}) {
+            console.log(`API Fetch: Calling ${endpoint} with options:`, options);
+            try {
+                const isFormData = options.body instanceof FormData;
+                if (!isFormData && options.body && typeof options.body === 'object') {
+                    options.headers = { ...options.headers, 'Content-Type': 'application/json' };
+                    options.body = JSON.stringify(options.body);
+                }
+
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                
+                if (!response.ok) { 
+                    const errText = await response.text();
+                    console.error(`API Error Response for ${endpoint} (Status: ${response.status}):`, errText);
+                    try { 
+                        const errJson = JSON.parse(errText); 
+                        throw new Error(errJson.error || `API request failed with status ${response.status}`); 
+                    } catch (parseError) { 
+                        throw new Error(`API request failed: ${errText} (Status: ${response.status})`); 
+                    }
+                }
+                if (response.status === 204 || response.headers.get('content-length') === '0') {
+                    console.log(`API Fetch: Received empty response for ${endpoint}.`);
+                    return { success: true };
+                }
+                const jsonResponse = await response.json();
+                console.log(`API Fetch: Successful response for ${endpoint}:`, jsonResponse);
+                return jsonResponse;
+            }
+            catch (error) { 
+                console.error(`API Error on ${endpoint}:`, error); 
+                return { error: error.message }; 
+            }
+        }
+
+        async function getReferenceData(tableName, schema = 'reference') {
+            const cacheKey = `${schema}.${tableName}`;
+            if (masterCache[cacheKey]) {
+                console.log(`Cache hit for reference data: ${cacheKey}`);
+                return masterCache[cacheKey];
+            }
+            console.log(`Fetching reference data for: ${cacheKey}`);
+            const data = await apiFetch(`table/${schema}/${tableName}`);
+            if(data && !data.error) {
+                masterCache[cacheKey] = data;
+            } else {
+                console.error(`Failed to fetch reference data for ${cacheKey}:`, data ? data.error : 'Unknown error');
+            }
+            return data;
+        }
+
+        async function getTableSchema(schema, table) {
+            const cacheKey = `schema.${schema}.${table}`;
+            if (masterCache[cacheKey]) {
+                console.log(`Cache hit for schema: ${cacheKey}`);
+                return masterCache[cacheKey];
+            }
+            console.log(`Fetching schema for: ${cacheKey}`);
+            const schemaData = await apiFetch(`table/${schema}/${table}/schema`);
+            if (schemaData && !schemaData.error) {
+                masterCache[cacheKey] = schemaData;
+            } else {
+                console.error(`Failed to fetch schema for ${cacheKey}:`, schemaData ? schemaData.error : 'Unknown error');
+            }
+            return schemaData;
+        }
+
+        async function getAllProjectTables() {
+            if (allProjectTables.length > 0) {
+                console.log("Returning cached project tables.");
+                return allProjectTables;
+            }
+            console.log("Fetching all tables for projects page.");
+            const tables = await apiFetch('table_names_for_forms');
+            if (tables && !tables.error) {
+                // Filter for tables relevant to projects: lims.projects, lims.project_persons
+                allProjectTables = tables.filter(t => 
+                    t === 'lims.projects' || 
+                    t === 'lims.project_persons'
+                );
+                console.log("Filtered project tables:", allProjectTables);
+                return allProjectTables;
+            }
+            console.error("Failed to fetch all project tables:", tables ? tables.error : 'Unknown error');
+            return [];
+        }
+
+        // --- UI RENDERING ---
+        function formatColumnName(columnName) {
+            return columnName.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+        }
+        
+        function renderTable(dataToDisplay, schemaInfo) {
+            console.log("Rendering table with data:", dataToDisplay, "and schema:", schemaInfo);
+            const tableHeaders = document.getElementById('table-headers');
+            const tableBody = document.getElementById('dynamic-table-body');
+            if (!tableHeaders || !tableBody) {
+                console.error("Table elements not found for rendering.");
+                return;
+            }
+
+            tableHeaders.innerHTML = '';
+            tableBody.innerHTML = '';
+
+            if (!schemaInfo || schemaInfo.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500">No schema information available for this table.</td></tr>`;
+                return;
+            }
+
+            const columnsToDisplay = schemaInfo.filter(col => !col.column_name.includes('attachment') && !col.column_name.includes('password_hash') && !col.column_name.includes('search_vector'));
+            
+            let headerHtml = '';
+            columnsToDisplay.forEach(col => {
+                headerHtml += `
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        <div class="sortable-header" data-column="${col.column_name}">
+                            <span>${formatColumnName(col.column_name)}</span>
+                            <i data-lucide="chevrons-up-down" class="sort-icon text-gray-400"></i>
+                        </div>
+                        <input type="text" placeholder="Filter ${formatColumnName(col.column_name)}..." class="filter-input" data-column="${col.column_name}">
+                    </th>
+                `;
+            });
+            headerHtml += `<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>`;
+            tableHeaders.innerHTML = headerHtml;
+
+            if (!dataToDisplay || dataToDisplay.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="${columnsToDisplay.length + 1}" class="text-center p-4 text-gray-500">No data available for this table.</td></tr>`;
+            } else {
+                tableBody.innerHTML = dataToDisplay.map(row => {
+                    const pkValues = getPkValues(row);
+                    const formattedPkValues = {};
+                    for (const key in pkValues) {
+                        const colSchema = schemaInfo.find(s => s.column_name === key);
+                        if (colSchema && colSchema.data_type === 'date') {
+                            formattedPkValues[key] = formatDateForInput(pkValues[key]);
+                        } else {
+                            formattedPkValues[key] = pkValues[key];
+                        }
+                    }
+
+                    let rowHtml = `<tr class="hover:bg-gray-50 cursor-pointer dynamic-table-row" data-pk-values='${JSON.stringify(formattedPkValues)}'>`;
+                    columnsToDisplay.forEach(col => {
+                        let value = row[col.column_name];
+                        if (value === null || value === undefined) {
+                            value = 'N/A';
+                        } else if (col.data_type === 'date' && value) {
+                            try { value = new Date(value).toLocaleDateString('en-CA'); } catch (e) { /* keep original */ }
+                        } else if (col.data_type === 'timestamp with time zone' && value) {
+                            try { value = new Date(value).toLocaleString(); } catch (e) { /* keep original */ }
+                        } else if (typeof value === 'object') { 
+                            value = JSON.stringify(value);
+                        }
+                        rowHtml += `<td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${value}</td>`;
+                    });
+                    rowHtml += `
+                        <td class="px-4 py-3 flex space-x-2">
+                            <button class="edit-btn p-1 text-gray-500 hover:text-blue-600" data-pk-values='${JSON.stringify(formattedPkValues)}'><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                            <button class="delete-btn p-1 text-gray-500 hover:text-red-600" data-pk-values='${JSON.stringify(formattedPkValues)}'><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </td>
+                    </tr>`;
+                    return rowHtml;
+                }).join('');
+            }
+            
+            lucide.createIcons();
+            addTableActionListeners();
+            addFilterAndSortListeners();
+        }
+
+        function getPkValues(row) {
+            const pkColumns = masterCache[`pk.${currentTableName}`] || [];
+            const pkValues = {};
+            pkColumns.forEach(pkCol => {
+                if (row[pkCol] !== undefined) {
+                    pkValues[pkCol] = row[pkCol];
+                }
+            });
+            console.log("Extracted PK Values:", pkValues);
+            return pkValues;
+        }
+
+        const formatDateForInput = (dateString) => {
+            if (!dateString) return '';
+            try {
+                const date = new Date(dateString);
+                return isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0];
+            } catch (e) {
+                console.warn("Failed to format date for input:", dateString, e);
+                return '';
+            }
+        };
+
+        const formatDateTimeForInput = (dateTimeString) => {
+            if (!dateTimeString) return '';
+            try {
+                const date = new Date(dateTimeString);
+                return isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 16);
+            } catch (e) {
+                console.warn("Failed to format datetime for input:", dateTimeString, e);
+                return '';
+            }
+        };
+
+
+        function addTableActionListeners() {
+            console.log("Adding table action listeners.");
+            document.querySelectorAll('.dynamic-table-row').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    if (e.target.closest('button')) return; 
+                    console.log("Row clicked:", row.dataset.pkValues);
+                    document.querySelectorAll('.dynamic-table-row').forEach(r => r.classList.remove('table-row-selected'));
+                    row.classList.add('table-row-selected');
+                    const pkValues = JSON.parse(row.dataset.pkValues);
+                    renderProjectDetails(pkValues);
+                });
+            });
+
+            document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', async e => {
+                e.stopPropagation();
+                console.log("Edit button clicked:", e.currentTarget.dataset.pkValues);
+                const pkValues = JSON.parse(e.currentTarget.dataset.pkValues);
+                const record = currentTableData.find(r => {
+                    return Object.keys(pkValues).every(key => {
+                        const colSchema = currentTableSchema.find(s => s.column_name === key);
+                        if (colSchema && colSchema.data_type === 'date') {
+                            return formatDateForInput(r[key]) === pkValues[key];
+                        }
+                        return String(r[key]) === String(pkValues[key]);
+                    });
+                });
+                if (record) showCreateEditModal(record);
+                else console.error("Record not found for editing with PKs:", pkValues);
+            }));
+
+            document.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', async e => {
+                e.stopPropagation();
+                console.log("Delete button clicked:", e.currentTarget.dataset.pkValues);
+                const pkValues = JSON.parse(e.currentTarget.dataset.pkValues);
+                const recordIdentifier = Object.values(pkValues).join(' / ');
+                
+                if (!confirm(`Are you sure you want to delete this record (${recordIdentifier}) from ${currentTableName}?`)){
+                    console.log("Delete cancelled by user.");
+                    return;
+                }
+
+                let success = false;
+                // Special handling for lims.projects: Delete child records first
+                if (currentTableName === 'lims.projects') {
+                    const projectId = pkValues.project_id;
+
+                    const childTablesToDelete = [
+                        { name: 'lims.project_persons', pkCols: ['project_id', 'person_id'] },
+                        // Add other directly dependent tables here if they don't cascade automatically
+                    ];
+
+                    let allChildrenDeleted = true;
+                    for (const childTable of childTablesToDelete) {
+                        try {
+                            const [childSchema, childTableName] = childTable.name.split('.');
+                            let filterParams = `filter_project_id=${projectId}`;
+                            
+                            console.log(`Attempting to delete children from ${childTable.name} for project ${projectId}`);
+                            const children = await apiFetch(`table/${childSchema}/${childTableName}?${filterParams}`);
+                            
+                            if (children && children.length > 0) {
+                                for (const childRecord of children) {
+                                    const deleteChildPkValues = {};
+                                    childTable.pkCols.forEach(col => {
+                                        if (childRecord[col] !== undefined) {
+                                            deleteChildPkValues[col] = childRecord[col];
+                                            const childColSchema = (masterCache[`schema.${childSchema}.${childTableName}`] || []).find(s => s.column_name === col);
+                                            if (childColSchema && childColSchema.data_type === 'date') {
+                                                deleteChildPkValues[col] = formatDateForInput(childRecord[col]);
+                                            }
+                                        }
+                                    });
+                                    const childQueryString = new URLSearchParams(deleteChildPkValues).toString();
+                                    console.log(`Deleting child record from ${childTable.name} with PKs:`, deleteChildPkValues);
+                                    const deleteChildResult = await apiFetch(`table/${childSchema}/${childTableName}?${childQueryString}`, { method: 'DELETE' });
+                                    if (!deleteChildResult.success) {
+                                        console.error(`Failed to delete child record from ${childTable.name}:`, deleteChildResult.error);
+                                        allChildrenDeleted = false;
+                                        alert(`Failed to delete associated records in ${childTable.name}. Cannot delete project.`);
+                                        break;
+                                    }
+                                }
+                            }
+                        } catch (error) {
+                            console.error(`Error fetching/deleting children from ${childTable.name}:`, error);
+                            allChildrenDeleted = false;
+                            alert(`Error processing associated records for ${childTable.name}. Cannot delete project.`);
+                            break;
+                        }
+                        if (!allChildrenDeleted) break;
+                    }
+
+                    if (allChildrenDeleted) {
+                        console.log(`All children deleted. Proceeding to delete main project ${recordIdentifier}.`);
+                        const queryString = new URLSearchParams(pkValues).toString();
+                        const result = await apiFetch(`table/${currentTableName.split('.')[0]}/${currentTableName.split('.')[1]}?${queryString}`, { method: 'DELETE' });
+                        if (result.success) {
+                            success = true;
+                        } else {
+                            console.error("Failed to delete main project:", result.error);
+                            alert('Failed to delete project: ' + (result ? result.error : 'Unknown error'));
+                        }
+                    }
+                } else {
+                    // Generic delete for other tables
+                    console.log(`Deleting generic record from ${currentTableName} with PKs:`, pkValues);
+                    const queryString = new URLSearchParams(pkValues).toString();
+                    const result = await apiFetch(`table/${currentTableName.split('.')[0]}/${currentTableName.split('.')[1]}?${queryString}`, { method: 'DELETE' });
+                    if(result.success) {
+                        success = true;
+                    } else {
+                        console.error("Failed to delete generic record:", result.error);
+                        alert('Failed to delete record: ' + (result ? result.error : 'Unknown error'));
+                    }
+                }
+                
+                if (success) {
+                    console.log("Record deleted successfully. Reloading table.");
+                    alert('Record deleted successfully!');
+                    loadAndRenderTable(currentTableName);
+                    document.getElementById('project-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="folder-kanban" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a project to view its details</p></div></div>`;
+                    lucide.createIcons();
+                }
+            }));
+        }
+
+        function addFilterAndSortListeners() {
+            console.log("Adding filter and sort listeners.");
+            document.querySelectorAll('.sortable-header').forEach(header => {
+                header.removeEventListener('click', handleSortClick);
+                header.addEventListener('click', handleSortClick);
+            });
+            document.querySelectorAll('.filter-input').forEach(input => {
+                input.removeEventListener('input', handleFilterInput);
+                input.addEventListener('input', handleFilterInput);
+            });
+            updateSortIcons();
+        }
+
+        function handleSortClick(e) {
+            const column = e.currentTarget.dataset.column;
+            if (sortColumn === column) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = column;
+                sortDirection = 'asc';
+            }
+            applyFiltersAndSort();
+        }
+
+        function handleFilterInput(e) {
+            const column = e.target.dataset.column;
+            columnFilters[column] = e.target.value.toLowerCase();
+            applyFiltersAndSort();
+        }
+
+        function applyFiltersAndSort() {
+            let tempArray = [...currentTableData]; 
+            for (const column in columnFilters) {
+                const filterText = columnFilters[column];
+                if (filterText) {
+                    tempArray = tempArray.filter(row => 
+                        String(row[column] || '').toLowerCase().includes(filterText)
+                    );
+                }
+            }
+            if (sortColumn) {
+                tempArray.sort((a, b) => {
+                    const valA = String(a[sortColumn] || '').toLowerCase();
+                    const valB = String(b[sortColumn] || '').toLowerCase();
+                    const colSchema = currentTableSchema.find(c => c.column_name === sortColumn);
+
+                    if (colSchema && ['date', 'timestamp with time zone'].includes(colSchema.data_type)) { 
+                        const dateA = new Date(a[sortColumn]), dateB = new Date(b[sortColumn]);
+                        if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) return 0; 
+                        return sortDirection === 'asc' ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
+                    }
+                    return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                });
+            }
+            renderTable(tempArray, currentTableSchema);
+            updateSortIcons(); 
+        }
+
+        function updateSortIcons() {
+            document.querySelectorAll('.sortable-header i').forEach(icon => icon.setAttribute('data-lucide', 'chevrons-up-down'));
+            if (sortColumn) {
+                const currentSortIcon = document.querySelector(`.sortable-header[data-column="${sortColumn}"] i`);
+                if (currentSortIcon) currentSortIcon.setAttribute('data-lucide', sortDirection === 'asc' ? 'chevron-up' : 'chevron-down');
+            }
+            lucide.createIcons(); 
+        }
+
+        async function renderProjectDetails(pkValues) {
+            console.log("Rendering project details for PKs:", pkValues);
+            const container = document.getElementById('project-details-container');
+            container.innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="loader-2" class="animate-spin mx-auto h-12 w-12 text-blue-600"></i><p class="mt-2">Loading project details...</p></div></div>`;
+            lucide.createIcons();
+
+            const project = currentTableData.find(p => {
+                return Object.keys(pkValues).every(key => String(p[key]) === String(pkValues[key]));
+            });
+
+            if (!project) { 
+                console.error("Project record not found in currentTableData for PKs:", pkValues);
+                container.innerHTML = `<div class="card p-6 text-red-500">Error: Project details not found.</div>`; 
+                return; 
+            }
+
+            const formatDate = (dateString) => {
+                if (!dateString) return 'N/A';
+                try {
+                    const date = new Date(dateString);
+                    return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString('en-CA');
+                } catch (e) {
+                    console.warn("Failed to format date for display:", dateString, e);
+                    return 'N/A';
+                }
+            };
+
+            const renderDetailRow = (label, value) => {
+                if (value === null || value === undefined || String(value).trim() === '' || value === 'N/A') {
+                    return '';
+                }
+                return `<div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100"><dt class="font-medium text-gray-500">${label}</dt><dd class="text-gray-900 break-all">${value}</dd></div>`;
+            };
+
+            const [projectPersons, allPersons] = await Promise.all([
+                apiFetch(`table/lims/project_persons?filter_project_id=${project.project_id}`),
+                getReferenceData('personal', 'reference')
+            ]);
+
+            const personsMap = new Map(allPersons.map(p => [p.person_id, p.full_name || p.person_id]));
+
+            let detailsHtml = `<div class="space-y-3 text-sm">`;
+            detailsHtml += `
+                <div class="accordion-item">
+                    <button class="accordion-header active" data-accordion="core-info">
+                        <span class="flex items-center"><i data-lucide="info" class="w-5 h-5 mr-2"></i> Core Information</span>
+                        <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                    </button>
+                    <div class="accordion-content open">
+                        <dl class="space-y-2 py-2">
+                            ${renderDetailRow('Project ID', project.project_id)}
+                            ${renderDetailRow('Title', project.title)}
+                            ${renderDetailRow('Description', project.description)}
+                            ${renderDetailRow('Start Date', formatDate(project.start_date))}
+                            ${renderDetailRow('End Date', formatDate(project.end_date))}
+                            ${renderDetailRow('Status', project.status_id)}
+                            ${renderDetailRow('Principal Investigator', personsMap.get(project.pi_person_id) || project.pi_person_id)}
+                            ${renderDetailRow('Funder', project.funder)}
+                            ${project.attachment_link ? renderDetailRow('Attachment Link', `<a href="${project.attachment_link}" target="_blank" class="text-blue-600 hover:underline">View Attachment</a>`) : ''}
+                            ${project.attachment ? renderDetailRow('Attachment File', `<span class="text-gray-500">Binary data present</span>`) : ''}
+                        </dl>
+                    </div>
+                </div>
+            `;
+
+            // Linked Persons Section
+            detailsHtml += `
+                <div class="accordion-item mt-2">
+                    <button class="accordion-header" data-accordion="linked-persons">
+                        <span class="flex items-center"><i data-lucide="users" class="w-5 h-5 mr-2"></i> Linked Personnel (${projectPersons ? projectPersons.length : 0})</span>
+                        <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="space-y-2 py-2" id="linked-persons-list">
+                            ${(projectPersons && projectPersons.length > 0) ? projectPersons.map(pp => `
+                                <span class="person-tag" data-project-id="${pp.project_id}" data-person-id="${pp.person_id}">
+                                    ${personsMap.get(pp.person_id) || pp.person_id}
+                                    <i data-lucide="x" class="remove-icon"></i>
+                                </span>
+                            `).join('') : '<p class="text-gray-500">No personnel linked.</p>'}
+                            <button class="add-person-btn" id="add-person-to-project-btn" data-project-id="${project.project_id}">
+                                <i data-lucide="plus" class="w-4 h-4 inline-block mr-1"></i> Add Person
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML = `<div class="card p-6 h-full flex flex-col"><div class="flex justify-between items-start mb-4"><div><h2 class="text-2xl font-bold text-gray-800">${project.title || 'No Title'}</h2><p class="text-sm text-gray-500">${project.project_id}</p></div></div><div class="flex-grow overflow-y-auto pr-2">${detailsHtml}</div></div>`;
+            lucide.createIcons(); 
+            
+            // Re-attach accordion listeners
+            document.querySelectorAll('.accordion-header').forEach(header => {
+                header.addEventListener('click', () => {
+                    const content = header.nextElementSibling;
+                    header.classList.toggle('active');
+                    content.classList.toggle('open');
+                    lucide.createIcons();
+                });
+            });
+
+            // Add event listeners for person tags and add person button
+            document.querySelectorAll('.person-tag').forEach(tag => {
+                tag.addEventListener('click', async (e) => {
+                    const projectId = tag.dataset.projectId;
+                    const personId = tag.dataset.personId;
+                    if (confirm(`Remove ${personsMap.get(personId) || personId} from this project?`)) {
+                        const result = await apiFetch(`table/lims/project_persons?project_id=${projectId}&person_id=${personId}`, { method: 'DELETE' });
+                        if (result.success) {
+                            alert('Person unlinked successfully!');
+                            renderProjectDetails(pkValues); // Re-render details to update list
+                        } else {
+                            alert('Failed to unlink person: ' + (result.error || 'Unknown error'));
+                        }
+                    }
+                });
+            });
+
+            document.getElementById('add-person-to-project-btn').addEventListener('click', async (e) => {
+                const projectId = e.currentTarget.dataset.projectId;
+                const availablePersons = allPersons.filter(p => 
+                    !(projectPersons || []).some(pp => pp.person_id === p.person_id)
+                );
+
+                if (availablePersons.length === 0) {
+                    alert("No more persons to add or all are already linked.");
+                    return;
+                }
+
+                let optionsHtml = availablePersons.map(p => `<option value="${p.person_id}">${p.full_name || p.person_id}</option>`).join('');
+
+                const addPersonModalHtml = `
+                    <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
+                        <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-md transform transition-all -translate-y-10 opacity-0">
+                            <div class="flex justify-between items-center mb-6">
+                                <h2 class="text-2xl font-bold">Add Person to Project</h2>
+                                <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                            </div>
+                            <form id="add-person-form" class="space-y-4">
+                                <div>
+                                    <label class="block text-gray-700 text-sm font-bold mb-1" for="new-person-id">Select Person</label>
+                                    <select id="new-person-id" name="person_id" class="w-full mt-1 p-2 border rounded" required>
+                                        <option value="">-- Select --</option>
+                                        ${optionsHtml}
+                                    </select>
+                                </div>
+                                <div class="pt-4 flex justify-end">
+                                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">
+                                        Add Person
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                `;
+                const { closeModal: closeAddPersonModal } = showModal(addPersonModalHtml);
+
+                document.getElementById('add-person-form').onsubmit = async (submitEvent) => {
+                    submitEvent.preventDefault();
+                    const newPersonId = document.getElementById('new-person-id').value;
+                    if (!newPersonId) {
+                        alert("Please select a person.");
+                        return;
+                    }
+                    try {
+                        const result = await apiFetch(`table/lims/project_persons`, {
+                            method: 'POST',
+                            body: { 
+                                project_id: projectId, 
+                                person_id: newPersonId,
+                                link_date: new Date().toISOString().split('T')[0] // Use current date
+                            }
+                        });
+                        if (result && !result.error) {
+                            alert('Person linked successfully!');
+                            closeAddPersonModal();
+                            renderProjectDetails(pkValues); // Re-render details to update list
+                        } else {
+                            alert('Failed to link person: ' + (result.error || 'Unknown error'));
+                        }
+                    } catch (error) {
+                        console.error("Error adding person to project:", error);
+                        alert('Error adding person to project: ' + error.message);
+                    }
+                };
+            });
+        }
+
+        // --- MODAL LOGIC (reused from other pages) ---
+        function showModal(content) {
+            const container = document.getElementById('modal-container');
+            container.innerHTML = content;
+            const modal = container.querySelector('.modal-overlay');
+            const modalContent = container.querySelector('.modal-content');
+            setTimeout(() => modalContent.classList.remove('opacity-0', '-translate-y-10'), 10);
+            const closeModal = () => {
+                modalContent.classList.add('opacity-0', '-translate-y-10');
+                setTimeout(() => container.innerHTML = '', 300);
+            };
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+            container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+            return { closeModal };
+        }
+
+        async function showCreateEditModal(record = null) {
+            console.log("Showing create/edit modal. Record:", record);
+            const isEditing = record !== null;
+            const targetTableSchema = currentTableSchema;
+            const schemaName = currentTableName.split('.')[0];
+            const tableName = currentTableName.split('.')[1];
+
+            const [persons, statuses, customers] = await Promise.all([ 
+                getReferenceData('personal', 'reference'), 
+                getReferenceData('status', 'reference'),
+                getReferenceData('customers', 'lims')
+            ]);
+
+            let formFieldsHtml = '';
+            targetTableSchema.forEach(col => {
+                const isAutoGenerated = col.column_name.includes('_id') && col.column_default && col.column_default.includes('nextval');
+                
+                if (col.column_name.includes('password_hash') || 
+                    col.column_name.includes('search_vector') ||
+                    (isEditing && col.is_primary_key) ||
+                    (!isEditing && isAutoGenerated)
+                ) {
+                    return;
+                }
+
+                let value = isEditing ? (record[col.column_name] || '') : (col.column_default ? col.column_default.replace(/::[a-z_]+/g, '').replace(/'/g, '') : '');
+                let inputType = 'text';
+                let extraAttrs = '';
+                let label = formatColumnName(col.column_name);
+                let optionsHtml = '';
+
+                if (col.column_name === 'attachment') {
+                    formFieldsHtml += `
+                        <div>
+                            <label class="block text-gray-700 text-sm font-bold mb-1">${label} (File)</label>
+                            <input type="file" name="${col.column_name}" class="w-full mt-1 p-2 border rounded">
+                            ${isEditing && record.attachment ? `<p class="text-xs text-gray-500 mt-1">Existing attachment present. Uploading new file will replace it.</p>` : ''}
+                        </div>
+                    `;
+                    return;
+                } else if (col.column_name === 'attachment_link') {
+                    inputType = 'url';
+                }
+
+                switch (col.data_type) {
+                    case 'integer':
+                    case 'numeric':
+                    case 'bigint':
+                        inputType = 'number'; 
+                        break;
+                    case 'date':
+                        inputType = 'date';
+                        if (isEditing) value = formatDateForInput(value);
+                        break;
+                    case 'timestamp with time zone':
+                    case 'timestamp without time zone':
+                        inputType = 'datetime-local';
+                        if (isEditing) value = formatDateTimeForInput(value);
+                        break;
+                    case 'boolean':
+                        inputType = 'checkbox';
+                        if (isEditing) extraAttrs = value ? 'checked' : '';
+                        value = '';
+                        break;
+                    case 'text':
+                    case 'character varying':
+                        if (col.column_name.includes('description') || col.column_name.includes('notes')) {
+                            formFieldsHtml += `
+                                <div class="md:col-span-2">
+                                    <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
+                                    <textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-24">${value}</textarea>
+                                </div>
+                            `;
+                            return;
+                        }
+                        break;
+                    case 'jsonb':
+                        formFieldsHtml += `
+                            <div class="md:col-span-2">
+                                <label class="block text-gray-700 text-sm font-bold mb-1">${label} (JSON)</label>
+                                <textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-24">${value ? JSON.stringify(value, null, 2) : ''}</textarea>
+                            </div>
+                        `;
+                        return;
+                }
+
+                if (col.column_name.endsWith('_id')) {
+                    let refData = [];
+                    let valueKey = col.column_name;
+                    let displayKey = col.column_name;
+
+                    if (col.column_name.includes('person_id') && persons) { // For pi_person_id
+                        refData = persons;
+                        displayKey = 'full_name';
+                    } else if (col.column_name.includes('status_id') && statuses) {
+                        refData = statuses;
+                        displayKey = 'status_id';
+                    } else if (col.column_name.includes('customer_id') && customers) {
+                        refData = customers;
+                        displayKey = 'customer_name';
+                    }
+                    
+                    if (refData.length > 0) {
+                        optionsHtml = `<option value="">-- Select ${label} --</option>`;
+                        optionsHtml += refData.map(item => `<option value="${item[valueKey]}" ${value == item[valueKey] ? 'selected' : ''}>${item[displayKey] || item[valueKey]}</option>`).join('');
+                        formFieldsHtml += `
+                            <div>
+                                <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
+                                <select name="${col.column_name}" class="w-full mt-1 p-2 border rounded">${optionsHtml}</select>
+                            </div>
+                        `;
+                        return;
+                    }
+                }
+
+                formFieldsHtml += `
+                    <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
+                        <input type="${inputType}" name="${col.column_name}" ${col.is_nullable === 'NO' && !col.column_default ? 'required' : ''} class="w-full mt-1 p-2 border rounded" value="${value}" ${extraAttrs}>
+                    </div>
+                `;
+            });
+
+            // Special field for lims.projects to link persons
+            if (currentTableName === 'lims.projects') {
+                formFieldsHtml += `
+                    <div class="md:col-span-2">
+                        <label class="block text-gray-700 text-sm font-bold mb-1">Linked Person IDs (semicolon-separated)</label>
+                        <input type="text" name="linked_person_ids" class="w-full mt-1 p-2 border rounded" placeholder="e.g., P001;P002;P00N" value="${isEditing && record.project_id ? (await apiFetch(`table/lims/project_persons?filter_project_id=${record.project_id}`)).map(pp => pp.person_id).join(';') : ''}">
+                        <p class="text-xs text-gray-500 mt-1">For new projects, enter existing Person IDs separated by semicolons (e.g., P001;P002). These will be linked in 'lims.project_persons'.</p>
+                    </div>
+                `;
+            }
+
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-4xl max-h-[90vh] overflow-y-auto transform transition-all -translate-y-10 opacity-0">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl font-bold">${isEditing ? 'Edit' : 'Create'} ${formatColumnName(tableName)} Record</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                        </div>
+                        <form id="record-form" class="space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                ${formFieldsHtml}
+                            </div>
+                            <div class="pt-4 flex justify-end">
+                                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">
+                                    ${isEditing ? 'Save Changes' : 'Create Record'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+
+            document.getElementById('record-form').onsubmit = async (e) => {
+                e.preventDefault();
+                
+                const formElement = e.target;
+                const attachmentInput = formElement.querySelector('input[name="attachment"]');
+                const hasFileSelected = attachmentInput && attachmentInput.files && attachmentInput.files.length > 0;
+                
+                let body;
+                if (hasFileSelected) {
+                    console.log("File detected. Using FormData for submission.");
+                    body = new FormData(formElement);
+                } else {
+                    console.log("No file selected. Using JSON for submission.");
+                    body = {};
+                    const formData = new FormData(formElement);
+                    formData.forEach((value, key) => {
+                        const colSchema = targetTableSchema.find(s => s.column_name === key);
+                        if (colSchema && (colSchema.data_type === 'integer' || colSchema.data_type === 'numeric' || colSchema.data_type === 'bigint')) {
+                            body[key] = value === '' ? null : Number(value);
+                        } else if (colSchema && colSchema.data_type === 'boolean') {
+                            body[key] = formElement.querySelector(`[name="${key}"]`).checked; 
+                        } else if (colSchema && colSchema.data_type === 'jsonb') {
+                            try {
+                                body[key] = value === '' ? null : JSON.parse(value);
+                            } catch (jsonError) {
+                                alert(`Invalid JSON for ${formatColumnName(key)}: ${jsonError.message}`);
+                                throw new Error(`Invalid JSON for ${formatColumnName(key)}`);
+                            }
+                        }
+                        else {
+                            body[key] = value === '' ? null : value;
+                        }
+                    });
+                }
+
+                // Handle special 'linked_person_ids' field for lims.projects
+                let linkedPersonIds = null;
+                if (currentTableName === 'lims.projects') {
+                    const linkedPersonsField = formElement.querySelector('[name="linked_person_ids"]');
+                    if (linkedPersonsField) {
+                        linkedPersonIds = linkedPersonsField.value.split(';').map(id => id.trim()).filter(id => id !== '');
+                        if (hasFileSelected) {
+                             // FormData doesn't handle arrays well for this dynamic linking;
+                             // backend will need to retrieve from form.
+                             // For simplicity and to avoid complex FormData manipulation,
+                             // we'll explicitly remove it from the main body and handle separately.
+                            body.delete('linked_person_ids'); 
+                        } else {
+                            // For JSON, we can just pop it as it's not a direct column
+                            delete body.linked_person_ids; 
+                        }
+                    }
+                }
+
+                const method = isEditing ? 'PUT' : 'POST';
+                
+                let endpoint = `table/${schemaName}/${tableName}`;
+                let currentProjectId = null;
+
+                if (isEditing) {
+                    const pkValuesForApi = {};
+                    const originalPkValues = getPkValues(record);
+                    for (const key in originalPkValues) {
+                        const colSchema = targetTableSchema.find(s => s.column_name === key);
+                        if (colSchema && colSchema.data_type === 'date') {
+                            pkValuesForApi[key] = formatDateForInput(originalPkValues[key]);
+                        } else {
+                            pkValuesForApi[key] = originalPkValues[key];
+                        }
+                    }
+                    const pkQueryString = new URLSearchParams(pkValuesForApi).toString();
+                    endpoint += `?${pkQueryString}`;
+                    console.log("Edit endpoint with PKs:", endpoint);
+                    currentProjectId = record.project_id; // Store current project_id for linking
+                }
+                
+                console.log(`Submitting form: Method=${method}, Endpoint=${endpoint}, Body:`, body);
+                const result = await apiFetch(endpoint, { method, body });
+                if (result && !result.error) { 
+                    console.log("API call successful:", result);
+                    alert(`${isEditing ? 'Updated' : 'Created'} record successfully!`);
+                    
+                    // Handle linked_person_ids for lims.projects
+                    if (currentTableName === 'lims.projects' && linkedPersonIds !== null) {
+                        const projectIdToLink = result.project_id || currentProjectId; // Use new ID or existing
+                        if (projectIdToLink) {
+                            // Fetch existing linked persons
+                            const existingLinksResult = await apiFetch(`table/lims/project_persons?filter_project_id=${projectIdToLink}`);
+                            const existingLinkedPersons = existingLinksResult && !existingLinksResult.error ? existingLinksResult.map(p => p.person_id) : [];
+
+                            // Persons to add
+                            const personsToAdd = linkedPersonIds.filter(id => !existingLinkedPersons.includes(id));
+                            for (const personId of personsToAdd) {
+                                try {
+                                    await apiFetch(`table/lims/project_persons`, {
+                                        method: 'POST',
+                                        body: { project_id: projectIdToLink, person_id: personId, link_date: new Date().toISOString().split('T')[0] }
+                                    });
+                                    console.log(`Linked person ${personId} to project ${projectIdToLink}`);
+                                } catch (linkError) {
+                                    console.error(`Failed to link person ${personId}:`, linkError);
+                                }
+                            }
+
+                            // Persons to remove
+                            const personsToRemove = existingLinkedPersons.filter(id => !linkedPersonIds.includes(id));
+                            for (const personId of personsToRemove) {
+                                try {
+                                    await apiFetch(`table/lims/project_persons?project_id=${projectIdToLink}&person_id=${personId}`, {
+                                        method: 'DELETE'
+                                    });
+                                    console.log(`Unlinked person ${personId} from project ${projectIdToLink}`);
+                                } catch (unlinkError) {
+                                    console.error(`Failed to unlink person ${personId}:`, unlinkError);
+                                }
+                            }
+                        }
+                    }
+
+                    closeModal(); 
+                    loadAndRenderTable(currentTableName); 
+                    if (currentTableName === 'lims.projects') {
+                        const targetPkValues = {
+                            project_id: result.project_id || currentProjectId 
+                        };
+                        setTimeout(() => {
+                            const row = document.querySelector(`.dynamic-table-row[data-pk-values='${JSON.stringify(targetPkValues)}']`);
+                            if (row) { row.classList.add('table-row-selected'); renderProjectDetails(targetPkValues); }
+                        }, 100);
+                    }
+                } else {
+                    console.error("API call failed:", result);
+                    alert(`Failed to ${isEditing ? 'save' : 'create'} record: ` + (result ? result.error : 'Unknown error')); 
+                }
+            };
+        }
+
+        async function showBulkUploadModal() {
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl transform transition-all -translate-y-10 opacity-0">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl font-bold">Bulk CSV Upload for ${formatColumnName(currentTableName.split('.')[1])}</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                        </div>
+                        <p class="text-gray-700 mb-4">Upload a CSV file. The first row should contain column headers matching your database table.</p>
+                        ${currentTableName === 'lims.projects' ? '<p class="text-gray-700 mb-4">For projects, you can include a "linked_person_ids" column with semicolon-separated Person IDs (e.g., P001;P002). These will be linked automatically.</p>' : ''}
+                        <input type="file" id="csv-file-input" accept=".csv" class="w-full p-2 border rounded mb-4">
+                        <div class="flex justify-between space-x-2">
+                            <button id="download-csv-template-btn-modal" class="w-1/2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
+                                <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download Template
+                            </button>
+                            <button id="upload-csv-btn" class="w-1/2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
+                                <i data-lucide="upload" class="w-5 h-5 mr-2"></i>Upload CSV
+                            </button>
+                        </div>
+                        <div id="upload-status" class="mt-4 text-center text-sm"></div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+
+            document.getElementById('download-csv-template-btn-modal').addEventListener('click', downloadCsvTemplate);
+
+            document.getElementById('upload-csv-btn').addEventListener('click', () => {
+                const fileInput = document.getElementById('csv-file-input');
+                const statusDiv = document.getElementById('upload-status');
+                const file = fileInput.files[0];
+
+                if (!file) {
+                    statusDiv.innerHTML = `<p class="text-red-500">Please select a CSV file.</p>`;
+                    return;
+                }
+
+                statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Processing CSV...</p>`;
+                lucide.createIcons();
+
+                PapaParse.parse(file, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: async (results) => {
+                        if (results.errors.length) {
+                            statusDiv.innerHTML = `<p class="text-red-500">CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}</p>`;
+                            return;
+                        }
+                        if (!results.data.length) {
+                            statusDiv.innerHTML = `<p class="text-red-500">No data found in CSV.</p>`;
+                            return;
+                        }
+
+                        // Handle 'linked_person_ids' for lims.projects before sending to backend
+                        let recordsToUpload = results.data.map(row => {
+                            const newRow = {};
+                            for (const key in row) {
+                                newRow[key] = row[key] === '' ? null : row[key];
+                            }
+                            return newRow;
+                        });
+
+                        const [schemaName, tableName] = currentTableName.split('.');
+                        
+                        statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Uploading ${recordsToUpload.length} records...</p>`;
+                        lucide.createIcons();
+
+                        if (tableName === 'projects') {
+                            const successfulProjects = [];
+                            for (const record of recordsToUpload) {
+                                const linkedPersonIds = record.linked_person_ids ? record.linked_person_ids.split(';').map(id => id.trim()).filter(id => id !== '') : [];
+                                delete record.linked_person_ids; // Remove from main record body
+
+                                const result = await apiFetch(`table/${schemaName}/${tableName}`, {
+                                    method: 'POST',
+                                    body: record
+                                });
+
+                                if (result && !result.error) {
+                                    successfulProjects.push(result);
+                                    const projectId = result.project_id;
+                                    for (const personId of linkedPersonIds) {
+                                        try {
+                                            await apiFetch(`table/lims/project_persons`, {
+                                                method: 'POST',
+                                                body: { project_id: projectId, person_id: personId, link_date: new Date().toISOString().split('T')[0] }
+                                            });
+                                        } catch (linkError) {
+                                            console.error(`Failed to link person ${personId} to new project ${projectId} during bulk upload:`, linkError);
+                                        }
+                                    }
+                                } else {
+                                    console.error(`Failed to upload project record:`, record, result);
+                                }
+                            }
+                            if (successfulProjects.length > 0) {
+                                statusDiv.innerHTML = `<p class="text-green-600">Successfully uploaded ${successfulProjects.length} records!</p>`;
+                                loadAndRenderTable(currentTableName);
+                                setTimeout(closeModal, 2000);
+                            } else {
+                                statusDiv.innerHTML = `<p class="text-red-500">Bulk upload failed: No records successfully uploaded.</p>`;
+                            }
+
+                        } else {
+                            // Standard bulk upload for other tables
+                            const result = await apiFetch(`table/${schemaName}/${tableName}/batch_upload`, {
+                                method: 'POST',
+                                body: recordsToUpload
+                            });
+
+                            if (result && result.success) {
+                                statusDiv.innerHTML = `<p class="text-green-600">Successfully uploaded ${result.inserted_rows} records!</p>`;
+                                loadAndRenderTable(currentTableName);
+                                setTimeout(closeModal, 2000);
+                            } else {
+                                statusDiv.innerHTML = `<p class="text-red-500">Bulk upload failed: ${result ? result.error : 'Unknown error'}</p>`;
+                            }
+                        }
+                        lucide.createIcons();
+                    }
+                });
+            });
+        }
+
+        async function downloadCsvTemplate() {
+            console.log("downloadCsvTemplate called.");
+            console.log("Attempting to download CSV template for:", currentTableName);
+            const [schemaName, tableName] = currentTableName.split('.');
+            const schema = await getTableSchema(schemaName, tableName);
+
+            if (!schema || schema.error) {
+                console.error("Failed to fetch table schema for template:", schema ? schema.error : 'Unknown error');
+                alert('Failed to fetch table schema for template: ' + (schema ? schema.error : 'Unknown error'));
+                return;
+            }
+
+            let headers = schema.filter(col => 
+                !col.column_name.includes('attachment') && 
+                !col.column_name.includes('password_hash') && 
+                !col.column_name.includes('search_vector') &&
+                !(col.column_default && col.column_default.includes('nextval')) && 
+                !col.column_name.includes('created_at')
+            ).map(col => col.column_name);
+
+            // Add special 'linked_person_ids' header for lims.projects
+            if (currentTableName === 'lims.projects') {
+                headers.push('linked_person_ids');
+            }
+
+            const pkCols = masterCache[`pk.${currentTableName}`] || [];
+            pkCols.forEach(pkCol => {
+                if (!headers.includes(pkCol)) {
+                    headers.unshift(pkCol);
+                }
+            });
+            
+            console.log("CSV Template Headers:", headers);
+            const csv = PapaParse.unparse([headers], { header: false });
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${tableName}_template.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            console.log("CSV template download initiated.");
+        }
+
+        async function showBulkModifyModal() {
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl transform transition-all -translate-y-10 opacity-0">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl font-bold">Bulk Modify for ${formatColumnName(currentTableName.split('.')[1])}</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                        </div>
+                        <p class="text-gray-700 mb-4">Upload a CSV or JSON file containing records to update. Each record must include all primary key column(s) for identification, and any fields you wish to modify.</p>
+                        <input type="file" id="bulk-modify-file-input" accept=".csv,.json" class="w-full p-2 border rounded mb-4">
+                        <div class="flex justify-between space-x-2">
+                            <button id="download-bulk-modify-template-btn-modal" class="w-1/2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
+                                <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download Template
+                            </button>
+                            <button id="perform-bulk-modify-btn" class="w-1/2 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
+                                <i data-lucide="file-edit" class="w-5 h-5 mr-2"></i>Perform Bulk Modify
+                            </button>
+                        </div>
+                        <div id="modify-status" class="mt-4 text-center text-sm"></div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+
+            document.getElementById('download-bulk-modify-template-btn-modal').addEventListener('click', downloadBulkModifyTemplate);
+
+
+            document.getElementById('perform-bulk-modify-btn').addEventListener('click', () => {
+                const fileInput = document.getElementById('bulk-modify-file-input');
+                const statusDiv = document.getElementById('modify-status');
+                const file = fileInput.files[0];
+
+                if (!file) {
+                    statusDiv.innerHTML = `<p class="text-red-500">Please select a file (CSV or JSON).</p>`;
+                    return;
+                }
+
+                statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Processing file...</p>`;
+                lucide.createIcons();
+
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    let recordsToModify = [];
+                    try {
+                        if (file.type === 'application/json') {
+                            recordsToModify = JSON.parse(e.target.result);
+                            if (!Array.isArray(recordsToModify)) {
+                                throw new Error("JSON file must contain an array of objects.");
+                            }
+                        } else if (file.type === 'text/csv') {
+                            const parseResult = PapaParse.parse(e.target.result, { header: true, skipEmptyLines: true });
+                            if (parseResult.errors.length) {
+                                throw new Error(`CSV parsing errors: ${parseResult.errors.map(err => err.message).join(', ')}`);
+                            }
+                            recordsToModify = parseResult.data;
+                        } else {
+                            throw new Error("Unsupported file type. Please upload a CSV or JSON file.");
+                        }
+
+                        if (!recordsToModify.length) {
+                            statusDiv.innerHTML = `<p class="text-red-500">No records found in the file.</p>`;
+                            return;
+                        }
+
+                        const recordsToModifyCleaned = recordsToModify.map(row => {
+                            const newRow = {};
+                            for (const key in row) {
+                                newRow[key] = row[key] === '' ? null : row[key];
+                            }
+                            return newRow;
+                        });
+
+                        statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Performing bulk update on ${recordsToModifyCleaned.length} records...</p>`;
+                        lucide.createIcons();
+
+                        const [schemaName, tableName] = currentTableName.split('.');
+                        const result = await apiFetch(`table/${schemaName}/${tableName}/batch_update`, {
+                            method: 'PUT',
+                            body: recordsToModifyCleaned
+                        });
+
+                        if (result && result.success) {
+                            statusDiv.innerHTML = `<p class="text-green-600">Successfully updated ${result.updated_rows} records!</p>`;
+                            loadAndRenderTable(currentTableName);
+                            setTimeout(closeModal, 2000);
+                        } else {
+                            statusDiv.innerHTML = `<p class="text-red-500">Bulk modify failed: ${result ? result.error : 'Unknown error'}</p>`;
+                        }
+                        lucide.createIcons();
+
+                    } catch (error) {
+                        console.error("Bulk modify file processing error:", error);
+                        statusDiv.innerHTML = `<p class="text-red-500">Error processing file: ${error.message}</p>`;
+                        lucide.createIcons();
+                    }
+                };
+                reader.readAsText(file);
+            });
+        }
+
+        async function downloadBulkModifyTemplate() {
+            console.log("downloadBulkModifyTemplate called.");
+            console.log("Attempting to download Bulk Modify template for:", currentTableName);
+            const [schemaName, tableName] = currentTableName.split('.');
+            const schema = await getTableSchema(schemaName, tableName);
+            const pkColumns = masterCache[`pk.${currentTableName}`] || [];
+
+            if (!schema || schema.error) {
+                console.error("Failed to fetch table schema for template:", schema ? schema.error : 'Unknown error');
+                alert('Failed to fetch table schema for template: ' + (schema ? schema.error : 'Unknown error'));
+                return;
+            }
+
+            let headers = pkColumns;
+            
+            const commonEditableColumns = schema.filter(col => 
+                !pkColumns.includes(col.column_name) && 
+                !col.column_name.includes('attachment') && 
+                !col.column_name.includes('password_hash') && 
+                !col.column_name.includes('search_vector') &&
+                !col.column_name.includes('created_at') &&
+                !(col.column_default && col.column_default.includes('nextval'))
+            ).map(col => col.column_name);
+
+            headers = [...new Set([...headers, ...commonEditableColumns])];
+
+            console.log("Bulk Modify Template Headers:", headers);
+            const csv = PapaParse.unparse([headers], { header: false });
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${tableName}_bulk_modify_template.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            console.log("Bulk modify template download initiated.");
+        }
+
+        // --- PAGE INITIALIZATION & TAB LOGIC ---
+        async function initializePage() {
+            setupTabListeners();
+            await populateDynamicTableSelect();
+            await loadAndRenderTable(currentTableName); 
+
+            document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal());
+            document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal);
+            document.getElementById('bulk-modify-btn').addEventListener('click', showBulkModifyModal);
+        }
+
+        function setupTabListeners() {
+            const tabProjects = document.getElementById('tab-projects');
+            const dynamicTableSelect = document.getElementById('dynamic-table-select');
+
+            tabProjects.addEventListener('click', () => {
+                tabProjects.classList.add('active');
+                dynamicTableSelect.classList.remove('active');
+                dynamicTableSelect.value = 'lims.projects';
+                currentTableName = 'lims.projects';
+                loadAndRenderTable(currentTableName);
+            });
+
+            dynamicTableSelect.addEventListener('change', (e) => {
+                tabProjects.classList.remove('active');
+                dynamicTableSelect.classList.add('active');
+                currentTableName = e.target.value;
+                loadAndRenderTable(currentTableName);
+            });
+        }
+
+        async function populateDynamicTableSelect() {
+            const select = document.getElementById('dynamic-table-select');
+            const projectTables = await getAllProjectTables();
+            
+            select.innerHTML = '<option value="">-- Select Related Table --</option>';
+            select.innerHTML += `<option value="lims.projects">lims.projects (Main)</option>`;
+
+            if (projectTables && !projectTables.error) {
+                const otherProjectTables = projectTables.filter(t => t !== 'lims.projects');
+                otherProjectTables.forEach(table => {
+                    select.innerHTML += `<option value="${table}">${table}</option>`;
+                });
+            }
+            select.value = currentTableName;
+        }
+
+        async function loadAndRenderTable(fullTableName) {
+            console.log(`loadAndRenderTable: Attempting to load data for ${fullTableName}`);
+            const [schemaName, tableName] = fullTableName.split('.');
+            
+            sortColumn = null;
+            sortDirection = 'asc';
+            columnFilters = {};
+            document.querySelectorAll('.filter-input').forEach(input => input.value = '');
+
+            const tableBody = document.getElementById('dynamic-table-body');
+            tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Loading data...</td></tr>`;
+            lucide.createIcons();
+
+            let dataFilter = '';
+            if (tableName === 'projects') { // Assuming lims.projects
+                dataFilter = '?filter_status_id=Active'; // Only load active projects initially
+            } else if (tableName === 'sop') { // Assuming lims.sop
+                 dataFilter = '?filter_status_id!=Archived'; // Exclude archived protocols
+            }
+
+            const [data, schema, pkInfo] = await Promise.all([
+                apiFetch(`table/${schemaName}/${tableName}${dataFilter}`),
+                getTableSchema(schemaName, tableName),
+                getPrimaryKeysForTable(schemaName, tableName)
+            ]);
+
+            if (data && !data.error && schema && !schema.error && pkInfo && !pkInfo.error) {
+                console.log(`Successfully loaded data for ${fullTableName}. Data count: ${data.length}`);
+                currentTableData = data;
+                currentTableSchema = schema;
+                masterCache[`pk.${fullTableName}`] = pkInfo;
+                applyFiltersAndSort();
+            } else {
+                console.error(`Failed to load data for ${fullTableName}. Data error: ${data ? data.error : 'N/A'}, Schema error: ${schema ? schema.error : 'N/A'}`);
+                tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-red-500">Error loading data for ${fullTableName}: ${data ? data.error : schema ? schema.error : 'Unknown error'}</td></tr>`;
+            }
+        }
+
+        async function getPrimaryKeysForTable(schema, table) {
+            const cacheKey = `pk.${schema}.${table}`;
+            if (masterCache[cacheKey]) return masterCache[cacheKey];
+
+            const schemaData = await getTableSchema(schema, table);
+            if (schemaData && !schemaData.error) {
+                const pkColumns = schemaData.filter(col => col.is_primary_key).map(col => col.column_name);
+                masterCache[cacheKey] = pkColumns;
+                return pkColumns;
+            }
+            return [];
+        }
+
+    </script>
+</body>
+</html>
