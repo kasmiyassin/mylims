@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Experiments - TIFI MG LIMS</title>
+    <title>Sampling - TIFI MG LIMS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -71,6 +71,47 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        /* Toast Notification Styles */
+        .toast-container {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 100;
+        }
+        .toast {
+            background-color: #fff;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.08);
+            display: flex;
+            align-items: center;
+            opacity: 0;
+            transform: translateY(-100%);
+            animation: fadeInSlideDown 0.3s ease-out forwards, fadeOut 0.3s ease-out 2.7s forwards;
+            margin-bottom: 0.75rem;
+            border-left: 5px solid;
+        }
+        .toast.success { border-color: #10b981; color: #065f46; } /* green-500, green-900 */
+        .toast.error { border-color: #ef4444; color: #991b1b; } /* red-500, red-900 */
+        .toast.info { border-color: #3b82f6; color: #1e40af; } /* blue-500, blue-900 */
+
+        .toast .lucide {
+            margin-right: 0.75rem;
+        }
+        .toast-message {
+            font-weight: 500;
+        }
+
+        @keyframes fadeInSlideDown {
+            from { opacity: 0; transform: translateY(-100%); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(-100%); }
+        }
     </style>
 </head>
 <body>
@@ -83,8 +124,8 @@
                 <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
                 <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
                 <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
-                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
-                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
                 <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (SOP)</span></a>
                 <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
                 <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
@@ -104,33 +145,36 @@
         <div id="main-content" class="ml-64 p-8 flex-grow">
             <div class="flex justify-between items-center mb-6">
                 <div>
-                    <h1 class="text-3xl font-bold text-gray-800">Experiments Management</h1>
-                    <p class="mt-1 text-md text-gray-600">Oversee and manage all your laboratory experiments and related data</p>
+                    <h1 class="text-3xl font-bold text-gray-800">Sampling Management</h1>
+                    <p class="mt-1 text-md text-gray-600">Oversee and manage all your sampling events and related data</p>
                 </div>
                 <div class="flex space-x-3">
-                    <button id="add-single-entry-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all duration-200">
-                        <i data-lucide="plus-circle" class="w-5 h-5 mr-2"></i>Add New Experiment
+                    <button id="add-single-entry-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all duration-200" disabled>
+                        <i data-lucide="plus-circle" class="w-5 h-5 mr-2"></i>Add New Event
                     </button>
-                    <button id="bulk-csv-upload-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all duration-200">
+                    <button id="bulk-csv-upload-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all duration-200" disabled>
                         <i data-lucide="upload" class="w-5 h-5 mr-2"></i>Bulk Upload CSV
                     </button>
-                    <button id="bulk-modify-btn" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all duration-200">
+                    <button id="bulk-modify-btn" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all duration-200" disabled>
                         <i data-lucide="file-edit" class="w-5 h-5 mr-2"></i>Bulk Modify
+                    </button>
+                    <button id="download-template-general-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all duration-200" disabled>
+                        <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download Template
                     </button>
                 </div>
             </div>
 
             <div class="border-b border-gray-200 mb-6">
                 <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-                    <a id="tab-experiments" class="tab-link whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active">
-                        All Experiments
+                    <a id="tab-sampling" class="tab-link whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active">
+                        All Sampling Events
                     </a>
                     <select id="dynamic-table-select" class="tab-link whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 bg-transparent outline-none">
                         </select>
                 </nav>
             </div>
 
-            <div id="content-experiments" class="grid grid-cols-1 lg:grid-cols-5 gap-8 mt-6">
+            <div id="content-sampling" class="grid grid-cols-1 lg:grid-cols-5 gap-8 mt-6">
                 <div class="lg:col-span-2">
                     <div class="card p-4 h-[70vh]"> <div class="overflow-y-auto h-full relative">
                             <table class="min-w-full table-auto">
@@ -151,14 +195,14 @@
                     </div>
                 </div>
 
-                <div id="experiment-details-container" class="lg:col-span-3">
+                <div id="sampling-details-container" class="lg:col-span-3">
                     <div class="card p-6 h-full flex items-center justify-center text-gray-500">
                         <div class="text-center">
-                            <i data-lucide="flask-round" class="mx-auto h-16 w-16 text-blue-400 mb-4 animate-pulse"></i>
-                            <p class="mt-2 text-lg font-semibold">Ready to explore an experiment?</p>
+                            <i data-lucide="map-pin" class="mx-auto h-16 w-16 text-blue-400 mb-4 animate-pulse"></i>
+                            <p class="mt-2 text-lg font-semibold">Ready to explore a sampling event?</p>
                             <p class="text-sm mt-1">Select an entry from the list on the left to view its comprehensive details.</p>
                             <button onclick="document.getElementById('add-single-entry-btn').click()" class="mt-4 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center mx-auto transition-all duration-200 shadow">
-                                <i data-lucide="plus" class="w-5 h-5 mr-2"></i>Or Create a New Experiment
+                                <i data-lucide="plus" class="w-5 h-5 mr-2"></i>Or Create a New Event
                             </button>
                         </div>
                     </div>
@@ -166,9 +210,36 @@
             </div>
         </div>
         <div id="modal-container"></div>
-    </div>
+        <div id="toast-container" class="toast-container"></div> </div>
 
     <script>
+        // --- Custom CSV Unparse Function (replaces PapaParse.unparse for this specific use case) ---
+        function unparseCSV(data, options) {
+            options = options || {};
+            const delimiter = options.delimiter || ',';
+            const newline = options.newline || '\n';
+            const quoteChar = options.quoteChar || '"';
+
+            if (!Array.isArray(data) || data.length === 0) {
+                return '';
+            }
+
+            const rows = data;
+
+            return rows.map(row => {
+                return row.map(field => {
+                    if (field === null || field === undefined) {
+                        return '';
+                    }
+                    let stringField = String(field);
+                    if (stringField.includes(delimiter) || stringField.includes(quoteChar) || stringField.includes('\n') || stringField.includes('\r')) {
+                        return quoteChar + stringField.replace(new RegExp(quoteChar, 'g'), quoteChar + quoteChar) + quoteChar;
+                    }
+                    return stringField;
+                }).join(delimiter);
+            }).join(newline);
+        }
+
         // --- AUTH & SETUP ---
         if (sessionStorage.getItem('isLoggedIn') !== 'true') {
             localStorage.setItem('redirectUrl', window.location.href);
@@ -179,11 +250,11 @@
         let masterCache = {}; 
         let currentTableData = []; 
         let currentTableSchema = []; // Stores column info for the currently displayed table
-        let currentTableName = 'lab.experiments'; // Default to experiments table
+        let currentTableName = 'lab.sampling'; // Default to sampling table
         let sortColumn = null; 
         let sortDirection = 'asc';
         let columnFilters = {};
-        let allExperimentTables = []; // To store list of all lab schema tables for dropdown
+        let allSamplingTables = []; // To store list of all relevant tables for dropdown
 
         // --- DOMContentLoaded ---
         document.addEventListener('DOMContentLoaded', () => {
@@ -215,14 +286,11 @@
         async function apiFetch(endpoint, options = {}) {
             console.log(`API Fetch: Calling ${endpoint} with options:`, options);
             try {
-                // Determine if the request body is FormData (for file uploads) or JSON
                 const isFormData = options.body instanceof FormData;
                 if (!isFormData && options.body && typeof options.body === 'object') {
                     options.headers = { ...options.headers, 'Content-Type': 'application/json' };
                     options.body = JSON.stringify(options.body);
                 }
-                // If it's FormData, fetch will automatically set Content-Type: multipart/form-data
-                // and boundary, so no manual header is needed.
 
                 const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
                 
@@ -243,10 +311,27 @@
                 const jsonResponse = await response.json();
                 console.log(`API Fetch: Successful response for ${endpoint}:`, jsonResponse);
                 return jsonResponse;
-            } catch (error) { 
+            }
+            catch (error) { 
                 console.error(`API Error on ${endpoint}:`, error); 
                 return { error: error.message }; 
             }
+        }
+
+        // Centralized toast notification function
+        function showToast(message, type = 'info') {
+            const toastContainer = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            const icon = type === 'success' ? 'check-circle' : (type === 'error' ? 'x-circle' : 'info');
+            toast.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5"></i><span class="toast-message">${message}</span>`;
+            toastContainer.appendChild(toast);
+            lucide.createIcons(); // Render lucide icons in the new toast
+
+            // Automatically remove toast after 3 seconds
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
         }
 
         async function getReferenceData(tableName, schema = 'reference') {
@@ -281,25 +366,24 @@
             return schemaData;
         }
 
-        async function getAllLabTables() {
-            if (allExperimentTables.length > 0) {
-                console.log("Returning cached lab tables.");
-                return allExperimentTables;
+        async function getAllSamplingTables() {
+            if (allSamplingTables.length > 0) {
+                console.log("Returning cached sampling tables.");
+                return allSamplingTables;
             }
-            console.log("Fetching all lab tables.");
+            console.log("Fetching all tables for sampling page.");
             const tables = await apiFetch('table_names_for_forms');
             if (tables && !tables.error) {
-                // Filter for tables in the 'lab' schema and relevant to experiments
-                allExperimentTables = tables.filter(t => 
-                    t.startsWith('lab.') && 
-                    !t.includes('_y') && // Exclude partitioned tables directly
-                    !t.includes('master_samples') && // Exclude master_samples as it's a backend helper
-                    !t.includes('storage_log') // Exclude storage_log for this page
+                // Filter for tables relevant to sampling: lab.sampling, lims.cruises, lab.fishing
+                allSamplingTables = tables.filter(t => 
+                    t === 'lab.sampling' || 
+                    t === 'lims.cruises' || 
+                    t === 'lab.fishing'
                 );
-                console.log("Filtered lab tables:", allExperimentTables);
-                return allExperimentTables;
+                console.log("Filtered sampling tables:", allSamplingTables);
+                return allSamplingTables;
             }
-            console.error("Failed to fetch all lab tables:", tables ? tables.error : 'Unknown error');
+            console.error("Failed to fetch all sampling tables:", tables ? tables.error : 'Unknown error');
             return [];
         }
 
@@ -317,7 +401,6 @@
                 return;
             }
 
-            // Clear previous content
             tableHeaders.innerHTML = '';
             tableBody.innerHTML = '';
 
@@ -326,7 +409,6 @@
                 return;
             }
 
-            // Create headers with sorting and filtering
             const columnsToDisplay = schemaInfo.filter(col => !col.column_name.includes('attachment') && !col.column_name.includes('password_hash') && !col.column_name.includes('search_vector'));
             
             let headerHtml = '';
@@ -344,12 +426,10 @@
             headerHtml += `<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>`;
             tableHeaders.innerHTML = headerHtml;
 
-            // Populate table body
             if (!dataToDisplay || dataToDisplay.length === 0) {
                 tableBody.innerHTML = `<tr><td colspan="${columnsToDisplay.length + 1}" class="text-center p-4 text-gray-500">No data available for this table.</td></tr>`;
             } else {
                 tableBody.innerHTML = dataToDisplay.map(row => {
-                    // Ensure date PKs are formatted for data-pk-values attribute
                     const pkValues = getPkValues(row);
                     const formattedPkValues = {};
                     for (const key in pkValues) {
@@ -370,7 +450,7 @@
                             try { value = new Date(value).toLocaleDateString('en-CA'); } catch (e) { /* keep original */ }
                         } else if (col.data_type === 'timestamp with time zone' && value) {
                             try { value = new Date(value).toLocaleString(); } catch (e) { /* keep original */ }
-                        } else if (typeof value === 'object') { // Handle JSONB or other complex types
+                        } else if (typeof value === 'object' && value !== null) { // Handle JSONB or other complex types
                             value = `<pre class="bg-gray-100 p-2 rounded-md text-xs overflow-auto max-h-24">${JSON.stringify(value, null, 2)}</pre>`; // Pretty print JSONB
                         }
                         rowHtml += `<td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${value}</td>`;
@@ -388,9 +468,10 @@
             lucide.createIcons();
             addTableActionListeners();
             addFilterAndSortListeners();
+            // Call updateMainActionButtons here to activate/deactivate buttons based on loaded table.
+            updateMainActionButtons(currentTableSchema.length > 0 ? currentTableSchema[0].table_type : null);
         }
 
-        // Helper to get primary key values from a row
         function getPkValues(row) {
             const pkColumns = masterCache[`pk.${currentTableName}`] || [];
             const pkValues = {};
@@ -403,7 +484,6 @@
             return pkValues;
         }
 
-        // Helper to format date for input fields (YYYY-MM-DD)
         const formatDateForInput = (dateString) => {
             if (!dateString) return '';
             try {
@@ -415,7 +495,6 @@
             }
         };
 
-        // Helper to format datetime for input fields (YYYY-MM-DDTHH:MM)
         const formatDateTimeForInput = (dateTimeString) => {
             if (!dateTimeString) return '';
             try {
@@ -437,7 +516,7 @@
                     document.querySelectorAll('.dynamic-table-row').forEach(r => r.classList.remove('table-row-selected'));
                     row.classList.add('table-row-selected');
                     const pkValues = JSON.parse(row.dataset.pkValues);
-                    renderExperimentDetails(pkValues);
+                    renderSamplingDetails(pkValues);
                 });
             });
 
@@ -446,7 +525,6 @@
                 console.log("Edit button clicked:", e.currentTarget.dataset.pkValues);
                 const pkValues = JSON.parse(e.currentTarget.dataset.pkValues);
                 const record = currentTableData.find(r => {
-                    // Match PKs, ensuring date formats are consistent for comparison
                     return Object.keys(pkValues).every(key => {
                         const colSchema = currentTableSchema.find(s => s.column_name === key);
                         if (colSchema && colSchema.data_type === 'date') {
@@ -455,7 +533,7 @@
                         return String(r[key]) === String(pkValues[key]);
                     });
                 });
-                if (record) showCreateEditModal(record); // Use showCreateEditModal for editing
+                if (record) showCreateEditModal(record);
                 else console.error("Record not found for editing with PKs:", pkValues);
             }));
 
@@ -467,70 +545,70 @@
                 
                 if (!confirm(`Are you sure you want to delete this record (${recordIdentifier}) from ${currentTableName}?`)){
                     console.log("Delete cancelled by user.");
-                    return; // User cancelled
+                    return;
                 }
 
                 let success = false;
-                if (currentTableName === 'lab.experiments') {
-                    // Special handling for lab.experiments: Delete child records first
-                    const experimentId = pkValues.experiment_id;
-                    const experimentDate = pkValues.experiment_date; // Already formatted as YYYY-MM-DD
+                // Special handling for lab.sampling: Delete child records first
+                if (currentTableName === 'lab.sampling') {
+                    const samplingId = pkValues.sampling_id;
+                    const samplingDate = pkValues.sampling_date; 
 
                     const childTablesToDelete = [
-                        { name: 'lab.experiments_projects', pkCols: ['experiment_id', 'experiment_date', 'project_id'] },
-                        { name: 'lab.experiments_samples', pkCols: ['experiment_id', 'experiment_date', 'sample_id'] }
-                        // Add other directly dependent tables here if they don't cascade automatically
+                        { name: 'lab.samples', pkCols: ['sample_id', 'sampling_date'] },
+                        { name: 'lab.fishing', pkCols: ['fishing_id', 'sampling_date'] }
                     ];
 
                     let allChildrenDeleted = true;
                     for (const childTable of childTablesToDelete) {
                         try {
                             const [childSchema, childTableName] = childTable.name.split('.');
-                            console.log(`Attempting to delete children from ${childTable.name} for experiment ${experimentId} on ${experimentDate}`);
-                            const children = await apiFetch(`table/${childSchema}/${childTableName}?filter_experiment_id=${experimentId}&filter_experiment_date=${experimentDate}`);
+                            let filterParams = `filter_sampling_id=${samplingId}&filter_sampling_date=${samplingDate}`;
+                            
+                            console.log(`Attempting to delete children from ${childTable.name} for sampling event ${samplingId} on ${samplingDate}`);
+                            const children = await apiFetch(`table/${childSchema}/${childTableName}?${filterParams}`);
                             
                             if (children && children.length > 0) {
                                 for (const childRecord of children) {
-                                    const childPkValues = {};
+                                    const deleteChildPkValues = {};
                                     childTable.pkCols.forEach(col => {
                                         if (childRecord[col] !== undefined) {
-                                            childPkValues[col] = childRecord[col];
-                                            // Ensure date PKs are formatted for deletion
+                                            deleteChildPkValues[col] = childRecord[col];
                                             const childColSchema = (masterCache[`schema.${childSchema}.${childTableName}`] || []).find(s => s.column_name === col);
                                             if (childColSchema && childColSchema.data_type === 'date') {
-                                                childPkValues[col] = formatDateForInput(childRecord[col]);
+                                                deleteChildPkValues[col] = formatDateForInput(childRecord[col]);
                                             }
                                         }
                                     });
-                                    const childQueryString = new URLSearchParams(childPkValues).toString();
-                                    console.log(`Deleting child record from ${childTable.name} with PKs:`, childPkValues);
+                                    const childQueryString = new URLSearchParams(deleteChildPkValues).toString();
+                                    console.log(`Deleting child record from ${childTable.name} with PKs:`, deleteChildPkValues);
                                     const deleteChildResult = await apiFetch(`table/${childSchema}/${childTableName}?${childQueryString}`, { method: 'DELETE' });
                                     if (!deleteChildResult.success) {
                                         console.error(`Failed to delete child record from ${childTable.name}:`, deleteChildResult.error);
                                         allChildrenDeleted = false;
-                                        alert(`Failed to delete associated records in ${childTable.name}. Cannot delete experiment.`);
-                                        break; // Stop trying to delete children for this table
+                                        alert(`Failed to delete associated records in ${childTable.name}. Cannot delete sampling event.`);
+                                        break;
                                     }
                                 }
                             }
                         } catch (error) {
                             console.error(`Error fetching/deleting children from ${childTable.name}:`, error);
                             allChildrenDeleted = false;
-                            alert(`Error processing associated records for ${childTable.name}. Cannot delete experiment.`);
+                            alert(`Error processing associated records for ${childTable.name}. Cannot delete sampling event.`);
                             break;
                         }
-                        if (!allChildrenDeleted) break; // Stop if any child deletion failed
+                        if (!allChildrenDeleted) break;
                     }
 
                     if (allChildrenDeleted) {
-                        console.log(`All children deleted. Proceeding to delete main experiment ${recordIdentifier}.`);
+                        console.log(`All children deleted. Proceeding to delete main sampling event ${recordIdentifier}.`);
                         const queryString = new URLSearchParams(pkValues).toString();
                         const result = await apiFetch(`table/${currentTableName.split('.')[0]}/${currentTableName.split('.')[1]}?${queryString}`, { method: 'DELETE' });
                         if (result.success) {
                             success = true;
                         } else {
-                            console.error("Failed to delete main experiment:", result.error);
-                            alert('Failed to delete experiment: ' + (result ? result.error : 'Unknown error'));
+                            console.error("Failed to delete main sampling event:", result.error);
+                            alert('Failed to delete sampling event: ' + (result ? result.error : 'Unknown error'));
                         }
                     }
                 } else {
@@ -550,7 +628,7 @@
                     console.log("Record deleted successfully. Reloading table.");
                     alert('Record deleted successfully!');
                     loadAndRenderTable(currentTableName);
-                    document.getElementById('experiment-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="flask-round" class="mx-auto h-16 w-16 text-blue-400 mb-4 animate-pulse"></i><p class="mt-2 text-lg font-semibold">Ready to explore an experiment?</p><p class="text-sm mt-1">Select an entry from the list on the left to view its comprehensive details.</p><button onclick="document.getElementById('add-single-entry-btn').click()" class="mt-4 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center mx-auto transition-all duration-200 shadow"><i data-lucide="plus" class="w-5 h-5 mr-2"></i>Or Create a New Experiment</button></div></div>`;
+                    document.getElementById('sampling-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="map-pin" class="mx-auto h-16 w-16 text-blue-400 mb-4 animate-pulse"></i><p class="mt-2 text-lg font-semibold">Ready to explore a sampling event?</p><p class="text-sm mt-1">Select an entry from the list on the left to view its comprehensive details.</p><button onclick="document.getElementById('add-single-entry-btn').click()" class="mt-4 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center mx-auto transition-all duration-200 shadow"><i data-lucide="plus" class="w-5 h-5 mr-2"></i>Or Create a New Event</button></div></div>`;
                     lucide.createIcons();
                 }
             }));
@@ -559,11 +637,11 @@
         function addFilterAndSortListeners() {
             console.log("Adding filter and sort listeners.");
             document.querySelectorAll('.sortable-header').forEach(header => {
-                header.removeEventListener('click', handleSortClick); // Remove old listener to prevent duplicates
+                header.removeEventListener('click', handleSortClick);
                 header.addEventListener('click', handleSortClick);
             });
             document.querySelectorAll('.filter-input').forEach(input => {
-                input.removeEventListener('input', handleFilterInput); // Remove old listener
+                input.removeEventListener('input', handleFilterInput);
                 input.addEventListener('input', handleFilterInput);
             });
             updateSortIcons();
@@ -623,25 +701,25 @@
             lucide.createIcons(); 
         }
 
-        async function renderExperimentDetails(pkValues) {
-            console.log("Rendering experiment details for PKs:", pkValues);
-            const container = document.getElementById('experiment-details-container');
-            container.innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="loader-2" class="animate-spin mx-auto h-12 w-12 text-blue-600"></i><p class="mt-2">Loading experiment details...</p></div></div>`;
+        async function renderSamplingDetails(pkValues) {
+            console.log("Rendering sampling details for PKs:", pkValues);
+            const container = document.getElementById('sampling-details-container');
+            container.innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="loader-2" class="animate-spin mx-auto h-12 w-12 text-blue-600"></i><p class="mt-2">Loading sampling details...</p></div></div>`;
             lucide.createIcons();
 
-            const experiment = currentTableData.find(e => {
+            const samplingEvent = currentTableData.find(se => {
                 return Object.keys(pkValues).every(key => {
-                    const colSchema = currentTableSchema.find(s => s.column_name === key);
+                    const colSchema = currentTableSchema.find(cs => cs.column_name === key);
                     if (colSchema && colSchema.data_type === 'date') {
-                        return formatDateForInput(e[key]) === pkValues[key];
+                        return formatDateForInput(se[key]) === pkValues[key];
                     }
-                    return String(e[key]) === String(pkValues[key]);
+                    return String(se[key]) === String(pkValues[key]);
                 });
             });
 
-            if (!experiment) { 
-                console.error("Experiment record not found in currentTableData for PKs:", pkValues);
-                container.innerHTML = `<div class="card p-6 text-red-500">Error: Experiment details not found.</div>`; 
+            if (!samplingEvent) { 
+                console.error("Sampling event record not found in currentTableData for PKs:", pkValues);
+                container.innerHTML = `<div class="card p-6 text-red-500">Error: Sampling event details not found.</div>`; 
                 return; 
             }
 
@@ -679,27 +757,13 @@
                 } else if (label.includes('Attachment File') && value) {
                     displayValue = `<span class="text-gray-500">Binary data present</span>`;
                 }
-
                 return `<div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100"><dt class="font-medium text-gray-500">${label}</dt><dd class="text-gray-900 break-all">${displayValue}</dd></div>`;
             };
 
-            // Define related tables and their icons
             const relatedTables = [
-                { name: 'lab.experiments_projects', icon: 'folder-kanban', title: 'Linked Projects' },
-                { name: 'lab.experiments_samples', icon: 'beaker', title: 'Linked Samples' },
-                { name: 'lab.protocol_runs', icon: 'book-text', title: 'Protocol Runs' },
-                { name: 'lab.dissections', icon: 'scissors', title: 'Dissections' },
-                { name: 'lab.extraction', icon: 'flask-conical', title: 'Extractions' },
-                { name: 'lab.nanodrop', icon: 'bar-chart-2', title: 'Nanodrop QC' },
-                { name: 'lab.qubit', icon: 'thermometer', title: 'Qubit QC' },
-                { name: 'lab.tapestation', icon: 'waveform', title: 'Tapestation QC' },
-                { name: 'lab.pcr', icon: 'dna', title: 'PCRs' },
-                { name: 'lab.gelelectrophoresis', icon: 'columns', title: 'Gel Electrophoresis' },
-                { name: 'lab.qpcr', icon: 'activity', title: 'qPCRs' },
-                { name: 'lab.library', icon: 'book', title: 'Libraries' },
-                { name: 'lab.sequencing', icon: 'dna-off', title: 'Sequencings' },
-                { name: 'bioinformatics.analysis_runs', icon: 'cloud-cog', title: 'Analysis Runs' },
-                { name: 'bioinformatics.edna_assignments', icon: 'dna', title: 'eDNA Assignments' }
+                { name: 'lab.samples', icon: 'beaker', title: 'Associated Samples' },
+                { name: 'lab.fishing', icon: 'fish', title: 'Fishing Details' },
+                { name: 'lims.cruises', icon: 'ship', title: 'Associated Cruises' }
             ];
 
             let detailsHtml = `<div class="space-y-3 text-sm">`;
@@ -711,18 +775,25 @@
                     </button>
                     <div class="accordion-content open">
                         <dl class="space-y-2 py-2">
-                            ${renderDetailRow('Experiment ID', experiment.experiment_id)}
-                            ${renderDetailRow('Title', experiment.experiment_title)}
-                            ${renderDetailRow('Date', formatDate(experiment.experiment_date))}
-                            ${renderDetailRow('Aim', experiment.aim)}
-                            ${renderDetailRow('Method', experiment.method)}
-                            ${renderDetailRow('SOP ID', experiment.sop_id)}
-                            ${renderDetailRow('Person ID', experiment.person_id)}
-                            ${renderDetailRow('Lab Book', experiment.lab_book)}
-                            ${renderDetailRow('Status', experiment.status_id)}
-                            ${renderDetailRow('Notes', experiment.notes)}
-                            ${renderDetailRow('Attachment Link', experiment.attachment_link)}
-                            ${renderDetailRow('Attachment File', experiment.attachment)}
+                            ${renderDetailRow('Sampling ID', samplingEvent.sampling_id)}
+                            ${renderDetailRow('Date', formatDate(samplingEvent.sampling_date))}
+                            ${renderDetailRow('Location Name', samplingEvent.location_name)}
+                            ${renderDetailRow('Longitude', samplingEvent.geom ? samplingEvent.geom.coordinates[0] : 'N/A')}
+                            ${renderDetailRow('Latitude', samplingEvent.geom ? samplingEvent.geom.coordinates[1] : 'N/A')}
+                            ${renderDetailRow('Depth (m)', samplingEvent.depth_m)}
+                            ${renderDetailRow('Temperature (C)', samplingEvent.temperature_atmospheric_c)}
+                            ${renderDetailRow('Weather', samplingEvent.weather)}
+                            ${renderDetailRow('Wind Speed', samplingEvent.wind_speed ? `${samplingEvent.wind_speed} ${samplingEvent.wind_unit_id || ''}` : 'N/A')}
+                            ${renderDetailRow('Salinity', samplingEvent.salinity ? `${samplingEvent.salinity} ${samplingEvent.salinity_unit_id || ''}` : 'N/A')}
+                            ${renderDetailRow('Oxygen', samplingEvent.oxygen ? `${samplingEvent.oxygen} ${samplingEvent.oxygen_unit_id || ''}` : 'N/A')}
+                            ${renderDetailRow('pH', samplingEvent.ph)}
+                            ${renderDetailRow('Instrument ID', samplingEvent.instrument_id)}
+                            ${renderDetailRow('Project ID', samplingEvent.project_id)}
+                            ${renderDetailRow('Cruise ID', samplingEvent.cruise_id)}
+                            ${renderDetailRow('Status', samplingEvent.status_id)}
+                            ${renderDetailRow('Notes', samplingEvent.notes)}
+                            ${renderDetailRow('Attachment Link', samplingEvent.attachment_link)}
+                            ${renderDetailRow('Attachment File', samplingEvent.attachment)}
                         </dl>
                     </div>
                 </div>
@@ -730,8 +801,20 @@
 
             for (const tableInfo of relatedTables) {
                 const [schemaName, tableName] = tableInfo.name.split('.');
-                console.log(`Fetching related items for ${tableInfo.name} with experiment_id=${experiment.experiment_id} and experiment_date=${formatDateForInput(experiment.experiment_date)}`);
-                const items = await apiFetch(`table/${schemaName}/${tableName}?filter_experiment_id=${experiment.experiment_id}&filter_experiment_date=${formatDateForInput(experiment.experiment_date)}`);
+                let filterParams = '';
+                if (tableInfo.name === 'lab.samples') {
+                    filterParams = `filter_sampling_id=${samplingEvent.sampling_id}&filter_sampling_date=${formatDateForInput(samplingEvent.sampling_date)}`;
+                } else if (tableInfo.name === 'lab.fishing') {
+                    filterParams = `filter_sampling_id=${samplingEvent.sampling_id}&filter_sampling_date=${formatDateForInput(samplingEvent.sampling_date)}`;
+                } else if (tableInfo.name === 'lims.cruises') {
+                    if (!samplingEvent.cruise_id) continue; // Skip if no cruise ID
+                    filterParams = `filter_cruise_id=${samplingEvent.cruise_id}`;
+                }
+
+                if (!filterParams) continue; // Skip if no valid filters were set
+
+                console.log(`Fetching related items for ${tableInfo.name} with filters: ${filterParams}`);
+                const items = await apiFetch(`table/${schemaName}/${tableName}?${filterParams}`);
                 
                 if (items && items.length > 0) {
                     const tableSchema = await getTableSchema(schemaName, tableName);
@@ -747,7 +830,7 @@
                                         ${items.map(item => `
                                             <div class="p-2 bg-gray-100 rounded-md">
                                                 <dl class="space-y-1">
-                                                    ${tableSchema.filter(col => !col.column_name.includes('attachment') && !col.column_name.includes('password_hash') && !col.column_name.includes('search_vector')) // Filter out binary attachment, password and search_vector
+                                                    ${tableSchema.filter(col => !col.column_name.includes('attachment') && !col.column_name.includes('password_hash') && !col.column_name.includes('search_vector'))
                                                         .map(col => {
                                                         let value = item[col.column_name];
                                                         if (value === null || value === undefined) {
@@ -775,7 +858,7 @@
                 }
             }
 
-            container.innerHTML = `<div class="card p-6 h-full flex flex-col"><div class="flex justify-between items-start mb-4"><div><h2 class="text-2xl font-bold text-gray-800">${experiment.experiment_title || 'No Title'}</h2><p class="text-sm text-gray-500">${experiment.experiment_id}</p></div></div><div class="flex-grow overflow-y-auto pr-2">${detailsHtml}</div></div>`;
+            container.innerHTML = `<div class="card p-6 h-full flex flex-col"><div class="flex justify-between items-start mb-4"><div><h2 class="text-2xl font-bold">Sampling Event: ${samplingEvent.sampling_id}</h2><p class="text-sm text-gray-500">${formatDate(samplingEvent.sampling_date)} - ${samplingEvent.location_name}</p></div></div><div class="flex-grow overflow-y-auto pr-2">${detailsHtml}</div></div>`;
             lucide.createIcons(); 
             document.querySelectorAll('.accordion-header').forEach(header => {
                 header.addEventListener('click', () => {
@@ -806,28 +889,30 @@
         async function showCreateEditModal(record = null) {
             console.log("Showing create/edit modal. Record:", record);
             const isEditing = record !== null;
-            const targetTableSchema = currentTableSchema; // Use the schema of the currently selected table
+            const targetTableSchema = currentTableSchema;
             const schemaName = currentTableName.split('.')[0];
             const tableName = currentTableName.split('.')[1];
 
-            // Fetch reference data for dropdowns
-            const [persons, statuses, projects, samplesTypes] = await Promise.all([ 
+            const [persons, statuses, cruises, vessels, regions, ecosystems, customers, units, sample_types] = await Promise.all([ 
                 getReferenceData('personal', 'reference'), 
                 getReferenceData('status', 'reference'),
-                getReferenceData('projects', 'lims'), // All projects for linking
-                getReferenceData('samples_type', 'reference') // All sample types for linking
+                getReferenceData('cruises', 'lims'),
+                getReferenceData('vessel', 'reference'),
+                getReferenceData('region', 'reference'),
+                getReferenceData('ecosystem', 'reference'),
+                getReferenceData('customers', 'lims'),
+                getReferenceData('units', 'reference'),
+                getReferenceData('samples_type', 'reference')
             ]);
 
             let formFieldsHtml = '';
             targetTableSchema.forEach(col => {
-                // Exclude auto-generated/system columns, composite PKs (handled by `record` for edit), and search_vector
-                // Also exclude columns that are serial (auto-incrementing) or have default values unless editing
-                const isAutoGenerated = col.column_name.includes('_id') && col.column_default && col.column_default.includes('nextval'); // Heuristic for serial
+                const isAutoGenerated = col.column_name.includes('_id') && col.column_default && col.column_default.includes('nextval');
                 
                 if (col.column_name.includes('password_hash') || 
                     col.column_name.includes('search_vector') ||
-                    (isEditing && col.is_primary_key) || // PKs are read-only when editing
-                    (!isEditing && isAutoGenerated) // Don't show auto-generated IDs in create form
+                    (isEditing && col.is_primary_key) ||
+                    (!isEditing && isAutoGenerated)
                 ) {
                     return;
                 }
@@ -838,7 +923,6 @@
                 let label = formatColumnName(col.column_name);
                 let optionsHtml = '';
 
-                // Special handling for attachment and attachment_link
                 if (col.column_name === 'attachment') {
                     formFieldsHtml += `
                         <div>
@@ -850,17 +934,29 @@
                     return;
                 } else if (col.column_name === 'attachment_link') {
                     inputType = 'url';
+                } else if (col.column_name.includes('geom')) { // Handle geometry columns
+                    formFieldsHtml += `
+                        <div class="md:col-span-2">
+                            <label class="block text-gray-700 text-sm font-bold mb-1">${label} (GeoJSON)</label>
+                            <textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-24">${value ? JSON.stringify(value, null, 2) : ''}</textarea>
+                            <p class="text-xs text-gray-500 mt-1">Enter GeoJSON for Point type (e.g., {"type": "Point", "coordinates": [lon, lat]})</p>
+                        </div>
+                    `;
+                    return;
                 }
 
                 switch (col.data_type) {
                     case 'integer':
                     case 'numeric':
                     case 'bigint':
-                        inputType = 'number';
+                        inputType = 'number'; 
                         break;
                     case 'date':
                         inputType = 'date';
                         if (isEditing) value = formatDateForInput(value);
+                        break;
+                    case 'time': // Handle time columns
+                        inputType = 'time';
                         break;
                     case 'timestamp with time zone':
                     case 'timestamp without time zone':
@@ -870,13 +966,13 @@
                     case 'boolean':
                         inputType = 'checkbox';
                         if (isEditing) extraAttrs = value ? 'checked' : '';
-                        value = ''; // Checkboxes don't use value attribute for checked state
+                        value = '';
                         break;
                     case 'text':
                     case 'character varying':
-                        if (col.column_name.includes('notes') || col.column_name.includes('aim') || col.column_name.includes('method') || col.column_name.includes('protocol_text')) {
+                        if (col.column_name.includes('notes') || col.column_name.includes('description') || col.column_name.includes('weather') || col.column_name.includes('location_name') || col.column_name.includes('fishing_method') || col.column_name.includes('gear_type') || col.column_name.includes('sea_state') || col.column_name.includes('preservative') || col.column_name.includes('instrument_id')) {
                             formFieldsHtml += `
-                                <div class="${col.column_name === 'notes' || col.column_name === 'aim' || col.column_name === 'method' ? 'md:col-span-2' : ''}">
+                                <div class="${['notes', 'description', 'weather', 'location_name', 'fishing_method'].includes(col.column_name) ? 'md:col-span-2' : ''}">
                                     <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
                                     <textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-24">${value}</textarea>
                                 </div>
@@ -894,11 +990,10 @@
                         return;
                 }
 
-                // Special handling for dropdowns based on common FK patterns
-                if (col.column_name.endsWith('_id') && col.column_name !== 'experiment_id' && col.column_name !== 'sample_id') {
+                if (col.column_name.endsWith('_id') && col.column_name !== 'sampling_id') {
                     let refData = [];
                     let valueKey = col.column_name;
-                    let displayKey = col.column_name; // Default display key
+                    let displayKey = col.column_name;
 
                     if (col.column_name.includes('person_id') && persons) {
                         refData = persons;
@@ -906,16 +1001,29 @@
                     } else if (col.column_name.includes('status_id') && statuses) {
                         refData = statuses;
                         displayKey = 'status_id';
-                    } else if (col.column_name.includes('project_id') && projects) {
-                        refData = projects;
-                        displayKey = 'title';
-                    } else if (col.column_name.includes('sample_type_id') && samplesTypes) {
-                        refData = samplesTypes;
-                        displayKey = 'sample_type_abrv'; // Use abbreviation for display
+                    } else if (col.column_name.includes('cruise_id') && cruises) {
+                        refData = cruises;
+                        displayKey = 'cruise_id'; 
+                    } else if (col.column_name.includes('vessel_id') && vessels) {
+                        refData = vessels;
+                        displayKey = 'vessel_name';
+                    } else if (col.column_name.includes('region_id') && regions) {
+                        refData = regions;
+                        displayKey = 'region_abrv';
+                    } else if (col.column_name.includes('ecosystem_id') && ecosystems) {
+                        refData = ecosystems;
+                        displayKey = 'ecosystem_abrv';
+                    } else if (col.column_name.includes('customer_id') && customers) {
+                        refData = customers;
+                        displayKey = 'customer_name';
+                    } else if (col.column_name.includes('unit_id') && units) {
+                        refData = units;
+                        displayKey = 'unit_abbreviation';
+                    } else if (col.column_name.includes('sample_type_id') && sample_types) {
+                        refData = sample_types;
+                        displayKey = 'sample_type_abrv';
                     }
-                    // Add more conditions for other reference tables as needed (e.g., sop_id, primer_id, etc.)
-                    // Example: if (col.column_name === 'sop_id' && sops) { refData = sops; displayKey = 'title'; }
-
+                    
                     if (refData.length > 0) {
                         optionsHtml = `<option value="">-- Select ${label} --</option>`;
                         optionsHtml += refData.map(item => `<option value="${item[valueKey]}" ${value == item[valueKey] ? 'selected' : ''}>${item[displayKey] || item[valueKey]}</option>`).join('');
@@ -936,22 +1044,6 @@
                     </div>
                 `;
             });
-
-            // Special fields for lab.experiments
-            if (currentTableName === 'lab.experiments') {
-                formFieldsHtml += `
-                    <div class="md:col-span-2">
-                        <label class="block text-gray-700 text-sm font-bold mb-1">Linked Project IDs (semicolon-separated)</label>
-                        <input type="text" name="project_ids" class="w-full mt-1 p-2 border rounded" placeholder="e.g., Project1;Project2;ProjectN" value="${isEditing && record.projects_linked ? record.projects_linked.join(';') : ''}">
-                        <p class="text-xs text-gray-500 mt-1">For new experiments, enter existing Project IDs separated by semicolons (e.g., P001;P002). These will be linked in 'experiments_projects'.</p>
-                    </div>
-                    <div class="md:col-span-2">
-                        <label class="block text-gray-700 text-sm font-bold mb-1">Linked Sample IDs (semicolon-separated)</label>
-                        <input type="text" name="sample_ids" class="w-full mt-1 p-2 border rounded" placeholder="e.g., S001;S002;S00N" value="${isEditing && record.samples_linked ? record.samples_linked.join(';') : ''}">
-                        <p class="text-xs text-gray-500 mt-1">For new experiments, enter existing Sample IDs separated by semicolons (e.g., S001;S002). These will be linked in 'experiments_samples'.</p>
-                    </div>
-                `;
-            }
 
             const modalHTML = `
                 <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
@@ -991,43 +1083,51 @@
                 btnText.textContent = 'Processing...';
                 spinner.classList.remove('hidden');
 
-                let body;
+                let body = {};
+                const formData = new FormData(formElement);
+                formData.forEach((value, key) => {
+                    const colSchema = targetTableSchema.find(s => s.column_name === key);
+                    
+                    if (key === 'attachment') {
+                        // Handled by hasFileSelected below
+                    } else if (colSchema && (colSchema.data_type === 'integer' || colSchema.data_type === 'numeric' || colSchema.data_type === 'bigint')) {
+                        body[key] = value === '' ? null : Number(value);
+                    } else if (colSchema && colSchema.data_type === 'boolean') {
+                        body[key] = formElement.querySelector(`[name="${key}"]`).checked; 
+                    } else if (colSchema && colSchema.data_type === 'jsonb' || colSchema.column_name.includes('geom')) { // Handle GeoJSON as JSONB
+                        try {
+                            body[key] = value === '' ? null : JSON.parse(value);
+                        } catch (jsonError) {
+                            alert(`Invalid JSON for ${formatColumnName(key)}: ${jsonError.message}`);
+                            throw new Error(`Invalid JSON for ${formatColumnName(key)}`);
+                        }
+                    } else {
+                        body[key] = value === '' ? null : value;
+                    }
+                });
+
                 if (hasFileSelected) {
-                    console.log("File detected. Using FormData for submission.");
-                    body = new FormData(formElement); // Use FormData for file uploads
-                } else {
-                    console.log("No file selected. Using JSON for submission.");
-                    body = {};
-                    const formData = new FormData(formElement); // Still use FormData to easily get all fields
-                    formData.forEach((value, key) => {
-                        const colSchema = targetTableSchema.find(s => s.column_name === key);
-                        if (colSchema && (colSchema.data_type === 'integer' || colSchema.data_type === 'numeric' || colSchema.data_type === 'bigint')) {
-                            body[key] = value === '' ? null : Number(value);
-                        } else if (colSchema && colSchema.data_type === 'boolean') {
-                            // Checkbox value is 'on' if checked, '' if unchecked
-                            body[key] = formElement.querySelector(`[name="${key}"]`).checked; 
-                        } else if (colSchema && colSchema.data_type === 'jsonb') {
-                            try {
-                                body[key] = value === '' ? null : JSON.parse(value);
-                            } catch (jsonError) {
-                                alert(`Invalid JSON for ${formatColumnName(key)}: ${jsonError.message}`);
-                                throw new Error(`Invalid JSON for ${formatColumnName(key)}`); // Stop submission
-                            }
+                    // For file uploads, reconstruct FormData to include processed JSON parts and the file
+                    const formDataWithFile = new FormData();
+                    for (const key in body) {
+                        // For JSON values, ensure they are stringified back for FormData
+                        if (typeof body[key] === 'object' && body[key] !== null) {
+                            formDataWithFile.append(key, JSON.stringify(body[key]));
+                        } else {
+                            formDataWithFile.append(key, body[key]);
                         }
-                        else {
-                            body[key] = value === '' ? null : value;
-                        }
-                    });
+                    }
+                    formDataWithFile.append('attachment', attachmentInput.files[0]);
+                    body = formDataWithFile; // Replace 'body' with FormData object
                 }
+                // If no file selected, 'body' remains a plain object for JSON submission
 
                 const method = isEditing ? 'PUT' : 'POST';
                 
                 let endpoint = `table/${schemaName}/${tableName}`;
                 if (isEditing) {
                     const pkValuesForApi = {};
-                    // Iterate over the original 'record' (which contains the PKs)
-                    // and format them correctly for the URLSearchParams
-                    const originalPkValues = getPkValues(record); // Get PKs from the original record
+                    const originalPkValues = getPkValues(record);
                     for (const key in originalPkValues) {
                         const colSchema = targetTableSchema.find(s => s.column_name === key);
                         if (colSchema && colSchema.data_type === 'date') {
@@ -1043,7 +1143,7 @@
                 
                 console.log(`Submitting form: Method=${method}, Endpoint=${endpoint}, Body:`, body);
                 const result = await apiFetch(endpoint, { method, body });
-                
+
                 submitBtn.disabled = false;
                 btnText.textContent = isEditing ? 'Save Changes' : 'Create Record';
                 spinner.classList.add('hidden');
@@ -1053,32 +1153,27 @@
                     alert(`${isEditing ? 'Updated' : 'Created'} record successfully!`);
                     closeModal(); 
                     loadAndRenderTable(currentTableName); 
-                    if (currentTableName === 'lab.experiments' && !isEditing) {
-                        // If a new experiment was created, select it in the table
-                        const newExperimentPkValues = {
-                            experiment_id: result.experiment_id, 
-                            experiment_date: formatDateForInput(result.experiment_date) // Ensure date format matches what's used in data-pk-values
+                    if (currentTableName === 'lab.sampling' && !isEditing) {
+                        const newSamplingPkValues = {
+                            sampling_id: result.sampling_id, 
+                            sampling_date: result.sampling_date ? formatDateForInput(result.sampling_date) : undefined 
                         };
                         setTimeout(() => {
-                            const row = document.querySelector(`.dynamic-table-row[data-pk-values='${JSON.stringify(newExperimentPkValues)}']`);
-                            if (row) { row.classList.add('table-row-selected'); renderExperimentDetails(newExperimentPkValues); }
+                            const row = document.querySelector(`.dynamic-table-row[data-pk-values='${JSON.stringify(newSamplingPkValues)}']`);
+                            if (row) { row.classList.add('table-row-selected'); renderSamplingDetails(newSamplingPkValues); }
                         }, 100);
-                    } else if (currentTableName === 'lab.experiments' && isEditing) {
-                         // After editing, re-render details for the same record
-                         const updatedRecordPkValues = {};
-                         // Need to get the potentially updated PKs from the form if they were editable,
-                         // but for now, we assume PKs are not changed in edit form.
-                         // If PKs were editable, 'result' would contain the new PKs.
-                         const originalPkValues = getPkValues(record); // Still use original for re-fetch
-                         for (const key in originalPkValues) {
+                    } else if (isEditing) {
+                        const updatedRecordPkValues = {};
+                        const originalPkValues = getPkValues(record);
+                        for (const key in originalPkValues) {
                             const colSchema = targetTableSchema.find(s => s.column_name === key);
                             if (colSchema && colSchema.data_type === 'date') {
-                                updatedRecordPkValues[key] = formatDateForInput(record[key]); // Use potentially new date from form
+                                updatedRecordPkValues[key] = formatDateForInput(record[key]);
                             } else {
                                 updatedRecordPkValues[key] = record[key];
                             }
-                         }
-                         renderExperimentDetails(updatedRecordPkValues);
+                        }
+                        renderSamplingDetails(updatedRecordPkValues);
                     }
                 } else {
                     console.error("API call failed:", result);
@@ -1095,7 +1190,7 @@
                             <h2 class="text-2xl font-bold">Bulk CSV Upload for ${formatColumnName(currentTableName.split('.')[1])}</h2>
                             <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
                         </div>
-                        <p class="text-gray-700 mb-4">Upload a CSV file. The first row should contain column headers matching your database table. For linking projects/samples to experiments, use 'project_ids' and 'sample_ids' columns with semicolon-separated values (e.g., P001;P002).</p>
+                        <p class="text-gray-700 mb-4">Upload a CSV file. The first row should contain column headers matching your database table.</p>
                         <input type="file" id="csv-file-input" accept=".csv" class="w-full p-2 border rounded mb-4">
                         <div class="flex justify-between space-x-2">
                             <button id="download-csv-template-btn-modal" class="w-1/2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all duration-200">
@@ -1112,8 +1207,7 @@
             `;
             const { closeModal } = showModal(modalHTML);
 
-            // Attach event listener for the new template button inside the modal
-            document.getElementById('download-csv-template-btn-modal').addEventListener('click', downloadCsvTemplate);
+            document.getElementById('download-csv-template-btn-modal').addEventListener('click', () => downloadCsvTemplate(currentTableName));
 
             document.getElementById('upload-csv-btn').addEventListener('click', async () => {
                 const fileInput = document.getElementById('csv-file-input');
@@ -1153,7 +1247,6 @@
                             return;
                         }
 
-                        // Convert empty strings to null for database insertion
                         const recordsToUpload = results.data.map(row => {
                             const newRow = {};
                             for (const key in row) {
@@ -1188,9 +1281,14 @@
             });
         }
 
-        async function downloadCsvTemplate() {
-            console.log("Attempting to download CSV template for:", currentTableName);
-            const [schemaName, tableName] = currentTableName.split('.');
+        async function downloadCsvTemplate(fullTableName) {
+            console.log("downloadCsvTemplate called for:", fullTableName);
+            if (!fullTableName) {
+                alert("Please select a table to download its template.");
+                return;
+            }
+
+            const [schemaName, tableName] = fullTableName.split('.');
             const schema = await getTableSchema(schemaName, tableName);
 
             if (!schema || schema.error) {
@@ -1203,37 +1301,35 @@
                 !col.column_name.includes('attachment') && 
                 !col.column_name.includes('password_hash') && 
                 !col.column_name.includes('search_vector') &&
-                !(col.column_name.includes('_id') && col.column_default && col.column_default.includes('nextval')) && // Exclude auto-generated IDs for template (e.g., experiment_project_id)
-                !col.column_name.includes('created_at') &&
-                !col.column_default // Exclude columns with default values as they don't need user input
+                !col.column_name.includes('geom') && // Exclude PostGIS geometry columns
+                !(col.column_default && col.column_default.includes('nextval')) && // Exclude auto-generated default values
+                !col.column_name.includes('created_at') && // Exclude audit columns
+                !col.column_name.includes('last_modified_at') // Exclude audit columns
             ).map(col => col.column_name);
 
-            // Add special columns for experiments table
-            if (currentTableName === 'lab.experiments') {
-                if (!headers.includes('project_ids')) headers.push('project_ids');
-                if (!headers.includes('sample_ids')) headers.push('sample_ids');
-            }
+            const pkCols = masterCache[`pk.${fullTableName}`] || [];
+            pkCols.forEach(pkCol => {
+                const pkColSchema = schema.find(c => c.column_name === pkCol);
+                // Only prepend if it's a primary key not auto-generated
+                if (pkColSchema && !(pkColSchema.column_default && pkColSchema.column_default.includes('nextval'))) {
+                    if (!headers.includes(pkCol)) {
+                        headers.unshift(pkCol);
+                    }
+                }
+            });
             
             console.log("CSV Template Headers:", headers);
-            const csv = PapaParse.unparse([headers], { header: false }); // Only headers
+            const csv = unparseCSV([headers], { header: false });
             
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
-            if (link.download !== undefined) { // feature detection
-                link.setAttribute('href', URL.createObjectURL(blob));
-                link.setAttribute('download', `${tableName}_template.csv`);
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                // Remove the link after a short delay to ensure download initiates
-                setTimeout(() => {
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(link.href); // Clean up the object URL
-                }, 250); 
-                console.log("CSV template download initiated.");
-            } else {
-                alert('Your browser does not support downloading files directly. Please copy the content: \n\n' + csv);
-            }
+            link.href = URL.createObjectURL(blob);
+            link.download = `${tableName}_template.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            console.log("CSV template download initiated.");
         }
 
         async function showBulkModifyModal() {
@@ -1247,10 +1343,10 @@
                         <p class="text-gray-700 mb-4">Upload a CSV or JSON file containing records to update. Each record must include all primary key column(s) for identification, and any fields you wish to modify.</p>
                         <input type="file" id="bulk-modify-file-input" accept=".csv,.json" class="w-full p-2 border rounded mb-4">
                         <div class="flex justify-between space-x-2">
-                            <button id="download-bulk-modify-template-btn-modal" class="w-1/2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all duration-200">
+                            <button id="download-bulk-modify-template-btn-modal" class="w-1/2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
                                 <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download Template
                             </button>
-                            <button id="perform-bulk-modify-btn" class="w-1/2 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all duration-200">
+                            <button id="perform-bulk-modify-btn" class="w-1/2 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
                                 <span id="modify-button-text">Perform Bulk Modify</span>
                                 <span id="modify-spinner" class="hidden ml-2 button-spinner"></span>
                             </button>
@@ -1261,7 +1357,7 @@
             `;
             const { closeModal } = showModal(modalHTML);
 
-            document.getElementById('download-bulk-modify-template-btn-modal').addEventListener('click', downloadBulkModifyTemplate);
+            document.getElementById('download-bulk-modify-template-btn-modal').addEventListener('click', () => downloadBulkModifyTemplate(currentTableName));
 
 
             document.getElementById('perform-bulk-modify-btn').addEventListener('click', async () => {
@@ -1354,11 +1450,16 @@
             });
         }
 
-        async function downloadBulkModifyTemplate() {
-            console.log("Attempting to download Bulk Modify template for:", currentTableName);
-            const [schemaName, tableName] = currentTableName.split('.');
+        async function downloadBulkModifyTemplate(fullTableName) {
+            console.log("Attempting to download Bulk Modify template for:", fullTableName);
+            if (!fullTableName) {
+                alert("Please select a table to download its bulk modify template.");
+                return;
+            }
+
+            const [schemaName, tableName] = fullTableName.split('.');
             const schema = await getTableSchema(schemaName, tableName);
-            const pkColumns = masterCache[`pk.${currentTableName}`] || [];
+            const pkColumns = masterCache[`pk.${fullTableName}`] || [];
 
             if (!schema || schema.error) {
                 console.error("Failed to fetch table schema for template:", schema ? schema.error : 'Unknown error');
@@ -1366,71 +1467,71 @@
                 return;
             }
 
-            // For bulk modify, include all PKs and a few common editable columns
-            let headers = pkColumns; // Start with primary keys
+            let headers = pkColumns;
             
-            // Add other relevant columns that are commonly modified, excluding system/auto-gen/binary
             const commonEditableColumns = schema.filter(col => 
-                !pkColumns.includes(col.column_name) && // Not a PK (already added)
+                !pkColumns.includes(col.column_name) && 
                 !col.column_name.includes('attachment') && 
                 !col.column_name.includes('password_hash') && 
                 !col.column_name.includes('search_vector') &&
+                !col.column_name.includes('geom') && 
                 !col.column_name.includes('created_at') &&
-                !(col.column_default && col.column_default.includes('nextval')) // Exclude serial columns
+                !(col.column_default && col.column_default.includes('nextval'))
             ).map(col => col.column_name);
 
-            headers = [...new Set([...headers, ...commonEditableColumns])]; // Combine and ensure uniqueness
+            headers = [...new Set([...headers, ...commonEditableColumns])];
 
             console.log("Bulk Modify Template Headers:", headers);
-            const csv = PapaParse.unparse([headers], { header: false }); // Only headers
+            const csv = PapaParse.unparse([headers], { header: false });
             
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
-            if (link.download !== undefined) { // feature detection
+            if (link.download !== undefined) { // Feature detection for download attribute
                 link.setAttribute('href', URL.createObjectURL(blob));
                 link.setAttribute('download', `${tableName}_bulk_modify_template.csv`);
                 link.style.visibility = 'hidden';
                 document.body.appendChild(link);
                 link.click();
-                // Remove the link after a short delay to ensure download initiates
+                // Clean up the object URL and remove the link from DOM after a short delay
                 setTimeout(() => {
                     document.body.removeChild(link);
-                    URL.revokeObjectURL(link.href); // Clean up the object URL
+                    URL.revokeObjectURL(link.href);
                 }, 250); 
                 console.log("Bulk modify template download initiated.");
             } else {
-                alert('Your browser does not support downloading files directly. Please copy the content: \n\n' + csv);
+                // Fallback for browsers that don't support download attribute (should be rare now)
+                alert('Your browser does not support direct file downloads. Please copy the content below and save it as a .csv file:\n\n' + csv);
             }
         }
 
-        // --- PAGE INITIALIZATION & TAB LOGIC ---
         async function initializePage() {
             setupTabListeners();
             await populateDynamicTableSelect();
-            // Load the default table (lab.experiments) on initial page load
+            // Load the default table (lab.sampling) on initial page load
+            // This is crucial for initial button states
             await loadAndRenderTable(currentTableName); 
 
-            // Attach event listeners for bulk action buttons
+            // Attach event listeners for main action buttons
             document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal());
             document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal);
-            // The download template button is now inside the bulk upload modal
             document.getElementById('bulk-modify-btn').addEventListener('click', showBulkModifyModal);
+            document.getElementById('download-template-general-btn').addEventListener('click', () => downloadCsvTemplate(currentTableName));
         }
 
         function setupTabListeners() {
-            const tabExperiments = document.getElementById('tab-experiments');
+            const tabSampling = document.getElementById('tab-sampling');
             const dynamicTableSelect = document.getElementById('dynamic-table-select');
 
-            tabExperiments.addEventListener('click', () => {
-                tabExperiments.classList.add('active');
+            tabSampling.addEventListener('click', () => {
+                tabSampling.classList.add('active');
                 dynamicTableSelect.classList.remove('active');
-                dynamicTableSelect.value = 'lab.experiments'; // Reset dropdown to default
-                currentTableName = 'lab.experiments';
+                dynamicTableSelect.value = 'lab.sampling';
+                currentTableName = 'lab.sampling';
                 loadAndRenderTable(currentTableName);
             });
 
             dynamicTableSelect.addEventListener('change', (e) => {
-                tabExperiments.classList.remove('active');
+                tabSampling.classList.remove('active');
                 dynamicTableSelect.classList.add('active');
                 currentTableName = e.target.value;
                 loadAndRenderTable(currentTableName);
@@ -1439,44 +1540,36 @@
 
         async function populateDynamicTableSelect() {
             const select = document.getElementById('dynamic-table-select');
-            const labTables = await getAllLabTables();
+            const samplingTables = await getAllSamplingTables();
             
-            select.innerHTML = '<option value="">-- Select Experiment Sub-Table --</option>';
-            // Add lab.experiments as the first explicit option
-            select.innerHTML += `<option value="lab.experiments">lab.experiments (Main)</option>`;
+            select.innerHTML = '<option value="">-- Select Related Table --</option>';
+            select.innerHTML += `<option value="lab.sampling">lab.sampling (Main)</option>`;
 
-            if (labTables && !labTables.error) {
-                // Filter out lab.experiments as it's added explicitly
-                const otherLabTables = labTables.filter(t => t !== 'lab.experiments');
-                otherLabTables.forEach(table => {
-                    // Only include tables that are directly related to experiments via experiment_id
-                    // This is a heuristic; a more robust solution would query FKs.
-                    // For now, based on your schema, these are the relevant ones:
-                    if (table.startsWith('lab.experiments_') ||
-                        table.startsWith('lab.protocol_runs') ||
-                        table.startsWith('lab.dissections') ||
-                        table.startsWith('lab.extraction') ||
-                        table.startsWith('lab.nanodrop') ||
-                        table.startsWith('lab.qubit') ||
-                        table.startsWith('lab.tapestation') ||
-                        table.startsWith('lab.pcr') ||
-                        table.startsWith('lab.gelelectrophoresis') ||
-                        table.startsWith('lab.qpcr') ||
-                        table.startsWith('lab.library') ||
-                        table.startsWith('lab.sequencing') ||
-                        table.startsWith('lab.datasets') ||
-                        table.startsWith('bioinformatics.analysis_runs') ||
-                        table.startsWith('bioinformatics.edna_assignments')
-                    ) {
-                        select.innerHTML += `<option value="${table}">${table}</option>`;
-                    }
+            if (samplingTables && !samplingTables.error) {
+                const otherSamplingTables = samplingTables.filter(t => t !== 'lab.sampling');
+                otherSamplingTables.forEach(table => {
+                    select.innerHTML += `<option value="${table}">${table}</option>`;
                 });
             }
-            select.value = currentTableName; // Set initial selection
+            select.value = currentTableName;
+        }
+
+        // This function will now update the disabled state of all relevant buttons
+        function updateMainActionButtons(tableType) {
+            // Assume any table that isn't a view is a "base" table for edit/add purposes
+            const isBaseTable = tableType === 'BASE TABLE'; 
+
+            document.getElementById('add-single-entry-btn').disabled = !isBaseTable;
+            document.getElementById('bulk-csv-upload-btn').disabled = !isBaseTable;
+            document.getElementById('bulk-modify-btn').disabled = !isBaseTable;
+            // The download template button should always be available if a table is selected,
+            // regardless of whether it's a base table or view.
+            document.getElementById('download-template-general-btn').disabled = !currentTableName; 
         }
 
         async function loadAndRenderTable(fullTableName) {
             console.log(`loadAndRenderTable: Attempting to load data for ${fullTableName}`);
+            currentTableName = fullTableName; // Update global currentTableName
             const [schemaName, tableName] = fullTableName.split('.');
             
             // Reset sorting and filtering when loading a new table
@@ -1501,9 +1594,13 @@
                 currentTableSchema = schema;
                 masterCache[`pk.${fullTableName}`] = pkInfo; // Store PK info in cache
                 applyFiltersAndSort(); // This will call renderTable internally
+                // Update button states after successful load
+                updateMainActionButtons(schema.length > 0 ? schema[0].table_type : null);
             } else {
                 console.error(`Failed to load data for ${fullTableName}. Data error: ${data ? data.error : 'N/A'}, Schema error: ${schema ? schema.error : 'N/A'}`);
                 tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-red-500">Error loading data for ${fullTableName}: ${data ? data.error : schema ? schema.error : 'Unknown error'}</td></tr>`;
+                // Disable buttons if loading fails
+                updateMainActionButtons(null);
             }
         }
 
@@ -1511,8 +1608,6 @@
             const cacheKey = `pk.${schema}.${table}`;
             if (masterCache[cacheKey]) return masterCache[cacheKey];
 
-            // This relies on the PK_MAPPING in app.py
-            // We need to fetch the /table_schema endpoint and identify PKs from there
             const schemaData = await getTableSchema(schema, table);
             if (schemaData && !schemaData.error) {
                 const pkColumns = schemaData.filter(col => col.is_primary_key).map(col => col.column_name);
