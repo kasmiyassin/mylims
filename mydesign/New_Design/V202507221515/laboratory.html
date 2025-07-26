@@ -7,8 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script> <style>
         /* Base body styles using Inter font and light background */
         body { 
             font-family: 'Inter', sans-serif; 
@@ -164,11 +163,65 @@
             visibility: visible;
             opacity: 1;
         }
+
+        /* Loading spinner for buttons */
+        .button-spinner {
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-top-color: #fff;
+            border-radius: 50%;
+            width: 1.25rem; /* w-5 */
+            height: 1.25rem; /* h-5 */
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Toast Notification Styles */
+        .toast-container {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 100;
+        }
+        .toast {
+            background-color: #fff;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.08);
+            display: flex;
+            align-items: center;
+            opacity: 0;
+            transform: translateY(-100%);
+            animation: fadeInSlideDown 0.3s ease-out forwards, fadeOut 0.3s ease-out 2.7s forwards;
+            margin-bottom: 0.75rem;
+            border-left: 5px solid;
+        }
+        .toast.success { border-color: #10b981; color: #065f46; } /* green-500, green-900 */
+        .toast.error { border-color: #ef4444; color: #991b1b; } /* red-500, red-900 */
+        .toast.info { border-color: #3b82f6; color: #1e40af; } /* blue-500, blue-900 */
+
+        .toast .lucide {
+            margin-right: 0.75rem;
+        }
+        .toast-message {
+            font-weight: 500;
+        }
+
+        @keyframes fadeInSlideDown {
+            from { opacity: 0; transform: translateY(-100%); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(-100%); }
+        }
     </style>
 </head>
 <body>
     <div id="main-app" class="flex">
-        <!-- Sidebar -->
         <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col z-20">
             <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0">
                 <i data-lucide="flask-conical" class="inline-block mr-2 text-blue-600"></i><span>TIFI MG</span>
@@ -196,7 +249,6 @@
             </div>
         </div>
 
-        <!-- Main Content Area -->
         <div id="main-content" class="ml-64 p-8 flex-grow">
             <div class="flex justify-between items-center mb-6">
                 <div>
@@ -242,15 +294,13 @@
             </div>
 
             <div id="content-display" class="grid grid-cols-1 lg:grid-cols-5 gap-8 mt-6">
-                <!-- Table Display Area -->
                 <div class="lg:col-span-3">
                     <div class="card p-4">
                         <div class="overflow-y-auto h-[65vh] relative">
                             <table class="min-w-full">
                                 <thead class="bg-gray-50 sticky top-0 z-10">
                                     <tr id="table-headers">
-                                        <!-- Dynamic headers will be loaded here -->
-                                    </tr>
+                                        </tr>
                                 </thead>
                                 <tbody id="dynamic-table-body" class="divide-y divide-gray-200">
                                     <tr><td colspan="100%" class="text-center p-4 text-gray-500">
@@ -265,7 +315,6 @@
                     </div>
                 </div>
 
-                <!-- Details/Info Area (initially empty or with a placeholder) -->
                 <div id="record-details-container" class="lg:col-span-2">
                     <div class="card p-6 h-full flex items-center justify-center text-gray-500">
                         <div class="text-center">
@@ -276,12 +325,11 @@
                 </div>
             </div>
         </div>
-        <!-- Modal Container -->
         <div id="modal-container"></div>
-    </div>
+        <div id="toast-container" class="toast-container"></div> </div>
 
     <script>
-        // --- Custom CSV Unparse Function (replaces PapaParse.unparse for this specific use case) ---
+        // --- Custom CSV Unparse Function (replaces PapaParse for this specific use case) ---
         function unparseCSV(data, options) {
             options = options || {};
             const delimiter = options.delimiter || ',';
@@ -420,6 +468,32 @@
         }
 
         /**
+         * Centralized toast notification function.
+         * @param {string} message - The message to display.
+         * @param {'success'|'error'|'info'} [type='info'] - The type of toast.
+         */
+        function showToast(message, type = 'info') {
+            const toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                console.error("Toast container not found!");
+                alert(message); // Fallback to alert if container is missing
+                return;
+            }
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            const icon = type === 'success' ? 'check-circle' : (type === 'error' ? 'x-circle' : 'info');
+            toast.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5"></i><span class="toast-message">${message}</span>`;
+            toastContainer.appendChild(toast);
+            lucide.createIcons(); // Render lucide icons in the new toast
+
+            // Automatically remove toast after 3 seconds
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+
+        /**
          * Fetches reference data for dropdowns (e.g., lists of persons, statuses).
          * Caches results to avoid repeated API calls.
          * @param {string} tableName - The table name (e.g., 'personal', 'status').
@@ -478,7 +552,7 @@
             console.log("Fetching all table and view names.");
             const tables = await apiFetch('table_names_for_forms');
             if (tables && !tables.error) {
-                allTablesAndViews = tables;
+                allTablesAndViews = tables.sort(); // Sort alphabetically
                 return allTablesAndViews;
             }
             console.error("Failed to fetch all table names:", tables ? tables.error : 'Unknown error');
@@ -569,7 +643,7 @@
                             try { value = new Date(value).toLocaleDateString('en-CA'); } catch (e) { /* keep original */ }
                         } else if (col.data_type === 'timestamp with time zone' && value) {
                             try { value = new Date(value).toLocaleString(); } catch (e) { /* keep original */ }
-                        } else if (typeof value === 'object') { // Handle JSONB or other complex types
+                        } else if (typeof value === 'object') { 
                             value = JSON.stringify(value);
                         }
                         rowHtml += `<td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${value}</td>`;
@@ -678,7 +752,10 @@
         async function handleEditButtonClick(e) {
             e.stopPropagation(); // Prevent row click event from firing
             const btn = e.currentTarget;
-            if (btn.disabled) return; // Do nothing if button is disabled
+            if (btn.disabled) {
+                showToast("This operation is only available for base tables.", "info");
+                return; // Do nothing if button is disabled
+            }
 
             console.log("Edit button clicked:", btn.dataset.pkValues);
             const pkValues = JSON.parse(btn.dataset.pkValues);
@@ -692,13 +769,16 @@
                 });
             });
             if (record) showCreateEditModal(record);
-            else console.error("Record not found for editing with PKs:", pkValues);
+            else showToast("Record not found for editing.", "error");
         }
 
         async function handleDeleteButtonClick(e) {
             e.stopPropagation(); // Prevent row click event from firing
             const btn = e.currentTarget;
-            if (btn.disabled) return; // Do nothing if button is disabled
+            if (btn.disabled) {
+                showToast("This operation is only available for base tables.", "info");
+                return; // Do nothing if button is disabled
+            }
 
             console.log("Delete button clicked:", btn.dataset.pkValues);
             const pkValues = JSON.parse(btn.dataset.pkValues);
@@ -718,12 +798,12 @@
                 success = true;
             } else {
                 console.error("Failed to delete record:", result.error);
-                alert('Failed to delete record: ' + (result ? result.error : 'Unknown error'));
+                showToast('Failed to delete record: ' + (result ? result.error : 'Unknown error'), "error");
             }
             
             if (success) {
                 console.log("Record deleted successfully. Reloading table.");
-                alert('Record deleted successfully!');
+                showToast('Record deleted successfully!', "success");
                 loadAndRenderTable(currentTableName);
                 document.getElementById('record-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="info" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a record to view its details</p></div></div>`;
                 lucide.createIcons();
@@ -880,7 +960,16 @@
                 if (value === null || value === undefined || String(value).trim() === '' || value === 'N/A') {
                     return ''; // Don't render empty rows
                 }
-                return `<div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100"><dt class="font-medium text-gray-500">${label}</dt><dd class="text-gray-900 break-all">${value}</dd></div>`;
+                let displayValue = value;
+                if (typeof value === 'object' && value !== null) { 
+                    displayValue = `<pre class="bg-gray-100 p-2 rounded-md text-xs overflow-auto max-h-24">${JSON.stringify(value, null, 2)}</pre>`;
+                } else if (label.includes('Attachment Link') && typeof value === 'string') {
+                    displayValue = `<a href="${value}" target="_blank" class="text-blue-600 hover:underline">${value}</a>`;
+                } else if (label.includes('Attachment File') && value) {
+                    displayValue = `<span class="text-gray-500">Binary data present</span>`;
+                }
+
+                return `<div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100"><dt class="font-medium text-gray-500">${label}</dt><dd class="text-gray-900 break-all">${displayValue}</dd></div>`;
             };
 
             let detailsHtml = `<div class="space-y-3 text-sm">`;
@@ -905,8 +994,8 @@
                                     value = formatDate(value);
                                 } else if (['timestamp with time zone', 'timestamp without time zone'].includes(col.data_type)) {
                                     value = formatDateTime(value);
-                                } else if (typeof value === 'object') { // For JSONB
-                                    value = JSON.stringify(value, null, 2); // Pretty print JSON
+                                } else if (typeof value === 'object') { 
+                                    value = JSON.stringify(value, null, 2); // Pretty print JSON for display
                                 } else if (col.column_name === 'attachment_link') {
                                     value = `<a href="${value}" target="_blank" class="text-blue-600 hover:underline">${value}</a>`;
                                 }
@@ -1036,7 +1125,7 @@
                 
                 const shouldSkip = col.column_name.includes('password_hash') ||
                                    col.column_name.includes('search_vector') ||
-                                   col.column_name.includes('geom') ||
+                                   col.column_name.includes('geom') || // Exclude PostGIS geometry columns
                                    (isEditing && col.is_primary_key) || // Skip PKs if editing
                                    (!isEditing && isAutoGenerated && col.is_primary_key); // Skip auto-generated PKs for new entries
 
@@ -1194,7 +1283,7 @@
                         formFieldsHtml += `
                             <div>
                                 <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
-                                <select name="${col.column_name}" class="w-full mt-1 p-2 border rounded">${optionsHtml}</select>
+                                <select name="${col.column_name}" class="w-full mt-1 p-2 border rounded"${col.is_nullable === 'NO' ? ' required' : ''}>${optionsHtml}</select>
                             </div>
                         `;
                         return; // Skip default input if dropdown is generated
@@ -1261,7 +1350,7 @@
                             try {
                                 body[key] = value === '' ? null : JSON.parse(value);
                             } catch (jsonError) {
-                                alert(`Invalid JSON for ${formatColumnName(key)}: ${jsonError.message}`);
+                                showToast(`Invalid JSON for ${formatColumnName(key)}: ${jsonError.message}`, "error");
                                 throw new Error(`Invalid JSON for ${formatColumnName(key)}`); // Stop submission
                             }
                         }
@@ -1281,7 +1370,7 @@
                     const originalPkValues = getPkValues(record); // Get PKs from the original record
                     for (const key in originalPkValues) {
                         const colSchema = targetTableSchema.find(s => s.column_name === key);
-                        if (colSchema && colSchema.data_type === 'date') {
+                        if (colSchema && col.data_type === 'date') {
                             pkValuesForApi[key] = formatDateForInput(originalPkValues[key]);
                         } else {
                             pkValuesForApi[key] = originalPkValues[key];
@@ -1296,7 +1385,7 @@
                 const result = await apiFetch(endpoint, { method, body });
                 if (result && !result.error) { 
                     console.log("API call successful:", result);
-                    alert(`${isEditing ? 'Updated' : 'Created'} record successfully!`);
+                    showToast(`${isEditing ? 'Updated' : 'Created'} record successfully!`, "success");
                     closeModal(); 
                     loadAndRenderTable(currentTableName); 
                     // If editing, re-select the row and re-render details
@@ -1305,7 +1394,7 @@
                          const originalPkValues = getPkValues(record); // Still use original for re-fetch
                          for (const key in originalPkValues) {
                             const colSchema = targetTableSchema.find(s => s.column_name === key);
-                            if (colSchema && colSchema.data_type === 'date') {
+                            if (colSchema && col.data_type === 'date') {
                                 // For dates, use the value from the form (which is already YYYY-MM-DD)
                                 updatedRecordPkValues[key] = formElement.querySelector(`[name="${key}"]`)?.value || originalPkValues[key];
                             } else {
@@ -1324,7 +1413,7 @@
                     }
                 } else {
                     console.error("API call failed:", result);
-                    alert(`Failed to ${isEditing ? 'save' : 'create'} record: ` + (result ? result.error : 'Unknown error')); 
+                    showToast(`Failed to ${isEditing ? 'save' : 'create'} record: ` + (result ? result.error : 'Unknown error'), "error");
                 }
             };
         }
@@ -1360,66 +1449,130 @@
                 const file = fileInput.files[0];
 
                 if (!file) {
-                    statusDiv.innerHTML = `<p class="text-red-500">Please select a CSV file.</p>`;
+                    showToast("Please select a CSV file.", "error");
                     return;
                 }
 
                 statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Processing CSV...</p>`;
                 lucide.createIcons();
 
-                // Using the custom unparseCSV function, but for parsing, we still need PapaParse.
-                // Re-adding PapaParse for parsing only.
-                // If this still causes issues, we might need to implement a custom CSV parser as well.
-                const script = document.createElement('script');
-                script.src = "https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js";
-                script.onload = () => {
-                    PapaParse.parse(file, {
-                        header: true,
-                        skipEmptyLines: true,
-                        complete: async (results) => {
-                            if (results.errors.length) {
-                                statusDiv.innerHTML = `<p class="text-red-500">CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}</p>`;
-                                return;
-                            }
-                            if (!results.data.length) {
-                                statusDiv.innerHTML = `<p class="text-red-500">No data found in CSV.</p>`;
-                                return;
-                            }
-
-                            // Convert empty strings to null for database insertion
-                            const recordsToUpload = results.data.map(row => {
-                                const newRow = {};
-                                for (const key in row) {
-                                    newRow[key] = row[key] === '' ? null : row[key];
-                                }
-                                return newRow;
-                            });
-
-                            statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Uploading ${recordsToUpload.length} records...</p>`;
-                            lucide.createIcons();
-
-                            const [schemaName, tableName] = currentTableName.split('.');
-                            const result = await apiFetch(`table/${schemaName}/${tableName}/batch_upload`, {
-                                method: 'POST',
-                                body: recordsToUpload
-                            });
-
-                            if (result && result.success) {
-                                statusDiv.innerHTML = `<p class="text-green-600">Successfully uploaded ${result.inserted_rows} records!</p>`;
-                                loadAndRenderTable(currentTableName);
-                                setTimeout(closeModal, 2000);
-                            } else {
-                                statusDiv.innerHTML = `<p class="text-red-500">Bulk upload failed: ${result ? result.error : 'Unknown error'}</p>`;
-                            }
-                            lucide.createIcons();
+                // Using PapaParse for parsing.
+                PapaParse.parse(file, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: async (results) => {
+                        if (results.errors.length) {
+                            showToast(`CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}`, "error");
+                            return;
                         }
-                    });
-                };
-                script.onerror = () => {
-                    statusDiv.innerHTML = `<p class="text-red-500">Error loading PapaParse library for CSV upload. Please check network connection.</p>`;
-                };
-                document.head.appendChild(script);
+                        if (!results.data.length) {
+                            showToast("No data found in CSV.", "error");
+                            return;
+                        }
+
+                        // Convert empty strings to null for database insertion
+                        const recordsToUpload = results.data.map(row => {
+                            const newRow = {};
+                            for (const key in row) {
+                                newRow[key] = row[key] === '' ? null : row[key];
+                            }
+                            return newRow;
+                        });
+
+                        statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Uploading ${recordsToUpload.length} records...</p>`;
+                        lucide.createIcons();
+
+                        const [schemaName, tableName] = currentTableName.split('.');
+                        const result = await apiFetch(`table/${schemaName}/${tableName}/batch_upload`, {
+                            method: 'POST',
+                            body: recordsToUpload
+                        });
+
+                        if (result && result.success) {
+                            showToast(`Successfully uploaded ${result.inserted_rows} records!`, "success");
+                            loadAndRenderTable(currentTableName);
+                            setTimeout(closeModal, 2000);
+                        } else {
+                            showToast(`Bulk upload failed: ${result ? result.error : 'Unknown error'}`, "error");
+                        }
+                        lucide.createIcons();
+                    }
+                });
             });
+        }
+
+        /**
+         * Downloads a CSV template for the currently selected table.
+         * The template includes column headers based on the table's schema.
+         */
+        async function downloadCsvTemplate() {
+            console.log("downloadCsvTemplate called for:", currentTableName);
+            if (!currentTableName) {
+                showToast("Please select a table to download its template.", "error"); 
+                return;
+            }
+
+            const [schemaName, tableName] = currentTableName.split('.');
+            const schema = await getTableSchema(schemaName, tableName);
+
+            if (!schema || schema.error) {
+                console.error("Failed to fetch table schema for template:", schema ? schema.error : 'Unknown error');
+                showToast('Failed to fetch table schema for template: ' + (schema ? schema.error : 'Unknown error'), "error"); 
+                return;
+            }
+
+            // Filter columns for the template: exclude system, binary, auto-generated, and search vector columns
+            const headers = schema.filter(col => 
+                !col.column_name.includes('attachment') && 
+                !col.column_name.includes('password_hash') && 
+                !col.column_name.includes('search_vector') &&
+                !col.column_name.includes('geom') && // Exclude PostGIS geometry columns from template
+                !(col.column_default && col.column_default.includes('nextval')) && // Exclude auto-generated default values (like serial IDs)
+                !col.column_name.includes('created_at') && // Exclude audit columns
+                !col.column_name.includes('last_modified_at') // Exclude audit columns
+            ).map(col => col.column_name);
+
+            // Ensure primary key columns are always at the beginning of the template headers, if not auto-generated
+            const pkCols = await getPrimaryKeysForTable(schemaName, tableName);
+            pkCols.forEach(pkCol => {
+                const pkColSchema = schema.find(c => c.column_name === pkCol);
+                // Only prepend if it's a primary key and NOT auto-generated
+                if (pkColSchema && !(pkColSchema.column_default && pkColSchema.column_default.includes('nextval'))) {
+                    if (!headers.includes(pkCol)) {
+                        headers.unshift(pkCol);
+                    }
+                }
+            });
+
+            // Special handling for the 'lims.projects' table to include linking columns
+            if (currentTableName === 'lims.projects') {
+                if (!headers.includes('linked_person_ids')) headers.push('linked_person_ids');
+            }
+            
+            console.log("CSV Template Headers:", headers);
+            // Use unparseCSV (your custom function) to correctly format headers for CSV
+            const csv = unparseCSV([headers], { header: false }); // Pass headers as an array of arrays
+
+            // Create a Blob and trigger download
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            if (link.download !== undefined) { // Feature detection for download attribute
+                link.setAttribute('href', URL.createObjectURL(blob));
+                link.setAttribute('download', `${tableName}_template.csv`);
+                link.style.visibility = 'hidden'; // Hide the link
+                document.body.appendChild(link);
+                link.click();
+                // Clean up the object URL and remove the link from DOM after a short delay
+                setTimeout(() => {
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(link.href);
+                }, 250); 
+                console.log("CSV template download initiated successfully.");
+                showToast("Template downloaded successfully!", "success"); // Show toast on success
+            } else {
+                // Fallback for browsers that don't support download attribute (should be rare now)
+                alert('Your browser does not support direct file downloads. Please copy the content below and save it as a .csv file:\n\n' + csv);
+            }
         }
 
         /**
@@ -1447,13 +1600,13 @@
             `;
             const { closeModal } = showModal(modalHTML);
 
-            document.getElementById('perform-bulk-modify-btn').addEventListener('click', () => {
+            document.getElementById('perform-bulk-modify-btn').addEventListener('click', async () => {
                 const fileInput = document.getElementById('bulk-modify-file-input');
                 const statusDiv = document.getElementById('modify-status');
                 const file = fileInput.files[0];
 
                 if (!file) {
-                    statusDiv.innerHTML = `<p class="text-red-500">Please select a file (CSV or JSON).</p>`;
+                    showToast("Please select a file (CSV or JSON).", "error");
                     return;
                 }
 
@@ -1470,28 +1623,46 @@
                                 throw new Error("JSON file must contain an array of objects.");
                             }
                         } else if (file.type === 'text/csv') {
-                            // Using PapaParse for CSV parsing
-                            const script = document.createElement('script');
-                            script.src = "https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js";
-                            script.onload = () => {
-                                const parseResult = PapaParse.parse(e.target.result, { header: true, skipEmptyLines: true });
-                                if (parseResult.errors.length) {
-                                    throw new Error(`CSV parsing errors: ${parseResult.errors.map(err => err.message).join(', ')}`);
-                                }
-                                recordsToModify = parseResult.data;
-                                // Continue with the rest of the bulk modify logic here
-                                processBulkModifyRecords(recordsToModify, statusDiv, closeModal);
-                            };
-                            script.onerror = () => {
-                                statusDiv.innerHTML = `<p class="text-red-500">Error loading PapaParse library for CSV parsing. Please check network connection.</p>`;
-                            };
-                            document.head.appendChild(script);
-                            return; // Exit here, processing continues in script.onload
+                            const parseResult = PapaParse.parse(e.target.result, { header: true, skipEmptyLines: true });
+                            if (parseResult.errors.length) {
+                                throw new Error(`CSV parsing errors: ${parseResult.errors.map(err => err.message).join(', ')}`);
+                            }
+                            recordsToModify = parseResult.data;
                         } else {
                             throw new Error("Unsupported file type. Please upload a CSV or JSON file.");
                         }
-                        // If JSON, or if CSV parsing was handled by PapaParse onload, continue here
-                        processBulkModifyRecords(recordsToModify, statusDiv, closeModal);
+
+                        if (!recordsToModify.length) {
+                            showToast("No records found in the file.", "error");
+                            return;
+                        }
+
+                        // Convert empty strings to null for database update
+                        recordsToModify = recordsToModify.map(row => {
+                            const newRow = {};
+                            for (const key in row) {
+                                newRow[key] = row[key] === '' ? null : row[key];
+                            }
+                            return newRow;
+                        });
+
+                        statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Performing bulk update on ${recordsToModify.length} records...</p>`;
+                        lucide.createIcons();
+
+                        const [schemaName, tableName] = currentTableName.split('.');
+                        const result = await apiFetch(`table/${schemaName}/${tableName}/batch_update`, {
+                            method: 'PUT',
+                            body: recordsToModify
+                        });
+
+                        if (result && result.success) {
+                            showToast(`Successfully updated ${result.updated_rows} records!`, "success");
+                            loadAndRenderTable(currentTableName);
+                            setTimeout(closeModal, 2000);
+                        } else {
+                            showToast(`Bulk modify failed: ${result ? result.error : 'Unknown error'}`, "error");
+                        }
+                        lucide.createIcons();
 
                     } catch (error) {
                         console.error("Bulk modify file processing error:", error);
@@ -1503,135 +1674,66 @@
             });
         }
 
-        async function processBulkModifyRecords(recordsToModify, statusDiv, closeModal) {
-            if (!recordsToModify.length) {
-                statusDiv.innerHTML = `<p class="text-red-500">No records found in the file.</p>`;
+
+        /**
+         * Downloads a CSV template for bulk modification for the currently selected table.
+         * Includes primary keys and common editable columns.
+         */
+        async function downloadBulkModifyTemplate() {
+            console.log("downloadBulkModifyTemplate called for:", currentTableName);
+            if (!currentTableName) {
+                showToast("Please select a table to download its bulk modify template.", "error");
                 return;
             }
 
-            // Convert empty strings to null for database update
-            const recordsToModifyCleaned = recordsToModify.map(row => {
-                const newRow = {};
-                for (const key in row) {
-                    newRow[key] = row[key] === '' ? null : row[key];
-                }
-                return newRow;
-            });
-
-            statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Performing bulk update on ${recordsToModifyCleaned.length} records...</p>`;
-            lucide.createIcons();
-
             const [schemaName, tableName] = currentTableName.split('.');
-            const result = await apiFetch(`table/${schemaName}/${tableName}/batch_update`, {
-                method: 'PUT',
-                body: recordsToModifyCleaned
-            });
+            const schema = await getTableSchema(schemaName, tableName);
+            const pkColumns = masterCache[`pk.${currentTableName}`] || [];
 
-            if (result && result.success) {
-                statusDiv.innerHTML = `<p class="text-green-600">Successfully updated ${result.updated_rows} records!</p>`;
-                loadAndRenderTable(currentTableName);
-                setTimeout(closeModal, 2000);
-            } else {
-                statusDiv.innerHTML = `<p class="text-red-500">Bulk modify failed: ${result ? result.error : 'Unknown error'}</p>`;
+            if (!schema || schema.error) {
+                console.error("Failed to fetch table schema for template:", schema ? schema.error : 'Unknown error');
+                showToast('Failed to fetch table schema for template: ' + (schema ? schema.error : 'Unknown error'), "error");
+                return;
             }
-            lucide.createIcons();
-        }
 
+            // For bulk modify, include all PKs and a few common editable columns
+            let headers = pkColumns; // Start with primary keys
+            
+            // Add other relevant columns that are commonly modified, excluding system/auto-gen/binary
+            const commonEditableColumns = schema.filter(col => 
+                !pkColumns.includes(col.column_name) && 
+                !col.column_name.includes('attachment') && 
+                !col.column_name.includes('password_hash') && 
+                !col.column_name.includes('search_vector') &&
+                !col.column_name.includes('geom') && 
+                !col.column_name.includes('created_at') &&
+                !(col.column_default && col.column_default.includes('nextval'))
+            ).map(col => col.column_name);
 
-        /**
-         * Displays a modal for selecting a table to download a CSV template for.
-         */
-        async function showDownloadTemplateModal() {
-            const allSchemaTableNames = await getAllTablesAndViews();
-            let optionsHtml = '<option value="">-- Select Table for Template --</option>';
-            allSchemaTableNames.forEach(name => {
-                optionsHtml += `<option value="${name}">${name}</option>`;
-            });
+            headers = [...new Set([...headers, ...commonEditableColumns])]; // Combine and ensure uniqueness
 
-            const modalHTML = `
-                <div class="modal-overlay">
-                    <div class="modal-content">
-                        <div class="flex justify-between items-center mb-6 shrink-0">
-                            <h2 class="text-2xl font-bold">Download CSV Template</h2>
-                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
-                        </div>
-                        <p class="text-gray-700 mb-4">Select a table to download an empty CSV template with its column headers.</p>
-                        <select id="template-table-select" class="w-full p-2 border rounded mb-4">
-                            ${optionsHtml}
-                        </select>
-                        <div class="flex justify-end shrink-0">
-                            <button id="confirm-download-template-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
-                                <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download
-                            </button>
-                        </div>
-                        <div id="template-download-status" class="mt-4 text-center text-sm"></div>
-                    </div>
-                </div>
-            `;
-            const { closeModal } = showModal(modalHTML);
-
-            document.getElementById('confirm-download-template-btn').addEventListener('click', async () => {
-                const selectedTable = document.getElementById('template-table-select').value;
-                const statusDiv = document.getElementById('template-download-status');
-
-                if (!selectedTable) {
-                    statusDiv.innerHTML = `<p class="text-red-500">Please select a table.</p>`;
-                    return;
-                }
-
-                statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Generating template...</p>`;
-                lucide.createIcons();
-
-                try {
-                    const [schemaName, tableName] = selectedTable.split('.');
-                    const schema = await getTableSchema(schemaName, tableName);
-
-                    if (!schema || schema.error) {
-                        statusDiv.innerHTML = `<p class="text-red-500">Failed to fetch schema for template: ${schema ? schema.error : 'Unknown error'}</p>`;
-                        console.error("Failed to fetch schema for template:", schema);
-                        return;
-                    }
-
-                    let headers = schema.filter(col => 
-                        !col.column_name.includes('attachment') && 
-                        !col.column_name.includes('password_hash') && 
-                        !col.column_name.includes('search_vector') &&
-                        !col.column_name.includes('geom') && 
-                        !(col.column_default && col.column_default.includes('nextval')) && 
-                        !col.column_name.includes('created_at') &&
-                        !col.column_name.includes('last_modified_at')
-                    ).map(col => col.column_name);
-
-                    const pkCols = masterCache[`pk.${selectedTable}`] || [];
-                    pkCols.forEach(pkCol => {
-                        const pkColSchema = schema.find(c => c.column_name === pkCol);
-                        if (pkColSchema && !(pkColSchema.column_default && pkColSchema.column_default.includes('nextval'))) {
-                            if (!headers.includes(pkCol)) {
-                                headers.unshift(pkCol);
-                            }
-                        }
-                    });
-
-                    console.log("Generated CSV Headers:", headers);
-                    const csv = unparseCSV([headers]); // Use the custom unparseCSV function
-                    console.log("Generated CSV content:", csv);
-                    
-                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                    const link = document.createElement('a');
-                    link.href = URL.createObjectURL(blob);
-                    link.download = `${tableName}_template.csv`;
-                    document.body.appendChild(link);
-                    link.click();
+            console.log("Bulk Modify Template Headers:", headers);
+            const csv = unparseCSV([headers], { header: false });
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            if (link.download !== undefined) { // Feature detection for download attribute
+                link.setAttribute('href', URL.createObjectURL(blob));
+                link.setAttribute('download', `${tableName}_bulk_modify_template.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                // Clean up the object URL and remove the link from DOM after a short delay
+                setTimeout(() => {
                     document.body.removeChild(link);
                     URL.revokeObjectURL(link.href);
-                    
-                    statusDiv.innerHTML = `<p class="text-green-600">Template downloaded successfully!</p>`;
-                    setTimeout(closeModal, 1500);
-                } catch (error) {
-                    console.error("Error during template download:", error);
-                    statusDiv.innerHTML = `<p class="text-red-500">Error generating or downloading template: ${error.message}</p>`;
-                }
-            });
+                }, 250); 
+                console.log("Bulk modify template download initiated.");
+                showToast("Bulk modify template downloaded successfully!", "success");
+            } else {
+                // Fallback for browsers that don't support download attribute (should be rare now)
+                alert('Your browser does not support direct file downloads. Please copy the content below and save it as a .csv file:\n\n' + csv);
+            }
         }
 
 
@@ -1641,8 +1743,49 @@
          * Initializes the page: populates dropdowns and sets up event listeners.
          */
         async function initializePage() {
-            await populateSchemaSelect(); // Populate schema dropdown first
-            setupEventListeners(); // Set up all other event listeners
+            // Fetch all tables and views first
+            allTablesAndViews = await getAllTablesAndViews(); 
+
+            await populateSchemaSelect(); // This will now populate the schema dropdown
+
+            const schemaSelect = document.getElementById('schema-select');
+            // If schemas are available, automatically select the first one
+            if (schemaSelect.options.length > 1) { // Check if there's more than just the default "-- Select Schema --" option
+                schemaSelect.value = schemaSelect.options[1].value; // Select the first actual schema
+                await populateTableSelect(schemaSelect.value); // Populate tables for this schema
+
+                const tableSelect = document.getElementById('table-select');
+                // If tables are available in the first schema, load the first one
+                if (tableSelect.options.length > 1) { // Check if there's more than just the default "-- Select Table/View --" option
+                    await loadAndRenderTable(tableSelect.options[1].value); // Load data for the first table
+                } else {
+                    // No tables in the first schema, ensure buttons are disabled and messages are shown.
+                    document.getElementById('dynamic-table-body').innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500">No tables or views found in this schema.</td></tr>`;
+                    document.getElementById('record-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="info" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a record to view its details</p></div></div>`;
+                    lucide.createIcons();
+                    document.getElementById('add-single-entry-btn').disabled = true;
+                    document.getElementById('bulk-csv-upload-btn').disabled = true;
+                    document.getElementById('bulk-modify-btn').disabled = true;
+                    document.getElementById('download-template-btn').disabled = true;
+                    document.getElementById('add-tooltip').style.display = 'block'; 
+                    document.getElementById('upload-tooltip').style.display = 'block';
+                    document.getElementById('modify-tooltip').style.display = 'block';
+                }
+            } else {
+                 // No schemas found at all, disable everything and show a message
+                document.getElementById('dynamic-table-body').innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500">No schemas or tables available in the database. Please check backend connection and database schema.</td></tr>`;
+                document.getElementById('record-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="info" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a record to view its details</p></div></div>`;
+                lucide.createIcons();
+                document.getElementById('add-single-entry-btn').disabled = true;
+                document.getElementById('bulk-csv-upload-btn').disabled = true;
+                document.getElementById('bulk-modify-btn').disabled = true;
+                document.getElementById('download-template-btn').disabled = true;
+                document.getElementById('add-tooltip').style.display = 'block';
+                document.getElementById('upload-tooltip').style.display = 'block';
+                document.getElementById('modify-tooltip').style.display = 'block';
+            }
+            
+            setupEventListeners(); // Set up all other event listeners AFTER initial load
         }
 
         /**
@@ -1652,8 +1795,8 @@
             const schemaSelect = document.getElementById('schema-select');
             schemaSelect.innerHTML = '<option value="">-- Select Schema --</option>'; // Default option
 
-            const allNames = await getAllTablesAndViews();
-            const schemas = [...new Set(allNames.map(name => name.split('.')[0]))].sort(); // Get unique schema names and sort them
+            allTablesAndViews = await getAllTablesAndViews(); // Ensure this is fetched once
+            const schemas = [...new Set(allTablesAndViews.map(name => name.split('.')[0]))].sort(); // Get unique schema names and sort them
 
             schemas.forEach(schema => {
                 const option = document.createElement('option');
@@ -1682,6 +1825,45 @@
                     option.textContent = table;
                     tableSelect.appendChild(option);
                 });
+
+                // Automatically load the first table/view in the selected schema if not already loaded
+                // Only trigger if a schema was just selected and it's not the initial blank state
+                if (tablesInSchema.length > 0 && tableSelect.value === '') { 
+                    const firstTable = `${selectedSchema}.${tablesInSchema[0]}`;
+                    tableSelect.value = firstTable;
+                    loadAndRenderTable(firstTable);
+                } else if (tablesInSchema.length === 0) {
+                     // No tables in this selected schema, clear display and disable buttons
+                    currentTableName = null; 
+                    document.getElementById('dynamic-table-body').innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500">No tables or views found in this schema.</td></tr>`;
+                    document.getElementById('record-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="info" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a record to view its details</p></div></div>`;
+                    lucide.createIcons();
+                    document.getElementById('add-single-entry-btn').disabled = true;
+                    document.getElementById('bulk-csv-upload-btn').disabled = true;
+                    document.getElementById('bulk-modify-btn').disabled = true;
+                    document.getElementById('download-template-btn').disabled = true;
+                    document.getElementById('add-tooltip').style.display = 'none';
+                    document.getElementById('upload-tooltip').style.display = 'none';
+                    document.getElementById('modify-tooltip').style.display = 'none';
+                }
+            } else {
+                // If no schema selected, clear everything and disable buttons
+                currentTableName = null;
+                document.getElementById('dynamic-table-body').innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500">
+                    <div class="flex items-center justify-center">
+                        <i data-lucide="database" class="inline-block mr-2 text-blue-600"></i>
+                        <span>Please select a schema and table/view to display data.</span>
+                    </div>
+                </td></tr>`;
+                document.getElementById('record-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="info" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a record to view its details</p></div></div>`;
+                lucide.createIcons();
+                document.getElementById('add-single-entry-btn').disabled = true;
+                document.getElementById('bulk-csv-upload-btn').disabled = true;
+                document.getElementById('bulk-modify-btn').disabled = true;
+                document.getElementById('download-template-btn').disabled = true;
+                document.getElementById('add-tooltip').style.display = 'none';
+                document.getElementById('upload-tooltip').style.display = 'none';
+                document.getElementById('modify-tooltip').style.display = 'none';
             }
         }
 
@@ -1781,29 +1963,8 @@
 
             schemaSelect.addEventListener('change', (e) => {
                 const selectedSchema = e.target.value;
-                populateTableSelect(selectedSchema);
-                tableSelect.value = ''; // Reset table selection
-                currentTableName = null; // Clear current table
-                // Clear table display and details panel
-                document.getElementById('dynamic-table-body').innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500">
-                    <div class="flex items-center justify-center">
-                        <i data-lucide="database" class="inline-block mr-2 text-blue-600"></i>
-                        <span>Please select a schema and table/view to display data.</span>
-                    </div>
-                </td></tr>`;
-                document.getElementById('record-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="info" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a record to view its details</p></div></div>`;
-                lucide.createIcons();
-                // Disable action buttons when no table is selected
-                document.getElementById('add-single-entry-btn').disabled = true;
-                document.getElementById('bulk-csv-upload-btn').disabled = true;
-                document.getElementById('bulk-modify-btn').disabled = true;
-                document.getElementById('download-template-btn').disabled = true; // Disable template download
-                isCurrentTableBase = false; // Reset flag
-                currentTableType = null; // Reset table type
-                // Hide tooltips
-                document.getElementById('add-tooltip').style.display = 'none';
-                document.getElementById('upload-tooltip').style.display = 'none';
-                document.getElementById('modify-tooltip').style.display = 'none';
+                currentSchemaName = selectedSchema; // Update global schema name
+                populateTableSelect(selectedSchema); // This will then trigger loadAndRenderTable
             });
 
             tableSelect.addEventListener('change', (e) => {
@@ -1824,10 +1985,7 @@
                     document.getElementById('add-single-entry-btn').disabled = true;
                     document.getElementById('bulk-csv-upload-btn').disabled = true;
                     document.getElementById('bulk-modify-btn').disabled = true;
-                    document.getElementById('download-template-btn').disabled = true; // Disable template download
-                    isCurrentTableBase = false; // Reset flag
-                    currentTableType = null; // Reset table type
-                    // Hide tooltips
+                    document.getElementById('download-template-btn').disabled = true;
                     document.getElementById('add-tooltip').style.display = 'none';
                     document.getElementById('upload-tooltip').style.display = 'none';
                     document.getElementById('modify-tooltip').style.display = 'none';
@@ -1838,7 +1996,7 @@
             document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal());
             document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal);
             document.getElementById('bulk-modify-btn').addEventListener('click', showBulkModifyModal);
-            document.getElementById('download-template-btn').addEventListener('click', showDownloadTemplateModal); // New listener for template download
+            document.getElementById('download-template-btn').addEventListener('click', showDownloadTemplateModal);
         }
     </script>
 </body>

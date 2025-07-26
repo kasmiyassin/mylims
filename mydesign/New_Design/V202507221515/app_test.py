@@ -4,7 +4,7 @@ from waitress import serve
 import os
 import bcrypt
 import base64
-import json # Import json module
+import json
 from typing import Any, Dict, List, Optional, Tuple, Union
 from datetime import datetime, timedelta, time
 import psycopg2
@@ -61,7 +61,7 @@ PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     ('lims', 'permits'): 'permit_id',
     ('lims', 'primers'): 'primer_id',
     ('lims', 'sop'): 'sop_id',
-    ('lims', 'workflow_steps'): ['workflow_id', 'step_number'], # Composite PK
+    ('lims', 'workflow_steps'): 'step_id', # Changed to step_id as it's the PK
     ('lims', 'equipment'): 'equipment_id',
     ('lims', 'suppliers'): 'supplier_id',
     ('lims', 'inventory_items'): 'item_id',
@@ -189,7 +189,15 @@ def get_pk_columns(schema: str, table: str) -> List[str]:
     if pk_info is None:
         print(f"WARNING: No primary key mapping found for {schema}.{table}. Defaulting to ['nr']. "
               "Please ensure PK_MAPPING is correct and matches database column casing.")
-        return ['nr']
+        # Attempt to dynamically find PK if not mapped, or return a sensible default
+        # This dynamic lookup would query information_schema.table_constraints
+        # For now, stick to mapped or default 'nr' or 'id'
+        if 'nr' in _get_column_types(g.db_conn, schema, table):
+            return ['nr']
+        elif 'id' in _get_column_types(g.db_conn, schema, table):
+            return ['id']
+        else:
+            return [] # No default, let the frontend handle missing PK error
     if isinstance(pk_info, str):
         return [pk_info]
     return pk_info
@@ -630,15 +638,9 @@ def get_table_data(schema: str, table: str):
             elif actual_schema.lower() == 'lab' and actual_table.lower() in ['fish', 'fishing', 'storage_log']:
                 # These tables directly contain sample_id (or sampling_id which is related to sample_id)
                 # and sampling_date
-                where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s') # Assuming sample_id for fish, storage_log
-                params.append(f'%{filter_sample_id_value}%')
-                if filter_sampling_date_value:
-                    filter_samp_date_obj = parse_date_filter(filter_sampling_date_value)
-                    where_clauses.append(f'"{actual_table}"."sampling_date" = %s')
-                    params.append(filter_samp_date_obj)
-                # Special case for 'fishing' table which uses 'sampling_id'
+                # Note: 'fishing' table has 'sampling_id', not 'sample_id' directly.
+                # It's better to join to lab.samples for consistency if filtering by sample_id.
                 if actual_table.lower() == 'fishing':
-                    # Need to join to lab.samples to filter by sample_id
                     base_query_from += f"""
                         JOIN "lab"."samples" AS S ON "{actual_table}".sampling_id = S.sampling_id
                         AND "{actual_table}".sampling_date = S.sampling_date
@@ -648,6 +650,13 @@ def get_table_data(schema: str, table: str):
                     if filter_sampling_date_value:
                         filter_samp_date_obj = parse_date_filter(filter_sampling_date_value)
                         where_clauses.append(f'S.sampling_date = %s')
+                        params.append(filter_samp_date_obj)
+                else: # For fish, storage_log (assuming they have sample_id)
+                    where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s')
+                    params.append(f'%{filter_sample_id_value}%')
+                    if filter_sampling_date_value:
+                        filter_samp_date_obj = parse_date_filter(filter_sampling_date_value)
+                        where_clauses.append(f'"{actual_table}"."sampling_date" = %s')
                         params.append(filter_samp_date_obj)
             elif actual_schema.lower() == 'lab' and actual_table.lower() == 'sampling':
                 # Sampling table can be filtered by sample_id via join
@@ -716,24 +725,18 @@ def get_table_data(schema: str, table: str):
                (key == 'filter_sample_id' and filter_sample_id_value) or \
                (key == 'filter_sampling_date' and filter_sampling_date_value) or \
                (key == 'filter_protocol_id' and filter_protocol_id_value) or \
-               (key == 'exclude_status_id' and exclude_status_id_value): # Exclude this from generic parsing
+               (key == 'exclude_status_id' and exclude_status_id_value) or \
+               (key == 'limit') or (key == 'offset') or \
+               (key == 'order_by') or (key == 'order_direction'):
                 continue
 
-            if key == 'limit' or key == 'offset':
-                continue
-            elif key == 'order_by':
-                order_by_column = value
-                continue
-            elif key == 'order_direction':
-                if value.upper() in ['ASC', 'DESC']:
-                    order_direction = value.upper()
-                continue
             # Specific filter for 'expire_date_within_30_days' for reagents dashboard stat
-            elif key == 'filter_expire_date_within_30_days' and value.lower() == 'true':
+            if key == 'filter_expire_date_within_30_days' and value.lower() == 'true':
                 where_clauses.append(f'"expire_date" BETWEEN CURRENT_DATE AND CURRENT_DATE + interval \'30 day\'')
                 continue # No param needed for this one
 
             # Standard list of filterable columns (ensure it contains all columns you might filter by)
+            # This list should ideally be dynamic from schema or a more comprehensive mapping
             filterable_columns = [
                 'sample_id', 'status_id', 'sop_id', 'person_id', 'project_id', 
                 'room_id', 'vessel_id', 'region_id', 'ecosystem_id', 'category_id', 'sample_type_id', 'gene_id', 'taxon_id', 'species_id', 'unit_id', 
@@ -744,7 +747,7 @@ def get_table_data(schema: str, table: str):
                 'mail', 'protocol_text', # Added protocol_text for filtering if needed
                 'path', 
                 # Date/Timestamp fields for filtering
-                'reception_date', 'experiment_date', 'dissection_date', 'extraction_date', 'measurement_date', 'pcr_date', 'run_date', 'prep_date', 'sequencing_date', 'order_date', 'expire_date', 'date_publication', 'date_submission', 'valid_from', 'valid_to', 'link_date', 'move_date', 'action_timestamp', 'created_at', 'date_realise', 'sampling_date'
+                'reception_date', 'experiment_date', 'dissection_date', 'extraction_date', 'measurement_date', 'pcr_date', 'run_date', 'prep_date', 'sequencing_date', 'order_date', 'expire_date', 'date_publication', 'date_submission', 'valid_from', 'valid_to', 'link_date', 'move_date', 'action_timestamp', 'created_at', 'date_realise', 'sampling_date', 'record_date', 'sent_at', 'started_at', 'last_updated_at' # Added for Wanderfische tables
             ]
             
             # Handling date/year filters
@@ -788,20 +791,24 @@ def get_table_data(schema: str, table: str):
             query += f" WHERE {' AND '.join(where_clauses)}"
             
         # Add ORDER BY clause
+        order_by_column = request.args.get('order_by')
+        order_direction = request.args.get('order_direction', 'ASC').upper()
+
         if order_by_column:
             # Ensure order_by_column is qualified if it's from a joined table
             # This logic needs to be careful to apply to the correct alias or original table
-            if order_by_column in ['experiment_id', 'experiment_date'] and (actual_schema.lower() == 'bioinformatics' and actual_table.lower() in ['analysis_runs', 'edna_assignments']):
-                # For these cases, order by the joined table 'S' (sequencing)
-                quoted_order_by_column = f'S."{order_by_column}"' 
-            elif order_by_column in ['sample_id', 'sampling_date'] and (actual_schema.lower() == 'lab' and actual_table.lower() in ['fishing', 'sampling']):
-                 # For fishing/sampling, if filtering by sample_id, order by S.sample_id
-                if filter_sample_id_value: # Only if a join with S is active
+            quoted_order_by_column = f'"{actual_table}"."{order_by_column}"' # Default to main table
+            
+            # Specific handling for joined tables if the order_by column is from them
+            if (actual_schema.lower() == 'bioinformatics' and actual_table.lower() in ['analysis_runs', 'edna_assignments']) and order_by_column in ['experiment_id', 'experiment_date']:
+                quoted_order_by_column = f'S."{order_by_column}"' # From sequencing table alias 'S'
+            elif (actual_schema.lower() == 'lab' and actual_table.lower() in ['fishing', 'sampling']) and order_by_column in ['sample_id', 'sampling_date']:
+                # If filtering by sample_id, it implies a join with 'S' (samples)
+                if filter_sample_id_value:
                     quoted_order_by_column = f'S."{order_by_column}"'
-                else: # Otherwise, order by the table's own column
+                else:
                     quoted_order_by_column = f'"{actual_table}"."{order_by_column}"'
-            else:
-                quoted_order_by_column = f'"{actual_table}"."{order_by_column}"'
+            
             query += f' ORDER BY {quoted_order_by_column} {order_direction}'
             
         # Add LIMIT and OFFSET clauses
@@ -869,9 +876,13 @@ def create_record(schema: str, table: str):
         # Extract custom fields for linked tables before filtering for main table insertion
         project_ids_str = None
         sample_ids_str = None
+        linked_person_ids_str = None # For lims.projects
+
         if actual_schema.lower() == 'lab' and actual_table.lower() == 'experiments':
             project_ids_str = data.pop('project_ids', None) # Pop to remove from main table columns
             sample_ids_str = data.pop('sample_ids', None) # Pop to remove from main table columns
+        elif actual_schema.lower() == 'lims' and actual_table.lower() == 'projects':
+            linked_person_ids_str = data.pop('linked_person_ids', None)
 
         # Filtered data now only contains columns that map directly to the DB table
         # Convert empty strings to None, and ensure attachment is handled.
@@ -888,6 +899,20 @@ def create_record(schema: str, table: str):
                 except json.JSONDecodeError:
                     print(f"WARNING: Invalid JSON for column '{k}'. Storing as None. Value: {v}")
                     filtered_data[k] = None # Store None if JSON is invalid
+            # Handle geometry types (WKT or GeoJSON string to PostGIS geometry)
+            elif column_types.get(k) == 'USER-DEFINED' and v is not None and (v.upper().startswith('POINT(') or v.strip().startswith('{')):
+                try:
+                    # Attempt to parse WKT or GeoJSON string into a PostGIS geometry object
+                    # This requires psycopg2 to handle geometry types correctly, often with a custom adapter
+                    # For simplicity, if it's a string, we'll let psycopg2 handle it if it can.
+                    # If it's a JSON string for GeoJSON, parse it.
+                    if v.strip().startswith('{'): # Assume GeoJSON
+                        filtered_data[k] = json.loads(v)
+                    else: # Assume WKT
+                        filtered_data[k] = v # Pass WKT string directly
+                except (json.JSONDecodeError, Exception) as e:
+                    print(f"WARNING: Invalid geometry format for column '{k}'. Storing as None. Value: {v}. Error: {e}")
+                    filtered_data[k] = None
             else:
                 filtered_data[k] = v
             
@@ -937,6 +962,19 @@ def create_record(schema: str, table: str):
                             print(f"  Warning: Could not link sample {sample_id} to experiment {experiment_id}: {e}")
                             # Log error but allow other links/main record to proceed
             
+            # Handle linked_person_ids for lims.projects
+            elif actual_schema.lower() == 'lims' and actual_table.lower() == 'projects' and new_record and linked_person_ids_str:
+                project_id = new_record['project_id']
+                person_list = [p.strip() for p in linked_person_ids_str.split(';') if p.strip()]
+                for person_id in person_list:
+                    try:
+                        cur.execute(
+                            'INSERT INTO "lims"."project_persons" ("project_id", "person_id", "link_date") VALUES (%s, %s, CURRENT_DATE);',
+                            (project_id, person_id)
+                        )
+                    except Exception as e:
+                        print(f"  Warning: Could not link person {person_id} to project {project_id}: {e}")
+
             conn.commit() # Commit all changes in the transaction
         return jsonify(transform_row_for_json(new_record)), 201
     except Exception as e:    
@@ -955,6 +993,8 @@ def update_record(schema: str, table: str):
         actual_schema, actual_table = resolved_names
 
         pk_columns = get_pk_columns(schema, table) # Get all PK columns
+        if not pk_columns:
+            return jsonify({"error": f"Primary key not defined for {schema}.{table}. Cannot perform update."}), 400
 
         # Get column types for JSONB handling
         column_types = _get_column_types(conn, actual_schema, actual_table)
@@ -984,6 +1024,7 @@ def update_record(schema: str, table: str):
 
         set_clauses: List[str] = []
         values: List[Any] = []
+        pk_where_clauses: List[str] = [] # Initialize pk_where_clauses here
         
         if (actual_schema.lower() == 'reference' and actual_table.lower() == 'personal') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
@@ -1008,6 +1049,19 @@ def update_record(schema: str, table: str):
                     print(f"WARNING: Invalid JSON for column '{key}'. Storing as None. Value: {val}")
                     set_clauses.append(f'"{key}" = %s')
                     values.append(None) # Store None if JSON is invalid
+            # Handle geometry types (WKT or GeoJSON string to PostGIS geometry)
+            elif column_types.get(key) == 'USER-DEFINED' and val is not None and (isinstance(val, str) and (val.upper().startswith('POINT(') or val.strip().startswith('{'))):
+                try:
+                    if val.strip().startswith('{'): # Assume GeoJSON
+                        set_clauses.append(f'"{key}" = %s')
+                        values.append(json.loads(val))
+                    else: # Assume WKT
+                        set_clauses.append(f'"{key}" = %s')
+                        values.append(val) # Pass WKT string directly
+                except (json.JSONDecodeError, Exception) as e:
+                    print(f"WARNING: Invalid geometry format for column '{key}'. Storing as None. Value: {val}. Error: {e}")
+                    set_clauses.append(f'"{key}" = %s')
+                    values.append(None)
             else:
                 set_clauses.append(f'"{key}" = %s')
                 values.append(None if val == '' else val)    
@@ -1016,9 +1070,8 @@ def update_record(schema: str, table: str):
             return jsonify({"error": "No fields to update"}), 400
 
         # Construct WHERE clause for composite primary key
-        where_pk_clauses = []
         for pk_col in pk_columns:
-            where_pk_clauses.append(f'"{pk_col}" = %s')
+            pk_where_clauses.append(f'"{pk_col}" = %s')
             pk_val = pk_values_from_request[pk_col]
             # Special handling for date columns in PK comparison in backend
             if 'date' in pk_col.lower() and pk_val is not None:
@@ -1058,6 +1111,8 @@ def delete_record(schema: str, table: str):
         actual_schema, actual_table = resolved_names
 
         pk_columns = get_pk_columns(schema, table) # Get all PK columns
+        if not pk_columns:
+            return jsonify({"error": f"Primary key not defined for {schema}.{table}. Cannot perform deletion."}), 400
 
         # Collect PK values from query parameters
         pk_values_from_request = []
@@ -1116,7 +1171,7 @@ def batch_upload(schema: str, table: str):
 
         inserted_count = 0
         
-        # Special handling for 'lab.experiments' due to linked tables
+        # Special handling for 'lab.experiments'
         if actual_schema.lower() == 'lab' and actual_table.lower() == 'experiments':
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 for record_data in records: # Use record_data to avoid conflict with `record`
@@ -1135,6 +1190,16 @@ def batch_upload(schema: str, table: str):
                             except json.JSONDecodeError:
                                 print(f"WARNING: Invalid JSON for column '{k}' during batch upload. Storing as None. Value: {v}")
                                 filtered_record[k] = None
+                        # Handle geometry types (WKT or GeoJSON string)
+                        elif column_types.get(k) == 'USER-DEFINED' and v is not None and (isinstance(v, str) and (v.upper().startswith('POINT(') or v.strip().startswith('{'))):
+                            try:
+                                if v.strip().startswith('{'): # Assume GeoJSON
+                                    filtered_record[k] = json.loads(v)
+                                else: # Assume WKT
+                                    filtered_record[k] = v
+                            except (json.JSONDecodeError, Exception) as e:
+                                print(f"WARNING: Invalid geometry format for column '{k}'. Storing as None. Value: {v}. Error: {e}")
+                                filtered_record[k] = None
                         else:
                             filtered_record[k] = v
                     
@@ -1147,13 +1212,10 @@ def batch_upload(schema: str, table: str):
                             filtered_record['password_hash'] = hashed_password.decode('utf-8')
                         filtered_record.pop('password', None)
                     
-                    # Handle attachment if applicable (copied from create_record, assuming it's already in the dict for batch)
-                    # For batch upload, files would typically be base64 encoded strings in the JSON data,
-                    # not actual Werkzeug FileStorage objects.
+                    # Handle attachment for batch upload (assuming base64 encoded string in JSON)
                     if 'attachment' in filtered_record and filtered_record['attachment'] == '':
                         filtered_record['attachment'] = None
                     elif 'attachment' in filtered_record and isinstance(filtered_record['attachment'], str):
-                            # Assuming base64 encoded string from CSV/XLSX
                             try:
                                 filtered_record['attachment'] = base64.b64decode(filtered_record['attachment'])
                             except Exception as e:
@@ -1222,6 +1284,16 @@ def batch_upload(schema: str, table: str):
                             except json.JSONDecodeError:
                                 print(f"WARNING: Invalid JSON for column '{k}' during batch upload. Storing as None. Value: {v}")
                                 filtered_record[k] = None
+                        # Handle geometry types
+                        elif column_types.get(k) == 'USER-DEFINED' and v is not None and (isinstance(v, str) and (v.upper().startswith('POINT(') or v.strip().startswith('{'))):
+                            try:
+                                if v.strip().startswith('{'): # Assume GeoJSON
+                                    filtered_record[k] = json.loads(v)
+                                else: # Assume WKT
+                                    filtered_record[k] = v
+                            except (json.JSONDecodeError, Exception) as e:
+                                print(f"WARNING: Invalid geometry format for column '{k}'. Storing as None. Value: {v}. Error: {e}")
+                                filtered_record[k] = None
                         else:
                             filtered_record[k] = v
 
@@ -1287,6 +1359,16 @@ def batch_upload(schema: str, table: str):
                         except json.JSONDecodeError:
                             print(f"WARNING: Invalid JSON for column '{k}' during batch upload. Storing as None. Value: {v}")
                             temp_record[k] = None
+                    # Handle geometry types
+                    elif column_types.get(k) == 'USER-DEFINED' and v is not None and (isinstance(v, str) and (v.upper().startswith('POINT(') or v.strip().startswith('{'))):
+                        try:
+                            if v.strip().startswith('{'): # Assume GeoJSON
+                                temp_record[k] = json.loads(v)
+                            else: # Assume WKT
+                                temp_record[k] = v
+                        except (json.JSONDecodeError, Exception) as e:
+                            print(f"WARNING: Invalid geometry format for column '{k}'. Storing as None. Value: {v}. Error: {e}")
+                            temp_record[k] = None
 
                 processed_records_for_insertion.append({k: (v if v != '' else None) for k, v in temp_record.items()})
 
@@ -1341,7 +1423,7 @@ def batch_update(schema: str, table: str):
             for record_data in records_to_update:
                 set_clauses: List[str] = []
                 values: List[Any] = []
-                pk_where_clauses: List[str] = []
+                pk_where_clauses: List[str] = [] # Initialize pk_where_clauses here
                 pk_values: List[Any] = []
 
                 # Separate PK fields from update fields
@@ -1349,9 +1431,10 @@ def batch_update(schema: str, table: str):
                     if key in pk_columns:
                         pk_where_clauses.append(f'"{key}" = %s')
                         # Handle date formatting for PKs if necessary (matches frontend sending format)
-                        if 'date' in key.lower() and key in request.args and isinstance(request.args[key], str): # Check request.args for original PK value as string
+                        # For batch update, pk_values are coming from record_data.
+                        if 'date' in key.lower() and isinstance(val, str):
                             try:
-                                val = datetime.strptime(request.args[key], '%Y-%m-%d').date()
+                                val = datetime.strptime(val, '%Y-%m-%d').date()
                             except ValueError:
                                 pass # Keep as string if not a valid date format
                         pk_values.append(val)
@@ -1363,6 +1446,19 @@ def batch_update(schema: str, table: str):
                                 values.append(json.loads(val))
                             except json.JSONDecodeError:
                                 print(f"WARNING: Invalid JSON for column '{key}' during batch update. Storing as None. Value: {val}")
+                                set_clauses.append(f'"{key}" = %s')
+                                values.append(None)
+                        # Handle geometry types
+                        elif column_types.get(key) == 'USER-DEFINED' and val is not None and (isinstance(val, str) and (val.upper().startswith('POINT(') or val.strip().startswith('{'))):
+                            try:
+                                if val.strip().startswith('{'): # Assume GeoJSON
+                                    set_clauses.append(f'"{key}" = %s')
+                                    values.append(json.loads(val))
+                                else: # Assume WKT
+                                    set_clauses.append(f'"{key}" = %s')
+                                    values.append(val)
+                            except (json.JSONDecodeError, Exception) as e:
+                                print(f"WARNING: Invalid geometry format for column '{key}'. Storing as None. Value: {val}. Error: {e}")
                                 set_clauses.append(f'"{key}" = %s')
                                 values.append(None)
                         else:
