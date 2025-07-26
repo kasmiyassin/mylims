@@ -1,5 +1,5 @@
 -- ======================================================================
--- Complete PostgreSQL Schema for LIMS Database (Final Version)
+-- Complete PostgreSQL Schema for LIMS Database
 -- ======================================================================
 
 -- ======================================================================
@@ -19,6 +19,18 @@ DROP EXTENSION IF EXISTS hstore;
 DROP EXTENSION IF EXISTS tablefunc;
 DROP EXTENSION IF EXISTS ltree;
 -- DROP EXTENSION IF NOT EXISTS postgis;
+
+DROP TABLE IF EXISTS "projects"."ProjectWanderfische_ChatMessage" CASCADE;
+DROP TABLE IF EXISTS "projects"."ProjectWanderfische_Conversation" CASCADE;
+DROP TABLE IF EXISTS "projects"."ProjectWanderfische_Mail" CASCADE;
+DROP TABLE IF EXISTS "projects"."ProjectWanderfische_FishCatch" CASCADE;
+DROP TABLE IF EXISTS "projects"."ProjectWanderfische_FishingData" CASCADE;
+
+DROP SEQUENCE IF EXISTS "projects"."ProjectWanderfische_FishingData_seq";
+DROP SEQUENCE IF EXISTS "projects"."ProjectWanderfische_FishCatch_seq";
+DROP SEQUENCE IF EXISTS "projects"."ProjectWanderfische_Mail_seq";
+DROP SEQUENCE IF EXISTS "projects"."ProjectWanderfische_Conversation_seq";
+DROP SEQUENCE IF EXISTS "projects"."ProjectWanderfische_ChatMessage_seq";
 
 -- ======================================================================
 -- 1. Extensions
@@ -41,6 +53,7 @@ CREATE SCHEMA IF NOT EXISTS "lims";
 CREATE SCHEMA IF NOT EXISTS "reference";
 CREATE SCHEMA IF NOT EXISTS "bioinformatics";
 CREATE SCHEMA IF NOT EXISTS "audit";
+CREATE SCHEMA IF NOT EXISTS "projects";
 
 -- ======================================================================
 -- 3. Audit Log Table
@@ -538,7 +551,7 @@ CREATE TABLE IF NOT EXISTS "lab"."master_samples" (
     "notes" text
 );
 
-CREATE TABLE "lab"."samples" (
+CREATE TABLE "lab"."parental_samples" (
     "sample_id" text NOT NULL,
     "external_name" text,
     "parent_sample_id" text,
@@ -560,6 +573,8 @@ CREATE TABLE "lab"."samples" (
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
+	"experiment_id" text,
+    "experiment_date" date,
     PRIMARY KEY ("sample_id", "sampling_date")
 ) PARTITION BY RANGE ("sampling_date");
 
@@ -571,6 +586,8 @@ CREATE TABLE IF NOT EXISTS "lab"."fishing" (
     "catch_kg" numeric,
     "catch_fish" numeric,
     "customer_id" integer,
+	"experiment_id" text,
+    "experiment_date" date,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -591,10 +608,12 @@ CREATE TABLE IF NOT EXISTS "lab"."storage_log" (
 );
 
 CREATE TABLE IF NOT EXISTS "lab"."fish" (
-    "sample_id" text NOT NULL, -- Make it NOT NULL as part of a composite PK
+    "sample_id" text NOT NULL,
     "parent_sample_id" text,
-    "sampling_id" text,
-    "sampling_date" date NOT NULL, -- Make this NOT NULL and part of the PK
+    -- Removed "experiment_id"
+    "sampling_id" text NOT NULL, -- New column for sampling_id, now part of the conceptual PK
+    "sampling_date" date NOT NULL, -- This is the new partitioning key
+    -- Removed "experiment_date" as it's replaced by "sampling_date" conceptually for partitioning
     "species_id" text NOT NULL,
     "total_length_mm" numeric,
     "fork_length_mm" numeric,
@@ -612,8 +631,11 @@ CREATE TABLE IF NOT EXISTS "lab"."fish" (
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
+	"experiment_id" text,
+    "experiment_date" date NOT NULL,
+    -- The primary key must include ALL partitioning columns, hence sampling_date is included.
     PRIMARY KEY ("sample_id", "sampling_date")
-	) PARTITION BY RANGE ("experiment_date"); -- Define it as a partitioned table
+) PARTITION BY RANGE ("sampling_date"); -- Partition by sampling_date
 
 ALTER TABLE "lab"."fish" ADD CONSTRAINT chk_fish_sex_enum CHECK ("sex" IN ('Male', 'Female', 'Undetermined', NULL));
 
@@ -716,7 +738,8 @@ CREATE TABLE IF NOT EXISTS "lab"."sediments" (
     "external_name" text,
     "notes" text,
     "attachment" bytea,
-    "attachment_link" text
+    "attachment_link" text,
+	PRIMARY KEY ("sample_id", "experiment_date")
 ) PARTITION BY RANGE ("experiment_date");
 
 CREATE TABLE IF NOT EXISTS "lab"."water" (
@@ -1007,6 +1030,8 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."reference_databases" (
     "notes" text,
     "url" text,
     "last_updated_date" date,
+	"experiment_id" text,
+    "experiment_date" date,
     "attachment" bytea,
     "attachment_link" text
 );
@@ -1016,6 +1041,8 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."analysis_pipelines" (
     "pipeline_name" text NOT NULL,
     "version" text NOT NULL,
     "repository_link" text,
+	"experiment_id" text,
+    "experiment_date" date,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -1032,6 +1059,8 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."analysis_runs" (
     "reference_db_id" text,
     "clustering_threshold" numeric,
     "final_output_path" text,
+	"experiment_id" text,
+    "experiment_date" date,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -1046,14 +1075,170 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."edna_assignments" (
     "taxon_id" text NOT NULL,
     "read_count" integer,
     "confidence" numeric,
+	"experiment_id" text,
+    "experiment_date" date,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
 );
 
 
+
+-- ======================================================================
+-- Schema Creation for 'projects'
+-- New Tables for Wanderfische Project
+-- ======================================================================
+
+-- Table for Universal Fishing Data
+-- This table is designed to consolidate various fishing data inputs from different agencies.
+-- It includes fields for standardized data, a JSONB column for original raw data,
+-- and geographical coordinates with projection handling.
+CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_FishingData" (
+    "fishing_record_id" text NOT NULL, -- Part of composite PK, unique per year
+    "agency_id" text NOT NULL, -- Link to lims.external_contacts for the agency
+    "project_id" text NOT NULL, -- Link to lims.projects for the Wanderfische project
+    "agency_record_id" text,    -- Original ID from the contributing agency
+    "record_date" date NOT NULL, -- Partitioning key, part of composite PK
+    "record_time" time,
+    "fishing_year" integer,
+
+    -- Temporal details for fishing operation
+    "fishing_start_time" time,
+    "fishing_end_time" time,
+
+    -- Location Information (Original and Standardized)
+    "original_easting" numeric,
+    "original_northing" numeric,
+    "original_latitude" numeric,
+    "original_longitude" numeric,
+    "original_srid" integer, -- SRID of the original coordinates (e.g., 25832 for UTM32N, 4326 for WGS84)
+    "geom_4326" geometry(Point, 4326), -- Standardized WGS84 point using PostGIS
+
+    "location_description" text, -- e.g., Messstellen_Bezeichnung, NAME_LAGE, Lagebeschreibung, Messstelle (kurz)
+    "water_body_name" text,      -- e.g., Gewässername, Gewässer
+    "water_body_code" text,      -- e.g., GWKZ, Wasserkörper Nr.
+    "water_body_type" text,      -- e.g., 'river', 'lake', 'estuary', 'sea'
+    "catchment_area" text,       -- e.g., 'Rhine', 'Elbe'
+    "district" text,             -- e.g., Landkreis, Bearbeitungsgebiet
+    "water_depth_m" numeric,     -- Depth at fishing location
+
+    -- Fishing Event Details
+    "fishing_method" text,       -- e.g., "watend/Boot", Art_Elektrobefischung, Methode
+    "gear_type" text,            -- e.g., E-Gerät
+    "fishing_length_m" numeric,  -- e.g., Abschnitts-länge, Befischungslaenge, Befischte Strecke [m]
+    "fishing_area_sqm" numeric,  -- e.g., Befischte Fläche [m²]
+    "average_width_m" numeric,   -- e.g., Breite, mittl. Breite in m
+    "total_catch_quantity_kg" numeric,
+    "total_catch_quantity_fish" integer,
+
+    -- Environmental Parameters (from sampling data, if available)
+    "temperature_c" numeric,
+    "salinity" numeric,
+    "salinity_unit_id" text,     -- FK to reference.units
+    "oxygen" numeric,
+    "oxygen_unit_id" text,       -- FK to reference.units
+    "ph" numeric,
+    "turbidity_ntu" numeric,
+    "weather_conditions" text,
+    "wind_speed" numeric,
+    "wind_unit_id" text,         -- FK to reference.units
+
+    "notes" text,
+    "attachment" bytea,
+    "attachment_link" text,
+
+    "original_data_jsonb" jsonb, -- To store the complete original row data from the agency
+
+    "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    "created_by" text,           -- Link to reference.personal
+    "last_modified_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    "last_modified_by" text,      -- Link to reference.personal
+
+    PRIMARY KEY ("fishing_record_id", "record_date") -- Composite Primary Key for partitioning
+) PARTITION BY RANGE ("record_date");
+
+-- Table for detailed fish catch information per fishing record
+-- This allows for multiple species to be recorded per fishing event.
+CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_FishCatch" (
+    "fish_catch_id" text PRIMARY KEY,
+    "fishing_record_id" text NOT NULL, -- FK to ProjectWanderfische_FishingData
+    "fishing_record_date" date NOT NULL, -- Added for composite FK
+    "taxon_id" text,                    -- FK to reference.taxon for standardized species
+    "scientific_name_raw" text,         -- Original scientific name from agency
+    "german_name_raw" text,             -- Original German name from agency
+    "total_count" integer,
+    "juvenile_count" integer,
+    "praeadult_count" integer,
+    "adult_count" integer,
+    "individual_length_mm" numeric,     -- Length of an individual fish
+    "individual_weight_g" numeric,      -- Weight of an individual fish
+    "sex" text CHECK ("sex" IN ('Male', 'Female', 'Undetermined', NULL)),
+    "maturity_stage" text,
+    "condition_factor" numeric,
+    "disease_info" text,
+    "origin_type" text CHECK ("origin_type" IN ('Wild', 'Hatchery', 'Unknown', NULL)),
+    "notes" text,
+    "attachment" bytea,
+    "attachment_link" text,
+    "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    "created_by" text,
+    "last_modified_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    "last_modified_by" text
+);
+
+-- Table for managing mail communications related to fishing records
+CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_Mail" (
+    "mail_id" text PRIMARY KEY,
+    "fishing_record_id" text,           -- Optional FK to ProjectWanderfische_FishingData
+    "fishing_record_date" date,         -- Added for composite FK
+    "sender_person_id" text,            -- FK to reference.personal (internal sender)
+    "recipient_contact_id" text,        -- FK to lims.external_contacts (external recipient)
+    "subject" text NOT NULL,
+    "body" text,
+    "sent_at" timestamptz NOT NULL,
+    "attachment" bytea,
+    "attachment_link" text,
+    "notes" text,
+    "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    "created_by" text,
+    "last_modified_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    "last_modified_by" text
+);
+
+-- Table for managing conversation threads related to fishing records
+CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_Conversation" (
+    "conversation_id" text PRIMARY KEY,
+    "fishing_record_id" text,           -- Optional FK to ProjectWanderfische_FishingData
+    "fishing_record_date" date,         -- Added for composite FK
+    "topic" text NOT NULL,
+    "started_at" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "last_updated_at" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "notes" text,
+    "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    "created_by" text,
+    "last_modified_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    "last_modified_by" text
+);
+
+-- Table for individual chat messages within a conversation thread
+CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_ChatMessage" (
+    "message_id" text PRIMARY KEY,
+    "conversation_id" text NOT NULL,    -- FK to ProjectWanderfische_Conversation
+    "sender_person_id" text,            -- FK to reference.personal (internal sender)
+    "sender_contact_id" text,           -- FK to lims.external_contacts (external sender)
+    "message_text" text NOT NULL,
+    "sent_at" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "attachment" bytea,
+    "attachment_link" text,
+    "notes" text,
+    "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    "created_by" text,
+    "last_modified_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    "last_modified_by" text
+);
+
 --  ====================================================
---
+--  00. Functions
 --  ========================================================
 
 -- Function to populate experiment_id and experiment_date for lab.fishing
@@ -1104,7 +1289,7 @@ BEGIN
         exp_id,
         exp_date
     FROM
-        "lab"."samples" s
+        "lab"."parental_samples" s
     JOIN
         "lab"."sampling" sa ON s.sampling_id = sa.sampling_id AND s.sampling_date = sa.sampling_date
     WHERE
@@ -1360,6 +1545,251 @@ CREATE SEQUENCE IF NOT EXISTS "bioinformatics"."pipeline_serial_seq" START 1;
 CREATE SEQUENCE IF NOT EXISTS "bioinformatics"."analysis_runs_serial_seq" START 1;
 CREATE SEQUENCE IF NOT EXISTS "bioinformatics"."edna_assignments_serial_seq" START 1;
 CREATE SEQUENCE IF NOT EXISTS "lab"."protocol_run_serial_seq" START 1;
+
+
+CREATE SEQUENCE IF NOT EXISTS "projects"."ProjectWanderfische_FishingData_seq" START 1;
+CREATE SEQUENCE IF NOT EXISTS "projects"."ProjectWanderfische_FishCatch_seq" START 1;
+CREATE SEQUENCE IF NOT EXISTS "projects"."ProjectWanderfische_Mail_seq" START 1;
+CREATE SEQUENCE IF NOT EXISTS "projects"."ProjectWanderfische_Conversation_seq" START 1;
+CREATE SEQUENCE IF NOT EXISTS "projects"."ProjectWanderfische_ChatMessage_seq" START 1;
+
+-- ======================================================================
+--Functions for ID Generation and Coordinate Transformation
+-- ======================================================================
+
+-- Function to generate IDs for ProjectWanderfische_FishingData
+CREATE OR REPLACE FUNCTION "projects".generate_ProjectWanderfische_FishingData_id()
+RETURNS TRIGGER AS $$
+DECLARE
+    current_year text;
+    next_serial integer;
+    id_prefix text;
+BEGIN
+    current_year := TO_CHAR(COALESCE(NEW.record_date, CURRENT_DATE), 'YY');
+    id_prefix := 'WF' || current_year || 'F'; -- WanderFische + Year + Fishing
+
+    SELECT COALESCE(MAX(SUBSTRING("fishing_record_id" FROM LENGTH(id_prefix) + 1)::INTEGER), 0)
+    INTO next_serial
+    FROM "projects"."ProjectWanderfische_FishingData"
+    WHERE "fishing_record_id" ILIKE id_prefix || '%';
+
+    NEW.fishing_record_id := id_prefix || LPAD((next_serial + 1)::TEXT, 5, '0');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to generate IDs for ProjectWanderfische_FishCatch
+CREATE OR REPLACE FUNCTION "projects".generate_ProjectWanderfische_FishCatch_id()
+RETURNS TRIGGER AS $$
+DECLARE
+    next_serial integer;
+    id_prefix text;
+BEGIN
+    -- Prefix with the parent fishing_record_id for better traceability
+    id_prefix := NEW.fishing_record_id || '_C'; -- Catch
+
+    SELECT COALESCE(MAX(SUBSTRING("fish_catch_id" FROM LENGTH(id_prefix) + 1)::INTEGER), 0)
+    INTO next_serial
+    FROM "projects"."ProjectWanderfische_FishCatch"
+    WHERE "fish_catch_id" ILIKE id_prefix || '%';
+
+    NEW.fish_catch_id := id_prefix || LPAD((next_serial + 1)::TEXT, 3, '0');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to generate IDs for ProjectWanderfische_Mail
+CREATE OR REPLACE FUNCTION "projects".generate_ProjectWanderfische_Mail_id()
+RETURNS TRIGGER AS $$
+DECLARE
+    current_year text;
+    next_serial integer;
+    id_prefix text;
+BEGIN
+    current_year := TO_CHAR(COALESCE(NEW.sent_at, CURRENT_TIMESTAMP), 'YY');
+    id_prefix := 'WF' || current_year || 'M'; -- WanderFische + Year + Mail
+
+    SELECT COALESCE(MAX(SUBSTRING("mail_id" FROM LENGTH(id_prefix) + 1)::INTEGER), 0)
+    INTO next_serial
+    FROM "projects"."ProjectWanderfische_Mail"
+    WHERE "mail_id" ILIKE id_prefix || '%';
+
+    NEW.mail_id := id_prefix || LPAD((next_serial + 1)::TEXT, 5, '0');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to generate IDs for ProjectWanderfische_Conversation
+CREATE OR REPLACE FUNCTION "projects".generate_ProjectWanderfische_Conversation_id()
+RETURNS TRIGGER AS $$
+DECLARE
+    current_year text;
+    next_serial integer;
+    id_prefix text;
+BEGIN
+    current_year := TO_CHAR(COALESCE(NEW.started_at, CURRENT_TIMESTAMP), 'YY');
+    id_prefix := 'WF' || current_year || 'CONV'; -- WanderFische + Year + Conversation
+
+    SELECT COALESCE(MAX(SUBSTRING("conversation_id" FROM LENGTH(id_prefix) + 1)::INTEGER), 0)
+    INTO next_serial
+    FROM "projects"."ProjectWanderfische_Conversation"
+    WHERE "conversation_id" ILIKE id_prefix || '%';
+
+    NEW.conversation_id := id_prefix || LPAD((next_serial + 1)::TEXT, 5, '0');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to generate IDs for ProjectWanderfische_ChatMessage
+CREATE OR REPLACE FUNCTION "projects".generate_ProjectWanderfische_ChatMessage_id()
+RETURNS TRIGGER AS $$
+DECLARE
+    next_serial integer;
+    id_prefix text;
+BEGIN
+    -- Prefix with the parent conversation_id
+    id_prefix := NEW.conversation_id || '_MSG'; -- Message
+
+    SELECT COALESCE(MAX(SUBSTRING("message_id" FROM LENGTH(id_prefix) + 1)::INTEGER), 0)
+    INTO next_serial
+    FROM "projects"."ProjectWanderfische_ChatMessage"
+    WHERE "message_id" ILIKE id_prefix || '%';
+
+    NEW.message_id := id_prefix || LPAD((next_serial + 1)::TEXT, 4, '0');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- Function to transform coordinates to EPSG:4326 (WGS84)
+-- This function will be called before inserting data into geom_4326
+CREATE OR REPLACE FUNCTION "projects".transform_coordinates_to_wgs84(
+    p_easting numeric,
+    p_northing numeric,
+    p_latitude numeric,
+    p_longitude numeric,
+    p_original_srid integer
+)
+RETURNS geometry(Point, 4326) AS $$
+DECLARE
+    transformed_geom geometry(Point, 4326);
+    temp_geom geometry; -- Use a temporary geometry to check before casting to Point, 4326
+BEGIN
+    IF p_original_srid IS NULL THEN
+        -- If no SRID is provided, assume WGS84 if lat/lon are given
+        IF p_latitude IS NOT NULL AND p_longitude IS NOT NULL THEN
+            temp_geom := ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326);
+        ELSIF p_easting IS NOT NULL AND p_northing IS NOT NULL THEN
+            -- If only easting/northing and no SRID, raise a warning and return NULL
+            RAISE WARNING 'Cannot transform coordinates: original_srid is NULL for Easting/Northing input. Returning NULL.';
+            RETURN NULL;
+        ELSE
+            RETURN NULL; -- No coordinates provided
+        END IF;
+    ELSIF p_original_srid = 4326 THEN
+        -- Already WGS84, just create the point
+        IF p_longitude IS NOT NULL AND p_latitude IS NOT NULL THEN
+            temp_geom := ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326);
+        ELSIF p_easting IS NOT NULL AND p_northing IS NOT NULL THEN
+            -- If 4326 is specified but coordinates are Easting/Northing, assume they are actually Lon/Lat for 4326
+            -- This is a common mistake, so we try to interpret them as Lon/Lat for 4326
+            temp_geom := ST_SetSRID(ST_MakePoint(p_easting, p_northing), 4326);
+        ELSE
+            RETURN NULL;
+        END IF;
+    ELSIF p_easting IS NOT NULL AND p_northing IS NOT NULL THEN
+        -- Transform from other SRID to 4326
+        BEGIN
+            temp_geom := ST_Transform(ST_SetSRID(ST_MakePoint(p_easting, p_northing), p_original_srid), 4326);
+        EXCEPTION
+            WHEN SQLSTATE 'XX000' THEN -- Catch "Undefined spatial reference system" or similar
+                RAISE WARNING 'SRID % is not defined or transformation failed for coordinates (%, %). Returning NULL.', p_original_srid, p_easting, p_northing;
+                RETURN NULL;
+        END;
+    ELSE
+        RAISE WARNING 'Incomplete coordinate data for transformation. Easting/Northing missing for SRID %.', p_original_srid;
+        RETURN NULL;
+    END IF;
+
+    -- **Wichtige neue Prüfung:** Koordinaten auf Infinity/NaN prüfen
+    IF temp_geom IS NOT NULL AND (
+        ST_X(temp_geom) IS NULL OR ST_X(temp_geom) = 'Infinity'::float8 OR ST_X(temp_geom) = '-Infinity'::float8 OR ST_X(temp_geom) = 'NaN'::float8 OR
+        ST_Y(temp_geom) IS NULL OR ST_Y(temp_geom) = 'Infinity'::float8 OR ST_Y(temp_geom) = '-Infinity'::float8 OR ST_Y(temp_geom) = 'NaN'::float8
+    ) THEN
+        RAISE WARNING 'Transformed geometry contains invalid (Infinity/NaN) coordinates. Returning NULL.';
+        RETURN NULL;
+    END IF;
+
+    -- Nur zu geometry(Point, 4326) umwandeln, wenn es ein gültiger Punkt ist
+    IF ST_GeometryType(temp_geom) = 'ST_Point' THEN
+        transformed_geom := temp_geom;
+    ELSE
+        RAISE WARNING 'Transformed geometry is not a POINT type. Returning NULL.';
+        RETURN NULL;
+    END IF;
+
+    RETURN transformed_geom;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- Trigger function to populate geom_4326 before insert/update on ProjectWanderfische_FishingData
+CREATE OR REPLACE FUNCTION "projects".populate_fishing_geom_4326()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.geom_4326 := "projects".transform_coordinates_to_wgs84(
+        NEW.original_easting,
+        NEW.original_northing,
+        NEW.original_latitude,
+        NEW.original_longitude,
+        NEW.original_srid
+    );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function for ProjectWanderfische_FishingData partitions
+CREATE OR REPLACE FUNCTION "projects".create_ProjectWanderfische_FishingData_partition_if_not_exists()
+RETURNS TRIGGER AS $$
+DECLARE
+    partition_date date;
+    partition_name text;
+    start_date date;
+    end_date date;
+BEGIN
+    partition_date := NEW.record_date;
+    IF partition_date IS NULL THEN
+        RAISE EXCEPTION 'Cannot partition on NULL record_date for projects.ProjectWanderfische_FishingData. Please provide a record_date.';
+    END IF;
+
+    start_date := DATE_TRUNC('year', partition_date);
+    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
+    partition_name := 'ProjectWanderfische_FishingData_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "projects".' || quote_ident(partition_name) || ' PARTITION OF "projects"."ProjectWanderfische_FishingData"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Manual partition creation function for ProjectWanderfische_FishingData
+CREATE OR REPLACE FUNCTION "projects".create_ProjectWanderfische_FishingData_partition_if_not_exists_manual(p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'ProjectWanderfische_FishingData_y' || p_year;
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "projects".' || quote_ident(partition_name) || ' PARTITION OF "projects"."ProjectWanderfische_FishingData"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
+
 
 -- ======================================================================
 -- 9. Functions
@@ -2218,7 +2648,7 @@ BEGIN
         target_sample_sampling_date := NEW.sampling_date;
     ELSE
         SELECT s.sampling_date INTO target_sample_sampling_date
-        FROM "lab"."samples" s
+        FROM "lab"."parental_samples" s
         WHERE s.sample_id = target_sample_id;
 
         IF target_sample_sampling_date IS NULL THEN
@@ -2228,7 +2658,7 @@ BEGIN
     END IF;
 
     IF target_sample_id IS NOT NULL AND target_sample_sampling_date IS NOT NULL THEN
-        UPDATE "lab"."samples"
+        UPDATE "lab"."parental_samples"
         SET "sample_status_id" = new_status
         WHERE "sample_id" = target_sample_id
           AND "sampling_date" = target_sample_sampling_date;
@@ -2429,9 +2859,9 @@ BEGIN
 
     start_date := DATE_TRUNC('year', partition_date);
     end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
-    partition_name := 'samples_y' || TO_CHAR(start_date, 'YYYY');
+    partition_name := 'parentalsamples_y' || TO_CHAR(start_date, 'YYYY');
 
-    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."samples"
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."parental_samples"
              FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
 
     RETURN NEW;
@@ -2447,9 +2877,9 @@ DECLARE
 BEGIN
     start_date := MAKE_DATE(p_year, 1, 1);
     end_date := MAKE_DATE(p_year + 1, 1, 1);
-    partition_name := 'samples_y' || p_year;
+    partition_name := 'parentalsamples_y' || p_year;
 
-    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."samples"
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."parental_samples"
              FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
 END;
 $$ LANGUAGE plpgsql;
@@ -3001,7 +3431,8 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- Function for lab.fish partitions
+
+-- Update the auto-partitioning function for fish to use sampling_date
 CREATE OR REPLACE FUNCTION "lab".create_fish_partition_if_not_exists()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -3010,14 +3441,14 @@ DECLARE
     start_date date;
     end_date date;
 BEGIN
-    partition_date := NEW.sampling_date;
+    partition_date := NEW.sampling_date; -- Changed to NEW.sampling_date
     IF partition_date IS NULL THEN
-        RAISE EXCEPTION 'Cannot partition on NULL experiment_date for lab.fish. Please provide an experiment_date.';
+        RAISE EXCEPTION 'Cannot partition on NULL sampling_date for lab.fish. Please provide a sampling_date.';
     END IF;
 
     start_date := DATE_TRUNC('year', partition_date);
     end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
-    partition_name := 'y' || TO_CHAR(start_date, 'YYYY');
+    partition_name := 'fish_y' || TO_CHAR(start_date, 'YYYY'); -- Consistent naming
 
     EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."fish"
              FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
@@ -3026,31 +3457,41 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Recreate triggers that were on lab.fish
+CREATE TRIGGER trg_generate_fish_child_sample_id
+BEFORE INSERT ON "lab"."fish"
+FOR EACH ROW
+EXECUTE FUNCTION "lab".generate_fish_child_sample_id();
 
--- Function for lab.fishing partitions
-CREATE OR REPLACE FUNCTION "lab".create_fishing_partition_if_not_exists()
-RETURNS TRIGGER AS $$
+CREATE TRIGGER trg_create_fish_partition
+BEFORE INSERT ON "lab"."fish"
+FOR EACH ROW
+EXECUTE FUNCTION "lab".create_fish_partition_if_not_exists();
+
+CREATE TRIGGER audit_trigger_fish
+AFTER INSERT OR UPDATE OR DELETE ON "lab"."fish"
+FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
+
+-- You'll also need to update the manual partition creation function for fish:
+-- In your "9. Functions" section, ensure this is updated:
+CREATE OR REPLACE FUNCTION "lab".create_fish_partition_if_not_exists_manual(p_year integer)
+RETURNS VOID AS $$
 DECLARE
-    partition_date date;
-    partition_name text;
     start_date date;
     end_date date;
+    partition_name text;
 BEGIN
-    partition_date := NEW.sampling_date;
-    IF partition_date IS NULL THEN
-        RAISE EXCEPTION 'Cannot partition on NULL experiment_date for lab.fishing. Please provide an experiment_date.';
-    END IF;
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'fish_y' || TO_CHAR(start_date, 'YYYY'); -- Consistent naming
 
-    start_date := DATE_TRUNC('year', partition_date);
-    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
-    partition_name := 'y' || TO_CHAR(start_date, 'YYYY');
-
-    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."fishing"
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."fish"
              FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
-
-    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+
+
 
 -- Function for lab.otoliths partitions
 CREATE OR REPLACE FUNCTION "lab".create_otoliths_partition_if_not_exists()
@@ -3230,15 +3671,13 @@ CREATE INDEX IF NOT EXISTS idx_sampling_customer_id ON "lims"."customers" ("cust
 CREATE INDEX IF NOT EXISTS idx_sampling_geom ON "lab"."sampling" USING GIST ("geom");
 CREATE INDEX IF NOT EXISTS idx_sampling_fishing_start_geom ON "lab"."sampling" USING GIST ("fishing_start_geom");
 CREATE INDEX IF NOT EXISTS idx_sampling_fishing_end_geom ON "lab"."sampling" USING GIST ("fishing_end_geom");
-CREATE INDEX IF NOT EXISTS idx_fishing_sampling_id ON "lab"."fishing" ("sampling_id");
+CREATE INDEX IF NOT EXISTS idx_fishing_sampling_id ON "lab"."fishing" ("sampling_id", "sampling_date");
 CREATE INDEX IF NOT EXISTS idx_fishing_taxon_id ON "lab"."fishing" ("taxon_id");
-CREATE INDEX IF NOT EXISTS idx_samples_parent_sample_id ON "lab"."samples" ("parent_sample_id");
-CREATE INDEX IF NOT EXISTS idx_samples_sample_type_id ON "lab"."samples" ("sample_type_id");
-CREATE INDEX IF NOT EXISTS idx_samples_project_id ON "lab"."samples" ("project_id");
-CREATE INDEX IF NOT EXISTS idx_samples_storage_position ON "lab"."samples" ("storage_position");
+CREATE INDEX IF NOT EXISTS idx_samples_parent_sample_id ON "lab"."parental_samples" ("parent_sample_id");
+CREATE INDEX IF NOT EXISTS idx_samples_sample_type_id ON "lab"."parental_samples" ("sample_type_id");
+CREATE INDEX IF NOT EXISTS idx_samples_project_id ON "lab"."parental_samples" ("project_id");
+CREATE INDEX IF NOT EXISTS idx_samples_storage_position ON "lab"."parental_samples" ("storage_position");
 CREATE INDEX IF NOT EXISTS idx_storage_log_sample_id ON "lab"."storage_log" ("sample_id");
-CREATE INDEX IF NOT EXISTS idx_fish_parent_sample_id ON "lab"."fish" ("parent_sample_id");
-CREATE INDEX IF NOT EXISTS idx_fish_species_id ON "lab"."fish" ("species_id");
 CREATE INDEX IF NOT EXISTS idx_tissue_parent_sample_id ON "lab"."tissue" ("parent_sample_id");
 CREATE INDEX IF NOT EXISTS idx_dna_parent_sample_id ON "lab"."dna" ("parent_sample_id");
 CREATE INDEX IF NOT EXISTS idx_rna_parent_sample_id ON "lab"."rna" ("parent_sample_id");
@@ -3258,6 +3697,9 @@ CREATE INDEX IF NOT EXISTS idx_sequencing_library_id ON "lab"."sequencing" ("lib
 CREATE INDEX IF NOT EXISTS idx_datasets_customer_id ON "lab"."datasets" ("customer_id");
 CREATE INDEX IF NOT EXISTS idx_datasets_ecosystem_id ON "lab"."datasets" ("ecosystem_id");
 CREATE INDEX IF NOT EXISTS idx_datasets_region_id ON "lab"."datasets" ("region_id");
+CREATE INDEX IF NOT EXISTS idx_fish_parent_sample_id ON "lab"."fish" ("parent_sample_id");
+CREATE INDEX IF NOT EXISTS idx_fish_species_id ON "lab"."fish" ("species_id");
+CREATE INDEX IF NOT EXISTS idx_fish_sampling_id ON "lab"."fish" ("sampling_id", "sampling_date"); -- Combined index for FK
 
 
 CREATE INDEX IF NOT EXISTS idx_analysis_runs_pipeline_id ON "bioinformatics"."analysis_runs" ("pipeline_id");
@@ -3271,6 +3713,93 @@ CREATE INDEX IF NOT EXISTS idx_reference_databases_db_name ON "bioinformatics"."
 CREATE INDEX IF NOT EXISTS idx_projects_active ON "lims"."projects" ("project_id") WHERE status_id = 'Active';
 
 CREATE INDEX IF NOT EXISTS idx_customers_lower_name ON "lims"."customers" (LOWER("customer_name"));
+
+
+-- Indexes for ProjectWanderfische_FishingData
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishingData_agency_id ON "projects"."ProjectWanderfische_FishingData" ("agency_id");
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishingData_project_id ON "projects"."ProjectWanderfische_FishingData" ("project_id");
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishingData_record_date ON "projects"."ProjectWanderfische_FishingData" ("record_date");
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishingData_location_description ON "projects"."ProjectWanderfische_FishingData" ("location_description");
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishingData_water_body_name ON "projects"."ProjectWanderfische_FishingData" ("water_body_name");
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishingData_geom_4326 ON "projects"."ProjectWanderfische_FishingData" USING GIST ("geom_4326");
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishingData_agency_record_id ON "projects"."ProjectWanderfische_FishingData" ("agency_record_id");
+
+-- Indexes for ProjectWanderfische_FishCatch
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishCatch_fishing_record_id ON "projects"."ProjectWanderfische_FishCatch" ("fishing_record_id", "fishing_record_date");
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishCatch_taxon_id ON "projects"."ProjectWanderfische_FishCatch" ("taxon_id");
+
+-- Indexes for ProjectWanderfische_Mail
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_Mail_fishing_record_id ON "projects"."ProjectWanderfische_Mail" ("fishing_record_id", "fishing_record_date");
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_Mail_sender_person_id ON "projects"."ProjectWanderfische_Mail" ("sender_person_id");
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_Mail_recipient_contact_id ON "projects"."ProjectWanderfische_Mail" ("recipient_contact_id");
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_Mail_sent_at ON "projects"."ProjectWanderfische_Mail" ("sent_at");
+
+-- Indexes for ProjectWanderfische_Conversation
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_Conversation_fishing_record_id ON "projects"."ProjectWanderfische_Conversation" ("fishing_record_id", "fishing_record_date");
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_Conversation_topic ON "projects"."ProjectWanderfische_Conversation" ("topic");
+
+-- Indexes for ProjectWanderfische_ChatMessage
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_ChatMessage_conversation_id ON "projects"."ProjectWanderfische_ChatMessage" ("conversation_id");
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_ChatMessage_sender_person_id ON "projects"."ProjectWanderfische_ChatMessage" ("sender_person_id");
+CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_ChatMessage_sent_at ON "projects"."ProjectWanderfische_ChatMessage" ("sent_at");
+
+
+-- ======================================================================
+-- 6. Triggers
+-- ======================================================================
+
+-- Audit triggers for new tables
+CREATE TRIGGER audit_trigger_ProjectWanderfische_FishingData
+AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_FishingData"
+FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
+
+CREATE TRIGGER audit_trigger_ProjectWanderfische_FishCatch
+AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_FishCatch"
+FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
+
+CREATE TRIGGER audit_trigger_ProjectWanderfische_Mail
+AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_Mail"
+FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
+
+CREATE TRIGGER audit_trigger_ProjectWanderfische_Conversation
+AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_Conversation"
+FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
+
+CREATE TRIGGER audit_trigger_ProjectWanderfische_ChatMessage
+AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_ChatMessage"
+FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
+
+-- ID generation triggers
+CREATE TRIGGER trg_generate_ProjectWanderfische_FishingData_id
+BEFORE INSERT ON "projects"."ProjectWanderfische_FishingData"
+FOR EACH ROW EXECUTE FUNCTION "projects".generate_ProjectWanderfische_FishingData_id();
+
+CREATE TRIGGER trg_generate_ProjectWanderfische_FishCatch_id
+BEFORE INSERT ON "projects"."ProjectWanderfische_FishCatch"
+FOR EACH ROW EXECUTE FUNCTION "projects".generate_ProjectWanderfische_FishCatch_id();
+
+CREATE TRIGGER trg_generate_ProjectWanderfische_Mail_id
+BEFORE INSERT ON "projects"."ProjectWanderfische_Mail"
+FOR EACH ROW EXECUTE FUNCTION "projects".generate_ProjectWanderfische_Mail_id();
+
+CREATE TRIGGER trg_generate_ProjectWanderfische_Conversation_id
+BEFORE INSERT ON "projects"."ProjectWanderfische_Conversation"
+FOR EACH ROW EXECUTE FUNCTION "projects".generate_ProjectWanderfische_Conversation_id();
+
+CREATE TRIGGER trg_generate_ProjectWanderfische_ChatMessage_id
+BEFORE INSERT ON "projects"."ProjectWanderfische_ChatMessage"
+FOR EACH ROW EXECUTE FUNCTION "projects".generate_ProjectWanderfische_ChatMessage_id();
+
+-- Coordinate transformation trigger
+CREATE TRIGGER trg_populate_fishing_geom_4326
+BEFORE INSERT OR UPDATE ON "projects"."ProjectWanderfische_FishingData"
+FOR EACH ROW EXECUTE FUNCTION "projects".populate_fishing_geom_4326();
+
+-- Partitioning trigger
+CREATE TRIGGER trg_create_ProjectWanderfische_FishingData_partition
+BEFORE INSERT ON "projects"."ProjectWanderfische_FishingData"
+FOR EACH ROW EXECUTE FUNCTION "projects".create_ProjectWanderfische_FishingData_partition_if_not_exists();
+
 
 
 -- ======================================================================
@@ -3376,21 +3905,16 @@ FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
 CREATE TRIGGER audit_trigger_sampling
 AFTER INSERT OR UPDATE OR DELETE ON "lab"."sampling"
 FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_fishing
-AFTER INSERT OR UPDATE OR DELETE ON "lab"."fishing"
-FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
 CREATE TRIGGER audit_trigger_master_samples
 AFTER INSERT OR UPDATE OR DELETE ON "lab"."master_samples"
 FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
 CREATE TRIGGER audit_trigger_samples
-AFTER INSERT OR UPDATE OR DELETE ON "lab"."samples"
+AFTER INSERT OR UPDATE OR DELETE ON "lab"."parental_samples"
 FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
 CREATE TRIGGER audit_trigger_storage_log
 AFTER INSERT OR UPDATE OR DELETE ON "lab"."storage_log"
 FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_fish
-AFTER INSERT OR UPDATE OR DELETE ON "lab"."fish"
-FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
+
 CREATE TRIGGER audit_trigger_tissue
 AFTER INSERT OR UPDATE OR DELETE ON "lab"."tissue"
 FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
@@ -3468,9 +3992,8 @@ CREATE TRIGGER trg_generate_publication_id BEFORE INSERT ON "lims"."publications
 CREATE TRIGGER trg_generate_sop_id BEFORE INSERT ON "lims"."sop" FOR EACH ROW EXECUTE FUNCTION "lims".generate_sop_id();
 CREATE TRIGGER trg_generate_workflow_step_id BEFORE INSERT ON "lims"."workflow_steps" FOR EACH ROW EXECUTE FUNCTION "lims".generate_workflow_step_id();
 CREATE TRIGGER trg_generate_sampling_id BEFORE INSERT ON "lab"."sampling" FOR EACH ROW EXECUTE FUNCTION "lab".generate_sampling_id();
-CREATE TRIGGER trg_generate_fishing_id BEFORE INSERT ON "lab"."fishing" FOR EACH ROW EXECUTE FUNCTION "lab".generate_fishing_id();
-CREATE TRIGGER trg_generate_sample_id BEFORE INSERT ON "lab"."samples" FOR EACH ROW EXECUTE FUNCTION "lab".generate_sample_id();
-CREATE TRIGGER trg_generate_fish_child_sample_id BEFORE INSERT ON "lab"."fish" FOR EACH ROW EXECUTE FUNCTION "lab".generate_fish_child_sample_id();
+CREATE TRIGGER trg_generate_sample_id BEFORE INSERT ON "lab"."parental_samples" FOR EACH ROW EXECUTE FUNCTION "lab".generate_sample_id();
+-- CREATE TRIGGER trg_generate_fish_child_sample_id BEFORE INSERT ON "lab"."fish" FOR EACH ROW EXECUTE FUNCTION "lab".generate_fish_child_sample_id();
 CREATE TRIGGER trg_generate_tissue_child_sample_id BEFORE INSERT ON "lab"."tissue" FOR EACH ROW EXECUTE FUNCTION "lab".generate_tissue_child_sample_id();
 CREATE TRIGGER trg_generate_dna_child_sample_id BEFORE INSERT ON "lab"."dna" FOR EACH ROW EXECUTE FUNCTION "lab".generate_dna_child_sample_id();
 CREATE TRIGGER trg_generate_rna_child_sample_id BEFORE INSERT ON "lab"."rna" FOR EACH ROW EXECUTE FUNCTION "lab".generate_rna_child_sample_id();
@@ -3506,7 +4029,7 @@ CREATE TRIGGER trg_update_status_sequencing AFTER INSERT ON "lab"."sequencing" F
 CREATE TRIGGER trg_update_status_bioinformatics AFTER INSERT ON "bioinformatics"."analysis_runs" FOR EACH ROW EXECUTE PROCEDURE "lab".update_sample_status('Bioinformatics Done');
 
 CREATE TRIGGER trg_validate_sample_sampling_date
-BEFORE INSERT OR UPDATE ON "lab"."samples"
+BEFORE INSERT OR UPDATE ON "lab"."parental_samples"
 FOR EACH ROW
 EXECUTE FUNCTION "lab".validate_sample_sampling_date();
 
@@ -3516,7 +4039,7 @@ FOR EACH ROW
 EXECUTE FUNCTION "lab".create_sampling_partition_if_not_exists();
 
 CREATE TRIGGER trg_create_samples_partition
-BEFORE INSERT ON "lab"."samples"
+BEFORE INSERT ON "lab"."parental_samples"
 FOR EACH ROW
 EXECUTE FUNCTION "lab".create_samples_partition_if_not_exists();
 
@@ -3586,25 +4109,49 @@ BEFORE INSERT ON "lab"."dna"
 FOR EACH ROW
 EXECUTE FUNCTION "lab".create_dna_partition_if_not_exists();
 
-CREATE TRIGGER trg_create_fish_partition
-BEFORE INSERT ON "lab"."fish"
-FOR EACH ROW
-EXECUTE FUNCTION "lab".create_fish_partition_if_not_exists();
+-- CREATE TRIGGER trg_create_fish_partition BEFORE INSERT ON "lab"."fish" FOR EACH ROW EXECUTE FUNCTION "lab".create_fish_partition_if_not_exists();
+-- Update the manual partition creation function for fishing
+
+CREATE OR REPLACE FUNCTION "lab".create_fishing_partition_if_not_exists_manual (p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'fishing_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."fishing"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
+
 
 CREATE TRIGGER trg_create_fishing_partition
 BEFORE INSERT ON "lab"."fishing"
-FOR EACH ROW
-EXECUTE FUNCTION "lab".create_fishing_partition_if_not_exists();
+FOR EACH ROW EXECUTE FUNCTION "lab".create_fishing_partition_if_not_exists();
+
+DO $$
+DECLARE -- Re-declare variables here
+    current_year_int INTEGER := EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER;
+    next_year_int INTEGER := current_year_int + 1;
+BEGIN
+    PERFORM "lab".create_fishing_partition_if_not_exists_manual(current_year_int);
+    PERFORM "lab".create_fishing_partition_if_not_exists_manual(next_year_int);
+END $$;
+
 
 CREATE TRIGGER trg_create_otoliths_partition
 BEFORE INSERT ON "lab"."otoliths"
 FOR EACH ROW
 EXECUTE FUNCTION "lab".create_otoliths_partition_if_not_exists();
 
-CREATE TRIGGER trg_create_rna_partition
-BEFORE INSERT ON "lab"."rna"
-FOR EACH ROW
-EXECUTE FUNCTION "lab".create_rna_partition_if_not_exists();
+-- CREATE TRIGGER trg_create_rna_partition
+-- BEFORE INSERT ON "lab"."rna"
+-- FOR EACH ROW
+-- EXECUTE FUNCTION "lab".create_rna_partition_if_not_exists();
 
 CREATE TRIGGER trg_create_sediments_partition
 BEFORE INSERT ON "lab"."sediments"
@@ -3690,9 +4237,9 @@ ALTER TABLE "lims"."customers" ADD COLUMN IF NOT EXISTS customer_search_vector T
 CREATE INDEX IF NOT EXISTS idx_customers_gin_search ON "lims"."customers" USING GIN (customer_search_vector);
 CREATE TRIGGER trg_update_customer_search BEFORE INSERT OR UPDATE ON "lims"."customers" FOR EACH ROW EXECUTE FUNCTION "lims".update_customer_search_vector_func();
 
-ALTER TABLE "lab"."samples" ADD COLUMN IF NOT EXISTS sample_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_samples_gin_search ON "lab"."samples" USING GIN (sample_search_vector);
-CREATE TRIGGER trg_update_sample_search BEFORE INSERT OR UPDATE ON "lab"."samples" FOR EACH ROW EXECUTE FUNCTION "lab".update_sample_search_vector_func();
+ALTER TABLE "lab"."parental_samples" ADD COLUMN IF NOT EXISTS sample_search_vector TSVECTOR;
+CREATE INDEX IF NOT EXISTS idx_samples_gin_search ON "lab"."parental_samples" USING GIN (sample_search_vector);
+CREATE TRIGGER trg_update_sample_search BEFORE INSERT OR UPDATE ON "lab"."parental_samples" FOR EACH ROW EXECUTE FUNCTION "lab".update_sample_search_vector_func();
 
 ALTER TABLE "lims"."sop" ADD COLUMN IF NOT EXISTS sop_search_vector TSVECTOR;
 CREATE INDEX IF NOT EXISTS idx_sop_gin_search ON "lims"."sop" USING GIN (sop_search_vector);
@@ -3723,7 +4270,7 @@ $$;
 --------------------------------------------------------------------------------
 
 DROP TRIGGER IF EXISTS trg_update_customer_search ON "lims"."customers";
-DROP TRIGGER IF EXISTS trg_update_sample_search ON "lab"."samples";
+DROP TRIGGER IF EXISTS trg_update_sample_search ON "lab"."parental_samples";
 DROP TRIGGER IF EXISTS trg_update_sop_search ON "lims"."sop";
 DROP TRIGGER IF EXISTS trg_update_experiment_search ON "lab"."experiments";
 DROP TRIGGER IF EXISTS trg_update_project_search ON "lims"."projects"; -- Added this based on the last suggested fix for projects
@@ -3794,9 +4341,9 @@ CREATE INDEX IF NOT EXISTS idx_customers_gin_search ON "lims"."customers" USING 
 -- Create the trigger AFTER dropping it and recreating its function
 CREATE TRIGGER trg_update_customer_search BEFORE INSERT OR UPDATE ON "lims"."customers" FOR EACH ROW EXECUTE FUNCTION "lims".update_customer_search_vector_func();
 
-ALTER TABLE "lab"."samples" ADD COLUMN IF NOT EXISTS sample_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_samples_gin_search ON "lab"."samples" USING GIN (sample_search_vector);
-CREATE TRIGGER trg_update_sample_search BEFORE INSERT OR UPDATE ON "lab"."samples" FOR EACH ROW EXECUTE FUNCTION "lab".update_sample_search_vector_func();
+ALTER TABLE "lab"."parental_samples" ADD COLUMN IF NOT EXISTS sample_search_vector TSVECTOR;
+CREATE INDEX IF NOT EXISTS idx_samples_gin_search ON "lab"."parental_samples" USING GIN (sample_search_vector);
+CREATE TRIGGER trg_update_sample_search BEFORE INSERT OR UPDATE ON "lab"."parental_samples" FOR EACH ROW EXECUTE FUNCTION "lab".update_sample_search_vector_func();
 
 ALTER TABLE "lims"."sop" ADD COLUMN IF NOT EXISTS sop_search_vector TSVECTOR;
 CREATE INDEX IF NOT EXISTS idx_sop_gin_search ON "lims"."sop" USING GIN (sop_search_vector);
@@ -3831,52 +4378,6 @@ FROM
 LEFT JOIN
     "reference"."species" s ON t.taxon_id = s.species_id;
 
-CREATE OR REPLACE VIEW "lab"."detailed_samples_view" AS
-SELECT
-    s.sample_id,
-    s.external_name,
-    s.parent_sample_id,
-    s.sampling_id,
-    s.sampling_date,
-    ST_X(samp.geom) AS sampling_lon,
-    ST_Y(samp.geom) AS sampling_lat,
-    samp.location_name AS sampling_location,
-    samp.depth_m AS sampling_depth_m,
-    s.storage_id,
-    st.freezer AS storage_freezer,
-    st.box AS storage_box,
-    s.storage_position,
-    s.sampler_person_id,
-    s.receiver_person_id,
-    s.reception_date,
-    s.transport,
-    s.conservation_buffer,
-    s.sample_type_id,
-    stype.sample_type_abrv,
-    s.sample_status_id,
-    s.workflow_id,
-    s.step_id,
-    s.project_id,
-    p.title AS project_title,
-    s.customer_id,
-    c.customer_name,
-    c.customer_abrv,
-    s.notes,
-    s.attachment,
-    s.attachment_link
-FROM
-    "lab"."samples" s
-LEFT JOIN
-    "lab"."sampling" samp ON s.sampling_id = samp.sampling_id AND s.sampling_date = samp.sampling_date
-LEFT JOIN
-    "lab"."storage" st ON s.storage_id = st.storage_id
-LEFT JOIN
-    "lims"."projects" p ON s.project_id = p.project_id
-LEFT JOIN
-    "lims"."customers" c ON s.customer_id = c.customer_id
-LEFT JOIN
-    "reference"."samples_type" stype ON s.sample_type_id = stype.sample_type_id;
-
 CREATE OR REPLACE VIEW "lims"."project_overview_view" AS
 SELECT
     p.project_id,
@@ -3910,7 +4411,7 @@ SELECT
     ws.step_number,
     ws.workflow_status_id AS step_status
 FROM
-    "lab"."samples" s
+    "lab"."parental_samples" s
 LEFT JOIN
     "lims"."workflow_steps" ws ON s.workflow_id = ws.workflow_id AND s.step_id = ws.step_id;
 
@@ -3936,7 +4437,7 @@ FROM
 LEFT JOIN
     "reference"."room" r ON st.room_id = r.room_id
 LEFT JOIN
-    "lab"."samples" s ON st.storage_id = s.storage_id;
+    "lab"."parental_samples" s ON st.storage_id = s.storage_id;
 
 CREATE OR REPLACE VIEW "lab"."experiment_summary_view" AS
 SELECT
@@ -3997,7 +4498,7 @@ JOIN
 JOIN
     "lab"."sequencing" seq ON ar.sequencing_id = seq.sequencing_id
 JOIN
-    "lab"."samples" s ON seq.sample_id = s.sample_id
+    "lab"."parental_samples" s ON seq.sample_id = s.sample_id
 LEFT JOIN
     "reference"."personal" ref_p ON ar.person_id = ref_p.person_id
 LEFT JOIN
@@ -4046,7 +4547,7 @@ FROM
     "bioinformatics"."edna_assignments" ea
 JOIN "bioinformatics"."analysis_runs" ar ON ea.run_id = ar.run_id
 JOIN "bioinformatics"."analysis_pipelines" ap ON ar.pipeline_id = ap.pipeline_id
-JOIN "lab"."samples" s ON ea.sample_id = s.sample_id
+JOIN "lab"."parental_samples" s ON ea.sample_id = s.sample_id
 JOIN "lab"."sampling" samp ON s.sampling_id = samp.sampling_id AND s.sampling_date = samp.sampling_date
 JOIN "lims"."projects" p ON s.project_id = p.project_id
 JOIN "reference"."taxon" t ON ea.taxon_id = t.taxon_id
@@ -4058,7 +4559,7 @@ WITH box_counts AS (
     SELECT
         storage_id,
         COUNT(sample_id) AS stored_samples
-    FROM "lab"."samples"
+    FROM "lab"."parental_samples"
     WHERE storage_id IS NOT NULL
     GROUP BY storage_id
 )
@@ -4093,7 +4594,7 @@ SELECT
 FROM "lims"."projects" p
 LEFT JOIN "reference"."status" stat ON p.status_id = stat.status_id
 LEFT JOIN "lab"."experiments_projects" ep ON p.project_id = ep.project_id
-LEFT JOIN "lab"."samples" s ON p.project_id = s.project_id
+LEFT JOIN "lab"."parental_samples" s ON p.project_id = s.project_id
 LEFT JOIN "lims"."orders" o ON p.project_id = o.project_id
 GROUP BY
     p.project_id, p.title, stat.notes, p.funder, p.start_date, p.end_date
@@ -4285,7 +4786,7 @@ SELECT
     s.reception_date
 
 
-FROM "lab"."samples" s
+FROM "lab"."parental_samples" s
 LEFT JOIN "reference"."status" stat ON s.sample_status_id = stat.status_id
 LEFT JOIN "reference"."samples_type" stype ON s.sample_type_id = stype.sample_type_id
 LEFT JOIN "lims"."projects" p ON s.project_id = p.project_id
@@ -4384,7 +4885,7 @@ SELECT
     sample_type_id,
     COUNT(sample_id) AS total_samples_received
 FROM
-    "lab"."samples"
+    "lab"."parental_samples"
 WHERE
     reception_date IS NOT NULL
 GROUP BY
@@ -4394,6 +4895,1397 @@ ORDER BY
 WITH DATA;
 
 
+-- =========================================
+CREATE OR REPLACE VIEW "lab"."detailed_samples_view" AS
+SELECT
+    s.sample_id,
+    s.external_name,
+    s.parent_sample_id,
+    'Primary Sample' AS sample_origin_type, -- Identifies the source of this row
+    s.sample_type_id,
+    stype.sample_type_abrv,
+    s.sample_status_id,
+    stat.notes AS sample_status_notes,
+    s.sampling_id,
+    s.sampling_date,
+    s.reception_date,
+    s.project_id,
+    p.title AS project_title,
+    s.customer_id,
+    c.customer_name,
+    s.storage_id,
+    s.storage_position,
+    s.notes,
+    s.attachment,
+    s.attachment_link,
+
+    -- Sampling Event Details (from lab.sampling)
+    ST_X(samp.geom) AS sampling_lon,
+    ST_Y(samp.geom) AS sampling_lat,
+    ST_X(samp.fishing_start_geom) AS fishing_start_lon,
+    ST_Y(samp.fishing_start_geom) AS fishing_start_lat,
+    ST_X(samp.fishing_end_geom) AS fishing_end_lon,
+    ST_Y(samp.fishing_end_geom) AS fishing_end_lat,
+    samp.location_name AS sampling_location,
+    samp.depth_m AS sampling_depth_m,
+    samp.temperature_atmospheric_c,
+    samp.weather,
+    samp.wind_speed,
+    wu.unit_abbreviation AS wind_unit,
+    samp.salinity,
+    su.unit_abbreviation AS salinity_unit,
+    samp.oxygen,
+    ou.unit_abbreviation AS oxygen_unit,
+
+    -- Fish-specific Details (NULL placeholders for non-fish primary samples)
+    NULL::text AS fish_species_id,
+    NULL::text AS fish_species_en_name,
+    NULL::numeric AS fish_total_length_mm,
+    NULL::numeric AS fish_fork_length_mm,
+    NULL::numeric AS fish_standard_length_mm,
+    NULL::numeric AS fish_weight_g,
+    NULL::text AS fish_sex,
+    NULL::text AS fish_maturity_stage,
+    NULL::text AS fish_stomach_contents,
+    NULL::text AS fish_disease_info,
+    NULL::text AS fish_tag_id,
+
+    -- Tissue-specific Details (NULL placeholders)
+    NULL::numeric AS tissue_weight_mg,
+    NULL::text AS tissue_type,
+    NULL::text AS tissue_preservation_method,
+
+    -- DNA-specific Details (NULL placeholders)
+    NULL::numeric AS dna_volume_ul,
+    NULL::numeric AS dna_concentration_ng_ul,
+    NULL::numeric AS dna_a260_280,
+    NULL::numeric AS dna_a260_230,
+    NULL::text AS dna_extraction_method,
+    NULL::date AS dna_extraction_date_dna,
+    NULL::integer AS dna_extraction_number,
+
+    -- RNA-specific Details (NULL placeholders)
+    NULL::numeric AS rna_volume_ul,
+    NULL::numeric AS rna_concentration_ng_ul,
+    NULL::numeric AS rna_a260_280,
+    NULL::numeric AS rna_a260_230,
+    NULL::text AS rna_extraction_method,
+    NULL::date AS rna_extraction_date_rna,
+    NULL::integer AS rna_extraction_number,
+
+    -- Sediments-specific Details (NULL placeholders)
+    NULL::numeric AS sediment_volume,
+    NULL::text AS sediment_volume_unit,
+    NULL::numeric AS sediment_depth_m,
+    NULL::text AS sediment_sampling_method,
+    NULL::text AS sediment_conservation_buffer,
+
+    -- Water-specific Details (NULL placeholders)
+    NULL::numeric AS water_volume_l,
+    NULL::text AS water_filter,
+    NULL::numeric AS water_filter_pore_size_um,
+    NULL::numeric AS water_depth_m,
+    NULL::text AS water_sampling_method,
+    NULL::text AS water_conservation_buffer,
+
+    -- Otoliths-specific Details (NULL placeholders)
+    NULL::text AS otolith_id,
+    NULL::text AS otolith_reader_person_id,
+    NULL::text AS otolith_side,
+    NULL::numeric AS otolith_age_reading_years,
+    NULL::numeric AS otolith_confidence,
+
+    -- Dissections Details (NULL placeholders)
+    NULL::text AS dissection_id,
+    NULL::text AS dissection_person_id,
+    NULL::date AS dissection_date,
+    NULL::jsonb AS dissection_stomach_contents_jsonb,
+    NULL::numeric AS dissection_gonad_weight_g,
+    NULL::numeric AS dissection_liver_weight_g,
+
+    -- Extraction Details (NULL placeholders)
+    NULL::text AS extraction_id,
+    NULL::date AS extraction_process_date,
+    NULL::text AS extraction_process_person_id,
+    NULL::text AS extraction_process_kit,
+    NULL::numeric AS extraction_process_elution_volume_ul,
+    NULL::numeric AS extraction_process_yield_qubit_ng_ul,
+    NULL::numeric AS extraction_process_yield_nanodrop_ng_ul,
+    NULL::numeric AS extraction_process_a260_280,
+    NULL::numeric AS extraction_process_a260_230,
+    NULL::text AS extraction_result_dna_sample_id,
+    NULL::text AS extraction_result_rna_sample_id,
+    NULL::text AS extraction_blank_id,
+
+    -- Nanodrop QC Details (NULL placeholders)
+    NULL::text AS nanodrop_id,
+    NULL::numeric AS nanodrop_concentration,
+    NULL::text AS nanodrop_concentration_unit,
+    NULL::numeric AS nanodrop_a260,
+    NULL::numeric AS nanodrop_a260_280_qc,
+    NULL::numeric AS nanodrop_a260_230_qc,
+    NULL::numeric AS nanodrop_total_dna_ug,
+    NULL::date AS nanodrop_measurement_date,
+    NULL::text AS nanodrop_a260_280_note,
+    NULL::text AS nanodrop_a260_230_note,
+
+    -- Qubit QC Details (NULL placeholders)
+    NULL::text AS qubit_id,
+    NULL::numeric AS qubit_original_sample_conc,
+    NULL::text AS qubit_original_sample_unit,
+    NULL::numeric AS qubit_total_dna_ug,
+    NULL::date AS qubit_measurement_date,
+    NULL::text AS qubit_assay_kit,
+    NULL::numeric AS qubit_tube_conc,
+    NULL::text AS tube_unit_id,
+    NULL::numeric AS sample_volume_ul,
+    NULL::numeric AS elution_volume_ul,
+
+    -- Tapestation QC Details (NULL placeholders)
+    NULL::text AS tapestation_id,
+    NULL::date AS tapestation_measurement_date,
+    NULL::text AS tapestation_kit,
+
+    -- PCR Details (NULL placeholders)
+    NULL::text AS pcr_id,
+    NULL::date AS pcr_date,
+    NULL::text AS pcr_primer_id,
+    NULL::text AS pcr_target_gene_id,
+    NULL::numeric AS pcr_volume_reaction_ul,
+    NULL::text AS pcr_blank_id,
+    NULL::text AS pcr_position,
+
+    -- Gel Electrophoresis Details (NULL placeholders)
+    NULL::text AS gel_gelelectrophoresis_id,
+    NULL::date AS gel_run_date,
+    NULL::integer AS gel_band_size_bp,
+    NULL::text AS gel_gel_type,
+    NULL::text AS gel_position,
+    NULL::text AS gel_ladder,
+    NULL::numeric AS gel_voltage,
+    NULL::numeric AS gel_run_time_minutes,
+
+    -- qPCR Details (NULL placeholders)
+    NULL::text AS qpcr_id,
+    NULL::date AS qpcr_date,
+    NULL::numeric AS qpcr_ct_value,
+    NULL::text AS qpcr_inhibitor_test_result,
+    NULL::text AS qpcr_position,
+    NULL::text AS qpcr_primer_id_actual,
+    NULL::text AS qpcr_pcr_blank_id,
+    NULL::text AS qpcr_kit,
+    NULL::numeric AS qpcr_volume_ul,
+
+    -- Library Prep Details (NULL placeholders)
+    NULL::text AS library_id,
+    NULL::date AS library_prep_date,
+    NULL::text AS library_name,
+    NULL::text AS library_prep_kit,
+    NULL::text AS library_index_sequence,
+    NULL::integer AS library_read_length_bp,
+
+    -- Sequencing Details (NULL placeholders)
+    NULL::text AS sequencing_id,
+    NULL::date AS sequencing_date,
+    NULL::text AS sequencer,
+    NULL::text AS flow_cell_id,
+    NULL::bigint AS total_reads,
+    NULL::text AS raw_data_path,
+    NULL::text AS genbank_accession_number,
+    NULL::text AS sequencing_library_prep_kit,
+    NULL::text AS sequencing_index_sequence,
+    NULL::integer AS sequencing_read_length_bp,
+
+    -- Bioinformatics Analysis Details (NULL placeholders)
+    NULL::text AS analysis_run_id,
+    NULL::text AS pipeline_name,
+    NULL::text AS pipeline_version,
+    NULL::text AS bioinfo_reference_database,
+    NULL::text AS bioinfo_database_version,
+    NULL::numeric AS clustering_threshold,
+    NULL::text AS final_output_path,
+
+    -- eDNA Assignment Details (NULL placeholders)
+    NULL::text AS edna_assignment_id,
+    NULL::text AS edna_assigned_taxon_id,
+    NULL::text AS edna_assigned_taxon_name,
+    NULL::integer AS edna_read_count,
+    NULL::numeric AS edna_confidence,
+
+    -- Experiment Details (NULL placeholders for direct experiment link)
+    e.experiment_id AS associated_experiment_id,
+    e.experiment_title AS associated_experiment_title,
+    e.experiment_date AS associated_experiment_date,
+    e.aim AS associated_experiment_aim,
+    e.method AS associated_experiment_method,
+    exp_person.full_name AS experiment_person_name,
+
+    -- Person information (NULL placeholders for specific sections)
+    sampler_p.full_name AS sampler_full_name,
+    receiver_p.full_name AS receiver_full_name
+
+FROM
+    "lab"."parental_samples" s
+LEFT JOIN "reference"."status" stat ON s.sample_status_id = stat.status_id
+LEFT JOIN "reference"."samples_type" stype ON s.sample_type_id = stype.sample_type_id
+LEFT JOIN "lims"."projects" p ON s.project_id = p.project_id
+LEFT JOIN "lims"."customers" c ON s.customer_id = c.customer_id
+LEFT JOIN "lab"."storage" stor ON s.storage_id = stor.storage_id
+LEFT JOIN "reference"."room" r ON stor.room_id = r.room_id
+LEFT JOIN "lab"."sampling" samp ON s.sampling_id = samp.sampling_id AND s.sampling_date = samp.sampling_date
+LEFT JOIN "reference"."units" wu ON samp.wind_unit_id = wu.unit_id
+LEFT JOIN "reference"."units" su ON samp.salinity_unit_id = su.unit_id
+LEFT JOIN "reference"."units" ou ON samp.oxygen_unit_id = ou.unit_id
+LEFT JOIN "reference"."personal" sampler_p ON s.sampler_person_id = sampler_p.person_id
+LEFT JOIN "reference"."personal" receiver_p ON s.receiver_person_id = receiver_p.person_id
+LEFT JOIN "lab"."experiments_samples" es ON s.sample_id = es.sample_id AND s.sampling_date = es.experiment_date
+LEFT JOIN "lab"."experiments" e ON es.experiment_id = e.experiment_id AND es.experiment_date = e.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON e.person_id = exp_person.person_id
+
+UNION ALL
+select
+    f.sample_id,
+    NULL AS external_name,
+    f.parent_sample_id,
+    'Derived Fish Sample' AS sample_origin_type,
+    'Fish' AS sample_type_id,
+    'F' AS sample_type_abrv,
+    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS sample_status_id, -- Default status
+    (SELECT notes FROM "reference"."status" WHERE status_id = 'Received') AS sample_status_notes,
+    f.sampling_id,
+    f.sampling_date,
+    NULL AS reception_date,
+    f.project_id,
+    p.title AS project_title,
+    f.customer_id,
+    c.customer_name,
+    f.storage_id,
+    f.storage_position,
+    f.notes,
+    f.attachment,
+    f.attachment_link,
+
+    -- Sampling Event Details (linked via sampling_id from fish)
+    ST_X(samp.geom) AS sampling_lon,
+    ST_Y(samp.geom) AS sampling_lat,
+    ST_X(samp.fishing_start_geom) AS fishing_start_lon,
+    ST_Y(samp.fishing_start_geom) AS fishing_start_lat,
+    ST_X(samp.fishing_end_geom) AS fishing_end_lon,
+    ST_Y(samp.fishing_end_geom) AS fishing_end_lat,
+    samp.location_name AS sampling_location,
+    samp.depth_m AS sampling_depth_m,
+    samp.temperature_atmospheric_c,
+    samp.weather,
+    samp.wind_speed,
+    wu.unit_abbreviation AS wind_unit,
+    samp.salinity,
+    su.unit_abbreviation AS salinity_unit,
+    samp.oxygen,
+    ou.unit_abbreviation AS oxygen_unit,
+
+    -- Fish-specific Details
+    f.species_id,
+    taxon_sp.en_name AS fish_species_en_name,
+    f.total_length_mm,
+    f.fork_length_mm,
+    f.standard_length_mm,
+    f.weight_g,
+    f.sex,
+    f.maturity_stage,
+    f.stomach_contents,
+    f.disease_info,
+    f.tag_id,
+
+    -- All other specific details are NULL
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, NULL::text AS tissue_preservation_method,
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::numeric AS dna_a260_280, NULL::numeric AS dna_a260_230, NULL::text AS dna_extraction_method, NULL::date AS dna_extraction_date_dna, NULL::integer AS dna_extraction_number,
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::numeric AS rna_a260_280, NULL::numeric AS rna_a260_230, NULL::text AS rna_extraction_method, NULL::date AS rna_extraction_date_rna, NULL::integer AS rna_extraction_number,
+    NULL::numeric AS sediment_volume, NULL::text AS sediment_volume_unit, NULL::numeric AS sediment_depth_m, NULL::text AS sediment_sampling_method, NULL::text AS sediment_conservation_buffer,
+    NULL::numeric AS water_volume_l, NULL::text AS water_filter, NULL::numeric AS water_filter_pore_size_um, NULL::numeric AS water_depth_m, NULL::text AS water_sampling_method, NULL::text AS water_conservation_buffer,
+    NULL::text AS otolith_id, NULL::text AS otolith_reader_person_id, NULL::text AS otolith_side, NULL::numeric AS otolith_age_reading_years, NULL::numeric AS otolith_confidence,
+    NULL::text AS dissection_id, NULL::text AS dissection_person_id, NULL::date AS dissection_date, NULL::jsonb AS dissection_stomach_contents_jsonb, NULL::numeric AS dissection_gonad_weight_g, NULL::numeric AS dissection_liver_weight_g,
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::text AS extraction_process_person_id, NULL::text AS extraction_process_kit, NULL::numeric AS extraction_process_elution_volume_ul, NULL::numeric AS extraction_process_yield_qubit_ng_ul, NULL::numeric AS extraction_process_yield_nanodrop_ng_ul, NULL::numeric AS extraction_process_a260_280, NULL::numeric AS extraction_process_a260_230, NULL::text AS extraction_result_dna_sample_id, NULL::text AS extraction_result_rna_sample_id,
+    NULL::text AS extraction_blank_id,
+    NULL::text AS nanodrop_id, NULL::numeric AS nanodrop_concentration, NULL::text AS nanodrop_concentration_unit, NULL::numeric AS nanodrop_a260, NULL::numeric AS nanodrop_a260_280_qc, NULL::numeric AS nanodrop_a260_230_qc, NULL::numeric AS nanodrop_total_dna_ug, NULL::date AS nanodrop_measurement_date, NULL::text AS nanodrop_a260_280_note, NULL::text AS nanodrop_a260_230_note,
+    NULL::text AS qubit_id, NULL::numeric AS qubit_original_sample_conc, NULL::text AS qubit_original_sample_unit, NULL::numeric AS qubit_total_dna_ug, NULL::date AS qubit_measurement_date, NULL::text AS qubit_assay_kit, NULL::numeric AS qubit_tube_conc, NULL::text AS tube_unit_id, NULL::numeric AS sample_volume_ul, NULL::numeric AS elution_volume_ul,
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, NULL::text AS tapestation_kit,
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, NULL::text AS pcr_target_gene_id, NULL::numeric AS pcr_volume_reaction_ul, NULL::text AS pcr_blank_id, NULL::text AS pcr_position,
+    NULL::text AS gel_gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, NULL::text AS gel_gel_type, NULL::text AS gel_position, NULL::text AS gel_ladder, NULL::numeric AS gel_voltage, NULL::numeric AS gel_run_time_minutes,
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, NULL::text AS qpcr_inhibitor_test_result, NULL::text AS qpcr_position, NULL::text AS qpcr_primer_id_actual, NULL::text AS qpcr_pcr_blank_id, NULL::text AS qpcr_kit, NULL::numeric AS qpcr_volume_ul,
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, NULL::text AS library_prep_kit, NULL::text AS library_index_sequence, NULL::integer AS library_read_length_bp,
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::text AS sequencer, NULL::text AS flow_cell_id, NULL::bigint AS total_reads, NULL::text AS raw_data_path, NULL::text AS genbank_accession_number, NULL::text AS sequencing_library_prep_kit, NULL::text AS sequencing_index_sequence, NULL::integer AS sequencing_read_length_bp,
+    NULL::text AS analysis_run_id, NULL::text AS pipeline_name, NULL::text AS pipeline_version, NULL::text AS bioinfo_reference_database, NULL::text AS bioinfo_database_version, NULL::numeric AS clustering_threshold, NULL::text AS final_output_path,
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, NULL::numeric AS edna_confidence,
+    e.experiment_id AS associated_experiment_id, e.experiment_title AS associated_experiment_title, e.experiment_date AS associated_experiment_date, e.aim AS associated_experiment_aim, e.method AS associated_experiment_method, exp_person.full_name AS experiment_person_name,
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+
+FROM
+    "lab"."fish" f
+LEFT JOIN "lims"."projects" p ON f.project_id = p.project_id
+LEFT JOIN "lims"."customers" c ON f.customer_id = c.customer_id
+LEFT JOIN "lab"."sampling" samp ON f.sampling_id = samp.sampling_id AND f.sampling_date = samp.sampling_date
+LEFT JOIN "reference"."units" wu ON samp.wind_unit_id = wu.unit_id
+LEFT JOIN "reference"."units" su ON samp.salinity_unit_id = su.unit_id
+LEFT JOIN "reference"."units" ou ON samp.oxygen_unit_id = ou.unit_id
+LEFT JOIN "reference"."taxon" taxon_sp ON f.species_id = taxon_sp.taxon_id
+LEFT JOIN "lab"."experiments_samples" es ON f.sample_id = es.sample_id AND f.sampling_date = es.experiment_date
+LEFT JOIN "lab"."experiments" e ON es.experiment_id = e.experiment_id AND es.experiment_date = e.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON e.person_id = exp_person.person_id
+
+UNION ALL
+
+SELECT
+    t.sample_id,
+    NULL AS external_name,
+    t.parent_sample_id,
+    'Derived Tissue Sample' AS sample_origin_type,
+    'Tissue' AS sample_type_id,
+    'T' AS sample_type_abrv,
+    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS sample_status_id,
+    (SELECT notes FROM "reference"."status" WHERE status_id = 'Received') AS sample_status_notes,
+    NULL::text AS sampling_id,
+    t.experiment_date AS sampling_date,
+    NULL AS reception_date,
+    t.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    t.storage_id,
+    t.storage_position,
+    t.notes,
+    t.attachment,
+    t.attachment_link,
+
+    -- Sampling Event Details (NULL for derived tissue, might come from parent)
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+
+    -- Fish-specific Details (NULL)
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, NULL::numeric AS fish_fork_length_mm, NULL::numeric AS fish_standard_length_mm, NULL::numeric AS fish_weight_g, NULL::text AS fish_sex, NULL::text AS fish_maturity_stage, NULL::text AS fish_stomach_contents, NULL::text AS fish_disease_info, NULL::text AS fish_tag_id,
+
+    -- Tissue-specific Details
+    t.weight_mg,
+    t.tissue_type,
+    t.preservation_method,
+
+    -- All other specific details are NULL
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::numeric AS dna_a260_280, NULL::numeric AS dna_a260_230, NULL::text AS dna_extraction_method, NULL::date AS dna_extraction_date_dna, NULL::integer AS dna_extraction_number,
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::numeric AS rna_a260_280, NULL::numeric AS rna_a260_230, NULL::text AS rna_extraction_method, NULL::date AS rna_extraction_date_rna, NULL::integer AS rna_extraction_number,
+    NULL::numeric AS sediment_volume, NULL::text AS sediment_volume_unit, NULL::numeric AS sediment_depth_m, NULL::text AS sediment_sampling_method, NULL::text AS sediment_conservation_buffer,
+    NULL::numeric AS water_volume_l, NULL::text AS water_filter, NULL::numeric AS water_filter_pore_size_um, NULL::numeric AS water_depth_m, NULL::text AS water_sampling_method, NULL::text AS water_conservation_buffer,
+    NULL::text AS otolith_id, NULL::text AS otolith_reader_person_id, NULL::text AS otolith_side, NULL::numeric AS otolith_age_reading_years, NULL::numeric AS otolith_confidence,
+    NULL::text AS dissection_id, NULL::text AS dissection_person_id, NULL::date AS dissection_date, NULL::jsonb AS dissection_stomach_contents_jsonb, NULL::numeric AS dissection_gonad_weight_g, NULL::numeric AS dissection_liver_weight_g,
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::text AS extraction_process_person_id, NULL::text AS extraction_process_kit, NULL::numeric AS extraction_process_elution_volume_ul, NULL::numeric AS extraction_process_yield_qubit_ng_ul, NULL::numeric AS extraction_process_yield_nanodrop_ng_ul, NULL::numeric AS extraction_process_a260_280, NULL::numeric AS extraction_process_a260_230, NULL::text AS extraction_result_dna_sample_id, NULL::text AS extraction_result_rna_sample_id,
+    NULL::text AS extraction_blank_id,
+    NULL::text AS nanodrop_id, NULL::numeric AS nanodrop_concentration, NULL::text AS nanodrop_concentration_unit, NULL::numeric AS nanodrop_a260, NULL::numeric AS nanodrop_a260_280_qc, NULL::numeric AS nanodrop_a260_230_qc, NULL::numeric AS nanodrop_total_dna_ug, NULL::date AS nanodrop_measurement_date, NULL::text AS nanodrop_a260_280_note, NULL::text AS nanodrop_a260_230_note,
+    NULL::text AS qubit_id, NULL::numeric AS qubit_original_sample_conc, NULL::text AS qubit_original_sample_unit, NULL::numeric AS qubit_total_dna_ug, NULL::date AS qubit_measurement_date, NULL::text AS qubit_assay_kit, NULL::numeric AS qubit_tube_conc, NULL::text AS tube_unit_id, NULL::numeric AS sample_volume_ul, NULL::numeric AS elution_volume_ul,
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, NULL::text AS tapestation_kit,
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, NULL::text AS pcr_target_gene_id, NULL::numeric AS pcr_volume_reaction_ul, NULL::text AS pcr_blank_id, NULL::text AS pcr_position,
+    NULL::text AS gel_gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, NULL::text AS gel_gel_type, NULL::text AS gel_position, NULL::text AS gel_ladder, NULL::numeric AS gel_voltage, NULL::numeric AS gel_run_time_minutes,
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, NULL::text AS qpcr_inhibitor_test_result, NULL::text AS qpcr_position, NULL::text AS qpcr_primer_id_actual, NULL::text AS qpcr_pcr_blank_id, NULL::text AS qpcr_kit, NULL::numeric AS qpcr_volume_ul,
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, NULL::text AS library_prep_kit, NULL::text AS library_index_sequence, NULL::integer AS library_read_length_bp,
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::text AS sequencer, NULL::text AS flow_cell_id, NULL::bigint AS total_reads, NULL::text AS raw_data_path, NULL::text AS genbank_accession_number, NULL::text AS sequencing_library_prep_kit, NULL::text AS sequencing_index_sequence, NULL::integer AS sequencing_read_length_bp,
+    NULL::text AS analysis_run_id, NULL::text AS pipeline_name, NULL::text AS pipeline_version, NULL::text AS bioinfo_reference_database, NULL::text AS bioinfo_database_version, NULL::numeric AS clustering_threshold, NULL::text AS final_output_path,
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, NULL::numeric AS edna_confidence,
+    e.experiment_id AS associated_experiment_id, e.experiment_title AS associated_experiment_title, e.experiment_date AS associated_experiment_date, e.aim AS associated_experiment_aim, e.method AS associated_experiment_method, exp_person.full_name AS experiment_person_name,
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+
+FROM
+    "lab"."tissue" t
+LEFT JOIN "lims"."projects" p ON t.project_id = p.project_id
+LEFT JOIN "lab"."experiments" e ON t.experiment_id = e.experiment_id AND t.experiment_date = e.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON e.person_id = exp_person.person_id
+
+UNION ALL
+SELECT
+    d.sample_id,
+    NULL AS external_name,
+    d.parent_sample_id,
+    'Derived DNA Sample' AS sample_origin_type,
+    'DNA' AS sample_type_id,
+    'D' AS sample_type_abrv,
+    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS sample_status_id,
+    (SELECT notes FROM "reference"."status" WHERE status_id = 'Received') AS sample_status_notes,
+    NULL::text AS sampling_id,
+    d.experiment_date AS sampling_date,
+    d.extraction_date AS reception_date,
+    d.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    d.storage_id,
+    d.storage_position,
+    d.notes,
+    d.attachment,
+    d.attachment_link,
+
+    -- Sampling Event Details (NULL)
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+
+    -- Fish-specific Details (NULL)
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, NULL::numeric AS fish_fork_length_mm, NULL::numeric AS fish_standard_length_mm, NULL::numeric AS fish_weight_g, NULL::text AS fish_sex, NULL::text AS fish_maturity_stage, NULL::text AS fish_stomach_contents, NULL::text AS fish_disease_info, NULL::text AS fish_tag_id,
+
+    -- Tissue-specific Details (NULL)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, NULL::text AS tissue_preservation_method,
+
+    -- DNA-specific Details
+    d.volume_ul,
+    d.concentration_ng_ul,
+    d.a260_280,
+    d.a260_230,
+    d.extraction_method,
+    d.extraction_date AS dna_extraction_date_dna,
+    d.extraction_number,
+
+    -- All other specific details are NULL
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::numeric AS rna_a260_280, NULL::numeric AS rna_a260_230, NULL::text AS rna_extraction_method, NULL::date AS rna_extraction_date_rna, NULL::integer AS rna_extraction_number,
+    NULL::numeric AS sediment_volume, NULL::text AS sediment_volume_unit, NULL::numeric AS sediment_depth_m, NULL::text AS sediment_sampling_method, NULL::text AS sediment_conservation_buffer,
+    NULL::numeric AS water_volume_l, NULL::text AS water_filter, NULL::numeric AS water_filter_pore_size_um, NULL::numeric AS water_depth_m, NULL::text AS water_sampling_method, NULL::text AS water_conservation_buffer,
+    NULL::text AS otolith_id, NULL::text AS otolith_reader_person_id, NULL::text AS otolith_side, NULL::numeric AS otolith_age_reading_years, NULL::numeric AS otolith_confidence,
+    NULL::text AS dissection_id, NULL::text AS dissection_person_id, NULL::date AS dissection_date, NULL::jsonb AS dissection_stomach_contents_jsonb, NULL::numeric AS dissection_gonad_weight_g, NULL::numeric AS dissection_liver_weight_g,
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::text AS extraction_process_person_id, NULL::text AS extraction_process_kit, NULL::numeric AS extraction_process_elution_volume_ul, NULL::numeric AS extraction_process_yield_qubit_ng_ul, NULL::numeric AS extraction_process_yield_nanodrop_ng_ul, NULL::numeric AS extraction_process_a260_280, NULL::numeric AS extraction_process_a260_230, NULL::text AS extraction_result_dna_sample_id, NULL::text AS extraction_result_rna_sample_id,
+    NULL::text AS extraction_blank_id,
+    NULL::text AS nanodrop_id, NULL::numeric AS nanodrop_concentration, NULL::text AS nanodrop_concentration_unit, NULL::numeric AS nanodrop_a260, NULL::numeric AS nanodrop_a260_280_qc, NULL::numeric AS nanodrop_a260_230_qc, NULL::numeric AS nanodrop_total_dna_ug, NULL::date AS nanodrop_measurement_date, NULL::text AS nanodrop_a260_280_note, NULL::text AS nanodrop_a260_230_note,
+    NULL::text AS qubit_id, NULL::numeric AS qubit_original_sample_conc, NULL::text AS qubit_original_sample_unit, NULL::numeric AS qubit_total_dna_ug, NULL::date AS qubit_measurement_date, NULL::text AS qubit_assay_kit, NULL::numeric AS qubit_tube_conc, NULL::text AS tube_unit_id, NULL::numeric AS sample_volume_ul, NULL::numeric AS elution_volume_ul,
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, NULL::text AS tapestation_kit,
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, NULL::text AS pcr_target_gene_id, NULL::numeric AS pcr_volume_reaction_ul, NULL::text AS pcr_blank_id, NULL::text AS pcr_position,
+    NULL::text AS gel_gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, NULL::text AS gel_gel_type, NULL::text AS gel_position, NULL::text AS gel_ladder, NULL::numeric AS gel_voltage, NULL::numeric AS gel_run_time_minutes,
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, NULL::text AS qpcr_inhibitor_test_result, NULL::text AS qpcr_position, NULL::text AS qpcr_primer_id_actual, NULL::text AS qpcr_pcr_blank_id, NULL::text AS qpcr_kit, NULL::numeric AS qpcr_volume_ul,
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, NULL::text AS library_prep_kit, NULL::text AS library_index_sequence, NULL::integer AS library_read_length_bp,
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::text AS sequencer, NULL::text AS flow_cell_id, NULL::bigint AS total_reads, NULL::text AS raw_data_path, NULL::text AS genbank_accession_number, NULL::text AS sequencing_library_prep_kit, NULL::text AS sequencing_index_sequence, NULL::integer AS sequencing_read_length_bp,
+    NULL::text AS analysis_run_id, NULL::text AS pipeline_name, NULL::text AS pipeline_version, NULL::text AS bioinfo_reference_database, NULL::text AS bioinfo_database_version, NULL::numeric AS clustering_threshold, NULL::text AS final_output_path,
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, NULL::numeric AS edna_confidence,
+    e.experiment_id AS associated_experiment_id, e.experiment_title AS associated_experiment_title, e.experiment_date AS associated_experiment_date, e.aim AS associated_experiment_aim, e.method AS associated_experiment_method, exp_person.full_name AS experiment_person_name,
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+
+FROM
+    "lab"."dna" d
+LEFT JOIN "lims"."projects" p ON d.project_id = p.project_id
+LEFT JOIN "lab"."experiments" e ON d.experiment_id = e.experiment_id AND d.experiment_date = e.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON e.person_id = exp_person.person_id
+
+UNION ALL
+
+SELECT
+    r.sample_id,
+    NULL AS external_name,
+    r.parent_sample_id,
+    'Derived RNA Sample' AS sample_origin_type,
+    'RNA' AS sample_type_id,
+    'R' AS sample_type_abrv,
+    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS sample_status_id,
+    (SELECT notes FROM "reference"."status" WHERE status_id = 'Received') AS sample_status_notes,
+    NULL::text AS sampling_id,
+    r.experiment_date AS sampling_date,
+    r.extraction_date AS reception_date,
+    r.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    r.storage_id,
+    r.storage_position,
+    r.notes,
+    r.attachment,
+    r.attachment_link,
+
+    -- Sampling Event Details (NULL)
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+
+    -- Fish-specific Details (NULL)
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, NULL::numeric AS fish_fork_length_mm, NULL::numeric AS fish_standard_length_mm, NULL::numeric AS fish_weight_g, NULL::text AS fish_sex, NULL::text AS fish_maturity_stage, NULL::text AS fish_stomach_contents, NULL::text AS fish_disease_info, NULL::text AS fish_tag_id,
+
+    -- Tissue-specific Details (NULL)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, NULL::text AS tissue_preservation_method,
+
+    -- DNA-specific Details (NULL)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::numeric AS dna_a260_280, NULL::numeric AS dna_a260_230, NULL::text AS dna_extraction_method, NULL::date AS dna_extraction_date_dna, NULL::integer AS dna_extraction_number,
+
+    -- RNA-specific Details
+    r.volume_ul,
+    r.concentration_ng_ul,
+    r.a260_280,
+    r.a260_230,
+    r.extraction_method,
+    r.extraction_date AS rna_extraction_date_rna,
+    r.extraction_number,
+
+    -- All other specific details are NULL
+    NULL::numeric AS sediment_volume, NULL::text AS sediment_volume_unit, NULL::numeric AS sediment_depth_m, NULL::text AS sediment_sampling_method, NULL::text AS sediment_conservation_buffer,
+    NULL::numeric AS water_volume_l, NULL::text AS water_filter, NULL::numeric AS water_filter_pore_size_um, NULL::numeric AS water_depth_m, NULL::text AS water_sampling_method, NULL::text AS water_conservation_buffer,
+    NULL::text AS otolith_id, NULL::text AS otolith_reader_person_id, NULL::text AS otolith_side, NULL::numeric AS otolith_age_reading_years, NULL::numeric AS otolith_confidence,
+    NULL::text AS dissection_id, NULL::text AS dissection_person_id, NULL::date AS dissection_date, NULL::jsonb AS dissection_stomach_contents_jsonb, NULL::numeric AS dissection_gonad_weight_g, NULL::numeric AS dissection_liver_weight_g,
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::text AS extraction_process_person_id, NULL::text AS extraction_process_kit, NULL::numeric AS extraction_process_elution_volume_ul, NULL::numeric AS extraction_process_yield_qubit_ng_ul, NULL::numeric AS extraction_process_yield_nanodrop_ng_ul, NULL::numeric AS extraction_process_a260_280, NULL::numeric AS extraction_process_a260_230, NULL::text AS extraction_result_dna_sample_id, NULL::text AS extraction_result_rna_sample_id,
+    NULL::text AS extraction_blank_id,
+    NULL::text AS nanodrop_id, NULL::numeric AS nanodrop_concentration, NULL::text AS nanodrop_concentration_unit, NULL::numeric AS nanodrop_a260, NULL::numeric AS nanodrop_a260_280_qc, NULL::numeric AS nanodrop_a260_230_qc, NULL::numeric AS nanodrop_total_dna_ug, NULL::date AS nanodrop_measurement_date, NULL::text AS nanodrop_a260_280_note, NULL::text AS nanodrop_a260_230_note,
+    NULL::text AS qubit_id, NULL::numeric AS qubit_original_sample_conc, NULL::text AS qubit_original_sample_unit, NULL::numeric AS qubit_total_dna_ug, NULL::date AS qubit_measurement_date, NULL::text AS qubit_assay_kit, NULL::numeric AS qubit_tube_conc, NULL::text AS tube_unit_id, NULL::numeric AS sample_volume_ul, NULL::numeric AS elution_volume_ul,
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, NULL::text AS tapestation_kit,
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, NULL::text AS pcr_target_gene_id, NULL::numeric AS pcr_volume_reaction_ul, NULL::text AS pcr_blank_id, NULL::text AS pcr_position,
+    NULL::text AS gel_gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, NULL::text AS gel_gel_type, NULL::text AS gel_position, NULL::text AS gel_ladder, NULL::numeric AS gel_voltage, NULL::numeric AS gel_run_time_minutes,
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, NULL::text AS qpcr_inhibitor_test_result, NULL::text AS qpcr_position, NULL::text AS qpcr_primer_id_actual, NULL::text AS qpcr_pcr_blank_id, NULL::text AS qpcr_kit, NULL::numeric AS qpcr_volume_ul,
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, NULL::text AS library_prep_kit, NULL::text AS library_index_sequence, NULL::integer AS library_read_length_bp,
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::text AS sequencer, NULL::text AS flow_cell_id, NULL::bigint AS total_reads, NULL::text AS raw_data_path, NULL::text AS genbank_accession_number, NULL::text AS sequencing_library_prep_kit, NULL::text AS sequencing_index_sequence, NULL::integer AS sequencing_read_length_bp,
+    NULL::text AS analysis_run_id, NULL::text AS pipeline_name, NULL::text AS pipeline_version, NULL::text AS bioinfo_reference_database, NULL::text AS bioinfo_database_version, NULL::numeric AS clustering_threshold, NULL::text AS final_output_path,
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, NULL::numeric AS edna_confidence,
+    e.experiment_id AS associated_experiment_id, e.experiment_title AS associated_experiment_title, e.experiment_date AS associated_experiment_date, e.aim AS associated_experiment_aim, e.method AS associated_experiment_method, exp_person.full_name AS experiment_person_name,
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+
+FROM
+    "lab"."rna" r
+LEFT JOIN "lims"."projects" p ON r.project_id = p.project_id
+LEFT JOIN "lab"."experiments" e ON r.experiment_id = e.experiment_id AND r.experiment_date = e.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON e.person_id = exp_person.person_id
+
+UNION ALL
+
+SELECT
+    sed.sample_id,
+    sed.external_name,
+    sed.parent_sample_id,
+    'Derived Sediment Sample' AS sample_origin_type,
+    'Sediments' AS sample_type_id,
+    'S' AS sample_type_abrv,
+    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS sample_status_id,
+    (SELECT notes FROM "reference"."status" WHERE status_id = 'Received') AS sample_status_notes,
+    NULL::text AS sampling_id,
+    sed.experiment_date AS sampling_date,
+    NULL AS reception_date,
+    sed.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    sed.storage_id,
+    sed.storage_position,
+    sed.notes,
+    sed.attachment,
+    sed.attachment_link,
+
+    -- Sampling Event Details (NULL)
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+
+    -- Fish-specific Details (NULL)
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, NULL::numeric AS fish_fork_length_mm, NULL::numeric AS fish_standard_length_mm, NULL::numeric AS fish_weight_g, NULL::text AS fish_sex, NULL::text AS fish_maturity_stage, NULL::text AS fish_stomach_contents, NULL::text AS fish_disease_info, NULL::text AS fish_tag_id,
+
+    -- Tissue-specific Details (NULL)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, NULL::text AS tissue_preservation_method,
+
+    -- DNA-specific Details (NULL)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::numeric AS dna_a260_280, NULL::numeric AS dna_a260_230, NULL::text AS dna_extraction_method, NULL::date AS dna_extraction_date_dna, NULL::integer AS dna_extraction_number,
+
+    -- RNA-specific Details (NULL)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::numeric AS rna_a260_280, NULL::numeric AS rna_a260_230, NULL::text AS rna_extraction_method, NULL::date AS rna_extraction_date_rna, NULL::integer AS rna_extraction_number,
+
+    -- Sediments-specific Details
+    sed.volume,
+    svu.unit_abbreviation AS sediment_volume_unit,
+    sed.depth_m,
+    sed.sampling_method,
+    sed.conservation_buffer,
+
+    -- All other specific details are NULL
+    NULL::numeric AS water_volume_l, NULL::text AS water_filter, NULL::numeric AS water_filter_pore_size_um, NULL::numeric AS water_depth_m, NULL::text AS water_sampling_method, NULL::text AS water_conservation_buffer,
+    NULL::text AS otolith_id, NULL::text AS otolith_reader_person_id, NULL::text AS otolith_side, NULL::numeric AS otolith_age_reading_years, NULL::numeric AS otolith_confidence,
+    NULL::text AS dissection_id, NULL::text AS dissection_person_id, NULL::date AS dissection_date, NULL::jsonb AS dissection_stomach_contents_jsonb, NULL::numeric AS dissection_gonad_weight_g, NULL::numeric AS dissection_liver_weight_g,
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::text AS extraction_process_person_id, NULL::text AS extraction_process_kit, NULL::numeric AS extraction_process_elution_volume_ul, NULL::numeric AS extraction_process_yield_qubit_ng_ul, NULL::numeric AS extraction_process_yield_nanodrop_ng_ul, NULL::numeric AS extraction_process_a260_280, NULL::numeric AS extraction_process_a260_230, NULL::text AS extraction_result_dna_sample_id, NULL::text AS extraction_result_rna_sample_id,
+    NULL::text AS extraction_blank_id,
+    NULL::text AS nanodrop_id, NULL::numeric AS nanodrop_concentration, NULL::text AS nanodrop_concentration_unit, NULL::numeric AS nanodrop_a260, NULL::numeric AS nanodrop_a260_280_qc, NULL::numeric AS nanodrop_a260_230_qc, NULL::numeric AS nanodrop_total_dna_ug, NULL::date AS nanodrop_measurement_date, NULL::text AS nanodrop_a260_280_note, NULL::text AS nanodrop_a260_230_note,
+    NULL::text AS qubit_id, NULL::numeric AS qubit_original_sample_conc, NULL::text AS qubit_original_sample_unit, NULL::numeric AS qubit_total_dna_ug, NULL::date AS qubit_measurement_date, NULL::text AS qubit_assay_kit, NULL::numeric AS qubit_tube_conc, NULL::text AS tube_unit_id, NULL::numeric AS sample_volume_ul, NULL::numeric AS elution_volume_ul,
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, NULL::text AS tapestation_kit,
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, NULL::text AS pcr_target_gene_id, NULL::numeric AS pcr_volume_reaction_ul, NULL::text AS pcr_blank_id, NULL::text AS pcr_position,
+    NULL::text AS gel_gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, NULL::text AS gel_gel_type, NULL::text AS gel_position, NULL::text AS gel_ladder, NULL::numeric AS gel_voltage, NULL::numeric AS gel_run_time_minutes,
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, NULL::text AS qpcr_inhibitor_test_result, NULL::text AS qpcr_position, NULL::text AS qpcr_primer_id_actual, NULL::text AS qpcr_pcr_blank_id, NULL::text AS qpcr_kit, NULL::numeric AS qpcr_volume_ul,
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, NULL::text AS library_prep_kit, NULL::text AS library_index_sequence, NULL::integer AS library_read_length_bp,
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::text AS sequencer, NULL::text AS flow_cell_id, NULL::bigint AS total_reads, NULL::text AS raw_data_path, NULL::text AS genbank_accession_number, NULL::text AS sequencing_library_prep_kit, NULL::text AS sequencing_index_sequence, NULL::integer AS sequencing_read_length_bp,
+    NULL::text AS analysis_run_id, NULL::text AS pipeline_name, NULL::text AS pipeline_version, NULL::text AS bioinfo_reference_database, NULL::text AS bioinfo_database_version, NULL::numeric AS clustering_threshold, NULL::text AS final_output_path,
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, NULL::numeric AS edna_confidence,
+    e.experiment_id AS associated_experiment_id, e.experiment_title AS associated_experiment_title, e.experiment_date AS associated_experiment_date, e.aim AS associated_experiment_aim, e.method AS associated_experiment_method, exp_person.full_name AS experiment_person_name,
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+
+FROM
+    "lab"."sediments" sed
+LEFT JOIN "lims"."projects" p ON sed.project_id = p.project_id
+LEFT JOIN "reference"."units" svu ON sed.volume_unit_id = svu.unit_id
+LEFT JOIN "lab"."experiments" e ON sed.experiment_id = e.experiment_id AND sed.experiment_date = e.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON e.person_id = exp_person.person_id
+
+UNION ALL
+
+SELECT
+    w.sample_id,
+    NULL AS external_name,
+    w.parent_sample_id,
+    'Derived Water Sample' AS sample_origin_type,
+    'Water' AS sample_type_id,
+    'W' AS sample_type_abrv,
+    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS sample_status_id,
+    (SELECT notes FROM "reference"."status" WHERE status_id = 'Received') AS sample_status_notes,
+    NULL::text AS sampling_id,
+    w.experiment_date AS sampling_date,
+    NULL AS reception_date,
+    w.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    w.storage_id,
+    w.storage_position,
+    w.notes,
+    w.attachment,
+    w.attachment_link,
+
+    -- Sampling Event Details (NULL)
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+
+    -- Fish-specific Details (NULL)
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, NULL::numeric AS fish_fork_length_mm, NULL::numeric AS fish_standard_length_mm, NULL::numeric AS fish_weight_g, NULL::text AS fish_sex, NULL::text AS fish_maturity_stage, NULL::text AS fish_stomach_contents, NULL::text AS fish_disease_info, NULL::text AS fish_tag_id,
+
+    -- Tissue-specific Details (NULL)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, NULL::text AS tissue_preservation_method,
+
+    -- DNA-specific Details (NULL)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::numeric AS dna_a260_280, NULL::numeric AS dna_a260_230, NULL::text AS dna_extraction_method, NULL::date AS dna_extraction_date_dna, NULL::integer AS dna_extraction_number,
+
+    -- RNA-specific Details (NULL)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::numeric AS rna_a260_280, NULL::numeric AS rna_a260_230, NULL::text AS rna_extraction_method, NULL::date AS rna_extraction_date_rna, NULL::integer AS rna_extraction_number,
+
+    -- Sediments-specific Details (NULL)
+    NULL::numeric AS sediment_volume, NULL::text AS sediment_volume_unit, NULL::numeric AS sediment_depth_m, NULL::text AS sediment_sampling_method, NULL::text AS sediment_conservation_buffer,
+
+    -- Water-specific Details
+    w.volume_l,
+    w.filter,
+    w.filter_pore_size_um,
+    w.depth_m,
+    w.sampling_method,
+    w.conservation_buffer,
+
+    -- All other specific details are NULL
+    NULL::text AS otolith_id, NULL::text AS otolith_reader_person_id, NULL::text AS otolith_side, NULL::numeric AS otolith_age_reading_years, NULL::numeric AS otolith_confidence,
+    NULL::text AS dissection_id, NULL::text AS dissection_person_id, NULL::date AS dissection_date, NULL::jsonb AS dissection_stomach_contents_jsonb, NULL::numeric AS dissection_gonad_weight_g, NULL::numeric AS dissection_liver_weight_g,
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::text AS extraction_process_person_id, NULL::text AS extraction_process_kit, NULL::numeric AS extraction_process_elution_volume_ul, NULL::numeric AS extraction_process_yield_qubit_ng_ul, NULL::numeric AS extraction_process_yield_nanodrop_ng_ul, NULL::numeric AS extraction_process_a260_280, NULL::numeric AS extraction_process_a260_230, NULL::text AS extraction_result_dna_sample_id, NULL::text AS extraction_result_rna_sample_id,
+    NULL::text AS extraction_blank_id,
+    NULL::text AS nanodrop_id, NULL::numeric AS nanodrop_concentration, NULL::text AS nanodrop_concentration_unit, NULL::numeric AS nanodrop_a260, NULL::numeric AS nanodrop_a260_280_qc, NULL::numeric AS nanodrop_a260_230_qc, NULL::numeric AS nanodrop_total_dna_ug, NULL::date AS nanodrop_measurement_date, NULL::text AS nanodrop_a260_280_note, NULL::text AS nanodrop_a260_230_note,
+    NULL::text AS qubit_id, NULL::numeric AS qubit_original_sample_conc, NULL::text AS qubit_original_sample_unit, NULL::numeric AS qubit_total_dna_ug, NULL::date AS qubit_measurement_date, NULL::text AS qubit_assay_kit, NULL::numeric AS qubit_tube_conc, NULL::text AS tube_unit_id, NULL::numeric AS sample_volume_ul, NULL::numeric AS elution_volume_ul,
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, NULL::text AS tapestation_kit,
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, NULL::text AS pcr_target_gene_id, NULL::numeric AS pcr_volume_reaction_ul, NULL::text AS pcr_blank_id, NULL::text AS pcr_position,
+    NULL::text AS gel_gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, NULL::text AS gel_gel_type, NULL::text AS gel_position, NULL::text AS gel_ladder, NULL::numeric AS gel_voltage, NULL::numeric AS gel_run_time_minutes,
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, NULL::text AS qpcr_inhibitor_test_result, NULL::text AS qpcr_position, NULL::text AS qpcr_primer_id_actual, NULL::text AS qpcr_pcr_blank_id, NULL::text AS qpcr_kit, NULL::numeric AS qpcr_volume_ul,
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, NULL::text AS library_prep_kit, NULL::text AS library_index_sequence, NULL::integer AS library_read_length_bp,
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::text AS sequencer, NULL::text AS flow_cell_id, NULL::bigint AS total_reads, NULL::text AS raw_data_path, NULL::text AS genbank_accession_number, NULL::text AS sequencing_library_prep_kit, NULL::text AS sequencing_index_sequence, NULL::integer AS sequencing_read_length_bp,
+    NULL::text AS analysis_run_id, NULL::text AS pipeline_name, NULL::text AS pipeline_version, NULL::text AS bioinfo_reference_database, NULL::text AS bioinfo_database_version, NULL::numeric AS clustering_threshold, NULL::text AS final_output_path,
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, NULL::numeric AS edna_confidence,
+    e.experiment_id AS associated_experiment_id, e.experiment_title AS associated_experiment_title, e.experiment_date AS associated_experiment_date, e.aim AS associated_experiment_aim, e.method AS associated_experiment_method, exp_person.full_name AS experiment_person_name,
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+
+FROM
+    "lab"."water" w
+LEFT JOIN "lims"."projects" p ON w.project_id = p.project_id
+LEFT JOIN "lab"."experiments" e ON w.experiment_id = e.experiment_id AND w.experiment_date = e.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON e.person_id = exp_person.person_id
+
+UNION ALL
+
+SELECT
+    oto.otolith_id AS sample_id,
+    NULL AS external_name,
+    oto.sample_id AS parent_sample_id,
+    'Otolith Sample' AS sample_origin_type,
+    'Otolith' AS sample_type_id,
+    'O' AS sample_type_abrv,
+    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS sample_status_id,
+    (SELECT notes FROM "reference"."status" WHERE status_id = 'Received') AS sample_status_notes,
+    NULL::text AS sampling_id,
+    oto.experiment_date AS sampling_date,
+    NULL AS reception_date,
+    oto.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    NULL::text AS storage_id,
+    NULL::text AS storage_position,
+    oto.notes,
+    oto.attachment,
+    oto.attachment_link,
+
+    -- Sampling Event Details (NULL placeholders)
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+
+    -- Fish-specific Details (NULL)
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, NULL::numeric AS fish_fork_length_mm, NULL::numeric AS fish_standard_length_mm, NULL::numeric AS fish_weight_g, NULL::text AS fish_sex, NULL::text AS fish_maturity_stage, NULL::text AS fish_stomach_contents, NULL::text AS fish_disease_info, NULL::text AS fish_tag_id,
+
+    -- Tissue-specific Details (NULL)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, NULL::text AS tissue_preservation_method,
+
+    -- DNA-specific Details (NULL)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::numeric AS dna_a260_280, NULL::numeric AS dna_a260_230, NULL::text AS dna_extraction_method, NULL::date AS dna_extraction_date_dna, NULL::integer AS dna_extraction_number,
+
+    -- RNA-specific Details (NULL)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::numeric AS rna_a260_280, NULL::numeric AS rna_a260_230, NULL::text AS rna_extraction_method, NULL::date AS rna_extraction_date_rna, NULL::integer AS rna_extraction_number,
+
+    -- Sediments-specific Details (NULL)
+    NULL::numeric AS sediment_volume, NULL::text AS sediment_volume_unit, NULL::numeric AS sediment_depth_m, NULL::text AS sediment_sampling_method, NULL::text AS sediment_conservation_buffer,
+
+    -- Water-specific Details (NULL)
+    NULL::numeric AS water_volume_l, NULL::text AS water_filter, NULL::numeric AS water_filter_pore_size_um, NULL::numeric AS water_depth_m, NULL::text AS water_sampling_method, NULL::text AS water_conservation_buffer,
+
+    -- Otoliths-specific Details
+    oto.otolith_id,
+    oto.reader_person_id,
+    oto.side,
+    oto.age_reading_years,
+    oto.confidence,
+
+    -- All other specific details are NULL
+    NULL::text AS dissection_id, NULL::text AS dissection_person_id, NULL::date AS dissection_date, NULL::jsonb AS dissection_stomach_contents_jsonb, NULL::numeric AS dissection_gonad_weight_g, NULL::numeric AS dissection_liver_weight_g,
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::text AS extraction_process_person_id, NULL::text AS extraction_process_kit, NULL::numeric AS extraction_process_elution_volume_ul, NULL::numeric AS extraction_process_yield_qubit_ng_ul, NULL::numeric AS extraction_process_yield_nanodrop_ng_ul, NULL::numeric AS extraction_process_a260_280, NULL::numeric AS extraction_process_a260_230, NULL::text AS extraction_result_dna_sample_id, NULL::text AS extraction_result_rna_sample_id,
+    NULL::text AS extraction_blank_id,
+    NULL::text AS nanodrop_id, NULL::numeric AS nanodrop_concentration, NULL::text AS nanodrop_concentration_unit, NULL::numeric AS nanodrop_a260, NULL::numeric AS nanodrop_a260_280_qc, NULL::numeric AS nanodrop_a260_230_qc, NULL::numeric AS nanodrop_total_dna_ug, NULL::date AS nanodrop_measurement_date, NULL::text AS nanodrop_a260_280_note, NULL::text AS nanodrop_a260_230_note,
+    NULL::text AS qubit_id, NULL::numeric AS qubit_original_sample_conc, NULL::text AS qubit_original_sample_unit, NULL::numeric AS qubit_total_dna_ug, NULL::date AS qubit_measurement_date, NULL::text AS qubit_assay_kit, NULL::numeric AS qubit_tube_conc, NULL::text AS tube_unit_id, NULL::numeric AS sample_volume_ul, NULL::numeric AS elution_volume_ul,
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, NULL::text AS tapestation_kit,
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, NULL::text AS pcr_target_gene_id, NULL::numeric AS pcr_volume_reaction_ul, NULL::text AS pcr_blank_id, NULL::text AS pcr_position,
+    NULL::text AS gel_gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, NULL::text AS gel_gel_type, NULL::text AS gel_position, NULL::text AS gel_ladder, NULL::numeric AS gel_voltage, NULL::numeric AS gel_run_time_minutes,
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, NULL::text AS qpcr_inhibitor_test_result, NULL::text AS qpcr_position, NULL::text AS qpcr_primer_id_actual, NULL::text AS qpcr_pcr_blank_id, NULL::text AS qpcr_kit, NULL::numeric AS qpcr_volume_ul,
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, NULL::text AS library_prep_kit, NULL::text AS library_index_sequence, NULL::integer AS library_read_length_bp,
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::text AS sequencer, NULL::text AS flow_cell_id, NULL::bigint AS total_reads, NULL::text AS raw_data_path, NULL::text AS genbank_accession_number, NULL::text AS sequencing_library_prep_kit, NULL::text AS sequencing_index_sequence, NULL::integer AS sequencing_read_length_bp,
+    NULL::text AS analysis_run_id, NULL::text AS pipeline_name, NULL::text AS pipeline_version, NULL::text AS bioinfo_reference_database, NULL::text AS bioinfo_database_version, NULL::numeric AS clustering_threshold, NULL::text AS final_output_path,
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, NULL::numeric AS edna_confidence,
+    e.experiment_id AS associated_experiment_id, e.experiment_title AS associated_experiment_title, e.experiment_date AS associated_experiment_date, e.aim AS associated_experiment_aim, e.method AS associated_experiment_method, exp_person.full_name AS experiment_person_name,
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."otoliths" oto
+LEFT JOIN "lims"."projects" p ON oto.project_id = p.project_id
+LEFT JOIN "lab"."experiments" e ON oto.experiment_id = e.experiment_id AND oto.experiment_date = e.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON e.person_id = exp_person.person_id
+
+UNION ALL
+
+SELECT
+    ext.extraction_id AS sample_id,
+    NULL AS external_name,
+    ext.sample_id AS parent_sample_id,
+    'Extraction Product' AS sample_origin_type,
+    'Extraction' AS sample_type_id,
+    'EXT' AS sample_type_abrv,
+    ext.status_id AS sample_status_id,
+    stat.notes AS sample_status_notes,
+    NULL::text AS sampling_id,
+    ext.extraction_date AS sampling_date,
+    NULL::date AS reception_date, 
+    ext.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    ext.storage_id,
+    ext.storage_position,
+    ext.notes,
+    ext.attachment,
+    ext.attachment_link,
+
+    -- Sampling Event Details (NULL)
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+
+    -- Fish-specific Details (NULL)
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, NULL::numeric AS fish_fork_length_mm, NULL::numeric AS fish_standard_length_mm, NULL::numeric AS fish_weight_g, NULL::text AS fish_sex, NULL::text AS fish_maturity_stage, NULL::text AS fish_stomach_contents, NULL::text AS fish_disease_info, NULL::text AS fish_tag_id,
+
+    -- Tissue-specific Details (NULL)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, NULL::text AS tissue_preservation_method,
+
+    -- DNA-specific Details (NULL for extraction output, since these are in lab.dna/rna tables already)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::numeric AS dna_a260_280, NULL::numeric AS dna_a260_230, NULL::text AS dna_extraction_method, NULL::date AS dna_extraction_date_dna, NULL::integer AS dna_extraction_number,
+
+    -- RNA-specific Details (NULL for extraction output, since these are in lab.dna/rna tables already)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::numeric AS rna_a260_280, NULL::numeric AS rna_a260_230, NULL::text AS rna_extraction_method, NULL::date AS rna_extraction_date_rna, NULL::integer AS rna_extraction_number,
+
+    -- Sediments-specific Details (NULL)
+    NULL::numeric AS sediment_volume, NULL::text AS sediment_volume_unit, NULL::numeric AS sediment_depth_m, NULL::text AS sediment_sampling_method, NULL::text AS sediment_conservation_buffer,
+
+    -- Water-specific Details (NULL)
+    NULL::numeric AS water_volume_l, NULL::text AS water_filter, NULL::numeric AS water_filter_pore_size_um, NULL::numeric AS water_depth_m, NULL::text AS water_sampling_method, NULL::text AS water_conservation_buffer,
+
+    -- Otoliths-specific Details (NULL)
+    NULL::text AS otolith_id, NULL::text AS otolith_reader_person_id, NULL::text AS otolith_side, NULL::numeric AS otolith_age_reading_years, NULL::numeric AS otolith_confidence,
+
+    -- Dissections Details (NULL)
+    NULL::text AS dissection_id, NULL::text AS dissection_person_id, NULL::date AS dissection_date, NULL::jsonb AS dissection_stomach_contents_jsonb, NULL::numeric AS dissection_gonad_weight_g, NULL::numeric AS dissection_liver_weight_g,
+
+    -- Extraction Details (from lab.extraction, these are the *process* details for this row)
+    ext.extraction_id,
+    ext.extraction_date AS extraction_process_date,
+    ext.person_id AS extraction_process_person_id,
+    ext.kit AS extraction_process_kit,
+    ext.elution_volume_ul AS extraction_process_elution_volume_ul,
+    ext.yield_qubit_ng_ul AS extraction_process_yield_qubit_ng_ul,
+    ext.yield_nanodrop_ng_ul AS extraction_process_yield_nanodrop_ng_ul,
+    ext.a260_280 AS extraction_process_a260_280,
+    ext.a260_230 AS extraction_process_a260_230,
+    ext.extracted_dna_sample_id AS extraction_result_dna_sample_id,
+    ext.extracted_rna_sample_id AS extraction_result_rna_sample_id,
+    ext.extraction_blank_id,
+
+    -- All other specific details are NULL
+    NULL::text AS nanodrop_id, NULL::numeric AS nanodrop_concentration, NULL::text AS nanodrop_concentration_unit, NULL::numeric AS nanodrop_a260, NULL::numeric AS nanodrop_a260_280_qc, NULL::numeric AS nanodrop_a260_230_qc, NULL::numeric AS nanodrop_total_dna_ug, NULL::date AS nanodrop_measurement_date, NULL::text AS nanodrop_a260_280_note, NULL::text AS nanodrop_a260_230_note,
+    NULL::text AS qubit_id, NULL::numeric AS qubit_original_sample_conc, NULL::text AS qubit_original_sample_unit, NULL::numeric AS qubit_total_dna_ug, NULL::date AS qubit_measurement_date, NULL::text AS qubit_assay_kit, NULL::numeric AS qubit_tube_conc, NULL::text AS tube_unit_id, NULL::numeric AS sample_volume_ul, NULL::numeric AS elution_volume_ul,
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, NULL::text AS tapestation_kit,
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, NULL::text AS pcr_target_gene_id, NULL::numeric AS pcr_volume_reaction_ul, NULL::text AS pcr_blank_id, NULL::text AS pcr_position,
+    NULL::text AS gel_gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, NULL::text AS gel_gel_type, NULL::text AS gel_position, NULL::text AS gel_ladder, NULL::numeric AS gel_voltage, NULL::numeric AS gel_run_time_minutes,
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, NULL::text AS qpcr_inhibitor_test_result, NULL::text AS qpcr_position, NULL::text AS qpcr_primer_id_actual, NULL::text AS qpcr_pcr_blank_id, NULL::text AS qpcr_kit, NULL::numeric AS qpcr_volume_ul,
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, NULL::text AS library_prep_kit, NULL::text AS library_index_sequence, NULL::integer AS library_read_length_bp,
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::text AS sequencer, NULL::text AS flow_cell_id, NULL::bigint AS total_reads, NULL::text AS raw_data_path, NULL::text AS genbank_accession_number, NULL::text AS sequencing_library_prep_kit, NULL::text AS sequencing_index_sequence, NULL::integer AS sequencing_read_length_bp,
+    NULL::text AS analysis_run_id, NULL::text AS pipeline_name, NULL::text AS pipeline_version, NULL::text AS bioinfo_reference_database, NULL::text AS bioinfo_database_version, NULL::numeric AS clustering_threshold, NULL::text AS final_output_path,
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, NULL::numeric AS edna_confidence,
+    e.experiment_id AS associated_experiment_id, e.experiment_title AS associated_experiment_title, e.experiment_date AS associated_experiment_date, e.aim AS associated_experiment_aim, e.method AS associated_experiment_method, exp_person.full_name AS experiment_person_name,
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+
+FROM
+    "lab"."extraction" ext
+LEFT JOIN "lims"."projects" p ON ext.project_id = p.project_id
+LEFT JOIN "reference"."status" stat ON ext.status_id = stat.status_id
+LEFT JOIN "lab"."experiments" e ON ext.experiment_id = e.experiment_id AND ext.experiment_date = e.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON e.person_id = exp_person.person_id
+
+UNION ALL
+
+SELECT
+    nd.nanodrop_id AS sample_id,
+    NULL AS external_name,
+    nd.sample_id AS parent_sample_id,
+    'Nanodrop QC Record' AS sample_origin_type,
+    'NDQC' AS sample_type_id,
+    'NDQC' AS sample_type_abrv,
+    nd.status_id AS sample_status_id,
+    stat.notes AS sample_status_notes,
+    NULL::text AS sampling_id,
+    nd.measurement_date AS sampling_date,
+    NULL AS reception_date,
+    nd.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    nd.storage_id,
+    nd.storage_position,
+    nd.notes,
+    nd.attachment,
+    nd.attachment_link,
+
+    -- All other specific details are NULL
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, NULL::numeric AS fish_fork_length_mm, NULL::numeric AS fish_standard_length_mm, NULL::numeric AS fish_weight_g, NULL::text AS fish_sex, NULL::text AS fish_maturity_stage, NULL::text AS fish_stomach_contents, NULL::text AS fish_disease_info, NULL::text AS fish_tag_id,
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, NULL::text AS tissue_preservation_method,
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::numeric AS dna_a260_280, NULL::numeric AS dna_a260_230, NULL::text AS dna_extraction_method, NULL::date AS dna_extraction_date_dna, NULL::integer AS dna_extraction_number,
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::numeric AS rna_a260_280, NULL::numeric AS rna_a260_230, NULL::text AS rna_extraction_method, NULL::date AS rna_extraction_date_rna, NULL::integer AS rna_extraction_number,
+    NULL::numeric AS sediment_volume, NULL::text AS sediment_volume_unit, NULL::numeric AS sediment_depth_m, NULL::text AS sediment_sampling_method, NULL::text AS sediment_conservation_buffer,
+    NULL::numeric AS water_volume_l, NULL::text AS water_filter, NULL::numeric AS water_filter_pore_size_um, NULL::numeric AS water_depth_m, NULL::text AS water_sampling_method, NULL::text AS water_conservation_buffer,
+    NULL::text AS otolith_id, NULL::text AS otolith_reader_person_id, NULL::text AS otolith_side, NULL::numeric AS otolith_age_reading_years, NULL::numeric AS otolith_confidence,
+    NULL::text AS dissection_id, NULL::text AS dissection_person_id, NULL::date AS dissection_date, NULL::jsonb AS dissection_stomach_contents_jsonb, NULL::numeric AS dissection_gonad_weight_g, NULL::numeric AS dissection_liver_weight_g,
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::text AS extraction_process_person_id, NULL::text AS extraction_process_kit, NULL::numeric AS extraction_process_elution_volume_ul, NULL::numeric AS extraction_process_yield_qubit_ng_ul, NULL::numeric AS extraction_process_yield_nanodrop_ng_ul, NULL::numeric AS extraction_process_a260_280, NULL::numeric AS extraction_process_a260_230, NULL::text AS extraction_result_dna_sample_id, NULL::text AS extraction_result_rna_sample_id,
+    NULL::text AS extraction_blank_id,
+    nd.nanodrop_id,
+    nd.nanodrop_concentration,
+    ndcu.unit_abbreviation AS nanodrop_concentration_unit,
+    nd.a260,
+    nd.a260_280 AS nanodrop_a260_280_qc,
+    nd.a260_230 AS nanodrop_a260_230_qc,
+    nd.nanodrop_total_dna_ug,
+    nd.measurement_date,
+    nd.a260_280_note,
+    nd.a260_230_note,
+    NULL::text AS qubit_id, NULL::numeric AS qubit_original_sample_conc, NULL::text AS qubit_original_sample_unit, NULL::numeric AS qubit_total_dna_ug, NULL::date AS qubit_measurement_date, NULL::text AS qubit_assay_kit, NULL::numeric AS qubit_tube_conc, NULL::text AS tube_unit_id, NULL::numeric AS sample_volume_ul, NULL::numeric AS elution_volume_ul,
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, NULL::text AS tapestation_kit,
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, NULL::text AS pcr_target_gene_id, NULL::numeric AS pcr_volume_reaction_ul, NULL::text AS pcr_blank_id, NULL::text AS pcr_position,
+    NULL::text AS gel_gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, NULL::text AS gel_gel_type, NULL::text AS gel_position, NULL::text AS gel_ladder, NULL::numeric AS gel_voltage, NULL::numeric AS gel_run_time_minutes,
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, NULL::text AS qpcr_inhibitor_test_result, NULL::text AS qpcr_position, NULL::text AS qpcr_primer_id_actual, NULL::text AS qpcr_pcr_blank_id, NULL::text AS qpcr_kit, NULL::numeric AS qpcr_volume_ul,
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, NULL::text AS library_prep_kit, NULL::text AS library_index_sequence, NULL::integer AS library_read_length_bp,
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::text AS sequencer, NULL::text AS flow_cell_id, NULL::bigint AS total_reads, NULL::text AS raw_data_path, NULL::text AS genbank_accession_number, NULL::text AS sequencing_library_prep_kit, NULL::text AS sequencing_index_sequence, NULL::integer AS sequencing_read_length_bp,
+    NULL::text AS analysis_run_id, NULL::text AS pipeline_name, NULL::text AS pipeline_version, NULL::text AS bioinfo_reference_database, NULL::text AS bioinfo_database_version, NULL::numeric AS clustering_threshold, NULL::text AS final_output_path,
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, NULL::numeric AS edna_confidence,
+    e.experiment_id AS associated_experiment_id, e.experiment_title AS associated_experiment_title, e.experiment_date AS associated_experiment_date, e.aim AS associated_experiment_aim, e.method AS associated_experiment_method, exp_person.full_name AS experiment_person_name,
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+
+FROM
+    "lab"."nanodrop" nd
+LEFT JOIN "lims"."projects" p ON nd.project_id = p.project_id
+LEFT JOIN "reference"."status" stat ON nd.status_id = stat.status_id
+LEFT JOIN "reference"."units" ndcu ON nd.concentration_unit_id = ndcu.unit_id
+LEFT JOIN "lab"."experiments" e ON nd.experiment_id = e.experiment_id AND nd.experiment_date = e.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON e.person_id = exp_person.person_id
+
+UNION ALL
+
+SELECT
+    qu.qubit_id AS sample_id,
+    NULL AS external_name,
+    qu.sample_id AS parent_sample_id,
+    'Qubit QC Record' AS sample_origin_type,
+    'QubitQC' AS sample_type_id,
+    'QBC' AS sample_type_abrv,
+    qu.status_id AS sample_status_id,
+    stat.notes AS sample_status_notes,
+    NULL::text AS sampling_id,
+    qu.measurement_date AS sampling_date,
+    NULL AS reception_date,
+    qu.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    qu.storage_id,
+    qu.storage_position,
+    qu.notes,
+    qu.attachment,
+    qu.attachment_link,
+
+    -- All other specific details are NULL
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, NULL::numeric AS fish_fork_length_mm, NULL::numeric AS fish_standard_length_mm, NULL::numeric AS fish_weight_g, NULL::text AS fish_sex, NULL::text AS fish_maturity_stage, NULL::text AS fish_stomach_contents, NULL::text AS fish_disease_info, NULL::text AS fish_tag_id,
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, NULL::text AS tissue_preservation_method,
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::numeric AS dna_a260_280, NULL::numeric AS dna_a260_230, NULL::text AS dna_extraction_method, NULL::date AS dna_extraction_date_dna, NULL::integer AS dna_extraction_number,
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::numeric AS rna_a260_280, NULL::numeric AS rna_a260_230, NULL::text AS rna_extraction_method, NULL::date AS rna_extraction_date_rna, NULL::integer AS rna_extraction_number,
+    NULL::numeric AS sediment_volume, NULL::text AS sediment_volume_unit, NULL::numeric AS sediment_depth_m, NULL::text AS sediment_sampling_method, NULL::text AS sediment_conservation_buffer,
+    NULL::numeric AS water_volume_l, NULL::text AS water_filter, NULL::numeric AS water_filter_pore_size_um, NULL::numeric AS water_depth_m, NULL::text AS water_sampling_method, NULL::text AS water_conservation_buffer,
+    NULL::text AS otolith_id, NULL::text AS otolith_reader_person_id, NULL::text AS otolith_side, NULL::numeric AS otolith_age_reading_years, NULL::numeric AS otolith_confidence,
+    NULL::text AS dissection_id, NULL::text AS dissection_person_id, NULL::date AS dissection_date, NULL::jsonb AS dissection_stomach_contents_jsonb, NULL::numeric AS dissection_gonad_weight_g, NULL::numeric AS dissection_liver_weight_g,
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::text AS extraction_process_person_id, NULL::text AS extraction_process_kit, NULL::numeric AS extraction_process_elution_volume_ul, NULL::numeric AS extraction_process_yield_qubit_ng_ul, NULL::numeric AS extraction_process_yield_nanodrop_ng_ul, NULL::numeric AS extraction_process_a260_280, NULL::numeric AS extraction_process_a260_230, NULL::text AS extraction_result_dna_sample_id, NULL::text AS extraction_result_rna_sample_id,
+    NULL::text AS extraction_blank_id,
+    NULL::text AS nanodrop_id, NULL::numeric AS nanodrop_concentration, NULL::text AS nanodrop_concentration_unit, NULL::numeric AS nanodrop_a260, NULL::numeric AS nanodrop_a260_280_qc, NULL::numeric AS nanodrop_a260_230_qc, NULL::numeric AS nanodrop_total_dna_ug, NULL::date AS nanodrop_measurement_date, NULL::text AS nanodrop_a260_280_note, NULL::text AS nanodrop_a260_230_note,
+    qu.qubit_id,
+    qu.qubit_original_sample_conc,
+    quosu.unit_abbreviation AS qubit_original_sample_unit,
+    qu.qubit_total_dna_ug,
+    qu.measurement_date,
+    qu.assay_kit,
+    qu.qubit_tube_conc,
+    qu.tube_unit_id,
+    qu.sample_volume_ul,
+    qu.elution_volume_ul,
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, NULL::text AS tapestation_kit,
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, NULL::text AS pcr_target_gene_id, NULL::numeric AS pcr_volume_reaction_ul, NULL::text AS pcr_blank_id, NULL::text AS pcr_position,
+    NULL::text AS gel_gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, NULL::text AS gel_gel_type, NULL::text AS gel_position, NULL::text AS gel_ladder, NULL::numeric AS gel_voltage, NULL::numeric AS gel_run_time_minutes,
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, NULL::text AS qpcr_inhibitor_test_result, NULL::text AS qpcr_position, NULL::text AS qpcr_primer_id_actual, NULL::text AS qpcr_pcr_blank_id, NULL::text AS qpcr_kit, NULL::numeric AS qpcr_volume_ul,
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, NULL::text AS library_prep_kit, NULL::text AS library_index_sequence, NULL::integer AS library_read_length_bp,
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::text AS sequencer, NULL::text AS flow_cell_id, NULL::bigint AS total_reads, NULL::text AS raw_data_path, NULL::text AS genbank_accession_number, NULL::text AS sequencing_library_prep_kit, NULL::text AS sequencing_index_sequence, NULL::integer AS sequencing_read_length_bp,
+    NULL::text AS analysis_run_id, NULL::text AS pipeline_name, NULL::text AS pipeline_version, NULL::text AS bioinfo_reference_database, NULL::text AS bioinfo_database_version, NULL::numeric AS clustering_threshold, NULL::text AS final_output_path,
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, NULL::numeric AS edna_confidence,
+    e.experiment_id AS associated_experiment_id, e.experiment_title AS associated_experiment_title, e.experiment_date AS associated_experiment_date, e.aim AS associated_experiment_aim, e.method AS associated_experiment_method, exp_person.full_name AS experiment_person_name,
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."qubit" qu
+LEFT JOIN "lims"."projects" p ON qu.project_id = p.project_id
+LEFT JOIN "reference"."status" stat ON qu.status_id = stat.status_id
+LEFT JOIN "reference"."units" quosu ON qu.original_sample_unit_id = quosu.unit_id
+LEFT JOIN "lab"."experiments" e ON qu.experiment_id = e.experiment_id AND qu.experiment_date = e.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON e.person_id = exp_person.person_id
+
+UNION ALL
+
+SELECT
+    ts.tapestation_id AS sample_id,
+    NULL AS external_name,
+    ts.sample_id AS parent_sample_id,
+    'Tapestation QC Record' AS sample_origin_type,
+    'TSQC' AS sample_type_id,
+    'TSQC' AS sample_type_abrv,
+    ts.status_id AS sample_status_id,
+    stat.notes AS sample_status_notes,
+    NULL::text AS sampling_id,
+    ts.measurement_date AS sampling_date,
+    NULL AS reception_date,
+    ts.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    ts.storage_id,
+    ts.storage_position,
+    ts.notes,
+    ts.attachment,
+    ts.attachment_link,
+
+    -- All other specific details are NULL
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, NULL::numeric AS fish_fork_length_mm, NULL::numeric AS fish_standard_length_mm, NULL::numeric AS fish_weight_g, NULL::text AS fish_sex, NULL::text AS fish_maturity_stage, NULL::text AS fish_stomach_contents, NULL::text AS fish_disease_info, NULL::text AS fish_tag_id,
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, NULL::text AS tissue_preservation_method,
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::numeric AS dna_a260_280, NULL::numeric AS dna_a260_230, NULL::text AS dna_extraction_method, NULL::date AS dna_extraction_date_dna, NULL::integer AS dna_extraction_number,
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::numeric AS rna_a260_280, NULL::numeric AS rna_a260_230, NULL::text AS rna_extraction_method, NULL::date AS rna_extraction_date_rna, NULL::integer AS rna_extraction_number,
+    NULL::numeric AS sediment_volume, NULL::text AS sediment_volume_unit, NULL::numeric AS sediment_depth_m, NULL::text AS sediment_sampling_method, NULL::text AS sediment_conservation_buffer,
+    NULL::numeric AS water_volume_l, NULL::text AS water_filter, NULL::numeric AS water_filter_pore_size_um, NULL::numeric AS water_depth_m, NULL::text AS water_sampling_method, NULL::text AS water_conservation_buffer,
+    NULL::text AS otolith_id, NULL::text AS otolith_reader_person_id, NULL::text AS otolith_side, NULL::numeric AS otolith_age_reading_years, NULL::numeric AS otolith_confidence,
+    NULL::text AS dissection_id, NULL::text AS dissection_person_id, NULL::date AS dissection_date, NULL::jsonb AS dissection_stomach_contents_jsonb, NULL::numeric AS dissection_gonad_weight_g, NULL::numeric AS dissection_liver_weight_g,
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::text AS extraction_process_person_id, NULL::text AS extraction_process_kit, NULL::numeric AS extraction_process_elution_volume_ul, NULL::numeric AS extraction_process_yield_qubit_ng_ul, NULL::numeric AS extraction_process_yield_nanodrop_ng_ul, NULL::numeric AS extraction_process_a260_280, NULL::numeric AS extraction_process_a260_230, NULL::text AS extraction_result_dna_sample_id, NULL::text AS extraction_result_rna_sample_id,
+    NULL::text AS extraction_blank_id,
+    NULL::text AS nanodrop_id, NULL::numeric AS nanodrop_concentration, NULL::text AS nanodrop_concentration_unit, NULL::numeric AS nanodrop_a260, NULL::numeric AS nanodrop_a260_280_qc, NULL::numeric AS nanodrop_a260_230_qc, NULL::numeric AS nanodrop_total_dna_ug, NULL::date AS nanodrop_measurement_date, NULL::text AS nanodrop_a260_280_note, NULL::text AS nanodrop_a260_230_note,
+    NULL::text AS qubit_id, NULL::numeric AS qubit_original_sample_conc, NULL::text AS qubit_original_sample_unit, NULL::numeric AS qubit_total_dna_ug, NULL::date AS qubit_measurement_date, NULL::text AS qubit_assay_kit, NULL::numeric AS qubit_tube_conc, NULL::text AS tube_unit_id, NULL::numeric AS sample_volume_ul, NULL::numeric AS elution_volume_ul,
+    ts.tapestation_id,
+    ts.measurement_date,
+    ts.kit,
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, NULL::text AS pcr_target_gene_id, NULL::numeric AS pcr_volume_reaction_ul, NULL::text AS pcr_blank_id, NULL::text AS pcr_position,
+    NULL::text AS gel_gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, NULL::text AS gel_gel_type, NULL::text AS gel_position, NULL::text AS gel_ladder, NULL::numeric AS gel_voltage, NULL::numeric AS gel_run_time_minutes,
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, NULL::text AS qpcr_inhibitor_test_result, NULL::text AS qpcr_position, NULL::text AS qpcr_primer_id_actual, NULL::text AS qpcr_pcr_blank_id, NULL::text AS qpcr_kit, NULL::numeric AS qpcr_volume_ul,
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, NULL::text AS library_prep_kit, NULL::text AS library_index_sequence, NULL::integer AS library_read_length_bp,
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::text AS sequencer, NULL::text AS flow_cell_id, NULL::bigint AS total_reads, NULL::text AS raw_data_path, NULL::text AS genbank_accession_number, NULL::text AS sequencing_library_prep_kit, NULL::text AS sequencing_index_sequence, NULL::integer AS sequencing_read_length_bp,
+    NULL::text AS analysis_run_id, NULL::text AS pipeline_name, NULL::text AS pipeline_version, NULL::text AS bioinfo_reference_database, NULL::text AS bioinfo_database_version, NULL::numeric AS clustering_threshold, NULL::text AS final_output_path,
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, NULL::numeric AS edna_confidence,
+    e.experiment_id AS associated_experiment_id, e.experiment_title AS associated_experiment_title, e.experiment_date AS associated_experiment_date, e.aim AS associated_experiment_aim, e.method AS associated_experiment_method, exp_person.full_name AS experiment_person_name,
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."tapestation" ts
+LEFT JOIN "lims"."projects" p ON ts.project_id = p.project_id
+LEFT JOIN "reference"."status" stat ON ts.status_id = stat.status_id
+LEFT JOIN "lab"."experiments" e ON ts.experiment_id = e.experiment_id AND ts.experiment_date = e.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON e.person_id = exp_person.person_id
+
+UNION ALL
+
+SELECT
+    pcr.pcr_id AS sample_id,
+    NULL AS external_name,
+    pcr.sample_id AS parent_sample_id,
+    'PCR Product' AS sample_origin_type,
+    'PCRP' AS sample_type_id,
+    'PCRP' AS sample_type_abrv,
+    pcr.status_id AS sample_status_id,
+    stat.notes AS sample_status_notes,
+    NULL::text AS sampling_id,
+    pcr.pcr_date AS sampling_date,
+    NULL AS reception_date,
+    pcr.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    pcr.storage_id,
+    pcr.storage_position,
+    pcr.notes,
+    pcr.attachment,
+    pcr.attachment_link,
+
+    -- All other specific details are NULL
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, NULL::numeric AS fish_fork_length_mm, NULL::numeric AS fish_standard_length_mm, NULL::numeric AS fish_weight_g, NULL::text AS fish_sex, NULL::text AS fish_maturity_stage, NULL::text AS fish_stomach_contents, NULL::text AS fish_disease_info, NULL::text AS fish_tag_id,
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, NULL::text AS tissue_preservation_method,
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::numeric AS dna_a260_280, NULL::numeric AS dna_a260_230, NULL::text AS dna_extraction_method, NULL::date AS dna_extraction_date_dna, NULL::integer AS dna_extraction_number,
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::numeric AS rna_a260_280, NULL::numeric AS rna_a260_230, NULL::text AS rna_extraction_method, NULL::date AS rna_extraction_date_rna, NULL::integer AS rna_extraction_number,
+    NULL::numeric AS sediment_volume, NULL::text AS sediment_volume_unit, NULL::numeric AS sediment_depth_m, NULL::text AS sediment_sampling_method, NULL::text AS sediment_conservation_buffer,
+    NULL::numeric AS water_volume_l, NULL::text AS water_filter, NULL::numeric AS water_filter_pore_size_um, NULL::numeric AS water_depth_m, NULL::text AS water_sampling_method, NULL::text AS water_conservation_buffer,
+    NULL::text AS otolith_id, NULL::text AS otolith_reader_person_id, NULL::text AS otolith_side, NULL::numeric AS otolith_age_reading_years, NULL::numeric AS otolith_confidence,
+    NULL::text AS dissection_id, NULL::text AS dissection_person_id, NULL::date AS dissection_date, NULL::jsonb AS dissection_stomach_contents_jsonb, NULL::numeric AS dissection_gonad_weight_g, NULL::numeric AS dissection_liver_weight_g,
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::text AS extraction_process_person_id, NULL::text AS extraction_process_kit, NULL::numeric AS extraction_process_elution_volume_ul, NULL::numeric AS extraction_process_yield_qubit_ng_ul, NULL::numeric AS extraction_process_yield_nanodrop_ng_ul, NULL::numeric AS extraction_process_a260_280, NULL::numeric AS extraction_process_a260_230, NULL::text AS extraction_result_dna_sample_id, NULL::text AS extraction_result_rna_sample_id,
+    NULL::text AS extraction_blank_id,
+    NULL::text AS nanodrop_id, NULL::numeric AS nanodrop_concentration, NULL::text AS nanodrop_concentration_unit, NULL::numeric AS nanodrop_a260, NULL::numeric AS nanodrop_a260_280_qc, NULL::numeric AS nanodrop_a260_230_qc, NULL::numeric AS nanodrop_total_dna_ug, NULL::date AS nanodrop_measurement_date, NULL::text AS nanodrop_a260_280_note, NULL::text AS nanodrop_a260_230_note,
+    NULL::text AS qubit_id, NULL::numeric AS qubit_original_sample_conc, NULL::text AS qubit_original_sample_unit, NULL::numeric AS qubit_total_dna_ug, NULL::date AS qubit_measurement_date, NULL::text AS qubit_assay_kit, NULL::numeric AS qubit_tube_conc, NULL::text AS tube_unit_id, NULL::numeric AS sample_volume_ul, NULL::numeric AS elution_volume_ul,
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, NULL::text AS tapestation_kit,
+    pcr.pcr_id,
+    pcr.pcr_date,
+    pcr_primer.primer_id AS pcr_primer_id,
+    pcr_primer.target_gene_id AS pcr_target_gene_id,
+    pcr.volume_reaction_ul,
+    pcr.pcr_blank_id,
+    pcr.position AS pcr_position,
+    NULL::text AS gel_gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, NULL::text AS gel_gel_type, NULL::text AS gel_position, NULL::text AS gel_ladder, NULL::numeric AS gel_voltage, NULL::numeric AS gel_run_time_minutes,
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, NULL::text AS qpcr_inhibitor_test_result, NULL::text AS qpcr_position, NULL::text AS qpcr_primer_id_actual, NULL::text AS qpcr_pcr_blank_id, NULL::text AS qpcr_kit, NULL::numeric AS qpcr_volume_ul,
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, NULL::text AS library_prep_kit, NULL::text AS library_index_sequence, NULL::integer AS library_read_length_bp,
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::text AS sequencer, NULL::text AS flow_cell_id, NULL::bigint AS total_reads, NULL::text AS raw_data_path, NULL::text AS genbank_accession_number, NULL::text AS sequencing_library_prep_kit, NULL::text AS sequencing_index_sequence, NULL::integer AS sequencing_read_length_bp,
+    NULL::text AS analysis_run_id, NULL::text AS pipeline_name, NULL::text AS pipeline_version, NULL::text AS bioinfo_reference_database, NULL::text AS bioinfo_database_version, NULL::numeric AS clustering_threshold, NULL::text AS final_output_path,
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, NULL::numeric AS edna_confidence,
+    e.experiment_id AS associated_experiment_id, e.experiment_title AS associated_experiment_title, e.experiment_date AS associated_experiment_date, e.aim AS associated_experiment_aim, e.method AS associated_experiment_method, exp_person.full_name AS experiment_person_name,
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."pcr" pcr
+LEFT JOIN "lims"."projects" p ON pcr.project_id = p.project_id
+LEFT JOIN "reference"."status" stat ON pcr.status_id = stat.status_id
+LEFT JOIN "lims"."primers" pcr_primer ON pcr.primer_id = pcr_primer.primer_id
+LEFT JOIN "lab"."experiments" e ON pcr.experiment_id = e.experiment_id AND pcr.experiment_date = e.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON e.person_id = exp_person.person_id
+
+UNION ALL
+
+SELECT
+    gel.gelelectrophoresis_id AS sample_id,
+    NULL AS external_name,
+    gel.sample_id AS parent_sample_id,
+    'Gel Electrophoresis Result' AS sample_origin_type,
+    'GE' AS sample_type_id,
+    'GE' AS sample_type_abrv,
+    NULL AS sample_status_id, -- Gel table doesn't have status_id, default to NULL
+    NULL AS sample_status_notes,
+    NULL::text AS sampling_id,
+    gel.run_date AS sampling_date,
+    NULL AS reception_date,
+    gel.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    gel.storage_id,
+    gel.storage_position,
+    gel.notes,
+    gel.attachment,
+    gel.attachment_link,
+
+    -- All other specific details are NULL
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, NULL::numeric AS fish_fork_length_mm, NULL::numeric AS fish_standard_length_mm, NULL::numeric AS fish_weight_g, NULL::text AS fish_sex, NULL::text AS fish_maturity_stage, NULL::text AS fish_stomach_contents, NULL::text AS fish_disease_info, NULL::text AS fish_tag_id,
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, NULL::text AS tissue_preservation_method,
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::numeric AS dna_a260_280, NULL::numeric AS dna_a260_230, NULL::text AS dna_extraction_method, NULL::date AS dna_extraction_date_dna, NULL::integer AS dna_extraction_number,
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::numeric AS rna_a260_280, NULL::numeric AS rna_a260_230, NULL::text AS rna_extraction_method, NULL::date AS rna_extraction_date_rna, NULL::integer AS rna_extraction_number,
+    NULL::numeric AS sediment_volume, NULL::text AS sediment_volume_unit, NULL::numeric AS sediment_depth_m, NULL::text AS sediment_sampling_method, NULL::text AS sediment_conservation_buffer,
+    NULL::numeric AS water_volume_l, NULL::text AS water_filter, NULL::numeric AS water_filter_pore_size_um, NULL::numeric AS water_depth_m, NULL::text AS water_sampling_method, NULL::text AS water_conservation_buffer,
+    NULL::text AS otolith_id, NULL::text AS otolith_reader_person_id, NULL::text AS otolith_side, NULL::numeric AS otolith_age_reading_years, NULL::numeric AS otolith_confidence,
+    NULL::text AS dissection_id, NULL::text AS dissection_person_id, NULL::date AS dissection_date, NULL::jsonb AS dissection_stomach_contents_jsonb, NULL::numeric AS dissection_gonad_weight_g, NULL::numeric AS dissection_liver_weight_g,
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::text AS extraction_process_person_id, NULL::text AS extraction_process_kit, NULL::numeric AS extraction_process_elution_volume_ul, NULL::numeric AS extraction_process_yield_qubit_ng_ul, NULL::numeric AS extraction_process_yield_nanodrop_ng_ul, NULL::numeric AS extraction_process_a260_280, NULL::numeric AS extraction_process_a260_230, NULL::text AS extraction_result_dna_sample_id, NULL::text AS extraction_result_rna_sample_id,
+    NULL::text AS extraction_blank_id,
+    NULL::text AS nanodrop_id, NULL::numeric AS nanodrop_concentration, NULL::text AS nanodrop_concentration_unit, NULL::numeric AS nanodrop_a260, NULL::numeric AS nanodrop_a260_280_qc, NULL::numeric AS nanodrop_a260_230_qc, NULL::numeric AS nanodrop_total_dna_ug, NULL::date AS nanodrop_measurement_date, NULL::text AS nanodrop_a260_280_note, NULL::text AS nanodrop_a260_230_note,
+    NULL::text AS qubit_id, NULL::numeric AS qubit_original_sample_conc, NULL::text AS qubit_original_sample_unit, NULL::numeric AS qubit_total_dna_ug, NULL::date AS qubit_measurement_date, NULL::text AS qubit_assay_kit, NULL::numeric AS qubit_tube_conc, NULL::text AS tube_unit_id, NULL::numeric AS sample_volume_ul, NULL::numeric AS elution_volume_ul,
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, NULL::text AS tapestation_kit,
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, NULL::text AS pcr_target_gene_id, NULL::numeric AS pcr_volume_reaction_ul, NULL::text AS pcr_blank_id, NULL::text AS pcr_position,
+    gel.gelelectrophoresis_id,
+    gel.run_date,
+    gel.band_size_bp,
+    gel.gel_type,
+    gel.position AS gel_position,
+    gel.ladder AS gel_ladder,
+    gel.voltage AS gel_voltage,
+    gel.run_time_minutes AS gel_run_time_minutes,
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, NULL::text AS qpcr_inhibitor_test_result, NULL::text AS qpcr_position, NULL::text AS qpcr_primer_id_actual, NULL::text AS qpcr_pcr_blank_id, NULL::text AS qpcr_kit, NULL::numeric AS qpcr_volume_ul,
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, NULL::text AS library_prep_kit, NULL::text AS library_index_sequence, NULL::integer AS library_read_length_bp,
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::text AS sequencer, NULL::text AS flow_cell_id, NULL::bigint AS total_reads, NULL::text AS raw_data_path, NULL::text AS genbank_accession_number, NULL::text AS sequencing_library_prep_kit, NULL::text AS sequencing_index_sequence, NULL::integer AS sequencing_read_length_bp,
+    NULL::text AS analysis_run_id, NULL::text AS pipeline_name, NULL::text AS pipeline_version, NULL::text AS bioinfo_reference_database, NULL::text AS bioinfo_database_version, NULL::numeric AS clustering_threshold, NULL::text AS final_output_path,
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, NULL::numeric AS edna_confidence,
+    e.experiment_id AS associated_experiment_id, e.experiment_title AS associated_experiment_title, e.experiment_date AS associated_experiment_date, e.aim AS associated_experiment_aim, e.method AS associated_experiment_method, exp_person.full_name AS experiment_person_name,
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."gelelectrophoresis" gel
+LEFT JOIN "lims"."projects" p ON gel.project_id = p.project_id
+LEFT JOIN "lab"."experiments" e ON gel.experiment_id = e.experiment_id AND gel.experiment_date = e.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON e.person_id = exp_person.person_id
+
+UNION ALL
+
+SELECT
+    qpcr.qpcr_id AS sample_id,
+    NULL AS external_name,
+    qpcr.sample_id AS parent_sample_id,
+    'qPCR Result' AS sample_origin_type,
+    'QPCRR' AS sample_type_id,
+    'QPCRR' AS sample_type_abrv,
+    qpcr.status_id AS sample_status_id,
+    stat.notes AS sample_status_notes,
+    NULL::text AS sampling_id,
+    qpcr.qpcr_date AS sampling_date,
+    NULL AS reception_date,
+    qpcr.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    qpcr.storage_id,
+    qpcr.storage_position,
+    NULL::text AS notes,
+    qpcr.attachment,
+    qpcr.attachment_link,
+
+    -- All other specific details are NULL
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, NULL::numeric AS fish_fork_length_mm, NULL::numeric AS fish_standard_length_mm, NULL::numeric AS fish_weight_g, NULL::text AS fish_sex, NULL::text AS fish_maturity_stage, NULL::text AS fish_stomach_contents, NULL::text AS fish_disease_info, NULL::text AS fish_tag_id,
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, NULL::text AS tissue_preservation_method,
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::numeric AS dna_a260_280, NULL::numeric AS dna_a260_230, NULL::text AS dna_extraction_method, NULL::date AS dna_extraction_date_dna, NULL::integer AS dna_extraction_number,
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::numeric AS rna_a260_280, NULL::numeric AS rna_a260_230, NULL::text AS rna_extraction_method, NULL::date AS rna_extraction_date_rna, NULL::integer AS rna_extraction_number,
+    NULL::numeric AS sediment_volume, NULL::text AS sediment_volume_unit, NULL::numeric AS sediment_depth_m, NULL::text AS sediment_sampling_method, NULL::text AS sediment_conservation_buffer,
+    NULL::numeric AS water_volume_l, NULL::text AS water_filter, NULL::numeric AS water_filter_pore_size_um, NULL::numeric AS water_depth_m, NULL::text AS water_sampling_method, NULL::text AS water_conservation_buffer,
+    NULL::text AS otolith_id, NULL::text AS otolith_reader_person_id, NULL::text AS otolith_side, NULL::numeric AS otolith_age_reading_years, NULL::numeric AS otolith_confidence,
+    NULL::text AS dissection_id, NULL::text AS dissection_person_id, NULL::date AS dissection_date, NULL::jsonb AS dissection_stomach_contents_jsonb, NULL::numeric AS dissection_gonad_weight_g, NULL::numeric AS dissection_liver_weight_g,
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::text AS extraction_process_person_id, NULL::text AS extraction_process_kit, NULL::numeric AS extraction_process_elution_volume_ul, NULL::numeric AS extraction_process_yield_qubit_ng_ul, NULL::numeric AS extraction_process_yield_nanodrop_ng_ul, NULL::numeric AS extraction_process_a260_280, NULL::numeric AS extraction_process_a260_230, NULL::text AS extraction_result_dna_sample_id, NULL::text AS extraction_result_rna_sample_id,
+    NULL::text AS extraction_blank_id,
+    NULL::text AS nanodrop_id, NULL::numeric AS nanodrop_concentration, NULL::text AS nanodrop_concentration_unit, NULL::numeric AS nanodrop_a260, NULL::numeric AS nanodrop_a260_280_qc, NULL::numeric AS nanodrop_a260_230_qc, NULL::numeric AS nanodrop_total_dna_ug, NULL::date AS nanodrop_measurement_date, NULL::text AS nanodrop_a260_280_note, NULL::text AS nanodrop_a260_230_note,
+    NULL::text AS qubit_id, NULL::numeric AS qubit_original_sample_conc, NULL::text AS qubit_original_sample_unit, NULL::numeric AS qubit_total_dna_ug, NULL::date AS qubit_measurement_date, NULL::text AS qubit_assay_kit, NULL::numeric AS qubit_tube_conc, NULL::text AS tube_unit_id, NULL::numeric AS sample_volume_ul, NULL::numeric AS elution_volume_ul,
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, NULL::text AS tapestation_kit,
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, NULL::text AS pcr_target_gene_id, NULL::numeric AS pcr_volume_reaction_ul, NULL::text AS pcr_blank_id, NULL::text AS pcr_position,
+    NULL::text AS gel_gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, NULL::text AS gel_gel_type, NULL::text AS gel_position, NULL::text AS gel_ladder, NULL::numeric AS gel_voltage, NULL::numeric AS gel_run_time_minutes,
+    qpcr.qpcr_id,
+    qpcr.qpcr_date,
+    qpcr.ct_value,
+    qpcr.inhibitor_test_result,
+    qpcr.position AS qpcr_position,
+    qpcr.primer_id AS qpcr_primer_id_actual,
+    qpcr.pcr_blank_id AS qpcr_pcr_blank_id,
+    qpcr.kit AS qpcr_kit,
+    qpcr.volume_ul AS qpcr_volume_ul,
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, NULL::text AS library_prep_kit, NULL::text AS library_index_sequence, NULL::integer AS library_read_length_bp,
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::text AS sequencer, NULL::text AS flow_cell_id, NULL::bigint AS total_reads, NULL::text AS raw_data_path, NULL::text AS genbank_accession_number, NULL::text AS sequencing_library_prep_kit, NULL::text AS sequencing_index_sequence, NULL::integer AS sequencing_read_length_bp,
+    NULL::text AS analysis_run_id, NULL::text AS pipeline_name, NULL::text AS pipeline_version, NULL::text AS bioinfo_reference_database, NULL::text AS bioinfo_database_version, NULL::numeric AS clustering_threshold, NULL::text AS final_output_path,
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, NULL::numeric AS edna_confidence,
+    e.experiment_id AS associated_experiment_id, e.experiment_title AS associated_experiment_title, e.experiment_date AS associated_experiment_date, e.aim AS associated_experiment_aim, e.method AS associated_experiment_method, exp_person.full_name AS experiment_person_name,
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."qpcr" qpcr
+LEFT JOIN "lims"."projects" p ON qpcr.project_id = p.project_id
+LEFT JOIN "reference"."status" stat ON qpcr.status_id = stat.status_id
+LEFT JOIN "lab"."experiments" e ON qpcr.experiment_id = e.experiment_id AND qpcr.experiment_date = e.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON e.person_id = exp_person.person_id
+
+UNION ALL
+
+SELECT
+    lib.library_id AS sample_id,
+    NULL AS external_name,
+    lib.sample_id AS parent_sample_id,
+    'Library Prep Product' AS sample_origin_type,
+    'LIBP' AS sample_type_id,
+    'LIBP' AS sample_type_abrv,
+    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS sample_status_id,
+    (SELECT notes FROM "reference"."status" WHERE status_id = 'Received') AS sample_status_notes,
+    NULL::text AS sampling_id,
+    lib.prep_date AS sampling_date,
+    NULL AS reception_date,
+    lib.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    lib.storage_id,
+    lib.storage_position,
+    lib.notes,
+    lib.attachment,
+    lib.attachment_link,
+
+    -- All other specific details are NULL
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, NULL::numeric AS fish_fork_length_mm, NULL::numeric AS fish_standard_length_mm, NULL::numeric AS fish_weight_g, NULL::text AS fish_sex, NULL::text AS fish_maturity_stage, NULL::text AS fish_stomach_contents, NULL::text AS fish_disease_info, NULL::text AS fish_tag_id,
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, NULL::text AS tissue_preservation_method,
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::numeric AS dna_a260_280, NULL::numeric AS dna_a260_230, NULL::text AS dna_extraction_method, NULL::date AS dna_extraction_date_dna, NULL::integer AS dna_extraction_number,
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::numeric AS rna_a260_280, NULL::numeric AS rna_a260_230, NULL::text AS rna_extraction_method, NULL::date AS rna_extraction_date_rna, NULL::integer AS rna_extraction_number,
+    NULL::numeric AS sediment_volume, NULL::text AS sediment_volume_unit, NULL::numeric AS sediment_depth_m, NULL::text AS sediment_sampling_method, NULL::text AS sediment_conservation_buffer,
+    NULL::numeric AS water_volume_l, NULL::text AS water_filter, NULL::numeric AS water_filter_pore_size_um, NULL::numeric AS water_depth_m, NULL::text AS water_sampling_method, NULL::text AS water_conservation_buffer,
+    NULL::text AS otolith_id, NULL::text AS otolith_reader_person_id, NULL::text AS otolith_side, NULL::numeric AS otolith_age_reading_years, NULL::numeric AS otolith_confidence,
+    NULL::text AS dissection_id, NULL::text AS dissection_person_id, NULL::date AS dissection_date, NULL::jsonb AS dissection_stomach_contents_jsonb, NULL::numeric AS dissection_gonad_weight_g, NULL::numeric AS dissection_liver_weight_g,
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::text AS extraction_process_person_id, NULL::text AS extraction_process_kit, NULL::numeric AS extraction_process_elution_volume_ul, NULL::numeric AS extraction_process_yield_qubit_ng_ul, NULL::numeric AS extraction_process_yield_nanodrop_ng_ul, NULL::numeric AS extraction_process_a260_280, NULL::numeric AS extraction_process_a260_230, NULL::text AS extraction_result_dna_sample_id, NULL::text AS extraction_result_rna_sample_id,
+    NULL::text AS extraction_blank_id,
+    NULL::text AS nanodrop_id, NULL::numeric AS nanodrop_concentration, NULL::text AS nanodrop_concentration_unit, NULL::numeric AS nanodrop_a260, NULL::numeric AS nanodrop_a260_280_qc, NULL::numeric AS nanodrop_a260_230_qc, NULL::numeric AS nanodrop_total_dna_ug, NULL::date AS nanodrop_measurement_date, NULL::text AS nanodrop_a260_280_note, NULL::text AS nanodrop_a260_230_note,
+    NULL::text AS qubit_id, NULL::numeric AS qubit_original_sample_conc, NULL::text AS qubit_original_sample_unit, NULL::numeric AS qubit_total_dna_ug, NULL::date AS qubit_measurement_date, NULL::text AS qubit_assay_kit, NULL::numeric AS qubit_tube_conc, NULL::text AS tube_unit_id, NULL::numeric AS sample_volume_ul, NULL::numeric AS elution_volume_ul,
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, NULL::text AS tapestation_kit,
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, NULL::text AS pcr_target_gene_id, NULL::numeric AS pcr_volume_reaction_ul, NULL::text AS pcr_blank_id, NULL::text AS pcr_position,
+    NULL::text AS gel_gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, NULL::text AS gel_gel_type, NULL::text AS gel_position, NULL::text AS gel_ladder, NULL::numeric AS gel_voltage, NULL::numeric AS gel_run_time_minutes,
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, NULL::text AS qpcr_inhibitor_test_result, NULL::text AS qpcr_position, NULL::text AS qpcr_primer_id_actual, NULL::text AS qpcr_pcr_blank_id, NULL::text AS qpcr_kit, NULL::numeric AS qpcr_volume_ul,
+    lib.library_id,
+    lib.prep_date,
+    lib.library_name,
+    lib.library_prep_kit,
+    lib.index_sequence,
+    lib.read_length_bp,
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::text AS sequencer, NULL::text AS flow_cell_id, NULL::bigint AS total_reads, NULL::text AS raw_data_path, NULL::text AS genbank_accession_number, NULL::text AS sequencing_library_prep_kit, NULL::text AS sequencing_index_sequence, NULL::integer AS sequencing_read_length_bp,
+    NULL::text AS analysis_run_id, NULL::text AS pipeline_name, NULL::text AS pipeline_version, NULL::text AS bioinfo_reference_database, NULL::text AS bioinfo_database_version, NULL::numeric AS clustering_threshold, NULL::text AS final_output_path,
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, NULL::numeric AS edna_confidence,
+    e.experiment_id AS associated_experiment_id, e.experiment_title AS associated_experiment_title, e.experiment_date AS associated_experiment_date, e.aim AS associated_experiment_aim, e.method AS associated_experiment_method, exp_person.full_name AS experiment_person_name,
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."library" lib
+LEFT JOIN "lims"."projects" p ON lib.project_id = p.project_id
+LEFT JOIN "lab"."experiments" e ON lib.experiment_id = e.experiment_id AND lib.experiment_date = e.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON e.person_id = exp_person.person_id
+
+UNION ALL
+
+SELECT
+    seq.sequencing_id AS sample_id,
+    NULL AS external_name,
+    seq.sample_id AS parent_sample_id,
+    'Sequencing Run' AS sample_origin_type,
+    'SEQR' AS sample_type_id,
+    'SEQR' AS sample_type_abrv,
+    seq.status_id AS sample_status_id,
+    stat.notes AS sample_status_notes,
+    NULL::text AS sampling_id,
+    seq.sequencing_date AS sampling_date,
+    NULL AS reception_date,
+    seq.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    seq.storage_id,
+    seq.storage_position,
+    seq.notes,
+    seq.attachment,
+    seq.attachment_link,
+
+    -- All other specific details are NULL
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, NULL::numeric AS fish_fork_length_mm, NULL::numeric AS fish_standard_length_mm, NULL::numeric AS fish_weight_g, NULL::text AS fish_sex, NULL::text AS fish_maturity_stage, NULL::text AS fish_stomach_contents, NULL::text AS fish_disease_info, NULL::text AS fish_tag_id,
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, NULL::text AS tissue_preservation_method,
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::numeric AS dna_a260_280, NULL::numeric AS dna_a260_230, NULL::text AS dna_extraction_method, NULL::date AS dna_extraction_date_dna, NULL::integer AS dna_extraction_number,
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::numeric AS rna_a260_280, NULL::numeric AS rna_a260_230, NULL::text AS rna_extraction_method, NULL::date AS rna_extraction_date_rna, NULL::integer AS rna_extraction_number,
+    NULL::numeric AS sediment_volume, NULL::text AS sediment_volume_unit, NULL::numeric AS sediment_depth_m, NULL::text AS sediment_sampling_method, NULL::text AS sediment_conservation_buffer,
+    NULL::numeric AS water_volume_l, NULL::text AS water_filter, NULL::numeric AS water_filter_pore_size_um, NULL::numeric AS water_depth_m, NULL::text AS water_sampling_method, NULL::text AS water_conservation_buffer,
+    NULL::text AS otolith_id, NULL::text AS otolith_reader_person_id, NULL::text AS otolith_side, NULL::numeric AS otolith_age_reading_years, NULL::numeric AS otolith_confidence,
+    NULL::text AS dissection_id, NULL::text AS dissection_person_id, NULL::date AS dissection_date, NULL::jsonb AS dissection_stomach_contents_jsonb, NULL::numeric AS dissection_gonad_weight_g, NULL::numeric AS dissection_liver_weight_g,
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::text AS extraction_process_person_id, NULL::text AS extraction_process_kit, NULL::numeric AS extraction_process_elution_volume_ul, NULL::numeric AS extraction_process_yield_qubit_ng_ul, NULL::numeric AS extraction_process_yield_nanodrop_ng_ul, NULL::numeric AS extraction_process_a260_280, NULL::numeric AS extraction_process_a260_230, NULL::text AS extraction_result_dna_sample_id, NULL::text AS extraction_result_rna_sample_id,
+    NULL::text AS extraction_blank_id,
+    NULL::text AS nanodrop_id, NULL::numeric AS nanodrop_concentration, NULL::text AS nanodrop_concentration_unit, NULL::numeric AS nanodrop_a260, NULL::numeric AS nanodrop_a260_280_qc, NULL::numeric AS nanodrop_a260_230_qc, NULL::numeric AS nanodrop_total_dna_ug, NULL::date AS nanodrop_measurement_date, NULL::text AS nanodrop_a260_280_note, NULL::text AS nanodrop_a260_230_note,
+    NULL::text AS qubit_id, NULL::numeric AS qubit_original_sample_conc, NULL::text AS qubit_original_sample_unit, NULL::numeric AS qubit_total_dna_ug, NULL::date AS qubit_measurement_date, NULL::text AS qubit_assay_kit, NULL::numeric AS qubit_tube_conc, NULL::text AS tube_unit_id, NULL::numeric AS sample_volume_ul, NULL::numeric AS elution_volume_ul,
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, NULL::text AS tapestation_kit,
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, NULL::text AS pcr_target_gene_id, NULL::numeric AS pcr_volume_reaction_ul, NULL::text AS pcr_blank_id, NULL::text AS pcr_position,
+    NULL::text AS gel_gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, NULL::text AS gel_gel_type, NULL::text AS gel_position, NULL::text AS gel_ladder, NULL::numeric AS gel_voltage, NULL::numeric AS gel_run_time_minutes,
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, NULL::text AS qpcr_inhibitor_test_result, NULL::text AS qpcr_position, NULL::text AS qpcr_primer_id_actual, NULL::text AS qpcr_pcr_blank_id, NULL::text AS qpcr_kit, NULL::numeric AS qpcr_volume_ul,
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, NULL::text AS library_prep_kit, NULL::text AS library_index_sequence, NULL::integer AS library_read_length_bp,
+    seq.sequencing_id,
+    seq.sequencing_date,
+    seq.sequencer,
+    seq.flow_cell_id,
+    seq.total_reads,
+    seq.raw_data_path,
+    seq.genbank_accession_number,
+    seq.library_prep_kit AS sequencing_library_prep_kit,
+    seq.index_sequence AS sequencing_index_sequence,
+    seq.read_length_bp AS sequencing_read_length_bp,
+    ar.run_id AS analysis_run_id,
+    ap.pipeline_name,
+    ap.version AS pipeline_version,
+    rdb.db_name AS bioinfo_reference_database,
+    rdb.db_version AS bioinfo_database_version,
+    ar.clustering_threshold,
+    ar.final_output_path,
+    ea.assignment_id AS edna_assignment_id,
+    ea.taxon_id AS edna_assigned_taxon_id,
+    ea_taxon.en_name AS edna_assigned_taxon_name,
+    ea.read_count AS edna_read_count,
+    ea.confidence AS edna_confidence,
+    e.experiment_id AS associated_experiment_id, e.experiment_title AS associated_experiment_title, e.experiment_date AS associated_experiment_date, e.aim AS associated_experiment_aim, e.method AS associated_experiment_method, exp_person.full_name AS experiment_person_name,
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+
+FROM
+    "lab"."sequencing" seq
+LEFT JOIN "lims"."projects" p ON seq.project_id = p.project_id
+LEFT JOIN "reference"."status" stat ON seq.status_id = stat.status_id
+LEFT JOIN "lab"."experiments" e ON seq.experiment_id = e.experiment_id AND seq.sequencing_date = e.experiment_date -- Corrected join date
+LEFT JOIN "reference"."personal" exp_person ON e.person_id = exp_person.person_id
+LEFT JOIN "bioinformatics"."analysis_runs" ar ON seq.sequencing_id = ar.sequencing_id AND seq.sequencing_date = ar.sequencing_date
+LEFT JOIN "bioinformatics"."analysis_pipelines" ap ON ar.pipeline_id = ap.pipeline_id
+LEFT JOIN "bioinformatics"."reference_databases" rdb ON ar.reference_db_id = rdb.db_id
+LEFT JOIN "bioinformatics"."edna_assignments" ea ON ar.run_id = ea.run_id AND ar.run_date = ea.run_date AND seq.sample_id = ea.sample_id
+LEFT JOIN "reference"."taxon" ea_taxon ON ea.taxon_id = ea_taxon.taxon_id;
+
+
+
+-- ==============================================================================
 -- ======================================================================
 -- 15. Partitioning Setup
 -- ======================================================================
@@ -4417,10 +6309,10 @@ DECLARE -- Re-declare variables here
     next_year_start_date TEXT := (next_year_int || '-01-01');
     next_year_end_date TEXT := ((next_year_int + 1) || '-01-01');
 BEGIN
-    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".samples_y' || current_year_int || ' PARTITION OF "lab"."samples"
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".parentalsamples_y' || current_year_int || ' PARTITION OF "lab"."parental_samples"
              FOR VALUES FROM (''' || current_year_start_date || ''') TO (''' || current_year_end_date || ''');';
 
-    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".samples_y' || next_year_int || ' PARTITION OF "lab"."samples"
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".parentalsamples_y' || next_year_int || ' PARTITION OF "lab"."parental_samples"
              FOR VALUES FROM (''' || next_year_start_date || ''') TO (''' || next_year_end_date || ''');';
 END $$;
 
@@ -4613,18 +6505,65 @@ BEGIN
     PERFORM "bioinformatics".create_analysis_runs_partition_if_not_exists_manual(current_year_int);
     PERFORM "bioinformatics".create_analysis_runs_partition_if_not_exists_manual(next_year_int);
 END $$;
+
+
+-- =============================
+
+CREATE OR REPLACE FUNCTION "lab".create_fishing_partition_if_not_exists()
+RETURNS TRIGGER AS $$
+DECLARE
+    partition_date date;
+    partition_name text;
+    start_date date;
+    end_date date;
+BEGIN
+    partition_date := NEW.sampling_date;
+    IF partition_date IS NULL THEN
+        RAISE EXCEPTION 'Cannot partition on NULL sampling_date for lab.fishing. Please provide a sampling_date.';
+    END IF;
+
+    start_date := DATE_TRUNC('year', partition_date);
+    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
+    partition_name := 'fishing_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."fishing"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Update the manual partition creation function for fishing
+CREATE OR REPLACE FUNCTION "lab".create_fishing_partition_if_not_exists_manual (p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'fishing_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."fishing"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
+
+
+
 -- ======================================================================
 -- 16. Row-Level Security (RLS) Policies
 -- ======================================================================
 
 ALTER TABLE "lims"."projects" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "lab"."samples" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "lab"."parental_samples" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY project_membership_policy ON "lims"."projects"
 FOR SELECT
 USING ("lims".is_member_of_project(project_id));
 
-CREATE POLICY sample_project_membership_policy ON "lab"."samples"
+CREATE POLICY sample_project_membership_policy ON "lab"."parental_samples"
 FOR SELECT
 USING ("lims".is_member_of_project(project_id));
 
@@ -4741,7 +6680,7 @@ SELECT
 FROM
     "reference"."samples_type" st
 LEFT JOIN
-    "lab"."samples" s ON st.sample_type_id = s.sample_type_id
+    "lab"."parental_samples" s ON st.sample_type_id = s.sample_type_id
 GROUP BY
     st.sample_type_id
 ORDER BY
@@ -4765,7 +6704,7 @@ SELECT
     EXTRACT(YEAR FROM reception_date) AS reception_year,
     COUNT(sample_id) AS samples_received
 FROM
-    "lab"."samples"
+    "lab"."parental_samples"
 WHERE
     reception_date IS NOT NULL
 GROUP BY
@@ -5059,57 +6998,57 @@ ALTER TABLE "lab"."fishing"
 ADD CONSTRAINT "fishing_customer_id_fk" FOREIGN KEY ("customer_id")
 REFERENCES "lims"."customers"("customer_id");
 
-ALTER TABLE "lab"."samples"
+ALTER TABLE "lab"."parental_samples"
 ADD CONSTRAINT "samples_master_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
-ALTER TABLE "lab"."samples"
+ALTER TABLE "lab"."parental_samples"
 ADD CONSTRAINT "samples_parent_sample_id_fk" FOREIGN KEY ("parent_sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
-ALTER TABLE "lab"."samples"
+ALTER TABLE "lab"."parental_samples"
 ADD CONSTRAINT "samples_sampling_fk" FOREIGN KEY ("sampling_id", "sampling_date")
 REFERENCES "lab"."sampling"("sampling_id", "sampling_date");
 
-ALTER TABLE "lab"."samples"
+ALTER TABLE "lab"."parental_samples"
 ADD CONSTRAINT "samples_storage_id_fk" FOREIGN KEY ("storage_id")
 REFERENCES "lab"."storage"("storage_id");
 
-ALTER TABLE "lab"."samples"
+ALTER TABLE "lab"."parental_samples"
 ADD CONSTRAINT "samples_sampler_person_id_fk" FOREIGN KEY ("sampler_person_id")
 REFERENCES "reference"."personal"("person_id");
 
-ALTER TABLE "lab"."samples"
+ALTER TABLE "lab"."parental_samples"
 ADD CONSTRAINT "samples_receiver_person_id_fk" FOREIGN KEY ("receiver_person_id")
 REFERENCES "reference"."personal"("person_id");
 
-ALTER TABLE "lab"."samples"
+ALTER TABLE "lab"."parental_samples"
 ADD CONSTRAINT "samples_sample_type_id_fk" FOREIGN KEY ("sample_type_id")
 REFERENCES "reference"."samples_type"("sample_type_id");
 
-ALTER TABLE "lab"."samples"
+ALTER TABLE "lab"."parental_samples"
 ADD CONSTRAINT "samples_sample_status_id_fk" FOREIGN KEY ("sample_status_id")
 REFERENCES "reference"."status"("status_id");
 
-ALTER TABLE "lab"."samples"
+ALTER TABLE "lab"."parental_samples"
 ADD CONSTRAINT "samples_workflow_id_fk" FOREIGN KEY ("workflow_id")
 REFERENCES "lims"."workflows"("workflow_id");
 
-ALTER TABLE "lab"."samples"
+ALTER TABLE "lab"."parental_samples"
 ADD CONSTRAINT "samples_step_id_fk" FOREIGN KEY ("step_id")
 REFERENCES "lims"."workflow_steps"("step_id");
 
-ALTER TABLE "lab"."samples"
+ALTER TABLE "lab"."parental_samples"
 ADD CONSTRAINT "samples_project_id_fk" FOREIGN KEY ("project_id")
 REFERENCES "lims"."projects"("project_id");
 
-ALTER TABLE "lab"."samples"
+ALTER TABLE "lab"."parental_samples"
 ADD CONSTRAINT "samples_customer_id_fk" FOREIGN KEY ("customer_id")
 REFERENCES "lims"."customers"("customer_id");
 
 ALTER TABLE "lab"."storage_log"
 ADD CONSTRAINT "storage_log_sample_fk" FOREIGN KEY ("sample_id", "sample_sampling_date")
-REFERENCES "lab"."samples"("sample_id", "sampling_date");
+REFERENCES "lab"."parental_samples"("sample_id", "sampling_date");
 
 ALTER TABLE "lab"."storage_log"
 ADD CONSTRAINT "storage_log_storage_id_fk" FOREIGN KEY ("storage_id")
@@ -5119,6 +7058,7 @@ ALTER TABLE "lab"."storage_log"
 ADD CONSTRAINT "storage_log_person_id_fk" FOREIGN KEY ("person_id")
 REFERENCES "reference"."personal"("person_id");
 
+
 ALTER TABLE "lab"."fish"
 ADD CONSTRAINT "fish_sample_id_fk" FOREIGN KEY ("sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
@@ -5127,9 +7067,10 @@ ALTER TABLE "lab"."fish"
 ADD CONSTRAINT "fish_parent_sample_id_fk" FOREIGN KEY ("parent_sample_id")
 REFERENCES "lab"."master_samples"("sample_id");
 
+-- This FK now links to lab.sampling using sampling_id and sampling_date
 ALTER TABLE "lab"."fish"
-ADD CONSTRAINT "fish_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
-REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
+ADD CONSTRAINT "fish_sampling_fk" FOREIGN KEY ("sampling_id", "sampling_date")
+REFERENCES "lab"."sampling"("sampling_id", "sampling_date");
 
 ALTER TABLE "lab"."fish"
 ADD CONSTRAINT "fish_species_id_fk" FOREIGN KEY ("species_id")
@@ -5146,6 +7087,11 @@ REFERENCES "lims"."projects"("project_id");
 ALTER TABLE "lab"."fish"
 ADD CONSTRAINT "fish_customer_id_fk" FOREIGN KEY ("customer_id")
 REFERENCES "lims"."customers"("customer_id");
+
+
+ALTER TABLE "lab"."fish"
+ADD CONSTRAINT "fish_experiment_fk" FOREIGN KEY ("experiment_id", "experiment_date")
+REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 
 ALTER TABLE "lab"."tissue"
 ADD CONSTRAINT "tissue_sample_id_fk" FOREIGN KEY ("sample_id")
@@ -5575,529 +7521,6 @@ ALTER TABLE "bioinformatics"."edna_assignments"
 ADD CONSTRAINT "edna_assignments_taxon_id_fk" FOREIGN KEY ("taxon_id")
 REFERENCES "reference"."taxon"("taxon_id");
 
-
--- ======================================================================
--- Complete PostgreSQL Schema for LIMS Database (Final Version)
--- Extension for Wanderfische Project
--- ======================================================================
-
--- ======================================================================
--- 0. Pre-Cleanup for Wanderfische Project Tables
--- (Ensures a clean slate for recreation, especially after errors)
--- ======================================================================
-
-DROP TABLE IF EXISTS "projects"."ProjectWanderfische_ChatMessage" CASCADE;
-DROP TABLE IF EXISTS "projects"."ProjectWanderfische_Conversation" CASCADE;
-DROP TABLE IF EXISTS "projects"."ProjectWanderfische_Mail" CASCADE;
-DROP TABLE IF EXISTS "projects"."ProjectWanderfische_FishCatch" CASCADE;
-DROP TABLE IF EXISTS "projects"."ProjectWanderfische_FishingData" CASCADE;
-
-DROP SEQUENCE IF EXISTS "projects"."ProjectWanderfische_FishingData_seq";
-DROP SEQUENCE IF EXISTS "projects"."ProjectWanderfische_FishCatch_seq";
-DROP SEQUENCE IF EXISTS "projects"."ProjectWanderfische_Mail_seq";
-DROP SEQUENCE IF EXISTS "projects"."ProjectWanderfische_Conversation_seq";
-DROP SEQUENCE IF EXISTS "projects"."ProjectWanderfische_ChatMessage_seq";
-
--- ======================================================================
--- 1. Schema Creation for 'projects'
--- ======================================================================
-
-CREATE SCHEMA IF NOT EXISTS "projects";
-
--- ======================================================================
--- 2. New Tables for Wanderfische Project
--- ======================================================================
-
--- Table for Universal Fishing Data
--- This table is designed to consolidate various fishing data inputs from different agencies.
--- It includes fields for standardized data, a JSONB column for original raw data,
--- and geographical coordinates with projection handling.
-CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_FishingData" (
-    "fishing_record_id" text NOT NULL, -- Part of composite PK, unique per year
-    "agency_id" text NOT NULL, -- Link to lims.external_contacts for the agency
-    "project_id" text NOT NULL, -- Link to lims.projects for the Wanderfische project
-    "agency_record_id" text,    -- Original ID from the contributing agency
-    "record_date" date NOT NULL, -- Partitioning key, part of composite PK
-    "record_time" time,
-    "fishing_year" integer,
-
-    -- Temporal details for fishing operation
-    "fishing_start_time" time,
-    "fishing_end_time" time,
-
-    -- Location Information (Original and Standardized)
-    "original_easting" numeric,
-    "original_northing" numeric,
-    "original_latitude" numeric,
-    "original_longitude" numeric,
-    "original_srid" integer, -- SRID of the original coordinates (e.g., 25832 for UTM32N, 4326 for WGS84)
-    "geom_4326" geometry(Point, 4326), -- Standardized WGS84 point using PostGIS
-
-    "location_description" text, -- e.g., Messstellen_Bezeichnung, NAME_LAGE, Lagebeschreibung, Messstelle (kurz)
-    "water_body_name" text,      -- e.g., Gewässername, Gewässer
-    "water_body_code" text,      -- e.g., GWKZ, Wasserkörper Nr.
-    "water_body_type" text,      -- e.g., 'river', 'lake', 'estuary', 'sea'
-    "catchment_area" text,       -- e.g., 'Rhine', 'Elbe'
-    "district" text,             -- e.g., Landkreis, Bearbeitungsgebiet
-    "water_depth_m" numeric,     -- Depth at fishing location
-
-    -- Fishing Event Details
-    "fishing_method" text,       -- e.g., "watend/Boot", Art_Elektrobefischung, Methode
-    "gear_type" text,            -- e.g., E-Gerät
-    "fishing_length_m" numeric,  -- e.g., Abschnitts-länge, Befischungslaenge, Befischte Strecke [m]
-    "fishing_area_sqm" numeric,  -- e.g., Befischte Fläche [m²]
-    "average_width_m" numeric,   -- e.g., Breite, mittl. Breite in m
-    "total_catch_quantity_kg" numeric,
-    "total_catch_quantity_fish" integer,
-
-    -- Environmental Parameters (from sampling data, if available)
-    "temperature_c" numeric,
-    "salinity" numeric,
-    "salinity_unit_id" text,     -- FK to reference.units
-    "oxygen" numeric,
-    "oxygen_unit_id" text,       -- FK to reference.units
-    "ph" numeric,
-    "turbidity_ntu" numeric,
-    "weather_conditions" text,
-    "wind_speed" numeric,
-    "wind_unit_id" text,         -- FK to reference.units
-
-    "notes" text,
-    "attachment" bytea,
-    "attachment_link" text,
-
-    "original_data_jsonb" jsonb, -- To store the complete original row data from the agency
-
-    "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    "created_by" text,           -- Link to reference.personal
-    "last_modified_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    "last_modified_by" text,      -- Link to reference.personal
-
-    PRIMARY KEY ("fishing_record_id", "record_date") -- Composite Primary Key for partitioning
-) PARTITION BY RANGE ("record_date");
-
--- Table for detailed fish catch information per fishing record
--- This allows for multiple species to be recorded per fishing event.
-CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_FishCatch" (
-    "fish_catch_id" text PRIMARY KEY,
-    "fishing_record_id" text NOT NULL, -- FK to ProjectWanderfische_FishingData
-    "fishing_record_date" date NOT NULL, -- Added for composite FK
-    "taxon_id" text,                    -- FK to reference.taxon for standardized species
-    "scientific_name_raw" text,         -- Original scientific name from agency
-    "german_name_raw" text,             -- Original German name from agency
-    "total_count" integer,
-    "juvenile_count" integer,
-    "praeadult_count" integer,
-    "adult_count" integer,
-    "individual_length_mm" numeric,     -- Length of an individual fish
-    "individual_weight_g" numeric,      -- Weight of an individual fish
-    "sex" text CHECK ("sex" IN ('Male', 'Female', 'Undetermined', NULL)),
-    "maturity_stage" text,
-    "condition_factor" numeric,
-    "disease_info" text,
-    "origin_type" text CHECK ("origin_type" IN ('Wild', 'Hatchery', 'Unknown', NULL)),
-    "notes" text,
-    "attachment" bytea,
-    "attachment_link" text,
-    "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    "created_by" text,
-    "last_modified_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    "last_modified_by" text
-);
-
--- Table for managing mail communications related to fishing records
-CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_Mail" (
-    "mail_id" text PRIMARY KEY,
-    "fishing_record_id" text,           -- Optional FK to ProjectWanderfische_FishingData
-    "fishing_record_date" date,         -- Added for composite FK
-    "sender_person_id" text,            -- FK to reference.personal (internal sender)
-    "recipient_contact_id" text,        -- FK to lims.external_contacts (external recipient)
-    "subject" text NOT NULL,
-    "body" text,
-    "sent_at" timestamptz NOT NULL,
-    "attachment" bytea,
-    "attachment_link" text,
-    "notes" text,
-    "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    "created_by" text,
-    "last_modified_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    "last_modified_by" text
-);
-
--- Table for managing conversation threads related to fishing records
-CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_Conversation" (
-    "conversation_id" text PRIMARY KEY,
-    "fishing_record_id" text,           -- Optional FK to ProjectWanderfische_FishingData
-    "fishing_record_date" date,         -- Added for composite FK
-    "topic" text NOT NULL,
-    "started_at" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "last_updated_at" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "notes" text,
-    "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    "created_by" text,
-    "last_modified_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    "last_modified_by" text
-);
-
--- Table for individual chat messages within a conversation thread
-CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_ChatMessage" (
-    "message_id" text PRIMARY KEY,
-    "conversation_id" text NOT NULL,    -- FK to ProjectWanderfische_Conversation
-    "sender_person_id" text,            -- FK to reference.personal (internal sender)
-    "sender_contact_id" text,           -- FK to lims.external_contacts (external sender)
-    "message_text" text NOT NULL,
-    "sent_at" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "attachment" bytea,
-    "attachment_link" text,
-    "notes" text,
-    "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    "created_by" text,
-    "last_modified_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    "last_modified_by" text
-);
-
--- ======================================================================
--- 3. Sequences for ID Generation
--- ======================================================================
-
-CREATE SEQUENCE IF NOT EXISTS "projects"."ProjectWanderfische_FishingData_seq" START 1;
-CREATE SEQUENCE IF NOT EXISTS "projects"."ProjectWanderfische_FishCatch_seq" START 1;
-CREATE SEQUENCE IF NOT EXISTS "projects"."ProjectWanderfische_Mail_seq" START 1;
-CREATE SEQUENCE IF NOT EXISTS "projects"."ProjectWanderfische_Conversation_seq" START 1;
-CREATE SEQUENCE IF NOT EXISTS "projects"."ProjectWanderfische_ChatMessage_seq" START 1;
-
--- ======================================================================
--- 4. Functions for ID Generation and Coordinate Transformation
--- ======================================================================
-
--- Function to generate IDs for ProjectWanderfische_FishingData
-CREATE OR REPLACE FUNCTION "projects".generate_ProjectWanderfische_FishingData_id()
-RETURNS TRIGGER AS $$
-DECLARE
-    current_year text;
-    next_serial integer;
-    id_prefix text;
-BEGIN
-    current_year := TO_CHAR(COALESCE(NEW.record_date, CURRENT_DATE), 'YY');
-    id_prefix := 'WF' || current_year || 'F'; -- WanderFische + Year + Fishing
-
-    SELECT COALESCE(MAX(SUBSTRING("fishing_record_id" FROM LENGTH(id_prefix) + 1)::INTEGER), 0)
-    INTO next_serial
-    FROM "projects"."ProjectWanderfische_FishingData"
-    WHERE "fishing_record_id" ILIKE id_prefix || '%';
-
-    NEW.fishing_record_id := id_prefix || LPAD((next_serial + 1)::TEXT, 5, '0');
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Function to generate IDs for ProjectWanderfische_FishCatch
-CREATE OR REPLACE FUNCTION "projects".generate_ProjectWanderfische_FishCatch_id()
-RETURNS TRIGGER AS $$
-DECLARE
-    next_serial integer;
-    id_prefix text;
-BEGIN
-    -- Prefix with the parent fishing_record_id for better traceability
-    id_prefix := NEW.fishing_record_id || '_C'; -- Catch
-
-    SELECT COALESCE(MAX(SUBSTRING("fish_catch_id" FROM LENGTH(id_prefix) + 1)::INTEGER), 0)
-    INTO next_serial
-    FROM "projects"."ProjectWanderfische_FishCatch"
-    WHERE "fish_catch_id" ILIKE id_prefix || '%';
-
-    NEW.fish_catch_id := id_prefix || LPAD((next_serial + 1)::TEXT, 3, '0');
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Function to generate IDs for ProjectWanderfische_Mail
-CREATE OR REPLACE FUNCTION "projects".generate_ProjectWanderfische_Mail_id()
-RETURNS TRIGGER AS $$
-DECLARE
-    current_year text;
-    next_serial integer;
-    id_prefix text;
-BEGIN
-    current_year := TO_CHAR(COALESCE(NEW.sent_at, CURRENT_TIMESTAMP), 'YY');
-    id_prefix := 'WF' || current_year || 'M'; -- WanderFische + Year + Mail
-
-    SELECT COALESCE(MAX(SUBSTRING("mail_id" FROM LENGTH(id_prefix) + 1)::INTEGER), 0)
-    INTO next_serial
-    FROM "projects"."ProjectWanderfische_Mail"
-    WHERE "mail_id" ILIKE id_prefix || '%';
-
-    NEW.mail_id := id_prefix || LPAD((next_serial + 1)::TEXT, 5, '0');
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Function to generate IDs for ProjectWanderfische_Conversation
-CREATE OR REPLACE FUNCTION "projects".generate_ProjectWanderfische_Conversation_id()
-RETURNS TRIGGER AS $$
-DECLARE
-    current_year text;
-    next_serial integer;
-    id_prefix text;
-BEGIN
-    current_year := TO_CHAR(COALESCE(NEW.started_at, CURRENT_TIMESTAMP), 'YY');
-    id_prefix := 'WF' || current_year || 'CONV'; -- WanderFische + Year + Conversation
-
-    SELECT COALESCE(MAX(SUBSTRING("conversation_id" FROM LENGTH(id_prefix) + 1)::INTEGER), 0)
-    INTO next_serial
-    FROM "projects"."ProjectWanderfische_Conversation"
-    WHERE "conversation_id" ILIKE id_prefix || '%';
-
-    NEW.conversation_id := id_prefix || LPAD((next_serial + 1)::TEXT, 5, '0');
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Function to generate IDs for ProjectWanderfische_ChatMessage
-CREATE OR REPLACE FUNCTION "projects".generate_ProjectWanderfische_ChatMessage_id()
-RETURNS TRIGGER AS $$
-DECLARE
-    next_serial integer;
-    id_prefix text;
-BEGIN
-    -- Prefix with the parent conversation_id
-    id_prefix := NEW.conversation_id || '_MSG'; -- Message
-
-    SELECT COALESCE(MAX(SUBSTRING("message_id" FROM LENGTH(id_prefix) + 1)::INTEGER), 0)
-    INTO next_serial
-    FROM "projects"."ProjectWanderfische_ChatMessage"
-    WHERE "message_id" ILIKE id_prefix || '%';
-
-    NEW.message_id := id_prefix || LPAD((next_serial + 1)::TEXT, 4, '0');
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-
--- Function to transform coordinates to EPSG:4326 (WGS84)
--- This function will be called before inserting data into geom_4326
-CREATE OR REPLACE FUNCTION "projects".transform_coordinates_to_wgs84(
-    p_easting numeric,
-    p_northing numeric,
-    p_latitude numeric,
-    p_longitude numeric,
-    p_original_srid integer
-)
-RETURNS geometry(Point, 4326) AS $$
-DECLARE
-    transformed_geom geometry(Point, 4326);
-    temp_geom geometry; -- Use a temporary geometry to check before casting to Point, 4326
-BEGIN
-    IF p_original_srid IS NULL THEN
-        -- If no SRID is provided, assume WGS84 if lat/lon are given
-        IF p_latitude IS NOT NULL AND p_longitude IS NOT NULL THEN
-            temp_geom := ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326);
-        ELSIF p_easting IS NOT NULL AND p_northing IS NOT NULL THEN
-            -- If only easting/northing and no SRID, raise a warning and return NULL
-            RAISE WARNING 'Cannot transform coordinates: original_srid is NULL for Easting/Northing input. Returning NULL.';
-            RETURN NULL;
-        ELSE
-            RETURN NULL; -- No coordinates provided
-        END IF;
-    ELSIF p_original_srid = 4326 THEN
-        -- Already WGS84, just create the point
-        IF p_longitude IS NOT NULL AND p_latitude IS NOT NULL THEN
-            temp_geom := ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326);
-        ELSIF p_easting IS NOT NULL AND p_northing IS NOT NULL THEN
-            -- If 4326 is specified but coordinates are Easting/Northing, assume they are actually Lon/Lat for 4326
-            -- This is a common mistake, so we try to interpret them as Lon/Lat for 4326
-            temp_geom := ST_SetSRID(ST_MakePoint(p_easting, p_northing), 4326);
-        ELSE
-            RETURN NULL;
-        END IF;
-    ELSIF p_easting IS NOT NULL AND p_northing IS NOT NULL THEN
-        -- Transform from other SRID to 4326
-        BEGIN
-            temp_geom := ST_Transform(ST_SetSRID(ST_MakePoint(p_easting, p_northing), p_original_srid), 4326);
-        EXCEPTION
-            WHEN SQLSTATE 'XX000' THEN -- Catch "Undefined spatial reference system" or similar
-                RAISE WARNING 'SRID % is not defined or transformation failed for coordinates (%, %). Returning NULL.', p_original_srid, p_easting, p_northing;
-                RETURN NULL;
-        END;
-    ELSE
-        RAISE WARNING 'Incomplete coordinate data for transformation. Easting/Northing missing for SRID %.', p_original_srid;
-        RETURN NULL;
-    END IF;
-
-    -- **Wichtige neue Prüfung:** Koordinaten auf Infinity/NaN prüfen
-    IF temp_geom IS NOT NULL AND (
-        ST_X(temp_geom) IS NULL OR ST_X(temp_geom) = 'Infinity'::float8 OR ST_X(temp_geom) = '-Infinity'::float8 OR ST_X(temp_geom) = 'NaN'::float8 OR
-        ST_Y(temp_geom) IS NULL OR ST_Y(temp_geom) = 'Infinity'::float8 OR ST_Y(temp_geom) = '-Infinity'::float8 OR ST_Y(temp_geom) = 'NaN'::float8
-    ) THEN
-        RAISE WARNING 'Transformed geometry contains invalid (Infinity/NaN) coordinates. Returning NULL.';
-        RETURN NULL;
-    END IF;
-
-    -- Nur zu geometry(Point, 4326) umwandeln, wenn es ein gültiger Punkt ist
-    IF ST_GeometryType(temp_geom) = 'ST_Point' THEN
-        transformed_geom := temp_geom;
-    ELSE
-        RAISE WARNING 'Transformed geometry is not a POINT type. Returning NULL.';
-        RETURN NULL;
-    END IF;
-
-    RETURN transformed_geom;
-END;
-$$ LANGUAGE plpgsql;
-
-
--- Trigger function to populate geom_4326 before insert/update on ProjectWanderfische_FishingData
-CREATE OR REPLACE FUNCTION "projects".populate_fishing_geom_4326()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.geom_4326 := "projects".transform_coordinates_to_wgs84(
-        NEW.original_easting,
-        NEW.original_northing,
-        NEW.original_latitude,
-        NEW.original_longitude,
-        NEW.original_srid
-    );
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Function for ProjectWanderfische_FishingData partitions
-CREATE OR REPLACE FUNCTION "projects".create_ProjectWanderfische_FishingData_partition_if_not_exists()
-RETURNS TRIGGER AS $$
-DECLARE
-    partition_date date;
-    partition_name text;
-    start_date date;
-    end_date date;
-BEGIN
-    partition_date := NEW.record_date;
-    IF partition_date IS NULL THEN
-        RAISE EXCEPTION 'Cannot partition on NULL record_date for projects.ProjectWanderfische_FishingData. Please provide a record_date.';
-    END IF;
-
-    start_date := DATE_TRUNC('year', partition_date);
-    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
-    partition_name := 'ProjectWanderfische_FishingData_y' || TO_CHAR(start_date, 'YYYY');
-
-    EXECUTE 'CREATE TABLE IF NOT EXISTS "projects".' || quote_ident(partition_name) || ' PARTITION OF "projects"."ProjectWanderfische_FishingData"
-             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Manual partition creation function for ProjectWanderfische_FishingData
-CREATE OR REPLACE FUNCTION "projects".create_ProjectWanderfische_FishingData_partition_if_not_exists_manual(p_year integer)
-RETURNS VOID AS $$
-DECLARE
-    start_date date;
-    end_date date;
-    partition_name text;
-BEGIN
-    start_date := MAKE_DATE(p_year, 1, 1);
-    end_date := MAKE_DATE(p_year + 1, 1, 1);
-    partition_name := 'ProjectWanderfische_FishingData_y' || p_year;
-
-    EXECUTE 'CREATE TABLE IF NOT EXISTS "projects".' || quote_ident(partition_name) || ' PARTITION OF "projects"."ProjectWanderfische_FishingData"
-             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
-END;
-$$ LANGUAGE plpgsql;
-
-
--- ======================================================================
--- 5. Indexes
--- ======================================================================
-
--- Indexes for ProjectWanderfische_FishingData
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishingData_agency_id ON "projects"."ProjectWanderfische_FishingData" ("agency_id");
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishingData_project_id ON "projects"."ProjectWanderfische_FishingData" ("project_id");
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishingData_record_date ON "projects"."ProjectWanderfische_FishingData" ("record_date");
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishingData_location_description ON "projects"."ProjectWanderfische_FishingData" ("location_description");
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishingData_water_body_name ON "projects"."ProjectWanderfische_FishingData" ("water_body_name");
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishingData_geom_4326 ON "projects"."ProjectWanderfische_FishingData" USING GIST ("geom_4326");
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishingData_agency_record_id ON "projects"."ProjectWanderfische_FishingData" ("agency_record_id");
-
--- Indexes for ProjectWanderfische_FishCatch
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishCatch_fishing_record_id ON "projects"."ProjectWanderfische_FishCatch" ("fishing_record_id", "fishing_record_date");
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_FishCatch_taxon_id ON "projects"."ProjectWanderfische_FishCatch" ("taxon_id");
-
--- Indexes for ProjectWanderfische_Mail
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_Mail_fishing_record_id ON "projects"."ProjectWanderfische_Mail" ("fishing_record_id", "fishing_record_date");
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_Mail_sender_person_id ON "projects"."ProjectWanderfische_Mail" ("sender_person_id");
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_Mail_recipient_contact_id ON "projects"."ProjectWanderfische_Mail" ("recipient_contact_id");
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_Mail_sent_at ON "projects"."ProjectWanderfische_Mail" ("sent_at");
-
--- Indexes for ProjectWanderfische_Conversation
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_Conversation_fishing_record_id ON "projects"."ProjectWanderfische_Conversation" ("fishing_record_id", "fishing_record_date");
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_Conversation_topic ON "projects"."ProjectWanderfische_Conversation" ("topic");
-
--- Indexes for ProjectWanderfische_ChatMessage
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_ChatMessage_conversation_id ON "projects"."ProjectWanderfische_ChatMessage" ("conversation_id");
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_ChatMessage_sender_person_id ON "projects"."ProjectWanderfische_ChatMessage" ("sender_person_id");
-CREATE INDEX IF NOT EXISTS idx_ProjectWanderfische_ChatMessage_sent_at ON "projects"."ProjectWanderfische_ChatMessage" ("sent_at");
-
-
--- ======================================================================
--- 6. Triggers
--- ======================================================================
-
--- Audit triggers for new tables
-CREATE TRIGGER audit_trigger_ProjectWanderfische_FishingData
-AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_FishingData"
-FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
-
-CREATE TRIGGER audit_trigger_ProjectWanderfische_FishCatch
-AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_FishCatch"
-FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
-
-CREATE TRIGGER audit_trigger_ProjectWanderfische_Mail
-AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_Mail"
-FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
-
-CREATE TRIGGER audit_trigger_ProjectWanderfische_Conversation
-AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_Conversation"
-FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
-
-CREATE TRIGGER audit_trigger_ProjectWanderfische_ChatMessage
-AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_ChatMessage"
-FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
-
--- ID generation triggers
-CREATE TRIGGER trg_generate_ProjectWanderfische_FishingData_id
-BEFORE INSERT ON "projects"."ProjectWanderfische_FishingData"
-FOR EACH ROW EXECUTE FUNCTION "projects".generate_ProjectWanderfische_FishingData_id();
-
-CREATE TRIGGER trg_generate_ProjectWanderfische_FishCatch_id
-BEFORE INSERT ON "projects"."ProjectWanderfische_FishCatch"
-FOR EACH ROW EXECUTE FUNCTION "projects".generate_ProjectWanderfische_FishCatch_id();
-
-CREATE TRIGGER trg_generate_ProjectWanderfische_Mail_id
-BEFORE INSERT ON "projects"."ProjectWanderfische_Mail"
-FOR EACH ROW EXECUTE FUNCTION "projects".generate_ProjectWanderfische_Mail_id();
-
-CREATE TRIGGER trg_generate_ProjectWanderfische_Conversation_id
-BEFORE INSERT ON "projects"."ProjectWanderfische_Conversation"
-FOR EACH ROW EXECUTE FUNCTION "projects".generate_ProjectWanderfische_Conversation_id();
-
-CREATE TRIGGER trg_generate_ProjectWanderfische_ChatMessage_id
-BEFORE INSERT ON "projects"."ProjectWanderfische_ChatMessage"
-FOR EACH ROW EXECUTE FUNCTION "projects".generate_ProjectWanderfische_ChatMessage_id();
-
--- Coordinate transformation trigger
-CREATE TRIGGER trg_populate_fishing_geom_4326
-BEFORE INSERT OR UPDATE ON "projects"."ProjectWanderfische_FishingData"
-FOR EACH ROW EXECUTE FUNCTION "projects".populate_fishing_geom_4326();
-
--- Partitioning trigger
-CREATE TRIGGER trg_create_ProjectWanderfische_FishingData_partition
-BEFORE INSERT ON "projects"."ProjectWanderfische_FishingData"
-FOR EACH ROW EXECUTE FUNCTION "projects".create_ProjectWanderfische_FishingData_partition_if_not_exists();
-
-
--- ======================================================================
--- 7. Foreign Key Constraints
--- ======================================================================
-
 ALTER TABLE "projects"."ProjectWanderfische_FishingData"
 ADD CONSTRAINT "fk_fishingdata_agency" FOREIGN KEY ("agency_id")
 REFERENCES "lims"."external_contacts"("contact_id") ON UPDATE CASCADE ON DELETE RESTRICT;
@@ -6199,24 +7622,452 @@ ADD CONSTRAINT "fk_chatmessage_last_modified_by" FOREIGN KEY ("last_modified_by"
 REFERENCES "reference"."personal"("person_id") ON UPDATE CASCADE ON DELETE SET NULL;
 
 
--- ======================================================================
--- 8. Initial Partitioning Setup for ProjectWanderfische_FishingData
--- ======================================================================
 
-DO $$
-DECLARE
-    current_year_int INTEGER := EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER;
-    next_year_int INTEGER := current_year_int + 1;
-BEGIN
-    PERFORM "projects".create_ProjectWanderfische_FishingData_partition_if_not_exists_manual(current_year_int);
-    PERFORM "projects".create_ProjectWanderfische_FishingData_partition_if_not_exists_manual(next_year_int);
-END $$;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 -- ======================================================================
 -- 9. Example Data Insertion (Optional)
 -- Updated to include new fields and composite primary keys
 -- ======================================================================
+
+
+-- ======================================================================
+-- ======================================================================
+-- 14. Initial Data Population
+-- ======================================================================
+
+INSERT INTO "reference"."status" ("status_id", "notes") VALUES
+('Received', 'sample has been received in the lab'),
+('Dissection', 'sample has been dissected'),
+('Extracted', 'sample has been extracted'),
+('Nanodrop QC', 'sample quality checked with Nanodrop'),
+('Qubit QC', 'sample quality checked with Qubit'),
+('Tapestation QC', 'sample quality checked with Tapestation'),
+('PCR Done', 'PCR has been performed on the sample'),
+('qPCR Done', 'qPCR has been performed on the sample'),
+('Library Prep', 'Sequencing library has been prepared'),
+('Sequencing Done', 'sample has been sequenced'),
+('Bioinformatics Done', 'bioinformatics analysis is complete'),
+('Unknown Step', 'An unknown step has occurred in the workflow')
+ON CONFLICT ("status_id") DO NOTHING;
+
+INSERT INTO "reference"."samples_type" ("sample_type_id", "sample_type_abrv", "notes") VALUES
+('DNA', 'D', 'Deoxyribonucleic Acid sample'),
+('RNA', 'R', 'Ribonucleic Acid sample'),
+('Library', 'L', 'Sequencing Library sample'),
+('Water', 'W', 'Water sample'),
+('Sediments', 'S', 'Sedi ment sample'),
+('Tissue', 'T', 'Tissue sample'),
+('Fish', 'F', 'Fish sample'),
+('Sequencing', 'Q', 'Sequencing run output'),
+('Dataset', 'Z', 'Processed dataset'),
+('Publication', 'PUB', 'Research Publication')
+ON CONFLICT ("sample_type_id") DO NOTHING;
+
+
+INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "unit_type", "conversion_factor_to_base") VALUES
+('mm', 'millimeter', 'mm', 'length', 0.001),
+('g', 'gram', 'g', 'mass', 0.001),
+('ul', 'microliter', 'µl', 'volume', 1e-6),
+('ng_ul', 'nanogram per microliter', 'ng/µl', 'concentration', 1e-9),
+('bp', 'base pair', 'bp', 'length', 1),
+('km_h', 'kilometer per hour', 'km/h', 'speed', 0.277778),
+('m_s', 'meter per second', 'm/s', 'speed', 1),
+('PSU', 'Practical Salinity Unit', 'PSU', 'salinity', 1),
+('ppt', 'parts per thousand', 'ppt', 'salinity', 1),
+('dbar', 'decibar', 'dbar', 'pressure', 1),
+('psi', 'pounds per square inch', 'psi', 'pressure', 0.0689476),
+('kPa', 'kilopascal', 'kPa', 'pressure', 1000),
+('mg_l', 'milligram per liter', 'mg/L', 'concentration', 1),
+('umol_l', 'micromole per liter', 'µmol/L', 'concentration', 1),
+('ntu', 'Nephelometric Turbidity Unit', 'NTU', 'turbidity', 1),
+('ug_l', 'microgram per liter', 'µg/L', 'concentration', 1),
+('deg', 'degree', 'deg', 'angle', 1),
+('min', 'minute', 'min', 'time', 60),
+('h', 'hour', 'h', 'time', 3600),
+('c', 'Celsius', '°C', 'temperature', 1),
+('l', 'liter', 'L', 'volume', 1),
+('um', 'micrometer', 'µm', 'length', 1e-6),
+('m', 'meter', 'm', 'length', 1)
+ON CONFLICT ("unit_id") DO NOTHING;
+
+INSERT INTO "reference"."personal" ("person_id", "full_name", "password_hash") VALUES
+('system_user', 'System Automation', 'no_password_needed_for_system')
+ON CONFLICT ("person_id") DO NOTHING;
+
+-- Insert statement for "reference"."Status"
+INSERT INTO "reference"."status" ("status_id", "notes") VALUES
+('Received', 'sample has been received in the lab'),
+('Dissection', 'sample has been dissected'),
+('Extracted', 'sample has been extracted'),
+('Nanodrop QC', 'sample quality checked with Nanodrop'),
+('Qubit QC', 'sample quality checked with Qubit'),
+('Tapestation QC', 'sample quality checked with Tapestation'),
+('PCR Done', 'PCR has been performed on the sample'),
+('qPCR Done', 'qPCR has been performed on the sample'),
+('Library Prep', 'Sequencing library has been prepared'),
+('Sequencing Done', 'sample has been sequenced'),
+('Bioinformatics Done', 'bioinformatics analysis is complete'),
+('Unknown Step', 'An unknown step has occurred in the workflow'),
+('Active', 'Project or item is currently active/in progress'),
+('Planned', 'Project or activity is planned but not yet started'),
+('Completed', 'Project or activity has been finished successfully'),
+('On Hold', 'Project or activity is temporarily paused'),
+('Cancelled', 'Project or activity has been cancelled'),
+('Rejected', 'Sample or item failed quality control or is unusable'),
+('In Transit', 'Sample or item is currently in transport'),
+('In Stock', 'Reagent or item is available in inventory'),
+('Expired', 'Reagent or item is past its expiration date')
+ON CONFLICT ("status_id") DO NOTHING;
+
+-- Insert statement for "reference"."category"
+-- You'll need to define what categories you want to include.
+-- Here are some common examples for a LIMS, you can adjust as needed.
+INSERT INTO "reference"."category" ("category_id", "notes") VALUES
+('Reagent', 'Chemicals and solutions used in experiments.'),
+('Consumable', 'Disposable lab supplies like tips, tubes, and plates.'),
+('Equipment', 'Laboratory instruments and machinery.'),
+('Service', 'External services like sequencing or custom synthesis.'),
+('Software', 'Licenses or subscriptions for bioinformatics or lab management tools.'),
+('General', 'Miscellaneous items not fitting other categories.')
+ON CONFLICT ("category_id") DO NOTHING;
+
+-- Insert statement for "reference"."samples_type"
+INSERT INTO "reference"."samples_type" ("sample_type_id", "sample_type_abrv", "notes") VALUES
+('DNA', 'D', 'Deoxyribonucleic Acid sample'),
+('RNA', 'R', 'Ribonucleic Acid sample'),
+('Library', 'L', 'Sequencing Library sample'),
+('Water', 'W', 'Water sample'),
+('Sediments', 'S', 'Sedi ment sample'),
+('Tissue', 'T', 'Tissue sample'),
+('Fish', 'F', 'Fish sample'),
+('Sequencing', 'Q', 'Sequencing run output'),
+('Dataset', 'Z', 'Processed dataset'),
+('Publication', 'PUB', 'Research Publication')
+ON CONFLICT ("sample_type_id") DO NOTHING;
+
+-- insert most genes
+INSERT INTO "reference"."gene" ("gene_id", "notes") VALUES
+('COI', 'Cytochrome c oxidase subunit I - Universal barcode marker for species identification'),
+('CytB', 'Cytochrome b - Mitochondrial gene for phylogenetic analysis and population studies'),
+('12S_rRNA', '12S ribosomal RNA - Mitochondrial gene for phylogenetic reconstruction'),
+('16S_rRNA', '16S ribosomal RNA - Mitochondrial gene for phylogenetic reconstruction'),
+('ACTB', 'Beta-actin - Housekeeping gene, commonly used as a control for gene expression studies'),
+('GAPDH', 'Glyceraldehyde-3-phosphate dehydrogenase - Housekeeping gene, internal control for gene expression'),
+('MHC_I', 'Major Histocompatibility Complex Class I - Immune gene, studied for disease resistance and diversity'),
+('MHC_II', 'Major Histocompatibility Complex Class II - Immune gene, studied for disease resistance and diversity'),
+('GH', 'Growth Hormone - Involved in growth and development, relevant for aquaculture and livestock'),
+('PRL', 'Prolactin - Involved in reproduction, growth, and osmoregulation in fish'),
+('RAG1', 'Recombination Activating Gene 1 - Nuclear gene for vertebrate phylogenetics'),
+('S7', 'Ribosomal protein S7 - Nuclear gene for phylogenetic analysis'),
+('Opsin_Rhodopsin', 'Opsin (Rhodopsin) - Genes involved in vision, studied for adaptation to light environments'),
+('TLR3', 'Toll-like Receptor 3 - Immune receptor gene, important for innate immunity in fish'),
+('HSP70', 'Heat Shock Protein 70 - Stress response gene, studied for environmental adaptation')
+ON CONFLICT ("gene_id") DO NOTHING;
+
+
+
+
+
+-- ======================================================================
+-- 14. Initial Data Population (Continued with "Test_db" Data)
+-- ======================================================================
+
+-- Reference Schema Tables - Basic Entries for FKs
+INSERT INTO "reference"."personal" ("person_id", "full_name", "password_hash") VALUES
+('Test_db', 'Test_db Full Name', 'Test_db_hashed_password')
+ON CONFLICT ("person_id") DO NOTHING;
+
+INSERT INTO "reference"."status" ("status_id", "notes") VALUES
+('Test_db', 'Test_db Status Notes')
+ON CONFLICT ("status_id") DO NOTHING;
+
+INSERT INTO "reference"."room" ("room_id", "etage", "address") VALUES
+('Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("room_id") DO NOTHING;
+
+INSERT INTO "reference"."vessel" ("vessel_id", "vessel_name") VALUES
+('Test_db', 'Test_db')
+ON CONFLICT ("vessel_id") DO NOTHING;
+
+INSERT INTO "reference"."region" ("region_id", "region_abrv", "country") VALUES
+('Test_db', 'TestDB', 'Test_db')
+ON CONFLICT ("region_id") DO NOTHING;
+
+INSERT INTO "reference"."ecosystem" ("ecosystem_id", "ecosystem_abrv", "country") VALUES
+('Test_db', 'TestDB', 'Test_db')
+ON CONFLICT ("ecosystem_id") DO NOTHING;
+
+INSERT INTO "reference"."category" ("category_id") VALUES
+('Test_db')
+ON CONFLICT ("category_id") DO NOTHING;
+
+INSERT INTO "reference"."samples_type" ("sample_type_id", "sample_type_abrv", "notes") VALUES
+('Test_db', 'TestDB', 'Test_db')
+ON CONFLICT ("sample_type_id") DO NOTHING;
+
+INSERT INTO "reference"."gene" ("gene_id") VALUES
+('Test_db')
+ON CONFLICT ("gene_id") DO NOTHING;
+
+INSERT INTO "reference"."taxon" ("taxon_id", "de_name", "en_name", "rank") VALUES
+('Test_db', 'Test_db', 'Test_db', 'species')
+ON CONFLICT ("taxon_id") DO NOTHING;
+-- Populate ltree path after inserting taxon data
+SELECT "reference".update_taxon_ltree_paths();
+
+INSERT INTO "reference"."species" ("species_id", "de_name", "en_name", "max_length_mm", "max_age_years") VALUES
+('Test_db', 'Test_db', 'Test_db', 1, 1)
+ON CONFLICT ("species_id") DO NOTHING;
+
+INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "unit_type", "conversion_factor_to_base") VALUES
+('Test_db', 'Test_db', 'TestDB', 'Test_db', 1)
+ON CONFLICT ("unit_id") DO NOTHING;
+
+
+-- Lims Schema Tables
+INSERT INTO "lims"."external_contacts" ("contact_id", "full_name") VALUES
+('Test_db', 'Test_db')
+ON CONFLICT ("contact_id") DO NOTHING;
+
+INSERT INTO "lims"."customers" ("customer_id", "customer_name", "customer_abrv") OVERRIDING SYSTEM VALUE VALUES
+(1, 'Test_db', 'TestDB')
+ON CONFLICT ("customer_id") DO NOTHING;
+
+INSERT INTO "lims"."projects" ("project_id", "title", "status_id", "pi_person_id", "customer_id", "start_date") VALUES
+('Test_db', 'Test_db', 'Test_db', 'Test_db', 1, '2025-07-01')
+ON CONFLICT ("project_id") DO NOTHING;
+
+INSERT INTO "lims"."project_persons" ("project_id", "person_id", "role") VALUES
+('Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("project_id", "person_id") DO NOTHING;
+
+INSERT INTO "lab"."storage" ("storage_id", "room_id", "freezer", "etage", "temperature_c", "box", "box_size_x", "box_size_y", "storage_position_format", "project_id") VALUES
+('Test_db', 'Test_db', 'Test_db', 'Test_db', 1, 'Test_db', 1, 1, 'Test_db', 'Test_db')
+ON CONFLICT ("storage_id") DO NOTHING;
+
+INSERT INTO "lims"."cruises" ("cruise_id", "project_id", "vessel_id", "status_id", "region_id", "ecosystem_id", "capitaine_contact_id", "chief_scientist_person_id", "start_date") VALUES
+('Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', '2025-07-01')
+ON CONFLICT ("cruise_id") DO NOTHING;
+
+INSERT INTO "lims"."workflows" ("workflow_id", "workflow_name") VALUES
+('Test_db', 'Test_db')
+ON CONFLICT ("workflow_id") DO NOTHING;
+
+INSERT INTO "lims"."permits" ("permit_id", "permit_number", "issuing_authority", "valid_from") VALUES
+('Test_db', 'Test_db', 'Test_db', '2025-07-01')
+ON CONFLICT ("permit_id") DO NOTHING;
+
+INSERT INTO "lims"."primers" ("primer_id", "target_gene_id", "primer_sequence_fwd") VALUES
+('Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("primer_id") DO NOTHING;
+
+INSERT INTO "lims"."sop" ("sop_id", "title", "sop_id_origin", "version", "author_person_id", "date_realise") VALUES
+('Test_db', 'Test_db', 'Test_db_origin', '1.0', 'Test_db', '2025-07-01')
+ON CONFLICT ("sop_id") DO NOTHING;
+
+INSERT INTO "lims"."workflow_steps" ("step_id", "workflow_id", "step_number", "step_name", "sop_id", "workflow_status_id") VALUES
+('Test_db', 'Test_db', 1, 'Test_db', 'Test_db_origin_v10', 'Test_db')
+ON CONFLICT ("step_id") DO NOTHING;
+
+INSERT INTO "lims"."equipment" ("equipment_id", "equipment_name", "room_id") VALUES
+('Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("equipment_id") DO NOTHING;
+
+INSERT INTO "lims"."suppliers" ("supplier_id", "supplier_name") VALUES
+('Test_db', 'Test_db')
+ON CONFLICT ("supplier_id") DO NOTHING;
+
+INSERT INTO "lims"."inventory_items" ("item_id", "item_name", "category_id", "unit_id") VALUES
+('Test_db', 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("item_id") DO NOTHING;
+
+INSERT INTO "lims"."orders" ("fi_order_nr", "item_id", "category_id", "order_date", "price", "quantity", "project_id", "supplier_id", "status_id") VALUES
+('Test_db', 'Test_db', 'Test_db', '2025-07-01', 1, 1, 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("fi_order_nr") DO NOTHING;
+
+INSERT INTO "lims"."reagents" ("reagent_id", "reagent_complete_name", "category_id", "lot", "storage_id", "storage_position", "status_id", "reception_date", "expire_date", "order_id", "project_id", "quantity_available", "quantity_unit_id") VALUES
+('Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 1, 'Test_db', '2025-07-01', '2025-07-01', 'Test_db', 'Test_db', 1, 'Test_db')
+ON CONFLICT ("reagent_id") DO NOTHING;
+
+INSERT INTO "lims"."publication_type" ("publication_type_id") VALUES
+('Test_db')
+ON CONFLICT ("publication_type_id") DO NOTHING;
+
+INSERT INTO "lims"."publications" ("publication_id", "publication_type_id", "project_id", "title", "journal", "volume", "issue", "pages", "doi", "date_publication", "date_submission", "first_author_person_id", "corresponding_author_person_id") VALUES
+('Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', '2025-07-01', '2025-07-01', 'Test_db', 'Test_db')
+ON CONFLICT ("publication_id") DO NOTHING;
+
+
+-- Lab Schema Tables
+INSERT INTO "lab"."experiments" ("experiment_id", "experiment_title", "aim", "method", "sop_id", "experiment_date", "person_id", "lab_book", "status_id") VALUES
+('Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db_origin_v10', '2025-07-01', 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("experiment_id", "experiment_date") DO NOTHING;
+
+INSERT INTO "lab"."experiments_projects" ("experiment_project_id", "experiment_id", "experiment_date", "project_id", "link_date") OVERRIDING SYSTEM VALUE VALUES
+(1, 'Test_db', '2025-07-01', 'Test_db', '2025-07-01')
+ON CONFLICT ("experiment_project_id") DO NOTHING;
+
+INSERT INTO "lab"."protocol_runs" ("protocol_run_id", "experiment_id", "experiment_date", "sop_id", "run_date", "person_id") VALUES
+('Test_db', 'Test_db', '2025-07-01', 'Test_db_origin_v10', '2025-07-01', 'Test_db')
+ON CONFLICT ("protocol_run_id") DO NOTHING;
+
+INSERT INTO "lab"."sampling" (
+    "sampling_id", "experiment_id", "experiment_date", "project_id", "cruise_id", "region_id",
+    "ecosystem_id", "vessel_id", "customer_id", "sampling_date", "geom", "location_name",
+    "depth_m", "start_at", "end_at", "temperature_atmospheric_c", "weather", "wind_speed"
+) VALUES (
+    'Test_db', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 'Test_db',
+    'Test_db', 'Test_db', 1, '2025-07-01', ST_SetSRID(ST_MakePoint(1, 1), 4326), 'Test_db',
+    1, '00:00:01', '00:00:01', 1, 'Test_db', 1 -- Added the two missing 'Test_db' values here
+)
+ON CONFLICT ("sampling_id", "sampling_date") DO NOTHING;
+
+-- Master samples is populated by the generate_sample_id trigger.
+-- Inserting into `lab.samples` will populate `master_samples`.
+-- INSERT INTO "lab"."master_samples" ("sample_id") VALUES ('Test_db') ON CONFLICT ("sample_id") DO NOTHING;
+
+INSERT INTO "lab"."parental_samples" ("external_name", "sampling_id", "sampling_date", "storage_id", "storage_position", "sampler_person_id", "receiver_person_id", "reception_date", "transport", "conservation_buffer", "sample_type_id", "sample_status_id", "project_id", "customer_id") VALUES
+('Test_db', '25TestDBTestDB0001', '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 1)
+ON CONFLICT ("sample_id", "sampling_date") DO NOTHING;
+
+INSERT INTO "lab"."fishing" ("fishing_id", "sampling_id", "sampling_date", "taxon_id", "catch_kg", "catch_fish", "customer_id") VALUES
+('Test_db_fish', '25TestDBTestDB0001', '2025-07-01', 'Test_db', 1, 1, 1)
+ON CONFLICT ("fishing_id", "sampling_date") DO NOTHING;
+
+INSERT INTO "lab"."storage_log" ("log_id", "sample_id", "sample_sampling_date", "storage_id", "person_id", "status") OVERRIDING SYSTEM VALUE VALUES
+(1, 'Test_db_sample', '2025-07-01', 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("log_id") DO NOTHING;
+
+INSERT INTO "lab"."fish" ("parent_sample_id", "sampling_id", "sampling_date", "species_id", "total_length_mm", "fork_length_mm", "standard_length_mm", "weight_g", "sex", "maturity_stage", "stomach_contents", "disease_info", "tag_id", "storage_id", "storage_position", "project_id", "customer_id") VALUES
+('TestDB25TestDBTestDB0001', '25TestDBTestDB0001', '2025-07-01', 'Test_db', 1, 1, 1, 1, 'Undetermined', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 1)
+ON CONFLICT ("sample_id", "sampling_date") DO NOTHING;
+
+INSERT INTO "lab"."tissue" ("parent_sample_id", "experiment_id", "experiment_date", "weight_mg", "tissue_type", "preservation_method", "storage_id", "storage_position", "project_id") VALUES
+('TestDB25TestDBTestDB0001', 'Test_db', '2025-07-01', 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("sample_id", "experiment_date") DO NOTHING;
+
+INSERT INTO "lab"."otoliths" ("sample_id","experiment_id", "experiment_date", "reader_person_id", "side", "age_reading_years", "confidence", "project_id") VALUES
+('TestDB25TestDBTestDB0001', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 1, 1, 'Test_db')
+ON CONFLICT ("otolith_id", "experiment_date") DO NOTHING;
+
+
+INSERT INTO "lab"."dna" ("parent_sample_id", "experiment_id", "experiment_date", "volume_ul", "concentration_ng_ul", "a260_280", "a260_230", "extraction_method", "preservation_method", "extraction_date", "extraction_number", "storage_id", "storage_position", "project_id") VALUES
+('TestDB25TestDBTestDB0001', 'Test_db', '2025-07-01', 1, 1, 1, 1, 'Test_db', 'Test_db', '2025-07-01', 1, 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("sample_id", "experiment_date") DO NOTHING;
+
+INSERT INTO "lab"."rna" ("parent_sample_id", "experiment_id", "experiment_date", "volume_ul", "concentration_ng_ul", "a260_280", "a260_230", "extraction_method", "preservation_method", "extraction_date", "extraction_number", "storage_id", "storage_position", "project_id") VALUES
+('TestDB25TestDBTestDB0001', 'Test_db', '2025-07-01', 1, 1, 1, 1, 'Test_db', 'Test_db', '2025-07-01', 1, 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("sample_id", "experiment_date") DO NOTHING;
+
+INSERT INTO "lab"."sediments" ("sample_id", "experiment_id", "experiment_date", "project_id", "volume", "volume_unit_id", "depth_m", "sampling_method", "conservation_buffer", "storage_id", "storage_position", "external_name") VALUES
+('TestDB25TestDBTestDB0001', 'Test_db', '2025-07-01', 'Test_db', 1, 'Test_db', 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("sample_id", "experiment_date") DO NOTHING;
+
+INSERT INTO "lab"."water" ("sample_id", "parent_sample_id", "experiment_id", "experiment_date", "volume_l", "filter", "filter_pore_size_um", "depth_m", "sampling_method", "conservation_buffer", "storage_id", "storage_position", "project_id") VALUES
+('TestDB25TestDBTestDB0001', 'TestDB25TestDBTestDB0001', 'Test_db', '2025-07-01', 1, 'Test_db', 1, 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("sample_id", "experiment_date") DO NOTHING;
+
+INSERT INTO "lab"."experiments_samples" ("experiment_id", "experiment_date", "sample_id") VALUES
+('Test_db', '2025-07-01', 'Test_db_sample')
+ON CONFLICT ("experiment_id", "sample_id", "experiment_date") DO NOTHING;
+
+INSERT INTO "lab"."dissections" ("dissection_id", "sample_id", "person_id", "dissection_date", "stomach_contents_jsonb", "gonad_weight_g", "liver_weight_g", "status_id") VALUES
+('Test_db_dissection', 'TestDB25TestDBTestDB0001', 'Test_db', '2025-07-01', '{}'::jsonb, 1, 1, 'Test_db')
+ON CONFLICT ("dissection_id", "dissection_date") DO NOTHING;
+
+INSERT INTO "lab"."extraction" ("extraction_id", "experiment_id", "experiment_date", "sample_id", "sample_type_id", "extracted_dna_sample_id", "extracted_rna_sample_id", "extraction_date", "person_id", "kit", "elution_volume_ul", "yield_qubit_ng_ul", "yield_nanodrop_ng_ul", "a260_280", "a260_230", "extraction_blank_id", "status_id", "storage_id", "storage_position", "project_id") VALUES
+('Test_db_extraction', 'Test_db', '2025-07-01', 'TestDB25TestDBTestDB0001',  'Test_db', NULL, NULL, '2025-07-01', 'Test_db', 'Test_db', 1, 1, 1, 1, 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("extraction_id", "extraction_date") DO NOTHING;
+
+INSERT INTO "lab"."nanodrop" ("nanodrop_id", "experiment_id", "experiment_date", "sample_id", "nanodrop_concentration", "concentration_unit_id", "a260", "a260_280", "a260_280_note", "a260_230", "a260_230_note", "measurement_date", "elution_volume_ul", "person_id", "status_id", "storage_id", "storage_position", "project_id") VALUES
+('Test_db_nanodrop', 'Test_db', '2025-07-01', 'TestDB25TestDBTestDB0001', 1, 'Test_db', 1, 1, 'Test_db', 1, 'Test_db', '2025-07-01', 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("nanodrop_id", "measurement_date") DO NOTHING;
+
+INSERT INTO "lab"."qubit" ("qubit_id", "sample_id", "experiment_id", "experiment_date", "run_id", "assay_kit", "measurement_date", "qubit_tube_conc", "tube_unit_id", "qubit_original_sample_conc", "original_sample_unit_id", "sample_volume_ul", "elution_volume_ul", "person_id", "status_id", "storage_id", "storage_position", "project_id") VALUES
+('Test_db_qubit', 'Test_db_sample', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', '2025-07-01', 1, 'Test_db', 1, 'Test_db', 1, 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("qubit_id", "measurement_date") DO NOTHING;
+
+INSERT INTO "lab"."tapestation" ("tapestation_id", "experiment_id", "experiment_date", "position", "measurement_date", "kit", "person_id", "sample_id", "storage_id", "storage_position", "status_id", "project_id") VALUES
+('Test_db_tape', 'Test_db', '2025-07-01', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 'Test_db_sample', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("tapestation_id", "measurement_date") DO NOTHING;
+
+INSERT INTO "lab"."pcr" ("pcr_id", "experiment_id", "experiment_date", "sample_id", "position", "primer_id", "pcr_blank_id", "pcr_date", "person_id", "kit", "storage_id", "storage_position", "status_id", "project_id", "volume_reaction_ul") VALUES
+('Test_db_pcr', 'Test_db', '2025-07-01', 'Test_db_sample', 'Test_db', 'Test_db', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 1)
+ON CONFLICT ("pcr_id", "pcr_date") DO NOTHING;
+
+INSERT INTO "lab"."gelelectrophoresis" ("gelelectrophoresis_id", "experiment_id", "experiment_date", "sample_id", "position", "ladder", "voltage", "band_size_bp", "gel_type", "run_time_minutes", "run_date", "person_id", "storage_id", "storage_position", "project_id") VALUES
+('Test_db_gel', 'Test_db', '2025-07-01', 'Test_db_sample', 'Test_db', 'Test_db', 1, 1, 'Test_db', 1, '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("gelelectrophoresis_id", "run_date") DO NOTHING;
+
+INSERT INTO "lab"."qpcr" ("qpcr_id", "experiment_id", "experiment_date", "sample_id", "position", "qpcr_date", "person_id", "primer_id", "ct_value", "inhibitor_test_result", "pcr_blank_id", "kit", "volume_ul", "storage_id", "storage_position", "status_id", "project_id") VALUES
+('Test_db_qpcr', 'Test_db', '2025-07-01', 'Test_db_sample', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 1, 'Test_db', 'Test_db', 'Test_db', 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("qpcr_id", "qpcr_date") DO NOTHING;
+
+INSERT INTO "lab"."library" ("library_id", "experiment_id", "experiment_date", "sample_id", "library_name", "prep_date", "person_id", "library_prep_kit", "index_sequence", "read_length_bp", "storage_id", "storage_position", "project_id") VALUES
+('Test_db_library', 'Test_db', '2025-07-01', 'Test_db_sample', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 1, 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("library_id", "prep_date") DO NOTHING;
+
+INSERT INTO "lab"."sequencing" ("sequencing_id", "experiment_id", "experiment_date", "library_id", "prep_date", "sample_id", "sequencing_date", "person_id", "sequencer", "flow_cell_id", "library_prep_kit", "index_sequence", "read_length_bp", "total_reads", "raw_data_path", "genbank_accession_number", "status_id", "storage_id", "storage_position", "project_id") VALUES
+('Test_db_seq', 'Test_db', '2025-07-01', 'Test_db_library', '2025-07-01', 'Test_db_sample', '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 1, 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("sequencing_id", "sequencing_date") DO NOTHING;
+
+INSERT INTO "lab"."datasets" ("dataset_id", "source_type", "ecosystem_id", "region_id", "customer_id", "stored_location_id", "reception_date", "storage_path") VALUES
+('Test_db_dataset', 'Test_db', 'Test_db', 'Test_db', 1, 'Test_db', '2025-07-01', 'Test_db')
+ON CONFLICT ("dataset_id", "reception_date") DO NOTHING;
+
+-- Bioinformatics Schema Tables
+INSERT INTO "bioinformatics"."reference_databases" ("db_id", "db_name", "db_version", "url", "last_updated_date") VALUES
+('Test_db', 'Test_db', 'Test_db', 'Test_db', '2025-07-01')
+ON CONFLICT ("db_id") DO NOTHING;
+
+INSERT INTO "bioinformatics"."analysis_pipelines" ("pipeline_id", "pipeline_name", "version", "repository_link") VALUES
+('Test_db_pipeline', 'Test_db', 'Test_db', 'Test_db')
+ON CONFLICT ("pipeline_id") DO NOTHING;
+
+INSERT INTO "bioinformatics"."analysis_runs" ("run_id", "pipeline_id", "sequencing_id", "sequencing_date", "person_id", "run_date", "parameters_jsonb", "reference_db_id", "clustering_threshold", "final_output_path") VALUES
+('Test_db_run', 'Test_db_pipeline', 'Test_db_seq', '2025-07-01', 'Test_db', '2025-07-01 10:00:00+02', '{}'::jsonb, 'Test_db', 1, 'Test_db')
+ON CONFLICT ("run_id", "run_date") DO NOTHING;
+
+INSERT INTO "bioinformatics"."edna_assignments" ("assignment_id", "run_id", "run_date", "sample_id", "taxon_id", "read_count", "confidence") VALUES
+('Test_db_assignment', 'Test_db_run', '2025-07-01', 'Test_db_sample', 'Test_db', 1, 1)
+ON CONFLICT ("assignment_id") DO NOTHING;
+
+
 
 -- Ensure necessary reference data exists for FKs
 INSERT INTO "lims"."external_contacts" ("contact_id", "full_name", "organization", "mail") VALUES
@@ -6416,722 +8267,6 @@ BEGIN
         );
     END;
 END $$;
-
-
-
-
-
--- 
---
--- ======================================================================
--- 14. Initial Data Population
--- ======================================================================
-
-INSERT INTO "reference"."status" ("status_id", "notes") VALUES
-('Received', 'sample has been received in the lab'),
-('Dissection', 'sample has been dissected'),
-('Extracted', 'sample has been extracted'),
-('Nanodrop QC', 'sample quality checked with Nanodrop'),
-('Qubit QC', 'sample quality checked with Qubit'),
-('Tapestation QC', 'sample quality checked with Tapestation'),
-('PCR Done', 'PCR has been performed on the sample'),
-('qPCR Done', 'qPCR has been performed on the sample'),
-('Library Prep', 'Sequencing library has been prepared'),
-('Sequencing Done', 'sample has been sequenced'),
-('Bioinformatics Done', 'bioinformatics analysis is complete'),
-('Unknown Step', 'An unknown step has occurred in the workflow')
-ON CONFLICT ("status_id") DO NOTHING;
-
-INSERT INTO "reference"."samples_type" ("sample_type_id", "sample_type_abrv", "notes") VALUES
-('DNA', 'D', 'Deoxyribonucleic Acid sample'),
-('RNA', 'R', 'Ribonucleic Acid sample'),
-('Library', 'L', 'Sequencing Library sample'),
-('Water', 'W', 'Water sample'),
-('Sediments', 'S', 'Sedi ment sample'),
-('Tissue', 'T', 'Tissue sample'),
-('Fish', 'F', 'Fish sample'),
-('Sequencing', 'Q', 'Sequencing run output'),
-('Dataset', 'Z', 'Processed dataset'),
-('Publication', 'PUB', 'Research Publication')
-ON CONFLICT ("sample_type_id") DO NOTHING;
-
-
-INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "unit_type", "conversion_factor_to_base") VALUES
-('mm', 'millimeter', 'mm', 'length', 0.001),
-('g', 'gram', 'g', 'mass', 0.001),
-('ul', 'microliter', 'µl', 'volume', 1e-6),
-('ng_ul', 'nanogram per microliter', 'ng/µl', 'concentration', 1e-9),
-('bp', 'base pair', 'bp', 'length', 1),
-('km_h', 'kilometer per hour', 'km/h', 'speed', 0.277778),
-('m_s', 'meter per second', 'm/s', 'speed', 1),
-('PSU', 'Practical Salinity Unit', 'PSU', 'salinity', 1),
-('ppt', 'parts per thousand', 'ppt', 'salinity', 1),
-('dbar', 'decibar', 'dbar', 'pressure', 1),
-('psi', 'pounds per square inch', 'psi', 'pressure', 0.0689476),
-('kPa', 'kilopascal', 'kPa', 'pressure', 1000),
-('mg_l', 'milligram per liter', 'mg/L', 'concentration', 1),
-('umol_l', 'micromole per liter', 'µmol/L', 'concentration', 1),
-('ntu', 'Nephelometric Turbidity Unit', 'NTU', 'turbidity', 1),
-('ug_l', 'microgram per liter', 'µg/L', 'concentration', 1),
-('deg', 'degree', 'deg', 'angle', 1),
-('min', 'minute', 'min', 'time', 60),
-('h', 'hour', 'h', 'time', 3600),
-('c', 'Celsius', '°C', 'temperature', 1),
-('l', 'liter', 'L', 'volume', 1),
-('um', 'micrometer', 'µm', 'length', 1e-6),
-('m', 'meter', 'm', 'length', 1)
-ON CONFLICT ("unit_id") DO NOTHING;
-
-INSERT INTO "reference"."personal" ("person_id", "full_name", "password_hash") VALUES
-('system_user', 'System Automation', 'no_password_needed_for_system')
-ON CONFLICT ("person_id") DO NOTHING;
-
--- Insert statement for "reference"."Status"
-INSERT INTO "reference"."status" ("status_id", "notes") VALUES
-('Received', 'sample has been received in the lab'),
-('Dissection', 'sample has been dissected'),
-('Extracted', 'sample has been extracted'),
-('Nanodrop QC', 'sample quality checked with Nanodrop'),
-('Qubit QC', 'sample quality checked with Qubit'),
-('Tapestation QC', 'sample quality checked with Tapestation'),
-('PCR Done', 'PCR has been performed on the sample'),
-('qPCR Done', 'qPCR has been performed on the sample'),
-('Library Prep', 'Sequencing library has been prepared'),
-('Sequencing Done', 'sample has been sequenced'),
-('Bioinformatics Done', 'bioinformatics analysis is complete'),
-('Unknown Step', 'An unknown step has occurred in the workflow'),
-('Active', 'Project or item is currently active/in progress'),
-('Planned', 'Project or activity is planned but not yet started'),
-('Completed', 'Project or activity has been finished successfully'),
-('On Hold', 'Project or activity is temporarily paused'),
-('Cancelled', 'Project or activity has been cancelled'),
-('Rejected', 'Sample or item failed quality control or is unusable'),
-('In Transit', 'Sample or item is currently in transport'),
-('In Stock', 'Reagent or item is available in inventory'),
-('Expired', 'Reagent or item is past its expiration date')
-ON CONFLICT ("status_id") DO NOTHING;
-
--- Insert statement for "reference"."category"
--- You'll need to define what categories you want to include.
--- Here are some common examples for a LIMS, you can adjust as needed.
-INSERT INTO "reference"."category" ("category_id", "notes") VALUES
-('Reagent', 'Chemicals and solutions used in experiments.'),
-('Consumable', 'Disposable lab supplies like tips, tubes, and plates.'),
-('Equipment', 'Laboratory instruments and machinery.'),
-('Service', 'External services like sequencing or custom synthesis.'),
-('Software', 'Licenses or subscriptions for bioinformatics or lab management tools.'),
-('General', 'Miscellaneous items not fitting other categories.')
-ON CONFLICT ("category_id") DO NOTHING;
-
--- Insert statement for "reference"."samples_type"
-INSERT INTO "reference"."samples_type" ("sample_type_id", "sample_type_abrv", "notes") VALUES
-('DNA', 'D', 'Deoxyribonucleic Acid sample'),
-('RNA', 'R', 'Ribonucleic Acid sample'),
-('Library', 'L', 'Sequencing Library sample'),
-('Water', 'W', 'Water sample'),
-('Sediments', 'S', 'Sedi ment sample'),
-('Tissue', 'T', 'Tissue sample'),
-('Fish', 'F', 'Fish sample'),
-('Sequencing', 'Q', 'Sequencing run output'),
-('Dataset', 'Z', 'Processed dataset'),
-('Publication', 'PUB', 'Research Publication')
-ON CONFLICT ("sample_type_id") DO NOTHING;
-
--- insert most genes
-INSERT INTO "reference"."gene" ("gene_id", "notes") VALUES
-('COI', 'Cytochrome c oxidase subunit I - Universal barcode marker for species identification'),
-('CytB', 'Cytochrome b - Mitochondrial gene for phylogenetic analysis and population studies'),
-('12S_rRNA', '12S ribosomal RNA - Mitochondrial gene for phylogenetic reconstruction'),
-('16S_rRNA', '16S ribosomal RNA - Mitochondrial gene for phylogenetic reconstruction'),
-('ACTB', 'Beta-actin - Housekeeping gene, commonly used as a control for gene expression studies'),
-('GAPDH', 'Glyceraldehyde-3-phosphate dehydrogenase - Housekeeping gene, internal control for gene expression'),
-('MHC_I', 'Major Histocompatibility Complex Class I - Immune gene, studied for disease resistance and diversity'),
-('MHC_II', 'Major Histocompatibility Complex Class II - Immune gene, studied for disease resistance and diversity'),
-('GH', 'Growth Hormone - Involved in growth and development, relevant for aquaculture and livestock'),
-('PRL', 'Prolactin - Involved in reproduction, growth, and osmoregulation in fish'),
-('RAG1', 'Recombination Activating Gene 1 - Nuclear gene for vertebrate phylogenetics'),
-('S7', 'Ribosomal protein S7 - Nuclear gene for phylogenetic analysis'),
-('Opsin_Rhodopsin', 'Opsin (Rhodopsin) - Genes involved in vision, studied for adaptation to light environments'),
-('TLR3', 'Toll-like Receptor 3 - Immune receptor gene, important for innate immunity in fish'),
-('HSP70', 'Heat Shock Protein 70 - Stress response gene, studied for environmental adaptation')
-ON CONFLICT ("gene_id") DO NOTHING;
-
-
-
-
-
-
-
--- --- ---- -----
---
---
---
---
--- --- ---- -----
--- ======================================================================
--- 14. Initial Data Population (Continued with "Test_db" Data)
--- ======================================================================
-
--- Reference Schema Tables - Basic Entries for FKs
-INSERT INTO "reference"."personal" ("person_id", "full_name", "password_hash") VALUES
-('Test_db', 'Test_db Full Name', 'Test_db_hashed_password')
-ON CONFLICT ("person_id") DO NOTHING;
-
-INSERT INTO "reference"."status" ("status_id", "notes") VALUES
-('Test_db', 'Test_db Status Notes')
-ON CONFLICT ("status_id") DO NOTHING;
-
-INSERT INTO "reference"."room" ("room_id", "etage", "address") VALUES
-('Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("room_id") DO NOTHING;
-
-INSERT INTO "reference"."vessel" ("vessel_id", "vessel_name") VALUES
-('Test_db', 'Test_db')
-ON CONFLICT ("vessel_id") DO NOTHING;
-
-INSERT INTO "reference"."region" ("region_id", "region_abrv", "country") VALUES
-('Test_db', 'TestDB', 'Test_db')
-ON CONFLICT ("region_id") DO NOTHING;
-
-INSERT INTO "reference"."ecosystem" ("ecosystem_id", "ecosystem_abrv", "country") VALUES
-('Test_db', 'TestDB', 'Test_db')
-ON CONFLICT ("ecosystem_id") DO NOTHING;
-
-INSERT INTO "reference"."category" ("category_id") VALUES
-('Test_db')
-ON CONFLICT ("category_id") DO NOTHING;
-
-INSERT INTO "reference"."samples_type" ("sample_type_id", "sample_type_abrv", "notes") VALUES
-('Test_db', 'TestDB', 'Test_db')
-ON CONFLICT ("sample_type_id") DO NOTHING;
-
-INSERT INTO "reference"."gene" ("gene_id") VALUES
-('Test_db')
-ON CONFLICT ("gene_id") DO NOTHING;
-
-INSERT INTO "reference"."taxon" ("taxon_id", "de_name", "en_name", "rank") VALUES
-('Test_db', 'Test_db', 'Test_db', 'species')
-ON CONFLICT ("taxon_id") DO NOTHING;
--- Populate ltree path after inserting taxon data
-SELECT "reference".update_taxon_ltree_paths();
-
-INSERT INTO "reference"."species" ("species_id", "de_name", "en_name", "max_length_mm", "max_age_years") VALUES
-('Test_db', 'Test_db', 'Test_db', 1, 1)
-ON CONFLICT ("species_id") DO NOTHING;
-
-INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "unit_type", "conversion_factor_to_base") VALUES
-('Test_db', 'Test_db', 'TestDB', 'Test_db', 1)
-ON CONFLICT ("unit_id") DO NOTHING;
-
-
--- Lims Schema Tables
-INSERT INTO "lims"."external_contacts" ("contact_id", "full_name") VALUES
-('Test_db', 'Test_db')
-ON CONFLICT ("contact_id") DO NOTHING;
-
-INSERT INTO "lims"."customers" ("customer_id", "customer_name", "customer_abrv") OVERRIDING SYSTEM VALUE VALUES
-(1, 'Test_db', 'TestDB')
-ON CONFLICT ("customer_id") DO NOTHING;
-
-INSERT INTO "lims"."projects" ("project_id", "title", "status_id", "pi_person_id", "customer_id", "start_date") VALUES
-('Test_db', 'Test_db', 'Test_db', 'Test_db', 1, '2025-07-01')
-ON CONFLICT ("project_id") DO NOTHING;
-
-INSERT INTO "lims"."project_persons" ("project_id", "person_id", "role") VALUES
-('Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("project_id", "person_id") DO NOTHING;
-
-INSERT INTO "lab"."storage" ("storage_id", "room_id", "freezer", "etage", "temperature_c", "box", "box_size_x", "box_size_y", "storage_position_format", "project_id") VALUES
-('Test_db', 'Test_db', 'Test_db', 'Test_db', 1, 'Test_db', 1, 1, 'Test_db', 'Test_db')
-ON CONFLICT ("storage_id") DO NOTHING;
-
-INSERT INTO "lims"."cruises" ("cruise_id", "project_id", "vessel_id", "status_id", "region_id", "ecosystem_id", "capitaine_contact_id", "chief_scientist_person_id", "start_date") VALUES
-('Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', '2025-07-01')
-ON CONFLICT ("cruise_id") DO NOTHING;
-
-INSERT INTO "lims"."workflows" ("workflow_id", "workflow_name") VALUES
-('Test_db', 'Test_db')
-ON CONFLICT ("workflow_id") DO NOTHING;
-
-INSERT INTO "lims"."permits" ("permit_id", "permit_number", "issuing_authority", "valid_from") VALUES
-('Test_db', 'Test_db', 'Test_db', '2025-07-01')
-ON CONFLICT ("permit_id") DO NOTHING;
-
-INSERT INTO "lims"."primers" ("primer_id", "target_gene_id", "primer_sequence_fwd") VALUES
-('Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("primer_id") DO NOTHING;
-
-INSERT INTO "lims"."sop" ("sop_id", "title", "sop_id_origin", "version", "author_person_id", "date_realise") VALUES
-('Test_db', 'Test_db', 'Test_db_origin', '1.0', 'Test_db', '2025-07-01')
-ON CONFLICT ("sop_id") DO NOTHING;
-
-INSERT INTO "lims"."workflow_steps" ("step_id", "workflow_id", "step_number", "step_name", "sop_id", "workflow_status_id") VALUES
-('Test_db', 'Test_db', 1, 'Test_db', 'Test_db_origin_v10', 'Test_db')
-ON CONFLICT ("step_id") DO NOTHING;
-
-INSERT INTO "lims"."equipment" ("equipment_id", "equipment_name", "room_id") VALUES
-('Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("equipment_id") DO NOTHING;
-
-INSERT INTO "lims"."suppliers" ("supplier_id", "supplier_name") VALUES
-('Test_db', 'Test_db')
-ON CONFLICT ("supplier_id") DO NOTHING;
-
-INSERT INTO "lims"."inventory_items" ("item_id", "item_name", "category_id", "unit_id") VALUES
-('Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("item_id") DO NOTHING;
-
-INSERT INTO "lims"."orders" ("fi_order_nr", "item_id", "category_id", "order_date", "price", "quantity", "project_id", "supplier_id", "status_id") VALUES
-('Test_db', 'Test_db', 'Test_db', '2025-07-01', 1, 1, 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("fi_order_nr") DO NOTHING;
-
-INSERT INTO "lims"."reagents" ("reagent_id", "reagent_complete_name", "category_id", "lot", "storage_id", "storage_position", "status_id", "reception_date", "expire_date", "order_id", "project_id", "quantity_available", "quantity_unit_id") VALUES
-('Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 1, 'Test_db', '2025-07-01', '2025-07-01', 'Test_db', 'Test_db', 1, 'Test_db')
-ON CONFLICT ("reagent_id") DO NOTHING;
-
-INSERT INTO "lims"."publication_type" ("publication_type_id") VALUES
-('Test_db')
-ON CONFLICT ("publication_type_id") DO NOTHING;
-
-INSERT INTO "lims"."publications" ("publication_id", "publication_type_id", "project_id", "title", "journal", "volume", "issue", "pages", "doi", "date_publication", "date_submission", "first_author_person_id", "corresponding_author_person_id") VALUES
-('Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', '2025-07-01', '2025-07-01', 'Test_db', 'Test_db')
-ON CONFLICT ("publication_id") DO NOTHING;
-
-
--- Lab Schema Tables
-INSERT INTO "lab"."experiments" ("experiment_id", "experiment_title", "aim", "method", "sop_id", "experiment_date", "person_id", "lab_book", "status_id") VALUES
-('Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db_origin_v10', '2025-07-01', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("experiment_id", "experiment_date") DO NOTHING;
-
-INSERT INTO "lab"."experiments_projects" ("experiment_project_id", "experiment_id", "experiment_date", "project_id", "link_date") OVERRIDING SYSTEM VALUE VALUES
-(1, 'Test_db', '2025-07-01', 'Test_db', '2025-07-01')
-ON CONFLICT ("experiment_project_id") DO NOTHING;
-
-INSERT INTO "lab"."protocol_runs" ("protocol_run_id", "experiment_id", "experiment_date", "sop_id", "run_date", "person_id") VALUES
-('Test_db', 'Test_db', '2025-07-01', 'Test_db_origin_v10', '2025-07-01', 'Test_db')
-ON CONFLICT ("protocol_run_id") DO NOTHING;
-
-INSERT INTO "lab"."sampling" (
-    "sampling_id", "experiment_id", "experiment_date", "project_id", "cruise_id", "region_id",
-    "ecosystem_id", "vessel_id", "customer_id", "sampling_date", "geom", "location_name",
-    "depth_m", "start_at", "end_at", "temperature_atmospheric_c", "weather", "wind_speed"
-) VALUES (
-    'Test_db', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 'Test_db',
-    'Test_db', 'Test_db', 1, '2025-07-01', ST_SetSRID(ST_MakePoint(1, 1), 4326), 'Test_db',
-    1, '00:00:01', '00:00:01', 1, 'Test_db', 1 -- Added the two missing 'Test_db' values here
-)
-ON CONFLICT ("sampling_id", "sampling_date") DO NOTHING;
-
--- Master samples is populated by the generate_sample_id trigger.
--- Inserting into `lab.samples` will populate `master_samples`.
--- INSERT INTO "lab"."master_samples" ("sample_id") VALUES ('Test_db') ON CONFLICT ("sample_id") DO NOTHING;
-
-INSERT INTO "lab"."samples" ("external_name", "sampling_id", "sampling_date", "storage_id", "storage_position", "sampler_person_id", "receiver_person_id", "reception_date", "transport", "conservation_buffer", "sample_type_id", "sample_status_id", "workflow_id", "step_id", "project_id", "customer_id") VALUES
-('Test_db', '25TestDBTestDB0001', '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 1)
-ON CONFLICT ("sample_id", "sampling_date") DO NOTHING;
-
-INSERT INTO "lab"."fishing" ("fishing_id", "sampling_id", "sampling_date", "taxon_id", "catch_kg", "catch_fish", "customer_id") VALUES
-('Test_db_fish', '25TestDBTestDB0001', '2025-07-01', 'Test_db', 1, 1, 1)
-ON CONFLICT ("fishing_id", "sampling_date") DO NOTHING;
-
-INSERT INTO "lab"."storage_log" ("log_id", "sample_id", "sample_sampling_date", "storage_id", "person_id", "status") OVERRIDING SYSTEM VALUE VALUES
-(1, 'Test_db_sample', '2025-07-01', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("log_id") DO NOTHING;
-
-INSERT INTO "lab"."fish" ("parent_sample_id", "sampling_id", "sampling_date", "species_id", "total_length_mm", "fork_length_mm", "standard_length_mm", "weight_g", "sex", "maturity_stage", "stomach_contents", "disease_info", "tag_id", "storage_id", "storage_position", "project_id", "customer_id") VALUES
-('D25TestDBTestDB0001', '25TestDBTestDB0001', '2025-07-01', 'Test_db', 1, 1, 1, 1, 'Undetermined', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 1)
-ON CONFLICT ("sample_id", "sampling_date") DO NOTHING;
-
-INSERT INTO "lab"."tissue" ("parent_sample_id", "experiment_id", "experiment_date", "weight_mg", "tissue_type", "preservation_method", "storage_id", "storage_position", "project_id") VALUES
-('D25TestDBTestDB0001', 'Test_db', '2025-07-01', 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("sample_id", "experiment_date") DO NOTHING;
-
-INSERT INTO "lab"."otoliths" ("sample_id","experiment_id", "experiment_date", "reader_person_id", "side", "age_reading_years", "confidence", "project_id") VALUES
-('D25TestDBTestDB0001', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 1, 1, 'Test_db')
-ON CONFLICT ("otolith_id", "experiment_date") DO NOTHING;
-
-
-INSERT INTO "lab"."dna" ("sample_id", "parent_sample_id", "experiment_id", "experiment_date", "volume_ul", "concentration_ng_ul", "a260_280", "a260_230", "extraction_method", "preservation_method", "extraction_date", "extraction_number", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_dna_child', 'Test_db_sample', 'Test_db', '2025-07-01', 1, 1, 1, 1, 'Test_db', 'Test_db', '2025-07-01', 1, 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("sample_id", "experiment_date") DO NOTHING;
-
-INSERT INTO "lab"."rna" ("sample_id", "parent_sample_id", "experiment_id", "experiment_date", "volume_ul", "concentration_ng_ul", "a260_280", "a260_230", "extraction_method", "preservation_method", "extraction_date", "extraction_number", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_rna_child', 'Test_db_sample', 'Test_db', '2025-07-01', 1, 1, 1, 1, 'Test_db', 'Test_db', '2025-07-01', 1, 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("sample_id", "experiment_date") DO NOTHING;
-
-INSERT INTO "lab"."sediments" ("sample_id", "parent_sample_id", "experiment_id", "experiment_date", "project_id", "volume", "volume_unit_id", "depth_m", "sampling_method", "conservation_buffer", "storage_id", "storage_position", "external_name") VALUES
-('Test_db_sediment_child', 'Test_db_sample', 'Test_db', '2025-07-01', 'Test_db', 1, 'Test_db', 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("sample_id", "experiment_date") DO NOTHING;
-
-INSERT INTO "lab"."water" ("sample_id", "parent_sample_id", "experiment_id", "experiment_date", "volume_l", "filter", "filter_pore_size_um", "depth_m", "sampling_method", "conservation_buffer", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_water_child', 'Test_db_sample', 'Test_db', '2025-07-01', 1, 'Test_db', 1, 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("sample_id", "experiment_date") DO NOTHING;
-
-INSERT INTO "lab"."experiments_samples" ("experiment_id", "experiment_date", "sample_id") VALUES
-('Test_db', '2025-07-01', 'Test_db_sample')
-ON CONFLICT ("experiment_id", "sample_id", "experiment_date") DO NOTHING;
-
-INSERT INTO "lab"."dissections" ("dissection_id", "sample_id", "person_id", "dissection_date", "stomach_contents_jsonb", "gonad_weight_g", "liver_weight_g", "status_id") VALUES
-('Test_db_dissection', 'Test_db_sample', 'Test_db', '2025-07-01', '{}'::jsonb, 1, 1, 'Test_db')
-ON CONFLICT ("dissection_id", "dissection_date") DO NOTHING;
-
-INSERT INTO "lab"."extraction" ("extraction_id", "experiment_id", "experiment_date", "sample_id", "parent_sample_id", "sample_type_id", "extracted_dna_sample_id", "extracted_rna_sample_id", "extraction_date", "person_id", "kit", "elution_volume_ul", "yield_qubit_ng_ul", "yield_nanodrop_ng_ul", "a260_280", "a260_230", "extraction_blank_id", "status_id", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_extraction', 'Test_db', '2025-07-01', 'Test_db_sample', 'Test_db_sample', 'Test_db', NULL, NULL, '2025-07-01', 'Test_db', 'Test_db', 1, 1, 1, 1, 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("extraction_id", "extraction_date") DO NOTHING;
-
-INSERT INTO "lab"."nanodrop" ("nanodrop_id", "experiment_id", "experiment_date", "sample_id", "nanodrop_concentration", "concentration_unit_id", "a260", "a260_280", "a260_280_note", "a260_230", "a260_230_note", "measurement_date", "elution_volume_ul", "person_id", "status_id", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_nanodrop', 'Test_db', '2025-07-01', 'Test_db_sample', 1, 'Test_db', 1, 1, 'Test_db', 1, 'Test_db', '2025-07-01', 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("nanodrop_id", "measurement_date") DO NOTHING;
-
-INSERT INTO "lab"."qubit" ("qubit_id", "sample_id", "experiment_id", "experiment_date", "run_id", "assay_kit", "measurement_date", "qubit_tube_conc", "tube_unit_id", "qubit_original_sample_conc", "original_sample_unit_id", "sample_volume_ul", "elution_volume_ul", "person_id", "status_id", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_qubit', 'Test_db_sample', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', '2025-07-01', 1, 'Test_db', 1, 'Test_db', 1, 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("qubit_id", "measurement_date") DO NOTHING;
-
-INSERT INTO "lab"."tapestation" ("tapestation_id", "experiment_id", "experiment_date", "position", "measurement_date", "kit", "person_id", "sample_id", "storage_id", "storage_position", "status_id", "project_id") VALUES
-('Test_db_tape', 'Test_db', '2025-07-01', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 'Test_db_sample', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("tapestation_id", "measurement_date") DO NOTHING;
-
-INSERT INTO "lab"."pcr" ("pcr_id", "experiment_id", "experiment_date", "sample_id", "position", "primer_id", "pcr_blank_id", "pcr_date", "person_id", "kit", "storage_id", "storage_position", "status_id", "project_id", "volume_reaction_ul") VALUES
-('Test_db_pcr', 'Test_db', '2025-07-01', 'Test_db_sample', 'Test_db', 'Test_db', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 1)
-ON CONFLICT ("pcr_id", "pcr_date") DO NOTHING;
-
-INSERT INTO "lab"."gelelectrophoresis" ("gelelectrophoresis_id", "experiment_id", "experiment_date", "sample_id", "position", "ladder", "voltage", "band_size_bp", "gel_type", "run_time_minutes", "run_date", "person_id", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_gel', 'Test_db', '2025-07-01', 'Test_db_sample', 'Test_db', 'Test_db', 1, 1, 'Test_db', 1, '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("gelelectrophoresis_id", "run_date") DO NOTHING;
-
-INSERT INTO "lab"."qpcr" ("qpcr_id", "experiment_id", "experiment_date", "sample_id", "position", "qpcr_date", "person_id", "primer_id", "ct_value", "inhibitor_test_result", "pcr_blank_id", "kit", "volume_ul", "storage_id", "storage_position", "status_id", "project_id") VALUES
-('Test_db_qpcr', 'Test_db', '2025-07-01', 'Test_db_sample', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 1, 'Test_db', 'Test_db', 'Test_db', 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("qpcr_id", "qpcr_date") DO NOTHING;
-
-INSERT INTO "lab"."library" ("library_id", "experiment_id", "experiment_date", "sample_id", "library_name", "prep_date", "person_id", "library_prep_kit", "index_sequence", "read_length_bp", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_library', 'Test_db', '2025-07-01', 'Test_db_sample', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 1, 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("library_id", "prep_date") DO NOTHING;
-
-INSERT INTO "lab"."sequencing" ("sequencing_id", "experiment_id", "experiment_date", "library_id", "prep_date", "sample_id", "sequencing_date", "person_id", "sequencer", "flow_cell_id", "library_prep_kit", "index_sequence", "read_length_bp", "total_reads", "raw_data_path", "genbank_accession_number", "status_id", "storage_id", "storage_position", "project_id") VALUES
-('Test_db_seq', 'Test_db', '2025-07-01', 'Test_db_library', '2025-07-01', 'Test_db_sample', '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 1, 1, 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("sequencing_id", "sequencing_date") DO NOTHING;
-
-INSERT INTO "lab"."datasets" ("dataset_id", "source_type", "ecosystem_id", "region_id", "customer_id", "stored_location_id", "reception_date", "storage_path") VALUES
-('Test_db_dataset', 'Test_db', 'Test_db', 'Test_db', 1, 'Test_db', '2025-07-01', 'Test_db')
-ON CONFLICT ("dataset_id", "reception_date") DO NOTHING;
-
--- Bioinformatics Schema Tables
-INSERT INTO "bioinformatics"."reference_databases" ("db_id", "db_name", "db_version", "url", "last_updated_date") VALUES
-('Test_db', 'Test_db', 'Test_db', 'Test_db', '2025-07-01')
-ON CONFLICT ("db_id") DO NOTHING;
-
-INSERT INTO "bioinformatics"."analysis_pipelines" ("pipeline_id", "pipeline_name", "version", "repository_link") VALUES
-('Test_db_pipeline', 'Test_db', 'Test_db', 'Test_db')
-ON CONFLICT ("pipeline_id") DO NOTHING;
-
-INSERT INTO "bioinformatics"."analysis_runs" ("run_id", "pipeline_id", "sequencing_id", "sequencing_date", "person_id", "run_date", "parameters_jsonb", "reference_db_id", "clustering_threshold", "final_output_path") VALUES
-('Test_db_run', 'Test_db_pipeline', 'Test_db_seq', '2025-07-01', 'Test_db', '2025-07-01 10:00:00+02', '{}'::jsonb, 'Test_db', 1, 'Test_db')
-ON CONFLICT ("run_id", "run_date") DO NOTHING;
-
-INSERT INTO "bioinformatics"."edna_assignments" ("assignment_id", "run_id", "run_date", "sample_id", "taxon_id", "read_count", "confidence") VALUES
-('Test_db_assignment', 'Test_db_run', '2025-07-01', 'Test_db_sample', 'Test_db', 1, 1)
-ON CONFLICT ("assignment_id") DO NOTHING;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
--- --- ----
--- 
--- 
--- 
---
--- --- ----
-
--- Start a transaction for atomicity
-BEGIN;
-
--- 1. Drop the existing (empty) lab.fish table
--- This will also drop any existing partitions, primary key, and check constraints.
-DROP TABLE IF EXISTS "lab"."fish" CASCADE;
-
--- 2. Create the NEW lab.fish table with "sampling_date" as the partitioning key
-CREATE TABLE "lab"."fish" (
-    "sample_id" text NOT NULL,
-    "parent_sample_id" text,
-    -- Removed "experiment_id"
-    "sampling_id" text NOT NULL, -- New column for sampling_id, now part of the conceptual PK
-    "sampling_date" date NOT NULL, -- This is the new partitioning key
-    -- Removed "experiment_date" as it's replaced by "sampling_date" conceptually for partitioning
-    "species_id" text NOT NULL,
-    "total_length_mm" numeric,
-    "fork_length_mm" numeric,
-    "standard_length_mm" numeric,
-    "weight_g" numeric,
-    "sex" text,
-    "maturity_stage" text,
-    "stomach_contents" text,
-    "disease_info" text,
-    "tag_id" text,
-    "storage_id" text,
-    "storage_position" text,
-    "project_id" text,
-    "customer_id" integer,
-    "notes" text,
-    "attachment" bytea,
-    "attachment_link" text,
-    -- The primary key must include ALL partitioning columns, hence sampling_date is included.
-    PRIMARY KEY ("sample_id", "sampling_date")
-) PARTITION BY RANGE ("sampling_date"); -- Partition by sampling_date
-
--- Re-add the check constraint
-ALTER TABLE "lab"."fish" ADD CONSTRAINT chk_fish_sex_enum CHECK ("sex" IN ('Male', 'Female', 'Undetermined', NULL));
-
--- 3. Re-add Triggers (adjust if necessary for the new columns)
--- If generate_fish_child_sample_id relied on experiment_id/date, it needs updating in your functions section.
--- Otherwise, if it only uses sample_id or parent_sample_id, it might be fine.
--- Example: Assuming generate_fish_child_sample_id takes care of sample_id and doesn't rely on experiment_id.
--- Also, the create_fish_partition_if_not_exists function needs to be updated to use `NEW.sampling_date`.
-
--- Update the auto-partitioning function for fish to use sampling_date
-CREATE OR REPLACE FUNCTION "lab".create_fish_partition_if_not_exists()
-RETURNS TRIGGER AS $$
-DECLARE
-    partition_date date;
-    partition_name text;
-    start_date date;
-    end_date date;
-BEGIN
-    partition_date := NEW.sampling_date; -- Changed to NEW.sampling_date
-    IF partition_date IS NULL THEN
-        RAISE EXCEPTION 'Cannot partition on NULL sampling_date for lab.fish. Please provide a sampling_date.';
-    END IF;
-
-    start_date := DATE_TRUNC('year', partition_date);
-    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
-    partition_name := 'fish_y' || TO_CHAR(start_date, 'YYYY'); -- Consistent naming
-
-    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."fish"
-             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Recreate triggers that were on lab.fish
-CREATE TRIGGER trg_generate_fish_child_sample_id
-BEFORE INSERT ON "lab"."fish"
-FOR EACH ROW
-EXECUTE FUNCTION "lab".generate_fish_child_sample_id();
-
-CREATE TRIGGER trg_create_fish_partition
-BEFORE INSERT ON "lab"."fish"
-FOR EACH ROW
-EXECUTE FUNCTION "lab".create_fish_partition_if_not_exists();
-
-CREATE TRIGGER audit_trigger_fish
-AFTER INSERT OR UPDATE OR DELETE ON "lab"."fish"
-FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
-
--- You'll also need to update the manual partition creation function for fish:
--- In your "9. Functions" section, ensure this is updated:
-CREATE OR REPLACE FUNCTION "lab".create_fish_partition_if_not_exists_manual(p_year integer)
-RETURNS VOID AS $$
-DECLARE
-    start_date date;
-    end_date date;
-    partition_name text;
-BEGIN
-    start_date := MAKE_DATE(p_year, 1, 1);
-    end_date := MAKE_DATE(p_year + 1, 1, 1);
-    partition_name := 'fish_y' || TO_CHAR(start_date, 'YYYY'); -- Consistent naming
-
-    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."fish"
-             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
-END;
-$$ LANGUAGE plpgsql;
-
-
--- 4. Re-add Indexes (adjust for new columns)
-CREATE INDEX IF NOT EXISTS idx_fish_parent_sample_id ON "lab"."fish" ("parent_sample_id");
-CREATE INDEX IF NOT EXISTS idx_fish_species_id ON "lab"."fish" ("species_id");
-CREATE INDEX IF NOT EXISTS idx_fish_sampling_id ON "lab"."fish" ("sampling_id", "sampling_date"); -- Combined index for FK
-
--- 5. Re-add Foreign Key Constraints
-ALTER TABLE "lab"."fish"
-ADD CONSTRAINT "fish_sample_id_fk" FOREIGN KEY ("sample_id")
-REFERENCES "lab"."master_samples"("sample_id");
-
-ALTER TABLE "lab"."fish"
-ADD CONSTRAINT "fish_parent_sample_id_fk" FOREIGN KEY ("parent_sample_id")
-REFERENCES "lab"."master_samples"("sample_id");
-
--- This FK now links to lab.sampling using sampling_id and sampling_date
-ALTER TABLE "lab"."fish"
-ADD CONSTRAINT "fish_sampling_fk" FOREIGN KEY ("sampling_id", "sampling_date")
-REFERENCES "lab"."sampling"("sampling_id", "sampling_date");
-
-ALTER TABLE "lab"."fish"
-ADD CONSTRAINT "fish_species_id_fk" FOREIGN KEY ("species_id")
-REFERENCES "reference"."species"("species_id");
-
-ALTER TABLE "lab"."fish"
-ADD CONSTRAINT "fish_storage_id_fk" FOREIGN KEY ("storage_id")
-REFERENCES "lab"."storage"("storage_id");
-
-ALTER TABLE "lab"."fish"
-ADD CONSTRAINT "fish_project_id_fk" FOREIGN KEY ("project_id")
-REFERENCES "lims"."projects"("project_id");
-
-ALTER TABLE "lab"."fish"
-ADD CONSTRAINT "fish_customer_id_fk" FOREIGN KEY ("customer_id")
-REFERENCES "lims"."customers"("customer_id");
-
--- Commit the transaction if all steps are successful
-COMMIT;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
--- Start a transaction for atomicity
-BEGIN;
-
--- 1. Stop relevant trigger on lab.fishing
--- This trigger populates experiment_id/date, which we are removing from the table.
-DROP TRIGGER IF EXISTS trg_populate_fishing_experiment_data ON "lab"."fishing";
-DROP TRIGGER IF EXISTS trg_generate_fishing_id ON "lab"."fishing";
-DROP TRIGGER IF EXISTS trg_create_fishing_partition ON "lab"."fishing";
-DROP TRIGGER IF EXISTS audit_trigger_fishing ON "lab"."fishing";
-
--- 2. Drop the existing (empty) lab.fishing table
--- This will also drop any existing partitions, primary key, and check constraints.
-DROP TABLE IF EXISTS "lab"."fishing" CASCADE;
-
----
--- Update Functions (MUST be done before recreating triggers)
----
-
--- The populate_fishing_experiment_data function is now obsolete for lab.fishing.
--- You can drop it, or modify it if it's reused elsewhere.
-DROP FUNCTION IF EXISTS "lab".populate_fishing_experiment_data();
-
--- Ensure create_fishing_partition_if_not_exists is defined if it references sampling_date
--- Based on your existing code, it correctly uses NEW.sampling_date.
-CREATE OR REPLACE FUNCTION "lab".create_fishing_partition_if_not_exists()
-RETURNS TRIGGER AS $$
-DECLARE
-    partition_date date;
-    partition_name text;
-    start_date date;
-    end_date date;
-BEGIN
-    partition_date := NEW.sampling_date;
-    IF partition_date IS NULL THEN
-        RAISE EXCEPTION 'Cannot partition on NULL sampling_date for lab.fishing. Please provide a sampling_date.';
-    END IF;
-
-    start_date := DATE_TRUNC('year', partition_date);
-    end_date := DATE_TRUNC('year', partition_date) + INTERVAL '1 year';
-    partition_name := 'fishing_y' || TO_CHAR(start_date, 'YYYY');
-
-    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."fishing"
-             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Update the manual partition creation function for fishing
-CREATE OR REPLACE FUNCTION "lab".create_fishing_partition_if_not_exists_manual (p_year integer)
-RETURNS VOID AS $$
-DECLARE
-    start_date date;
-    end_date date;
-    partition_name text;
-BEGIN
-    start_date := MAKE_DATE(p_year, 1, 1);
-    end_date := MAKE_DATE(p_year + 1, 1, 1);
-    partition_name := 'fishing_y' || TO_CHAR(start_date, 'YYYY');
-
-    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."fishing"
-             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
-END;
-$$ LANGUAGE plpgsql;
-
--- The generate_fishing_id function is fine as it uses sampling_id and the sequence.
--- No change needed for this function.
-
--- 3. Create the NEW lab.fishing table
-CREATE TABLE IF NOT EXISTS "lab"."fishing" (
-    "fishing_id" text NOT NULL,
-    "sampling_id" text NOT NULL,
-    "sampling_date" date NOT NULL,
-    "taxon_id" text,
-    "catch_kg" numeric,
-    "catch_fish" numeric,
-    "customer_id" integer,
-    "notes" text,
-    "attachment" bytea,
-    "attachment_link" text,
-    PRIMARY KEY ("fishing_id", "sampling_date")
-) PARTITION BY RANGE ("sampling_date");
-
----
--- Recreate Triggers on the new lab.fishing table
----
-
-CREATE TRIGGER trg_generate_fishing_id
-BEFORE INSERT ON "lab"."fishing"
-FOR EACH ROW EXECUTE FUNCTION "lab".generate_fishing_id();
-
-CREATE TRIGGER trg_create_fishing_partition
-BEFORE INSERT ON "lab"."fishing"
-FOR EACH ROW EXECUTE FUNCTION "lab".create_fishing_partition_if_not_exists();
-
-CREATE TRIGGER audit_trigger_fishing
-AFTER INSERT OR UPDATE OR DELETE ON "lab"."fishing"
-FOR EACH ROW EXECUTE PROCEDURE "audit"."if_modified_func"();
-
----
--- Re-add Indexes on the new lab.fishing table
----
-CREATE INDEX IF NOT EXISTS idx_fishing_sampling_id ON "lab"."fishing" ("sampling_id", "sampling_date");
-CREATE INDEX IF NOT EXISTS idx_fishing_taxon_id ON "lab"."fishing" ("taxon_id");
--- Recreate any other specific indexes that were on lab.fishing here.
-
----
--- Re-add Foreign Key Constraints for the new lab.fishing table
----
-ALTER TABLE "lab"."fishing"
-ADD CONSTRAINT "fishing_sampling_fk" FOREIGN KEY ("sampling_id", "sampling_date")
-REFERENCES "lab"."sampling"("sampling_id", "sampling_date") ON DELETE CASCADE;
-
-ALTER TABLE "lab"."fishing"
-ADD CONSTRAINT "fishing_taxon_id_fk" FOREIGN KEY ("taxon_id")
-REFERENCES "reference"."taxon"("taxon_id");
-
-ALTER TABLE "lab"."fishing"
-ADD CONSTRAINT "fishing_customer_id_fk" FOREIGN KEY ("customer_id")
-REFERENCES "lims"."customers"("customer_id");
-
--- Commit the transaction
-COMMIT;
 
 
 
