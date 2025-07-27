@@ -328,7 +328,7 @@ CREATE TABLE IF NOT EXISTS "lims"."workflow_steps" (
     "step_number" integer NOT NULL,
     "step_name" text NOT NULL,
     "sop_id" text,
-    "workflow_status_id" text DEFAULT 'Received' NOT NULL,
+    "status_id" text DEFAULT 'Received' NOT NULL,
     "target_table_name" text,
     "notes" text,
     "attachment" bytea,
@@ -458,6 +458,7 @@ CREATE TABLE IF NOT EXISTS "lab"."experiments_projects" (
     "project_id" text,
     "link_date" date,
     "notes" text,
+    "status_id" text,
     "attachment" bytea,
     "attachment_link" text
 );
@@ -549,6 +550,10 @@ ALTER TABLE "lab"."sampling" ADD PRIMARY KEY ("sampling_id", "sampling_date");
 CREATE TABLE IF NOT EXISTS "lab"."master_samples" (
     "sample_id" text PRIMARY KEY,
     "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    "created_by" TEXT,
+    "status_id" TEXT,
+    "workflow_id" TEXT,
+    "step_id" TEXT,
     "notes" text
 );
 
@@ -566,9 +571,8 @@ CREATE TABLE "lab"."parental_samples" (
     "transport" text,
     "conservation_buffer" text,
     "sample_type_id" text NOT NULL,
-    "sample_status_id" text DEFAULT 'Received' NOT NULL,
+    "status_id" text DEFAULT 'Received' NOT NULL,
     "workflow_id" text,
-    "step_id" text,
     "project_id" text,
     "customer_id" integer,
     "notes" text,
@@ -589,6 +593,7 @@ CREATE TABLE IF NOT EXISTS "lab"."fishing" (
     "customer_id" integer,
 	"experiment_id" text,
     "experiment_date" date,
+    "status_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -603,7 +608,7 @@ CREATE TABLE IF NOT EXISTS "lab"."storage_log" (
     "storage_id" text NOT NULL,
     "person_id" text,
     "move_date" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    "status" text NOT NULL,
+    "status_id" text,
     "storage_position" text,
     "notes" text
 );
@@ -628,7 +633,10 @@ CREATE TABLE IF NOT EXISTS "lab"."fish" (
     "storage_id" text,
     "storage_position" text,
     "project_id" text,
+    "workflow_id" text,
+    "step_id" text,
     "customer_id" integer,
+    "status_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -651,6 +659,9 @@ CREATE TABLE IF NOT EXISTS "lab"."tissue" (
     "storage_id" text,
     "storage_position" text,
     "project_id" text,
+    "workflow_id" text,
+    "step_id" text,
+    "status_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -669,6 +680,9 @@ CREATE TABLE IF NOT EXISTS "lab"."otoliths" (
     "age_reading_years" numeric,
     "confidence" numeric,
     "project_id" text,
+    "workflow_id" text,
+    "step_id" text,
+    "status_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -692,6 +706,9 @@ CREATE TABLE IF NOT EXISTS "lab"."dna" (
     "storage_id" text,
     "storage_position" text,
     "project_id" text,
+    "workflow_id" text,
+    "step_id" text,
+    "status_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -716,6 +733,9 @@ CREATE TABLE IF NOT EXISTS "lab"."rna" (
     "storage_id" text,
     "storage_position" text,
     "project_id" text,
+    "workflow_id" text,
+    "step_id" text,
+    "status_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -737,6 +757,9 @@ CREATE TABLE IF NOT EXISTS "lab"."sediments" (
     "storage_id" text,
     "storage_position" text,
     "external_name" text,
+    "workflow_id" text,
+    "step_id" text,
+    "status_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -756,6 +779,9 @@ CREATE TABLE IF NOT EXISTS "lab"."water" (
     "conservation_buffer" text,
     "storage_id" text,
     "storage_position" text,
+    "workflow_id" text,
+    "step_id" text,
+    "status_id" text,
     "notes" text,
     "project_id" text,
     "attachment" bytea,
@@ -926,6 +952,7 @@ CREATE TABLE IF NOT EXISTS "lab"."gelelectrophoresis" (
     "person_id" text,
     "storage_id" text,
     "storage_position" text,
+    "status_id" text,
     "project_id" text,
     "notes" text,
     "attachment" bytea,
@@ -951,6 +978,7 @@ CREATE TABLE IF NOT EXISTS "lab"."qpcr" (
     "storage_position" text,
     "status_id" text,
     "project_id" text,
+    "notes" text,
     "attachment" bytea,
     "attachment_link" text,
     PRIMARY KEY ("qpcr_id", "qpcr_date")
@@ -969,6 +997,7 @@ CREATE TABLE IF NOT EXISTS "lab"."library" (
     "read_length_bp" integer,
     "storage_id" text,
     "storage_position" text,
+    "status_id" text,
     "project_id" text,
     "notes" text,
     "attachment" bytea,
@@ -1013,6 +1042,7 @@ CREATE TABLE IF NOT EXISTS "lab"."datasets" (
     "customer_id" integer,
     "stored_location_id" text,
     "reception_date" date NOT NULL,
+    "status_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -1044,6 +1074,7 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."analysis_pipelines" (
     "repository_link" text,
 	"experiment_id" text,
     "experiment_date" date,
+    "status_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -1062,6 +1093,7 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."analysis_runs" (
     "final_output_path" text,
 	"experiment_id" text,
     "experiment_date" date,
+    "status_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -1078,6 +1110,7 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."edna_assignments" (
     "confidence" numeric,
 	"experiment_id" text,
     "experiment_date" date,
+    "status_id" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -1380,6 +1413,24 @@ BEGIN
     partition_name := 'fish_y' || TO_CHAR(start_date, 'YYYY'); -- Consistent naming
 
     EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."fish"
+             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- Update the manual partition creation function for fishing
+CREATE OR REPLACE FUNCTION "lab".create_fishing_partition_if_not_exists_manual (p_year integer)
+RETURNS VOID AS $$
+DECLARE
+    start_date date;
+    end_date date;
+    partition_name text;
+BEGIN
+    start_date := MAKE_DATE(p_year, 1, 1);
+    end_date := MAKE_DATE(p_year + 1, 1, 1);
+    partition_name := 'fishing_y' || TO_CHAR(start_date, 'YYYY');
+
+    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."fishing"
              FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
 END;
 $$ LANGUAGE plpgsql;
@@ -2660,7 +2711,7 @@ BEGIN
 
     IF target_sample_id IS NOT NULL AND target_sample_sampling_date IS NOT NULL THEN
         UPDATE "lab"."parental_samples"
-        SET "sample_status_id" = new_status
+        SET "status_id" = new_status
         WHERE "sample_id" = target_sample_id
           AND "sampling_date" = target_sample_sampling_date;
     END IF;
@@ -4406,11 +4457,11 @@ SELECT
     s.sample_id,
     s.external_name,
     s.sample_type_id,
-    s.sample_status_id AS current_status,
+    s.status_id AS current_status,
     s.workflow_id,
     ws.step_name AS current_workflow_step,
     ws.step_number,
-    ws.workflow_status_id AS step_status
+    ws.status_id AS step_status
 FROM
     "lab"."parental_samples" s
 LEFT JOIN
@@ -4661,7 +4712,7 @@ SELECT
     p.title AS project_title,
     s.sample_type_id,
     stype.sample_type_abrv,
-    s.sample_status_id,
+    s.status_id,
     stat.notes AS sample_status_notes,
     s.parent_sample_id,
 
@@ -4788,7 +4839,7 @@ SELECT
 
 
 FROM "lab"."parental_samples" s
-LEFT JOIN "reference"."status" stat ON s.sample_status_id = stat.status_id
+LEFT JOIN "reference"."status" stat ON s.status_id = stat.status_id
 LEFT JOIN "reference"."samples_type" stype ON s.sample_type_id = stype.sample_type_id
 LEFT JOIN "lims"."projects" p ON s.project_id = p.project_id
 LEFT JOIN "lab"."storage" stor ON s.storage_id = stor.storage_id
@@ -4905,7 +4956,7 @@ SELECT
     'Primary Sample' AS sample_origin_type, -- Identifies the source of this row
     s.sample_type_id,
     stype.sample_type_abrv,
-    s.sample_status_id,
+    s.status_id,
     stat.notes AS sample_status_notes,
     s.sampling_id,
     s.sampling_date,
@@ -5127,7 +5178,7 @@ SELECT
 
 FROM
     "lab"."parental_samples" s
-LEFT JOIN "reference"."status" stat ON s.sample_status_id = stat.status_id
+LEFT JOIN "reference"."status" stat ON s.status_id = stat.status_id
 LEFT JOIN "reference"."samples_type" stype ON s.sample_type_id = stype.sample_type_id
 LEFT JOIN "lims"."projects" p ON s.project_id = p.project_id
 LEFT JOIN "lims"."customers" c ON s.customer_id = c.customer_id
@@ -5151,7 +5202,7 @@ select
     'Derived Fish Sample' AS sample_origin_type,
     'Fish' AS sample_type_id,
     'F' AS sample_type_abrv,
-    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS sample_status_id, -- Default status
+    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS status_id, -- Default status
     (SELECT notes FROM "reference"."status" WHERE status_id = 'Received') AS sample_status_notes,
     f.sampling_id,
     f.sampling_date,
@@ -5242,7 +5293,7 @@ SELECT
     'Derived Tissue Sample' AS sample_origin_type,
     'Tissue' AS sample_type_id,
     'T' AS sample_type_abrv,
-    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS sample_status_id,
+    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS status_id,
     (SELECT notes FROM "reference"."status" WHERE status_id = 'Received') AS sample_status_notes,
     NULL::text AS sampling_id,
     t.experiment_date AS sampling_date,
@@ -5306,7 +5357,7 @@ SELECT
     'Derived DNA Sample' AS sample_origin_type,
     'DNA' AS sample_type_id,
     'D' AS sample_type_abrv,
-    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS sample_status_id,
+    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS status_id,
     (SELECT notes FROM "reference"."status" WHERE status_id = 'Received') AS sample_status_notes,
     NULL::text AS sampling_id,
     d.experiment_date AS sampling_date,
@@ -5377,7 +5428,7 @@ SELECT
     'Derived RNA Sample' AS sample_origin_type,
     'RNA' AS sample_type_id,
     'R' AS sample_type_abrv,
-    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS sample_status_id,
+    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS status_id,
     (SELECT notes FROM "reference"."status" WHERE status_id = 'Received') AS sample_status_notes,
     NULL::text AS sampling_id,
     r.experiment_date AS sampling_date,
@@ -5450,7 +5501,7 @@ SELECT
     'Derived Sediment Sample' AS sample_origin_type,
     'Sediments' AS sample_type_id,
     'S' AS sample_type_abrv,
-    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS sample_status_id,
+    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS status_id,
     (SELECT notes FROM "reference"."status" WHERE status_id = 'Received') AS sample_status_notes,
     NULL::text AS sampling_id,
     sed.experiment_date AS sampling_date,
@@ -5524,7 +5575,7 @@ SELECT
     'Derived Water Sample' AS sample_origin_type,
     'Water' AS sample_type_id,
     'W' AS sample_type_abrv,
-    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS sample_status_id,
+    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS status_id,
     (SELECT notes FROM "reference"."status" WHERE status_id = 'Received') AS sample_status_notes,
     NULL::text AS sampling_id,
     w.experiment_date AS sampling_date,
@@ -5600,7 +5651,7 @@ SELECT
     'Otolith Sample' AS sample_origin_type,
     'Otolith' AS sample_type_id,
     'O' AS sample_type_abrv,
-    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS sample_status_id,
+    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS status_id,
     (SELECT notes FROM "reference"."status" WHERE status_id = 'Received') AS sample_status_notes,
     NULL::text AS sampling_id,
     oto.experiment_date AS sampling_date,
@@ -5676,7 +5727,7 @@ SELECT
     'Extraction Product' AS sample_origin_type,
     'Extraction' AS sample_type_id,
     'EXT' AS sample_type_abrv,
-    ext.status_id AS sample_status_id,
+    ext.status_id AS status_id,
     stat.notes AS sample_status_notes,
     NULL::text AS sampling_id,
     ext.extraction_date AS sampling_date,
@@ -5764,7 +5815,7 @@ SELECT
     'Nanodrop QC Record' AS sample_origin_type,
     'NDQC' AS sample_type_id,
     'NDQC' AS sample_type_abrv,
-    nd.status_id AS sample_status_id,
+    nd.status_id AS status_id,
     stat.notes AS sample_status_notes,
     NULL::text AS sampling_id,
     nd.measurement_date AS sampling_date,
@@ -5832,7 +5883,7 @@ SELECT
     'Qubit QC Record' AS sample_origin_type,
     'QubitQC' AS sample_type_id,
     'QBC' AS sample_type_abrv,
-    qu.status_id AS sample_status_id,
+    qu.status_id AS status_id,
     stat.notes AS sample_status_notes,
     NULL::text AS sampling_id,
     qu.measurement_date AS sampling_date,
@@ -5899,7 +5950,7 @@ SELECT
     'Tapestation QC Record' AS sample_origin_type,
     'TSQC' AS sample_type_id,
     'TSQC' AS sample_type_abrv,
-    ts.status_id AS sample_status_id,
+    ts.status_id AS status_id,
     stat.notes AS sample_status_notes,
     NULL::text AS sampling_id,
     ts.measurement_date AS sampling_date,
@@ -5958,7 +6009,7 @@ SELECT
     'PCR Product' AS sample_origin_type,
     'PCRP' AS sample_type_id,
     'PCRP' AS sample_type_abrv,
-    pcr.status_id AS sample_status_id,
+    pcr.status_id AS status_id,
     stat.notes AS sample_status_notes,
     NULL::text AS sampling_id,
     pcr.pcr_date AS sampling_date,
@@ -6022,7 +6073,7 @@ SELECT
     'Gel Electrophoresis Result' AS sample_origin_type,
     'GE' AS sample_type_id,
     'GE' AS sample_type_abrv,
-    NULL AS sample_status_id, -- Gel table doesn't have status_id, default to NULL
+    NULL AS status_id, -- Gel table doesn't have status_id, default to NULL
     NULL AS sample_status_notes,
     NULL::text AS sampling_id,
     gel.run_date AS sampling_date,
@@ -6085,7 +6136,7 @@ SELECT
     'qPCR Result' AS sample_origin_type,
     'QPCRR' AS sample_type_id,
     'QPCRR' AS sample_type_abrv,
-    qpcr.status_id AS sample_status_id,
+    qpcr.status_id AS status_id,
     stat.notes AS sample_status_notes,
     NULL::text AS sampling_id,
     qpcr.qpcr_date AS sampling_date,
@@ -6150,7 +6201,7 @@ SELECT
     'Library Prep Product' AS sample_origin_type,
     'LIBP' AS sample_type_id,
     'LIBP' AS sample_type_abrv,
-    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS sample_status_id,
+    (SELECT status_id FROM "reference"."status" WHERE notes = 'Received') AS status_id,
     (SELECT notes FROM "reference"."status" WHERE status_id = 'Received') AS sample_status_notes,
     NULL::text AS sampling_id,
     lib.prep_date AS sampling_date,
@@ -6211,7 +6262,7 @@ SELECT
     'Sequencing Run' AS sample_origin_type,
     'SEQR' AS sample_type_id,
     'SEQR' AS sample_type_abrv,
-    seq.status_id AS sample_status_id,
+    seq.status_id AS status_id,
     stat.notes AS sample_status_notes,
     NULL::text AS sampling_id,
     seq.sequencing_date AS sampling_date,
@@ -6287,6 +6338,1152 @@ LEFT JOIN "reference"."taxon" ea_taxon ON ea.taxon_id = ea_taxon.taxon_id;
 
 
 -- ==============================================================================
+-- MYVIEW
+
+CREATE OR REPLACE VIEW "lab"."myview" AS
+-- 1. Parental Samples (Master Samples) - (Total columns: ~80)
+SELECT
+    s.sample_id,
+    s.external_name,
+    s.parent_sample_id,
+    'Primary Sample' AS sample_origin_type,
+    s.sample_type_id,
+    stype.sample_type_abrv,
+    s.status_id,
+    stat.notes AS sample_status_notes,
+    s.workflow_id,
+    s.step_id, -- Current step ID of the sample
+    s.sampling_id,
+    s.sampling_date,
+    s.reception_date,
+    s.project_id,
+    p.title AS project_title,
+    s.customer_id,
+    c.customer_name,
+    s.storage_id,
+    s.storage_position,
+    s.notes,
+    s.attachment,
+    s.attachment_link,
+
+    -- Associated Experiment (if linked via experiments_samples)
+    exp.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    exp.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    -- Sampling Event Details (from lab.sampling)
+    samp.location_name AS sampling_location,
+    samp.depth_m AS sampling_depth_m,
+    samp.temperature_atmospheric_c,
+    samp.weather,
+    samp.wind_speed,
+    wu.unit_abbreviation AS wind_unit,
+    samp.salinity,
+    su.unit_abbreviation AS salinity_unit,
+    samp.oxygen,
+    ou.unit_abbreviation AS oxygen_unit,
+    ST_X(samp.geom) AS sampling_lon,
+    ST_Y(samp.geom) AS sampling_lat,
+    ST_X(samp.fishing_start_geom) AS fishing_start_lon,
+    ST_Y(samp.fishing_start_geom) AS fishing_start_lat,
+    ST_X(samp.fishing_end_geom) AS fishing_end_lon,
+    ST_Y(samp.fishing_end_geom) AS fishing_end_lat,
+
+    -- Specific process/derived sample IDs and their relevant dates/values (28 columns from here)
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, -- Fish (3)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, -- Tissue (2)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::date AS dna_extraction_date_dna, -- DNA (3)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::date AS rna_extraction_date_rna, -- RNA (3)
+    NULL::text AS otolith_id, NULL::numeric AS otolith_age_reading_years, -- Otoliths (2)
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::numeric AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    NULL::text AS nanodrop_id, NULL::date AS nanodrop_measurement_date, NULL::numeric AS nanodrop_concentration, -- Nanodrop (3)
+    NULL::text AS qubit_id, NULL::date AS qubit_measurement_date, NULL::numeric AS qubit_original_sample_conc, -- Qubit (3)
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, -- Tapestation (2)
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, -- PCR (3)
+    NULL::text AS gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, -- Gel Electrophoresis (3)
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, -- qPCR (3)
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, -- Library (3)
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::bigint AS total_reads, -- Sequencing (3)
+    NULL::text AS analysis_run_id, NULL::date AS analysis_run_date, NULL::text AS pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    sampler_p.full_name AS sampler_full_name,
+    receiver_p.full_name AS receiver_full_name
+
+FROM
+    "lab"."parental_samples" s
+LEFT JOIN "reference"."status" stat ON s.status_id = stat.status_id
+LEFT JOIN "reference"."samples_type" stype ON s.sample_type_id = stype.sample_type_id
+LEFT JOIN "lims"."projects" p ON s.project_id = p.project_id
+LEFT JOIN "lims"."customers" c ON s.customer_id = c.customer_id
+LEFT JOIN "lab"."sampling" samp ON s.sampling_id = samp.sampling_id AND s.sampling_date = samp.sampling_date
+LEFT JOIN "reference"."units" wu ON samp.wind_unit_id = wu.unit_id
+LEFT JOIN "reference"."units" su ON samp.salinity_unit_id = su.unit_id
+LEFT JOIN "reference"."units" ou ON samp.oxygen_unit_id = ou.unit_id
+LEFT JOIN "reference"."personal" sampler_p ON s.sampler_person_id = sampler_p.person_id
+LEFT JOIN "reference"."personal" receiver_p ON s.receiver_person_id = receiver_p.person_id
+LEFT JOIN "lab"."experiments_samples" es ON s.sample_id = es.sample_id
+LEFT JOIN "lab"."experiments" exp ON es.experiment_id = exp.experiment_id AND es.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id
+
+UNION ALL
+
+-- 2. Derived Fish Samples
+SELECT
+    f.sample_id,
+    NULL::text AS external_name, -- Added NULL for missing external_name
+    f.parent_sample_id,
+    'Derived Fish Sample' AS sample_origin_type,
+    'Fish' AS sample_type_id,
+    'F' AS sample_type_abrv,
+    COALESCE(f.status_id, (SELECT status_id FROM "reference"."status" WHERE notes = 'Received')) AS status_id,
+    COALESCE(stat.notes, 'Received') AS sample_status_notes,
+    f.workflow_id,
+    f.step_id,
+    f.sampling_id,
+    f.sampling_date,
+    NULL::date AS reception_date,
+    f.project_id,
+    p.title AS project_title,
+    f.customer_id,
+    c.customer_name,
+    f.storage_id,
+    f.storage_position,
+    f.notes,
+    f.attachment,
+    f.attachment_link,
+
+    f.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    f.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    samp.location_name AS sampling_location,
+    samp.depth_m AS sampling_depth_m,
+    samp.temperature_atmospheric_c,
+    samp.weather,
+    samp.wind_speed,
+    wu.unit_abbreviation AS wind_unit,
+    samp.salinity,
+    su.unit_abbreviation AS salinity_unit,
+    samp.oxygen,
+    ou.unit_abbreviation AS oxygen_unit,
+    ST_X(samp.geom) AS sampling_lon,
+    ST_Y(samp.geom) AS sampling_lat,
+    ST_X(samp.fishing_start_geom) AS fishing_start_lon,
+    ST_Y(samp.fishing_start_geom) AS fishing_start_lat,
+    ST_X(samp.fishing_end_geom) AS fishing_end_lon,
+    ST_Y(samp.fishing_end_geom) AS fishing_end_lat,
+
+    f.species_id, taxon_sp.en_name AS fish_species_en_name, f.total_length_mm, -- Fish (3)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, -- Tissue (2)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::date AS dna_extraction_date_dna, -- DNA (3)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::date AS rna_extraction_date_rna, -- RNA (3)
+    NULL::text AS otolith_id, NULL::numeric AS otolith_age_reading_years, -- Otoliths (2)
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::numeric AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    NULL::text AS nanodrop_id, NULL::date AS nanodrop_measurement_date, NULL::numeric AS nanodrop_concentration, -- Nanodrop (3)
+    NULL::text AS qubit_id, NULL::date AS qubit_measurement_date, NULL::numeric AS qubit_original_sample_conc, -- Qubit (3)
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, -- Tapestation (2)
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, -- PCR (3)
+    NULL::text AS gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, -- Gel Electrophoresis (3)
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, -- qPCR (3)
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, -- Library (3)
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::bigint AS total_reads, -- Sequencing (3)
+    NULL::text AS analysis_run_id, NULL::date AS analysis_run_date, NULL::text AS pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name -- Not directly on fish table
+
+FROM
+    "lab"."fish" f
+LEFT JOIN "reference"."status" stat ON f.status_id = stat.status_id
+LEFT JOIN "lims"."projects" p ON f.project_id = p.project_id
+LEFT JOIN "lims"."customers" c ON f.customer_id = c.customer_id
+LEFT JOIN "lab"."sampling" samp ON f.sampling_id = samp.sampling_id AND f.sampling_date = samp.sampling_date
+LEFT JOIN "reference"."units" wu ON samp.wind_unit_id = wu.unit_id
+LEFT JOIN "reference"."units" su ON samp.salinity_unit_id = su.unit_id
+LEFT JOIN "reference"."units" ou ON samp.oxygen_unit_id = ou.unit_id
+LEFT JOIN "reference"."taxon" taxon_sp ON f.species_id = taxon_sp.taxon_id
+LEFT JOIN "lab"."experiments" exp ON f.experiment_id = exp.experiment_id AND f.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id
+
+UNION ALL
+
+-- 3. Derived Tissue Samples
+SELECT
+    t.sample_id,
+    NULL::text AS external_name,
+    t.parent_sample_id,
+    'Derived Tissue Sample' AS sample_origin_type,
+    'Tissue' AS sample_type_id,
+    'T' AS sample_type_abrv,
+    COALESCE(t.status_id, (SELECT status_id FROM "reference"."status" WHERE notes = 'Received')) AS status_id,
+    COALESCE(stat.notes, 'Received') AS sample_status_notes,
+    t.workflow_id,
+    t.step_id,
+    NULL::text AS sampling_id,
+    t.experiment_date AS sampling_date,
+    NULL::date AS reception_date,
+    t.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    t.storage_id,
+    t.storage_position,
+    t.notes,
+    t.attachment,
+    t.attachment_link,
+
+    t.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    t.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, -- Fish (3)
+    t.weight_mg AS tissue_weight_mg, t.tissue_type, -- Tissue (2)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::date AS dna_extraction_date_dna, -- DNA (3)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::date AS rna_extraction_date_rna, -- RNA (3)
+    NULL::text AS otolith_id, NULL::numeric AS otolith_age_reading_years, -- Otoliths (2)
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::numeric AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    NULL::text AS nanodrop_id, NULL::date AS nanodrop_measurement_date, NULL::numeric AS nanodrop_concentration, -- Nanodrop (3)
+    NULL::text AS qubit_id, NULL::date AS qubit_measurement_date, NULL::numeric AS qubit_original_sample_conc, -- Qubit (3)
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, -- Tapestation (2)
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, -- PCR (3)
+    NULL::text AS gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, -- Gel Electrophoresis (3)
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, -- qPCR (3)
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, -- Library (3)
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::bigint AS total_reads, -- Sequencing (3)
+    NULL::text AS analysis_run_id, NULL::date AS analysis_run_date, NULL::text AS pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."tissue" t
+LEFT JOIN "reference"."status" stat ON t.status_id = stat.status_id
+LEFT JOIN "lims"."projects" p ON t.project_id = p.project_id
+LEFT JOIN "lab"."experiments" exp ON t.experiment_id = exp.experiment_id AND t.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id
+
+UNION ALL
+
+-- 4. Derived DNA Samples
+SELECT
+    d.sample_id,
+    NULL::text AS external_name,
+    d.parent_sample_id,
+    'Derived DNA Sample' AS sample_origin_type,
+    'DNA' AS sample_type_id,
+    'D' AS sample_type_abrv,
+    COALESCE(d.status_id, (SELECT status_id FROM "reference"."status" WHERE notes = 'Received')) AS status_id,
+    COALESCE(stat.notes, 'Received') AS sample_status_notes,
+    d.workflow_id,
+    d.step_id,
+    NULL::text AS sampling_id,
+    d.experiment_date AS sampling_date,
+    d.extraction_date AS reception_date,
+    d.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    d.storage_id,
+    d.storage_position,
+    d.notes,
+    d.attachment,
+    d.attachment_link,
+
+    d.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    d.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, -- Fish (3)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, -- Tissue (2)
+    d.volume_ul AS dna_volume_ul, d.concentration_ng_ul AS dna_concentration_ng_ul, d.extraction_date AS dna_extraction_date_dna, -- DNA (3)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::date AS rna_extraction_date_rna, -- RNA (3)
+    NULL::text AS otolith_id, NULL::numeric AS otolith_age_reading_years, -- Otoliths (2)
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::numeric AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    NULL::text AS nanodrop_id, NULL::date AS nanodrop_measurement_date, NULL::numeric AS nanodrop_concentration, -- Nanodrop (3)
+    NULL::text AS qubit_id, NULL::date AS qubit_measurement_date, NULL::numeric AS qubit_original_sample_conc, -- Qubit (3)
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, -- Tapestation (2)
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, -- PCR (3)
+    NULL::text AS gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, -- Gel Electrophoresis (3)
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, -- qPCR (3)
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, -- Library (3)
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::bigint AS total_reads, -- Sequencing (3)
+    NULL::text AS analysis_run_id, NULL::date AS analysis_run_date, NULL::text AS pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."dna" d
+LEFT JOIN "reference"."status" stat ON d.status_id = stat.status_id
+LEFT JOIN "lims"."projects" p ON d.project_id = p.project_id
+LEFT JOIN "lab"."experiments" exp ON d.experiment_id = exp.experiment_id AND d.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id
+
+UNION ALL
+
+-- 5. Derived RNA Samples
+SELECT
+    r.sample_id,
+    NULL::text AS external_name,
+    r.parent_sample_id,
+    'Derived RNA Sample' AS sample_origin_type,
+    'RNA' AS sample_type_id,
+    'R' AS sample_type_abrv,
+    COALESCE(r.status_id, (SELECT status_id FROM "reference"."status" WHERE notes = 'Received')) AS status_id,
+    COALESCE(stat.notes, 'Received') AS sample_status_notes,
+    r.workflow_id,
+    r.step_id,
+    NULL::text AS sampling_id,
+    r.experiment_date AS sampling_date,
+    r.extraction_date AS reception_date,
+    r.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    r.storage_id,
+    r.storage_position,
+    r.notes,
+    r.attachment,
+    r.attachment_link,
+
+    r.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    r.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, -- Fish (3)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, -- Tissue (2)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::date AS dna_extraction_date_dna, -- DNA (3)
+    r.volume_ul AS rna_volume_ul, r.concentration_ng_ul AS rna_concentration_ng_ul, r.extraction_date AS rna_extraction_date_rna, -- RNA (3)
+    NULL::text AS otolith_id, NULL::numeric AS otolith_age_reading_years, -- Otoliths (2)
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::numeric AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    NULL::text AS nanodrop_id, NULL::date AS nanodrop_measurement_date, NULL::numeric AS nanodrop_concentration, -- Nanodrop (3)
+    NULL::text AS qubit_id, NULL::date AS qubit_measurement_date, NULL::numeric AS qubit_original_sample_conc, -- Qubit (3)
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, -- Tapestation (2)
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, -- PCR (3)
+    NULL::text AS gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, -- Gel Electrophoresis (3)
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, -- qPCR (3)
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, -- Library (3)
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::bigint AS total_reads, -- Sequencing (3)
+    NULL::text AS analysis_run_id, NULL::date AS analysis_run_date, NULL::text AS pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."rna" r
+LEFT JOIN "reference"."status" stat ON r.status_id = stat.status_id
+LEFT JOIN "lims"."projects" p ON r.project_id = p.project_id
+LEFT JOIN "lab"."experiments" exp ON r.experiment_id = exp.experiment_id AND r.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id
+
+UNION ALL
+
+-- 6. Derived Sediments Samples
+SELECT
+    sed.sample_id,
+    sed.external_name,
+    sed.parent_sample_id,
+    'Derived Sediment Sample' AS sample_origin_type,
+    'Sediments' AS sample_type_id,
+    'S' AS sample_type_abrv,
+    COALESCE(sed.status_id, (SELECT status_id FROM "reference"."status" WHERE notes = 'Received')) AS status_id,
+    COALESCE(stat.notes, 'Received') AS sample_status_notes,
+    sed.workflow_id,
+    sed.step_id,
+    NULL::text AS sampling_id,
+    sed.experiment_date AS sampling_date,
+    NULL::date AS reception_date,
+    sed.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    sed.storage_id,
+    sed.storage_position,
+    sed.notes,
+    sed.attachment,
+    sed.attachment_link,
+
+    sed.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    sed.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, -- Fish (3)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, -- Tissue (2)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::date AS dna_extraction_date_dna, -- DNA (3)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::date AS rna_extraction_date_rna, -- RNA (3)
+    NULL::text AS otolith_id, NULL::numeric AS otolith_age_reading_years, -- Otoliths (2)
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::numeric AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    NULL::text AS nanodrop_id, NULL::date AS nanodrop_measurement_date, NULL::numeric AS nanodrop_concentration, -- Nanodrop (3)
+    NULL::text AS qubit_id, NULL::date AS qubit_measurement_date, NULL::numeric AS qubit_original_sample_conc, -- Qubit (3)
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, -- Tapestation (2)
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, -- PCR (3)
+    NULL::text AS gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, -- Gel Electrophoresis (3)
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, -- qPCR (3)
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, -- Library (3)
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::bigint AS total_reads, -- Sequencing (3)
+    NULL::text AS analysis_run_id, NULL::date AS analysis_run_date, NULL::text AS pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."sediments" sed
+LEFT JOIN "reference"."status" stat ON sed.status_id = stat.status_id
+LEFT JOIN "lims"."projects" p ON sed.project_id = p.project_id
+LEFT JOIN "lab"."experiments" exp ON sed.experiment_id = exp.experiment_id AND sed.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id
+
+UNION ALL
+
+-- 7. Derived Water Samples
+SELECT
+    w.sample_id,
+    NULL AS external_name,
+    w.parent_sample_id,
+    'Derived Water Sample' AS sample_origin_type,
+    'Water' AS sample_type_id,
+    'W' AS sample_type_abrv,
+    COALESCE(w.status_id, (SELECT status_id FROM "reference"."status" WHERE notes = 'Received')) AS status_id,
+    COALESCE(stat.notes, 'Received') AS sample_status_notes,
+    w.workflow_id,
+    w.step_id,
+    NULL::text AS sampling_id,
+    w.experiment_date AS sampling_date,
+    NULL::date AS reception_date,
+    w.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    w.storage_id,
+    w.storage_position,
+    w.notes,
+    w.attachment,
+    w.attachment_link,
+
+    w.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    w.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, -- Fish (3)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, -- Tissue (2)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::date AS dna_extraction_date_dna, -- DNA (3)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::date AS rna_extraction_date_rna, -- RNA (3)
+    NULL::text AS otolith_id, NULL::numeric AS otolith_age_reading_years, -- Otoliths (2)
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::numeric AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    NULL::text AS nanodrop_id, NULL::date AS nanodrop_measurement_date, NULL::numeric AS nanodrop_concentration, -- Nanodrop (3)
+    NULL::text AS qubit_id, NULL::date AS qubit_measurement_date, NULL::numeric AS qubit_original_sample_conc, -- Qubit (3)
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, -- Tapestation (2)
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, -- PCR (3)
+    NULL::text AS gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, -- Gel Electrophoresis (3)
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, -- qPCR (3)
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, -- Library (3)
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::bigint AS total_reads, -- Sequencing (3)
+    NULL::text AS analysis_run_id, NULL::date AS analysis_run_date, NULL::text AS pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."water" w
+LEFT JOIN "reference"."status" stat ON w.status_id = stat.status_id
+LEFT JOIN "lims"."projects" p ON w.project_id = p.project_id
+LEFT JOIN "lab"."experiments" exp ON w.experiment_id = exp.experiment_id AND w.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id
+
+UNION ALL
+
+-- 8. Derived Otolith Samples
+SELECT
+    oto.otolith_id AS sample_id,
+    NULL AS external_name,
+    oto.sample_id AS parent_sample_id,
+    'Otolith Sample' AS sample_origin_type,
+    'Otolith' AS sample_type_id,
+    'O' AS sample_type_abrv,
+    COALESCE(oto.status_id, (SELECT status_id FROM "reference"."status" WHERE notes = 'Received')) AS status_id,
+    COALESCE(stat.notes, 'Received') AS sample_status_notes,
+    oto.workflow_id,
+    oto.step_id,
+    NULL::text AS sampling_id,
+    oto.experiment_date AS sampling_date,
+    NULL::date AS reception_date,
+    oto.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    NULL::text AS storage_id,
+    NULL::text AS storage_position,
+    oto.notes,
+    oto.attachment,
+    oto.attachment_link,
+
+    oto.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    oto.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, -- Fish (3)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, -- Tissue (2)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::date AS dna_extraction_date_dna, -- DNA (3)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::date AS rna_extraction_date_rna, -- RNA (3)
+    oto.otolith_id, oto.age_reading_years AS otolith_age_reading_years, -- Otoliths (2)
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::numeric AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    NULL::text AS nanodrop_id, NULL::date AS nanodrop_measurement_date, NULL::numeric AS nanodrop_concentration, -- Nanodrop (3)
+    NULL::text AS qubit_id, NULL::date AS qubit_measurement_date, NULL::numeric AS qubit_original_sample_conc, -- Qubit (3)
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, -- Tapestation (2)
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, -- PCR (3)
+    NULL::text AS gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, -- Gel Electrophoresis (3)
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, -- qPCR (3)
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, -- Library (3)
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::bigint AS total_reads, -- Sequencing (3)
+    NULL::text AS analysis_run_id, NULL::date AS analysis_run_date, NULL::text AS pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."otoliths" oto
+LEFT JOIN "reference"."status" stat ON oto.status_id = stat.status_id
+LEFT JOIN "lims"."projects" p ON oto.project_id = p.project_id
+LEFT JOIN "lab"."experiments" exp ON oto.experiment_id = exp.experiment_id AND oto.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id
+
+UNION ALL
+
+-- 9. Extraction Records (as a "sample" of the extraction process)
+SELECT
+    ext.extraction_id AS sample_id,
+    NULL AS external_name,
+    ext.sample_id AS parent_sample_id,
+    'Extraction Process' AS sample_origin_type,
+    'Extraction' AS sample_type_id,
+    'EXT' AS sample_type_abrv,
+    COALESCE(ext.status_id, (SELECT status_id FROM "reference"."status" WHERE notes = 'Extracted')) AS status_id,
+    COALESCE(stat.notes, 'Extracted') AS sample_status_notes,
+    NULL::text AS workflow_id,
+    NULL::text AS step_id,
+    NULL::text AS sampling_id,
+    ext.extraction_date AS sampling_date,
+    NULL::date AS reception_date,
+    ext.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    ext.storage_id,
+    ext.storage_position,
+    ext.notes,
+    ext.attachment,
+    ext.attachment_link,
+
+    ext.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    ext.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, -- Fish (3)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, -- Tissue (2)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::date AS dna_extraction_date_dna, -- DNA (3)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::date AS rna_extraction_date_rna, -- RNA (3)
+    NULL::text AS otolith_id, NULL::numeric AS otolith_age_reading_years, -- Otoliths (2)
+    ext.extraction_id, ext.extraction_date AS extraction_process_date, ext.yield_qubit_ng_ul AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    NULL::text AS nanodrop_id, NULL::date AS nanodrop_measurement_date, NULL::numeric AS nanodrop_concentration, -- Nanodrop (3)
+    NULL::text AS qubit_id, NULL::date AS qubit_measurement_date, NULL::numeric AS qubit_original_sample_conc, -- Qubit (3)
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, -- Tapestation (2)
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, -- PCR (3)
+    NULL::text AS gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, -- Gel Electrophoresis (3)
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, -- qPCR (3)
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, -- Library (3)
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::bigint AS total_reads, -- Sequencing (3)
+    NULL::text AS analysis_run_id, NULL::date AS analysis_run_date, NULL::text AS pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."extraction" ext
+LEFT JOIN "reference"."status" stat ON ext.status_id = stat.status_id
+LEFT JOIN "lims"."projects" p ON ext.project_id = p.project_id
+LEFT JOIN "lab"."experiments" exp ON ext.experiment_id = exp.experiment_id AND ext.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id
+
+UNION ALL
+
+-- 10. Nanodrop QC Records
+SELECT
+    nd.nanodrop_id AS sample_id,
+    NULL AS external_name,
+    nd.sample_id AS parent_sample_id,
+    'Nanodrop QC Record' AS sample_origin_type,
+    'Nanodrop QC' AS sample_type_id,
+    'NDQC' AS sample_type_abrv,
+    COALESCE(nd.status_id, (SELECT status_id FROM "reference"."status" WHERE notes = 'Nanodrop QC')) AS status_id,
+    COALESCE(stat.notes, 'Nanodrop QC') AS sample_status_notes,
+    NULL::text AS workflow_id,
+    NULL::text AS step_id,
+    NULL::text AS sampling_id,
+    nd.measurement_date AS sampling_date,
+    NULL::date AS reception_date,
+    nd.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    nd.storage_id,
+    nd.storage_position,
+    nd.notes,
+    nd.attachment,
+    nd.attachment_link,
+
+    nd.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    nd.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, -- Fish (3)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, -- Tissue (2)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::date AS dna_extraction_date_dna, -- DNA (3)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::date AS rna_extraction_date_rna, -- RNA (3)
+    NULL::text AS otolith_id, NULL::numeric AS otolith_age_reading_years, -- Otoliths (2)
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::numeric AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    nd.nanodrop_id, nd.measurement_date, nd.nanodrop_concentration, -- Nanodrop (3)
+    NULL::text AS qubit_id, NULL::date AS qubit_measurement_date, NULL::numeric AS qubit_original_sample_conc, -- Qubit (3)
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, -- Tapestation (2)
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, -- PCR (3)
+    NULL::text AS gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, -- Gel Electrophoresis (3)
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, -- qPCR (3)
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, -- Library (3)
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::bigint AS total_reads, -- Sequencing (3)
+    NULL::text AS analysis_run_id, NULL::date AS analysis_run_date, NULL::text AS pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."nanodrop" nd
+LEFT JOIN "reference"."status" stat ON nd.status_id = stat.status_id
+LEFT JOIN "lims"."projects" p ON nd.project_id = p.project_id
+LEFT JOIN "lab"."experiments" exp ON nd.experiment_id = exp.experiment_id AND nd.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id
+
+UNION ALL
+
+-- 11. Qubit QC Records
+SELECT
+    qu.qubit_id AS sample_id,
+    NULL AS external_name,
+    qu.sample_id AS parent_sample_id,
+    'Qubit QC Record' AS sample_origin_type,
+    'Qubit QC' AS sample_type_id,
+    'QBC' AS sample_type_abrv,
+    COALESCE(qu.status_id, (SELECT status_id FROM "reference"."status" WHERE notes = 'Qubit QC')) AS status_id,
+    COALESCE(stat.notes, 'Qubit QC') AS sample_status_notes,
+    NULL::text AS workflow_id,
+    NULL::text AS step_id,
+    NULL::text AS sampling_id,
+    qu.measurement_date AS sampling_date,
+    NULL::date AS reception_date,
+    qu.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    qu.storage_id,
+    qu.storage_position,
+    qu.notes,
+    qu.attachment,
+    qu.attachment_link,
+
+    qu.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    qu.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, -- Fish (3)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, -- Tissue (2)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::date AS dna_extraction_date_dna, -- DNA (3)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::date AS rna_extraction_date_rna, -- RNA (3)
+    NULL::text AS otolith_id, NULL::numeric AS otolith_age_reading_years, -- Otoliths (2)
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::numeric AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    NULL::text AS nanodrop_id, NULL::date AS nanodrop_measurement_date, NULL::numeric AS nanodrop_concentration, -- Nanodrop (3)
+    qu.qubit_id, qu.measurement_date, qu.qubit_original_sample_conc, -- Qubit (3)
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, -- Tapestation (2)
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, -- PCR (3)
+    NULL::text AS gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, -- Gel Electrophoresis (3)
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, -- qPCR (3)
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, -- Library (3)
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::bigint AS total_reads, -- Sequencing (3)
+    NULL::text AS analysis_run_id, NULL::date AS analysis_run_date, NULL::text AS pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."qubit" qu
+LEFT JOIN "reference"."status" stat ON qu.status_id = stat.status_id
+LEFT JOIN "lims"."projects" p ON qu.project_id = p.project_id
+LEFT JOIN "lab"."experiments" exp ON qu.experiment_id = exp.experiment_id AND qu.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id
+
+UNION ALL
+
+-- 12. Tapestation QC Records
+SELECT
+    ts.tapestation_id AS sample_id,
+    NULL AS external_name,
+    ts.sample_id AS parent_sample_id,
+    'Tapestation QC Record' AS sample_origin_type,
+    'Tapestation QC' AS sample_type_id,
+    'TSQC' AS sample_type_abrv,
+    COALESCE(ts.status_id, (SELECT status_id FROM "reference"."status" WHERE notes = 'Tapestation QC')) AS status_id,
+    COALESCE(stat.notes, 'Tapestation QC') AS sample_status_notes,
+    NULL::text AS workflow_id,
+    NULL::text AS step_id,
+    NULL::text AS sampling_id,
+    ts.measurement_date AS sampling_date,
+    NULL::date AS reception_date,
+    ts.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    ts.storage_id,
+    ts.storage_position,
+    ts.notes,
+    ts.attachment,
+    ts.attachment_link,
+
+    ts.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    ts.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, -- Fish (3)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, -- Tissue (2)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::date AS dna_extraction_date_dna, -- DNA (3)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::date AS rna_extraction_date_rna, -- RNA (3)
+    NULL::text AS otolith_id, NULL::numeric AS otolith_age_reading_years, -- Otoliths (2)
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::numeric AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    NULL::text AS nanodrop_id, NULL::date AS nanodrop_measurement_date, NULL::numeric AS nanodrop_concentration, -- Nanodrop (3)
+    NULL::text AS qubit_id, NULL::date AS qubit_measurement_date, NULL::numeric AS qubit_original_sample_conc, -- Qubit (3)
+    ts.tapestation_id, ts.measurement_date, -- Tapestation (2)
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, -- PCR (3)
+    NULL::text AS gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, -- Gel Electrophoresis (3)
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, -- qPCR (3)
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, -- Library (3)
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::bigint AS total_reads, -- Sequencing (3)
+    NULL::text AS analysis_run_id, NULL::date AS analysis_run_date, NULL::text AS pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."tapestation" ts
+LEFT JOIN "reference"."status" stat ON ts.status_id = stat.status_id
+LEFT JOIN "lims"."projects" p ON ts.project_id = p.project_id
+LEFT JOIN "lab"."experiments" exp ON ts.experiment_id = exp.experiment_id AND ts.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id
+
+UNION ALL
+
+-- 13. PCR Records
+SELECT
+    pcr.pcr_id AS sample_id,
+    NULL AS external_name,
+    pcr.sample_id AS parent_sample_id,
+    'PCR Product' AS sample_origin_type,
+    'PCR Product' AS sample_type_id,
+    'PCRP' AS sample_type_abrv,
+    COALESCE(pcr.status_id, (SELECT status_id FROM "reference"."status" WHERE notes = 'PCR Done')) AS status_id,
+    COALESCE(stat.notes, 'PCR Done') AS sample_status_notes,
+    NULL::text AS workflow_id,
+    NULL::text AS step_id,
+    NULL::text AS sampling_id,
+    pcr.pcr_date AS sampling_date,
+    NULL::date AS reception_date,
+    pcr.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    pcr.storage_id,
+    pcr.storage_position,
+    pcr.notes,
+    pcr.attachment,
+    pcr.attachment_link,
+
+    pcr.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    pcr.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, -- Fish (3)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, -- Tissue (2)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::date AS dna_extraction_date_dna, -- DNA (3)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::date AS rna_extraction_date_rna, -- RNA (3)
+    NULL::text AS otolith_id, NULL::numeric AS otolith_age_reading_years, -- Otoliths (2)
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::numeric AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    NULL::text AS nanodrop_id, NULL::date AS nanodrop_measurement_date, NULL::numeric AS nanodrop_concentration, -- Nanodrop (3)
+    NULL::text AS qubit_id, NULL::date AS qubit_measurement_date, NULL::numeric AS qubit_original_sample_conc, -- Qubit (3)
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, -- Tapestation (2)
+    pcr.pcr_id, pcr.pcr_date, pcr.primer_id AS pcr_primer_id, -- PCR (3)
+    NULL::text AS gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, -- Gel Electrophoresis (3)
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, -- qPCR (3)
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, -- Library (3)
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::bigint AS total_reads, -- Sequencing (3)
+    NULL::text AS analysis_run_id, NULL::date AS analysis_run_date, NULL::text AS pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."pcr" pcr
+LEFT JOIN "reference"."status" stat ON pcr.status_id = stat.status_id
+LEFT JOIN "lims"."projects" p ON pcr.project_id = p.project_id
+LEFT JOIN "lab"."experiments" exp ON pcr.experiment_id = exp.experiment_id AND pcr.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id
+
+UNION ALL
+
+-- 14. Gel Electrophoresis Records
+SELECT
+    gel.gelelectrophoresis_id AS sample_id,
+    NULL AS external_name,
+    gel.sample_id AS parent_sample_id,
+    'Gel Electrophoresis Result' AS sample_origin_type,
+    'Gel Electrophoresis' AS sample_type_id,
+    'GE' AS sample_type_abrv,
+    COALESCE(gel.status_id, (SELECT status_id FROM "reference"."status" WHERE notes = 'Unknown Step')) AS status_id,
+    COALESCE(stat.notes, 'Unknown Step') AS sample_status_notes,
+    NULL::text AS workflow_id,
+    NULL::text AS step_id,
+    NULL::text AS sampling_id,
+    gel.run_date AS sampling_date,
+    NULL::date AS reception_date,
+    gel.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    gel.storage_id,
+    gel.storage_position,
+    gel.notes,
+    gel.attachment,
+    gel.attachment_link,
+
+    gel.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    gel.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, -- Fish (3)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, -- Tissue (2)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::date AS dna_extraction_date_dna, -- DNA (3)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::date AS rna_extraction_date_rna, -- RNA (3)
+    NULL::text AS otolith_id, NULL::numeric AS otolith_age_reading_years, -- Otoliths (2)
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::numeric AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    NULL::text AS nanodrop_id, NULL::date AS nanodrop_measurement_date, NULL::numeric AS nanodrop_concentration, -- Nanodrop (3)
+    NULL::text AS qubit_id, NULL::date AS qubit_measurement_date, NULL::numeric AS qubit_original_sample_conc, -- Qubit (3)
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, -- Tapestation (2)
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, -- PCR (3)
+    gel.gelelectrophoresis_id, gel.run_date, gel.band_size_bp, -- Gel Electrophoresis (3)
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, -- qPCR (3)
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, -- Library (3)
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::bigint AS total_reads, -- Sequencing (3)
+    NULL::text AS analysis_run_id, NULL::date AS analysis_run_date, NULL::text AS pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."gelelectrophoresis" gel
+LEFT JOIN "reference"."status" stat ON gel.status_id = stat.status_id
+LEFT JOIN "lims"."projects" p ON gel.project_id = p.project_id
+LEFT JOIN "lab"."experiments" exp ON gel.experiment_id = exp.experiment_id AND gel.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id
+
+UNION ALL
+
+-- 15. qPCR Records
+SELECT
+    qpcr.qpcr_id AS sample_id,
+    NULL AS external_name,
+    qpcr.sample_id AS parent_sample_id,
+    'qPCR Result' AS sample_origin_type,
+    'qPCR' AS sample_type_id,
+    'QPCRR' AS sample_type_abrv,
+    COALESCE(qpcr.status_id, (SELECT status_id FROM "reference"."status" WHERE notes = 'qPCR Done')) AS status_id,
+    COALESCE(stat.notes, 'qPCR Done') AS sample_status_notes,
+    NULL::text AS workflow_id,
+    NULL::text AS step_id,
+    NULL::text AS sampling_id,
+    qpcr.qpcr_date AS sampling_date,
+    NULL::date AS reception_date,
+    qpcr.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    qpcr.storage_id,
+    qpcr.storage_position,
+    qpcr.notes,
+    qpcr.attachment,
+    qpcr.attachment_link,
+
+    qpcr.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    qpcr.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, -- Fish (3)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, -- Tissue (2)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::date AS dna_extraction_date_dna, -- DNA (3)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::date AS rna_extraction_date_rna, -- RNA (3)
+    NULL::text AS otolith_id, NULL::numeric AS otolith_age_reading_years, -- Otoliths (2)
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::numeric AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    NULL::text AS nanodrop_id, NULL::date AS nanodrop_measurement_date, NULL::numeric AS nanodrop_concentration, -- Nanodrop (3)
+    NULL::text AS qubit_id, NULL::date AS qubit_measurement_date, NULL::numeric AS qubit_original_sample_conc, -- Qubit (3)
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, -- Tapestation (2)
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, -- PCR (3)
+    NULL::text AS gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, -- Gel Electrophoresis (3)
+    qpcr.qpcr_id, qpcr.qpcr_date, qpcr.ct_value, -- qPCR (3)
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, -- Library (3)
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::bigint AS total_reads, -- Sequencing (3)
+    NULL::text AS analysis_run_id, NULL::date AS analysis_run_date, NULL::text AS pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."qpcr" qpcr
+LEFT JOIN "reference"."status" stat ON qpcr.status_id = stat.status_id
+LEFT JOIN "lims"."projects" p ON qpcr.project_id = p.project_id
+LEFT JOIN "lab"."experiments" exp ON qpcr.experiment_id = exp.experiment_id AND qpcr.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id
+
+UNION ALL
+
+-- 16. Library Records
+SELECT
+    lib.library_id AS sample_id,
+    NULL AS external_name,
+    lib.sample_id AS parent_sample_id,
+    'Library Prep Product' AS sample_origin_type,
+    'Library' AS sample_type_id,
+    'LIBP' AS sample_type_abrv,
+    COALESCE(lib.status_id, (SELECT status_id FROM "reference"."status" WHERE notes = 'Library Prep')) AS status_id,
+    COALESCE(stat.notes, 'Library Prep') AS sample_status_notes,
+    NULL::text AS workflow_id,
+    NULL::text AS step_id,
+    NULL::text AS sampling_id,
+    lib.prep_date AS sampling_date,
+    NULL::date AS reception_date,
+    lib.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    lib.storage_id,
+    lib.storage_position,
+    lib.notes,
+    lib.attachment,
+    lib.attachment_link,
+
+    lib.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    lib.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, -- Fish (3)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, -- Tissue (2)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::date AS dna_extraction_date_dna, -- DNA (3)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::date AS rna_extraction_date_rna, -- RNA (3)
+    NULL::text AS otolith_id, NULL::numeric AS otolith_age_reading_years, -- Otoliths (2)
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::numeric AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    NULL::text AS nanodrop_id, NULL::date AS nanodrop_measurement_date, NULL::numeric AS nanodrop_concentration, -- Nanodrop (3)
+    NULL::text AS qubit_id, NULL::date AS qubit_measurement_date, NULL::numeric AS qubit_original_sample_conc, -- Qubit (3)
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, -- Tapestation (2)
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, -- PCR (3)
+    NULL::text AS gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, -- Gel Electrophoresis (3)
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, -- qPCR (3)
+    lib.library_id, lib.prep_date, lib.library_name, -- Library (3)
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::bigint AS total_reads, -- Sequencing (3)
+    NULL::text AS analysis_run_id, NULL::date AS analysis_run_date, NULL::text AS pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."library" lib
+LEFT JOIN "reference"."status" stat ON lib.status_id = stat.status_id
+LEFT JOIN "lims"."projects" p ON lib.project_id = p.project_id
+LEFT JOIN "lab"."experiments" exp ON lib.experiment_id = exp.experiment_id AND lib.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id
+
+UNION ALL
+
+-- 17. Sequencing Records
+SELECT
+    seq.sequencing_id AS sample_id,
+    NULL AS external_name,
+    seq.sample_id AS parent_sample_id,
+    'Sequencing Run' AS sample_origin_type,
+    'Sequencing' AS sample_type_id,
+    'SEQR' AS sample_type_abrv,
+    COALESCE(seq.status_id, (SELECT status_id FROM "reference"."status" WHERE notes = 'Sequencing Done')) AS status_id,
+    COALESCE(stat.notes, 'Sequencing Done') AS sample_status_notes,
+    NULL::text AS workflow_id,
+    NULL::text AS step_id,
+    NULL::text AS sampling_id,
+    seq.sequencing_date AS sampling_date,
+    NULL::date AS reception_date,
+    seq.project_id,
+    p.title AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    seq.storage_id,
+    seq.storage_position,
+    seq.notes,
+    seq.attachment,
+    seq.attachment_link,
+
+    seq.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    seq.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, -- Fish (3)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, -- Tissue (2)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::date AS dna_extraction_date_dna, -- DNA (3)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::date AS rna_extraction_date_rna, -- RNA (3)
+    NULL::text AS otolith_id, NULL::numeric AS otolith_age_reading_years, -- Otoliths (2)
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::numeric AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    NULL::text AS nanodrop_id, NULL::date AS nanodrop_measurement_date, NULL::numeric AS nanodrop_concentration, -- Nanodrop (3)
+    NULL::text AS qubit_id, NULL::date AS qubit_measurement_date, NULL::numeric AS qubit_original_sample_conc, -- Qubit (3)
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, -- Tapestation (2)
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, -- PCR (3)
+    NULL::text AS gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, -- Gel Electrophoresis (3)
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, -- qPCR (3)
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, -- Library (3)
+    seq.sequencing_id, seq.sequencing_date, seq.total_reads, -- Sequencing (3)
+    NULL::text AS analysis_run_id, NULL::date AS analysis_run_date, NULL::text AS pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "lab"."sequencing" seq
+LEFT JOIN "reference"."status" stat ON seq.status_id = stat.status_id
+LEFT JOIN "lims"."projects" p ON seq.project_id = p.project_id
+LEFT JOIN "lab"."experiments" exp ON seq.experiment_id = exp.experiment_id AND seq.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id
+
+UNION ALL
+
+-- 18. Analysis Runs (as a "sample" of the bioinformatics process)
+SELECT
+    ar.run_id AS sample_id,
+    NULL AS external_name,
+    ar.sequencing_id AS parent_sample_id,
+    'Bioinformatics Analysis Run' AS sample_origin_type,
+    'Bioinformatics' AS sample_type_id,
+    'Analysis' AS sample_type_abrv,
+    COALESCE(ar.status_id, (SELECT status_id FROM "reference"."status" WHERE notes = 'Bioinformatics Done')) AS status_id,
+    COALESCE(stat.notes, 'Bioinformatics Done') AS sample_status_notes,
+    NULL::text AS workflow_id,
+    NULL::text AS step_id,
+    NULL::text AS sampling_id,
+    ar.run_date::date AS sampling_date,
+    NULL::date AS reception_date,
+    NULL::text AS project_id,
+    NULL::text AS project_title,
+    NULL::integer AS customer_id,
+    NULL::text AS customer_name,
+    NULL::text AS storage_id,
+    NULL::text AS storage_position,
+    ar.notes,
+    ar.attachment,
+    ar.attachment_link,
+
+    ar.experiment_id AS associated_experiment_id,
+    exp.experiment_title AS associated_experiment_title,
+    ar.experiment_date AS associated_experiment_date,
+    exp_person.full_name AS experiment_person_name,
+
+    NULL::text AS sampling_location, NULL::numeric AS sampling_depth_m, NULL::numeric AS temperature_atmospheric_c, NULL::text AS weather, NULL::numeric AS wind_speed, NULL::text AS wind_unit,
+    NULL::numeric AS salinity, NULL::text AS salinity_unit, NULL::numeric AS oxygen, NULL::text AS oxygen_unit,
+    NULL::numeric AS sampling_lon, NULL::numeric AS sampling_lat, NULL::numeric AS fishing_start_lon, NULL::numeric AS fishing_start_lat, NULL::numeric AS fishing_end_lon, NULL::numeric AS fishing_end_lat,
+
+    NULL::text AS fish_species_id, NULL::text AS fish_species_en_name, NULL::numeric AS fish_total_length_mm, -- Fish (3)
+    NULL::numeric AS tissue_weight_mg, NULL::text AS tissue_type, -- Tissue (2)
+    NULL::numeric AS dna_volume_ul, NULL::numeric AS dna_concentration_ng_ul, NULL::date AS dna_extraction_date_dna, -- DNA (3)
+    NULL::numeric AS rna_volume_ul, NULL::numeric AS rna_concentration_ng_ul, NULL::date AS rna_extraction_date_rna, -- RNA (3)
+    NULL::text AS otolith_id, NULL::numeric AS otolith_age_reading_years, -- Otoliths (2)
+    NULL::text AS extraction_id, NULL::date AS extraction_process_date, NULL::numeric AS extraction_process_yield_qubit_ng_ul, -- Extraction (3)
+    NULL::text AS nanodrop_id, NULL::date AS nanodrop_measurement_date, NULL::numeric AS nanodrop_concentration, -- Nanodrop (3)
+    NULL::text AS qubit_id, NULL::date AS qubit_measurement_date, NULL::numeric AS qubit_original_sample_conc, -- Qubit (3)
+    NULL::text AS tapestation_id, NULL::date AS tapestation_measurement_date, -- Tapestation (2)
+    NULL::text AS pcr_id, NULL::date AS pcr_date, NULL::text AS pcr_primer_id, -- PCR (3)
+    NULL::text AS gelelectrophoresis_id, NULL::date AS gel_run_date, NULL::integer AS gel_band_size_bp, -- Gel Electrophoresis (3)
+    NULL::text AS qpcr_id, NULL::date AS qpcr_date, NULL::numeric AS qpcr_ct_value, -- qPCR (3)
+    NULL::text AS library_id, NULL::date AS library_prep_date, NULL::text AS library_name, -- Library (3)
+    NULL::text AS sequencing_id, NULL::date AS sequencing_date, NULL::bigint AS total_reads, -- Sequencing (3)
+    ar.run_id AS analysis_run_id, ar.run_date::date AS analysis_run_date, ap.pipeline_name, -- Analysis Runs (3)
+    NULL::text AS edna_assignment_id, NULL::text AS edna_assigned_taxon_name, NULL::integer AS edna_read_count, -- eDNA Assignments (3)
+
+    NULL::text AS sampler_full_name, NULL::text AS receiver_full_name
+FROM
+    "bioinformatics"."analysis_runs" ar
+LEFT JOIN "reference"."status" stat ON ar.status_id = stat.status_id
+LEFT JOIN "bioinformatics"."analysis_pipelines" ap ON ar.pipeline_id = ap.pipeline_id
+LEFT JOIN "lab"."experiments" exp ON ar.experiment_id = exp.experiment_id AND ar.experiment_date = exp.experiment_date
+LEFT JOIN "reference"."personal" exp_person ON exp.person_id = exp_person.person_id;
+
 -- ======================================================================
 -- 15. Partitioning Setup
 -- ======================================================================
@@ -6531,23 +7728,6 @@ BEGIN
              FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
 
     RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Update the manual partition creation function for fishing
-CREATE OR REPLACE FUNCTION "lab".create_fishing_partition_if_not_exists_manual (p_year integer)
-RETURNS VOID AS $$
-DECLARE
-    start_date date;
-    end_date date;
-    partition_name text;
-BEGIN
-    start_date := MAKE_DATE(p_year, 1, 1);
-    end_date := MAKE_DATE(p_year + 1, 1, 1);
-    partition_name := 'fishing_y' || TO_CHAR(start_date, 'YYYY');
-
-    EXECUTE 'CREATE TABLE IF NOT EXISTS "lab".' || quote_ident(partition_name) || ' PARTITION OF "lab"."fishing"
-             FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
 END;
 $$ LANGUAGE plpgsql;
 
@@ -7028,7 +8208,7 @@ ADD CONSTRAINT "samples_sample_type_id_fk" FOREIGN KEY ("sample_type_id")
 REFERENCES "reference"."samples_type"("sample_type_id");
 
 ALTER TABLE "lab"."parental_samples"
-ADD CONSTRAINT "samples_sample_status_id_fk" FOREIGN KEY ("sample_status_id")
+ADD CONSTRAINT "samples_status_id_fk" FOREIGN KEY ("status_id")
 REFERENCES "reference"."status"("status_id");
 
 ALTER TABLE "lab"."parental_samples"
@@ -7726,8 +8906,8 @@ INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "u
 ('m', 'meter', 'm', 'length', 1)
 ON CONFLICT ("unit_id") DO NOTHING;
 
-INSERT INTO "reference"."personal" ("person_id", "full_name", "password_hash") VALUES
-('system_user', 'System Automation', 'no_password_needed_for_system')
+INSERT INTO "reference"."personal" ("person_id", "full_name", "password_hash","status_id") VALUES
+('system_user', 'System Automation', 'no_password_needed_for_system', 'Active')
 ON CONFLICT ("person_id") DO NOTHING;
 
 -- Insert statement for "reference"."Status"
@@ -7809,8 +8989,8 @@ ON CONFLICT ("gene_id") DO NOTHING;
 -- ======================================================================
 
 -- Reference Schema Tables - Basic Entries for FKs
-INSERT INTO "reference"."personal" ("person_id", "full_name", "password_hash") VALUES
-('Test_db', 'Test_db Full Name', 'Test_db_hashed_password')
+INSERT INTO "reference"."personal" ("person_id", "full_name", "password_hash","status_id") VALUES
+('Test_db', 'Test_db Full Name', 'Test_db_hashed_password','Active')
 ON CONFLICT ("person_id") DO NOTHING;
 
 INSERT INTO "reference"."status" ("status_id", "notes") VALUES
@@ -7962,7 +9142,7 @@ ON CONFLICT ("sampling_id", "sampling_date") DO NOTHING;
 -- Inserting into `lab.samples` will populate `master_samples`.
 -- INSERT INTO "lab"."master_samples" ("sample_id") VALUES ('Test_db') ON CONFLICT ("sample_id") DO NOTHING;
 
-INSERT INTO "lab"."parental_samples" ("external_name", "sampling_id", "sampling_date", "storage_id", "storage_position", "sampler_person_id", "receiver_person_id", "reception_date", "transport", "conservation_buffer", "sample_type_id", "sample_status_id", "project_id", "customer_id") VALUES
+INSERT INTO "lab"."parental_samples" ("external_name", "sampling_id", "sampling_date", "storage_id", "storage_position", "sampler_person_id", "receiver_person_id", "reception_date", "transport", "conservation_buffer", "sample_type_id", "status_id", "project_id", "customer_id") VALUES
 ('Test_db', '25TestDBTestDB0001', '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 'Test_db', '2025-07-01', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 'Test_db', 1)
 ON CONFLICT ("sample_id", "sampling_date") DO NOTHING;
 
