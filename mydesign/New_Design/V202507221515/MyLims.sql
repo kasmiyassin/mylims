@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS "reference"."personal" (
     "telephone" text,
     "mail" text,
     "password_hash" text NOT NULL,
+    "status_id" text NOT NULL,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text

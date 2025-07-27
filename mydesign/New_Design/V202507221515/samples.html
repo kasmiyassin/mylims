@@ -9,7 +9,6 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
-        /* Base styles from previous version */
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
         .sidebar { border-right: 1px solid #e2e8f0; }
         .sidebar-item { color: #475569; }
@@ -32,17 +31,15 @@
         .tab-link { cursor: pointer; }
         .tab-link.active { color: #4f46e5; border-color: #4f46e5; }
 
-        /* Custom scrollbar */
         .overflow-y-auto::-webkit-scrollbar { width: 8px; }
         .overflow-y-auto::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
         .overflow-y-auto::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
         .overflow-y-auto::-webkit-scrollbar-thumb:hover { background: #555; }
         
-        /* New/Modified Styles for improved UX */
         .add-child-btn {
-            background-color: #4f46e5; /* indigo-600 */
+            background-color: #4f46e5;
             color: white;
-            border-radius: 0.375rem; /* rounded-md */
+            border-radius: 0.375rem;
             padding: 0.5rem 1rem;
             font-size: 0.875rem;
             cursor: pointer;
@@ -53,14 +50,13 @@
             margin-right: 0.5rem;
         }
         .add-child-btn:hover {
-            background-color: #4338ca; /* darker indigo */
+            background-color: #4338ca;
             transform: translateY(-1px);
         }
         .add-child-btn .lucide {
             margin-right: 0.5rem;
         }
 
-        /* Toast Notification Styles */
         .toast-container {
             position: fixed;
             top: 1rem;
@@ -80,9 +76,9 @@
             margin-bottom: 0.75rem;
             border-left: 5px solid;
         }
-        .toast.success { border-color: #10b981; color: #065f46; } /* green-500, green-900 */
-        .toast.error { border-color: #ef4444; color: #991b1b; } /* red-500, red-900 */
-        .toast.info { border-color: #3b82f6; color: #1e40af; } /* blue-500, blue-900 */
+        .toast.success { border-color: #10b981; color: #065f46; }
+        .toast.error { border-color: #ef4444; color: #991b1b; }
+        .toast.info { border-color: #3b82f6; color: #1e40af; }
 
         .toast .lucide {
             margin-right: 0.75rem;
@@ -199,7 +195,6 @@
     </div>
 
     <script>
-        // --- Custom CSV Unparse Function (replaces PapaParse.unparse for this specific use case) ---
         function unparseCSV(data, options) {
             options = options || {};
             const delimiter = options.delimiter || ',';
@@ -226,7 +221,6 @@
             }).join(newline);
         }
 
-        // --- AUTH & SETUP ---
         if (sessionStorage.getItem('isLoggedIn') !== 'true') {
             localStorage.setItem('redirectUrl', window.location.href);
             window.location.href = './login.html';
@@ -235,15 +229,14 @@
         const API_BASE_URL = '/tifi-lims/api'; 
         let masterCache = {}; 
         let currentTableData = []; 
-        let currentTableSchema = []; // Stores column info for the currently displayed table
-        let currentTableName = 'lab.detailed_samples_view'; // Default to samples view
+        let currentTableSchema = [];
+        let currentTableName = 'lab.detailed_samples_view';
         let sortColumn = null; 
         let sortDirection = 'asc';
         let columnFilters = {};
-        let allSampleTables = []; // To store list of all lab schema tables for dropdown
-        let pkMappingCache = {}; // Cache for primary key information for specific tables
+        let allSampleTables = [];
+        let pkMappingCache = {};
 
-        // --- DOMContentLoaded ---
         document.addEventListener('DOMContentLoaded', () => {
             console.log("DOMContentLoaded: Initializing page.");
             lucide.createIcons();
@@ -269,7 +262,6 @@
             initializePage();
         });
 
-        // --- API & DATA HANDLING ---
         async function apiFetch(endpoint, options = {}) {
             console.log(`API Fetch: Calling ${endpoint} with options:`, options);
             try {
@@ -305,7 +297,6 @@
             }
         }
 
-        // Centralized toast notification function
         function showToast(message, type = 'info') {
             const toastContainer = document.getElementById('toast-container');
             const toast = document.createElement('div');
@@ -313,9 +304,8 @@
             const icon = type === 'success' ? 'check-circle' : (type === 'error' ? 'x-circle' : 'info');
             toast.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5"></i><span class="toast-message">${message}</span>`;
             toastContainer.appendChild(toast);
-            lucide.createIcons(); // Render lucide icons in the new toast
+            lucide.createIcons();
 
-            // Automatically remove toast after 3 seconds
             setTimeout(() => {
                 toast.remove();
             }, 3000);
@@ -361,18 +351,15 @@
             console.log("Fetching all tables for samples page.");
             const tables = await apiFetch('table_names_for_forms');
             if (tables && !tables.error) {
-                // Filter for tables in the 'lab' schema and relevant to samples
-                // Include specific bioinformatics tables that have direct sample_id links
                 allSampleTables = tables.filter(t => 
                     (t.startsWith('lab.') || t.startsWith('bioinformatics.')) && 
-                    !t.includes('_y') && // Exclude partitioned tables directly (e.g., lab.samples_y2025)
-                    !t.includes('master_samples') && // Exclude master_samples as it's a backend helper table
-                    !t.includes('storage_log') && // Exclude storage_log for the primary dropdown here (might be linked from details)
-                    !t.includes('experiments_projects') && // Exclude for samples page
-                    !t.includes('protocol_runs') && // Exclude for samples page
-                    !t.includes('experiments') && // Exclude for samples page
-                    // Explicitly include the tables you want in this dropdown
-                    (t === 'lab.samples' || t === 'lab.detailed_samples_view' || 
+                    !t.includes('_y') &&
+                    !t.includes('master_samples') &&
+                    !t.includes('storage_log') &&
+                    !t.includes('experiments_projects') &&
+                    !t.includes('protocol_runs') &&
+                    !t.includes('experiments') &&
+                    (t === 'lab.parental_samples' || t === 'lab.detailed_samples_view' || // Corrected from lab.samples
                      t === 'lab.water' || t === 'lab.sediments' || t === 'lab.tissue' ||
                      t === 'lab.otoliths' || t === 'lab.fish' || t === 'lab.dna' ||
                      t === 'lab.rna' || t === 'lab.sampling' || t === 'lab.fishing' ||
@@ -381,7 +368,6 @@
                      t === 'lab.gelelectrophoresis' || t === 'lab.qpcr' || t === 'lab.library' ||
                      t === 'lab.sequencing' || t === 'bioinformatics.analysis_runs' || 
                      t === 'bioinformatics.edna_assignments') &&
-                     // Explicitly exclude any tables from the 'projects' schema here
                      !t.startsWith('projects.') 
                 );
                 console.log("Filtered sample tables:", allSampleTables);
@@ -391,7 +377,6 @@
             return [];
         }
 
-        // --- UI RENDERING ---
         function formatColumnName(columnName) {
             return columnName.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
         }
@@ -451,9 +436,9 @@
                         if (value === null || value === undefined) {
                             value = 'N/A';
                         } else if (col.data_type === 'date' && value) {
-                            try { value = new Date(value).toLocaleDateString('en-CA'); } catch (e) { /* keep original */ }
+                            try { value = new Date(value).toLocaleDateString('en-CA'); } catch (e) { }
                         } else if (col.data_type === 'timestamp with time zone' && value) {
-                            try { value = new Date(value).toLocaleString(); } catch (e) { /* keep original */ }
+                            try { value = new Date(value).toLocaleString(); } catch (e) { }
                         } else if (typeof value === 'object') { 
                             value = JSON.stringify(value);
                         }
@@ -474,7 +459,6 @@
             addFilterAndSortListeners();
         }
 
-        // Fetches primary key info and caches it
         async function getPrimaryKeysForTable(schema, table) {
             const cacheKey = `pk.${schema}.${table}`;
             if (pkMappingCache[cacheKey]) {
@@ -491,7 +475,6 @@
         }
 
         function getPkValues(row) {
-            // Use the cached PK mapping for the *current* table being displayed
             const pkColumns = pkMappingCache[`pk.${currentTableName}`] || [];
             const pkValues = {};
             pkColumns.forEach(pkCol => {
@@ -507,10 +490,8 @@
             if (!dateString) return '';
             try {
                 const date = new Date(dateString);
-                // For date-only inputs, ensure it's YYYY-MM-DD
                 return isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0];
             } catch (e) {
-                console.warn("Failed to format date for input:", dateString, e);
                 return '';
             }
         };
@@ -519,10 +500,8 @@
             if (!dateTimeString) return '';
             try {
                 const date = new Date(dateTimeString);
-                // For datetime-local inputs, ensure it's YYYY-MM-DDTHH:MM
                 return isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 16);
             } catch (e) {
-                console.warn("Failed to format datetime for input:", dateTimeString, e);
                 return '';
             }
         };
@@ -554,10 +533,9 @@
                         return String(r[key]) === String(pkValues[key]);
                     });
                 });
-                // If editing from `detailed_samples_view`, always target `lab.samples` for the edit form.
                 let targetTableForEdit = currentTableName;
                 if (currentTableName === 'lab.detailed_samples_view') {
-                    targetTableForEdit = 'lab.samples';
+                    targetTableForEdit = 'lab.parental_samples';
                 }
                 if (record) showCreateEditModal(record, targetTableForEdit);
                 else showToast("Record not found for editing.", "error");
@@ -575,16 +553,13 @@
                 }
 
                 let success = false;
-                // Determine the actual table to delete from. If it's a view, try to delete from the underlying base table.
                 let tableToDeleteFrom = currentTableName;
                 if (currentTableName === 'lab.detailed_samples_view') {
-                    tableToDeleteFrom = 'lab.samples'; // Always delete from base samples table for the view
+                    tableToDeleteFrom = 'lab.parental_samples';
                 }
 
-                // Special handling for lab.samples: Delete child records first
-                if (tableToDeleteFrom === 'lab.samples') {
+                if (tableToDeleteFrom === 'lab.parental_samples') {
                     const sampleId = pkValues.sample_id;
-                    // For sampling_date, we need to pass it for deletion of partitions
                     const samplingDate = pkValues.sampling_date; 
 
                     const childTablesToDelete = [
@@ -616,20 +591,13 @@
                             const [childSchema, childTableName] = childTable.name.split('.');
                             const childPkColumns = await getPrimaryKeysForTable(childSchema, childTableName);
 
-                            // Dynamically build filter parameters for fetching children
                             let filterParams = new URLSearchParams();
                             filterParams.append(`filter_sample_id`, sampleId);
 
                             if (childPkColumns.includes('sampling_date') && samplingDate) {
                                 filterParams.append(`filter_sampling_date`, samplingDate);
                             }
-                            // Note: For tables partitioned by experiment_date (e.g., tissue, dna, rna),
-                            // the `sample_full_details_view` provides `experiment_date` (often the last one).
-                            // A more robust delete would iterate through all experiment_dates associated with this sample
-                            // in *that specific child table* if there could be multiple.
-                            // For simplicity, we'll fetch all children by `sample_id` and then iterate for deletion.
-
-                            console.log(`Attempting to find children from ${childTable.name} for sample ${sampleId}`);
+                            
                             const children = await apiFetch(`table/${childSchema}/${childTableName}?${filterParams.toString()}`);
                             
                             if (children && children.length > 0) {
@@ -645,7 +613,6 @@
                                         }
                                     });
                                     const childQueryString = new URLSearchParams(deleteChildPkValues).toString();
-                                    console.log(`Deleting child record from ${childTable.name} with PKs:`, deleteChildPkValues);
                                     const deleteChildResult = await apiFetch(`table/${childSchema}/${childTableName}?${childQueryString}`, { method: 'DELETE' });
                                     if (!deleteChildResult.success) {
                                         console.error(`Failed to delete child record from ${childTable.name}:`, deleteChildResult.error);
@@ -665,7 +632,6 @@
                     }
 
                     if (allChildrenDeleted) {
-                        console.log(`All children deleted. Proceeding to delete main sample ${recordIdentifier}.`);
                         const [mainSchema, mainTable] = tableToDeleteFrom.split('.');
                         const queryString = new URLSearchParams(pkValues).toString();
                         const result = await apiFetch(`table/${mainSchema}/${mainTable}?${queryString}`, { method: 'DELETE' });
@@ -677,8 +643,6 @@
                         }
                     }
                 } else {
-                    // Generic delete for other tables
-                    console.log(`Deleting generic record from ${tableToDeleteFrom} with PKs:`, pkValues);
                     const [genSchema, genTable] = tableToDeleteFrom.split('.');
                     const queryString = new URLSearchParams(pkValues).toString();
                     const result = await apiFetch(`table/${genSchema}/${genTable}?${queryString}`, { method: 'DELETE' });
@@ -691,7 +655,6 @@
                 }
                 
                 if (success) {
-                    console.log("Record deleted successfully. Reloading table.");
                     showToast('Record deleted successfully!', "success");
                     loadAndRenderTable(currentTableName);
                     document.getElementById('sample-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="beaker" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a sample to view its details</p></div></div>`;
@@ -701,7 +664,6 @@
         }
 
         function addFilterAndSortListeners() {
-            console.log("Adding filter and sort listeners.");
             document.querySelectorAll('.sortable-header').forEach(header => {
                 header.removeEventListener('click', handleSortClick);
                 header.addEventListener('click', handleSortClick);
@@ -773,8 +735,12 @@
             container.innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="loader-2" class="animate-spin mx-auto h-12 w-12 text-blue-600"></i><p class="mt-2">Loading sample details...</p></div></div>`;
             lucide.createIcons();
 
-            // Fetch the detailed sample view record again to ensure it's up-to-date and contains all joined fields.
-            const sampleDetailsData = await apiFetch(`table/lab/sample_full_details_view?filter_sample_id=${pkValues.sample_id}`);
+            // Fetch the detailed sample view record using all PK components
+            const sampleId = pkValues.sample_id;
+            const samplingDate = pkValues.sampling_date; 
+            const filterQueryString = `filter_sample_id=${sampleId}&filter_sampling_date=${samplingDate}`;
+
+            const sampleDetailsData = await apiFetch(`table/lab/sample_full_details_view?${filterQueryString}`);
             const sample = sampleDetailsData && sampleDetailsData.length > 0 ? sampleDetailsData[0] : null;
 
             if (!sample) { 
@@ -789,7 +755,6 @@
                     const date = new Date(dateString);
                     return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString('en-CA');
                 } catch (e) {
-                    console.warn("Failed to format date for display:", dateString, e);
                     return 'N/A';
                 }
             };
@@ -800,7 +765,6 @@
                     const date = new Date(dateString);
                     return isNaN(date.getTime()) ? 'N/A' : date.toLocaleString();
                 } catch (e) {
-                    console.warn("Failed to format datetime for display:", dateString, e);
                     return 'N/A';
                 }
             };
@@ -839,83 +803,79 @@
                 </div>
             `;
 
-            // Dynamic "Add Child Record" buttons
             detailsHtml += `<div class="p-4 bg-gray-50 rounded-lg border border-gray-200 mt-4">
                 <h3 class="text-lg font-semibold text-gray-800 mb-2">Add Related Records:</h3>
                 <div class="flex flex-wrap gap-2">
-                    <button class="add-child-btn" data-child-table="lab.fish" data-sample-id="${sample.sample_id}" data-sampling-date="${formatDateForInput(sample.sampling_event_date || '')}">
+                    <button class="add-child-btn" data-child-table="lab.fish" data-sample-id="${sample.sample_id}" data-sampling-date="${formatDateForInput(sample.sampling_event_date || '')}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="fish" class="w-4 h-4"></i>Add Fish Details
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.tissue" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.tissue" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="microscope" class="w-4 h-4"></i>Add Tissue Details
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.otoliths" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.otoliths" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="circle-dot" class="w-4 h-4"></i>Add Otoliths Details
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.dna" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.dna" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="dna" class="w-4 h-4"></i>Add DNA Details
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.rna" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.rna" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="ribbon" class="w-4 h-4"></i>Add RNA Details
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.sediments" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.sediments" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="sand-grain" class="w-4 h-4"></i>Add Sediments Details
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.water" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.water" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="droplet" class="w-4 h-4"></i>Add Water Details
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.experiments_samples" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.experiments_samples" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="flask-round" class="w-4 h-4"></i>Link Experiment
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.dissections" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.dissections" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="scissors" class="w-4 h-4"></i>Add Dissection
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.extraction" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.extraction" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="flask-conical" class="w-4 h-4"></i>Add Extraction
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.nanodrop" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.nanodrop" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="bar-chart-2" class="w-4 h-4"></i>Add Nanodrop QC
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.qubit" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.qubit" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="thermometer" class="w-4 h-4"></i>Add Qubit QC
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.tapestation" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.tapestation" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="waveform" class="w-4 h-4"></i>Add Tapestation QC
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.pcr" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.pcr" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="dna" class="w-4 h-4"></i>Add PCR
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.gelelectrophoresis" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.gelelectrophoresis" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="columns" class="w-4 h-4"></i>Add Gel Electrophoresis
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.qpcr" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.qpcr" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="activity" class="w-4 h-4"></i>Add qPCR
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.library" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.library" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="book" class="w-4 h-4"></i>Add Library
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.sequencing" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.sequencing" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="dna-off" class="w-4 h-4"></i>Add Sequencing
                     </button>
-                    <button class="add-child-btn" data-child-table="bioinformatics.analysis_runs" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="bioinformatics.analysis_runs" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="cloud-cog" class="w-4 h-4"></i>Add Analysis Run
                     </button>
-                    <button class="add-child-btn" data-child-table="bioinformatics.edna_assignments" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="bioinformatics.edna_assignments" data-sample-id="${sample.sample_id}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="dna" class="w-4 h-4"></i>Add eDNA Assignment
                     </button>
-                    <button class="add-child-btn" data-child-table="lab.storage_log" data-sample-id="${sample.sample_id}">
+                    <button class="add-child-btn" data-child-table="lab.storage_log" data-sample-id="${sample.sample_id}" data-sampling-date="${formatDateForInput(sample.sampling_event_date || '')}" data-experiment-id="${sample.associated_experiment_id || ''}" data-experiment-date="${formatDateForInput(sample.associated_experiment_date || '')}">
                         <i data-lucide="archive" class="w-4 h-4"></i>Add Storage Log
                     </button>
                 </div>
             </div>`;
 
 
-            // Define relevant child tables and their respective filtering logic and display fields
-            // Filter out views unless specifically needed for displaying info.
-            // The `sample_full_details_view` already aggregates a lot.
             const childDataSections = [
                 { name: 'lab.sampling', icon: 'map-pin', title: 'Sampling Event Details',
-                  data: sample.sampling_event_id ? [{ // Single record from sample_full_details_view
+                  data: sample.sampling_event_id ? [{
                         sampling_id: sample.sampling_event_id,
                         sampling_date: sample.sampling_event_date,
                         location_name: sample.sampling_location,
@@ -930,12 +890,11 @@
                         salinity_unit: sample.salinity_unit,
                         oxygen: sample.oxygen,
                         oxygen_unit: sample.oxygen_unit,
-                        // Add more fields from sample_full_details_view relevant to sampling
                   }] : [],
-                  displayFields: ['sampling_id', 'sampling_date', 'location_name', 'sampling_lon', 'sampling_lat', 'sampling_depth_m', 'temperature_atmospheric_c', 'weather', 'wind_speed', 'wind_unit', 'salinity', 'salinity_unit', 'oxygen', 'oxygen_unit']
+                  displayFields: ['sampling_id', 'sampling_date', 'location_name', 'longitude', 'latitude', 'depth_m', 'temperature_atmospheric_c', 'weather', 'wind_speed', 'wind_unit', 'salinity', 'salinity_unit', 'oxygen', 'oxygen_unit']
                 },
                 { name: 'lab.storage', icon: 'archive', title: 'Current Storage Location',
-                  data: sample.storage_id ? [{ // Single record from sample_full_details_view
+                  data: sample.storage_id ? [{
                         storage_id: sample.storage_id,
                         freezer: sample.storage_freezer,
                         box: sample.storage_box,
@@ -946,7 +905,7 @@
                   displayFields: ['storage_id', 'room_id', 'room_address', 'freezer', 'box', 'storage_position']
                 },
                 { name: 'lab.fish', icon: 'fish', title: 'Fish Details',
-                  data: sample.species_id ? [{ // Single record from sample_full_details_view
+                  data: sample.species_id ? [{
                         species_id: sample.species_id,
                         species_en_name: sample.species_en_name,
                         total_length_mm: sample.total_length_mm,
@@ -962,7 +921,7 @@
                   displayFields: ['species_id', 'species_en_name', 'total_length_mm', 'fork_length_mm', 'standard_length_mm', 'weight_g', 'sex', 'maturity_stage', 'stomach_contents', 'disease_info', 'tag_id']
                 },
                 { name: 'lab.tissue', icon: 'microscope', title: 'Tissue Details',
-                  data: sample.tissue_weight_mg || sample.tissue_type ? [{ // Single record from sample_full_details_view
+                  data: sample.tissue_weight_mg || sample.tissue_type ? [{
                         tissue_weight_mg: sample.tissue_weight_mg,
                         tissue_type: sample.tissue_type,
                         tissue_preservation_method: sample.tissue_preservation_method
@@ -970,7 +929,7 @@
                   displayFields: ['tissue_weight_mg', 'tissue_type', 'tissue_preservation_method']
                 },
                 { name: 'lab.otoliths', icon: 'circle-dot', title: 'Otoliths Details',
-                  data: sample.otolith_id ? [{ // Single record from sample_full_details_view
+                  data: sample.otolith_id ? [{
                         otolith_id: sample.otolith_id,
                         reader_person_id: sample.reader_person_id,
                         side: sample.side,
@@ -981,29 +940,29 @@
                   displayFields: ['otolith_id', 'reader_person_id', 'side', 'age_reading_years', 'confidence', 'reading_date']
                 },
                 { name: 'lab.dna', icon: 'dna', title: 'DNA Details',
-                  data: sample.dna_volume_ul || sample.dna_concentration_ng_ul ? [{ // Single record from sample_full_details_view
+                  data: sample.dna_volume_ul || sample.dna_concentration_ng_ul ? [{
                         dna_volume_ul: sample.dna_volume_ul,
                         dna_concentration_ng_ul: sample.dna_concentration_ng_ul,
                         dna_a260_280: sample.dna_a260_280,
                         dna_a260_230: sample.dna_a260_230,
                         dna_extraction_method: sample.dna_extraction_method,
-                        extraction_date: sample.extraction_date // This is from general extraction
+                        extraction_date: sample.extraction_date
                   }] : [],
                   displayFields: ['dna_volume_ul', 'dna_concentration_ng_ul', 'dna_a260_280', 'dna_a260_230', 'dna_extraction_method', 'extraction_date']
                 },
                 { name: 'lab.rna', icon: 'ribbon', title: 'RNA Details',
-                  data: sample.rna_volume_ul || sample.rna_concentration_ng_ul ? [{ // Single record from sample_full_details_view
+                  data: sample.rna_volume_ul || sample.rna_concentration_ng_ul ? [{
                         rna_volume_ul: sample.rna_volume_ul,
                         rna_concentration_ng_ul: sample.rna_concentration_ng_ul,
                         rna_a260_280: sample.rna_a260_280,
                         rna_a260_230: sample.rna_a260_230,
                         rna_extraction_method: sample.rna_extraction_method,
-                        extraction_date: sample.extraction_date // This is from general extraction
+                        extraction_date: sample.extraction_date
                   }] : [],
                   displayFields: ['rna_volume_ul', 'rna_concentration_ng_ul', 'rna_a260_280', 'rna_a260_230', 'rna_extraction_method', 'extraction_date']
                 },
                 { name: 'lab.sediments', icon: 'sand-grain', title: 'Sediments Details',
-                  data: sample.sediment_volume || sample.sediment_depth_m ? [{ // Single record from sample_full_details_view
+                  data: sample.sediment_volume || sample.sediment_depth_m ? [{
                         sediment_volume: sample.sediment_volume,
                         sediment_volume_unit: sample.sediment_volume_unit,
                         sediment_depth_m: sample.sediment_depth_m,
@@ -1012,7 +971,7 @@
                   displayFields: ['sediment_volume', 'sediment_volume_unit', 'sediment_depth_m', 'sediment_sampling_method']
                 },
                 { name: 'lab.water', icon: 'droplet', title: 'Water Details',
-                  data: sample.water_volume_l || sample.water_depth_m ? [{ // Single record from sample_full_details_view
+                  data: sample.water_volume_l || sample.water_depth_m ? [{
                         water_volume_l: sample.water_volume_l,
                         water_filter: sample.water_filter,
                         water_filter_pore_size_um: sample.water_filter_pore_size_um,
@@ -1020,16 +979,13 @@
                   }] : [],
                   displayFields: ['water_volume_l', 'water_filter', 'water_filter_pore_size_um', 'water_depth_m']
                 },
-                // Fetch direct related tables (like dissections, experiments_samples, etc. which can have multiple entries)
-                // These require a direct API call as sample_full_details_view typically shows only *one* associated record.
                 { name: 'lab.dissections', icon: 'scissors', title: 'Dissection History',
                   fetch: true, filter_key: 'sample_id', filter_value: sample.sample_id,
                   displayFields: ['dissection_id', 'dissection_date', 'person_id', 'gonad_weight_g', 'liver_weight_g', 'stomach_contents_jsonb']
                 },
                 { name: 'lab.experiments_samples', icon: 'flask-round', title: 'Linked Experiments',
                   fetch: true, filter_key: 'sample_id', filter_value: sample.sample_id,
-                  // Will need to join with lab.experiments to get titles
-                  displayFields: ['experiment_id', 'experiment_date', 'notes'] // Show linking details
+                  displayFields: ['experiment_id', 'experiment_date', 'notes']
                 },
                 { name: 'lab.extraction', icon: 'flask-conical', title: 'Extractions',
                   fetch: true, filter_key: 'sample_id', filter_value: sample.sample_id,
@@ -1088,14 +1044,16 @@
                     let filterQuery = new URLSearchParams();
                     filterQuery.append(`filter_sample_id`, sample.sample_id);
 
-                    // Add sampling_date filter for fish/sampling/fishing if present and relevant
-                    if (sample.sampling_event_date && ['lab.fish', 'lab.sampling', 'lab.fishing'].includes(section.name)) {
+                    if (sample.sampling_event_date && ['lab.fish', 'lab.sampling', 'lab.fishing', 'lab.parental_samples'].includes(section.name)) {
                         filterQuery.append(`filter_sampling_date`, formatDateForInput(sample.sampling_event_date));
                     }
-                    // For tables partitioned by experiment_date, pass it for correct filtering
-                    // This relies on the `sample_full_details_view` providing *an* experiment_date, or a lookup.
-                    // For now, we only pass `sample_id` and expect the backend's `get_table_data` to handle.
-
+                    if (sample.associated_experiment_date && ['lab.tissue', 'lab.otoliths', 'lab.dna', 'lab.rna', 'lab.sediments', 'lab.water', 'lab.experiments_samples', 'lab.dissections', 'lab.extraction', 'lab.nanodrop', 'lab.qubit', 'lab.tapestation', 'lab.pcr', 'lab.gelelectrophoresis', 'lab.qpcr', 'lab.library', 'bioinformatics.analysis_runs'].includes(section.name)) {
+                        filterQuery.append(`filter_experiment_date`, formatDateForInput(sample.associated_experiment_date));
+                    }
+                    if (sample.sequencing_date && section.name === 'lab.sequencing') {
+                        filterQuery.append(`filter_sequencing_date`, formatDateForInput(sample.sequencing_date));
+                    }
+                    
                     const fetchedItems = await apiFetch(`table/${schemaName}/${tableName}?${filterQuery.toString()}`);
                     if (fetchedItems && !fetchedItems.error) {
                         items = fetchedItems;
@@ -1121,10 +1079,9 @@
                                             <dl class="space-y-1">
                                                 ${section.displayFields.map(field => {
                                                     let value = item[field];
-                                                    // Special handling for some fields
                                                     if (field.includes('_date') || field.includes('_at')) {
                                                         value = formatDate(value);
-                                                    } else if (field.includes('time')) { // Handle time fields
+                                                    } else if (field.includes('time')) {
                                                         value = formatDateTime(value);
                                                     }
                                                     else if (typeof value === 'object' && value !== null) {
@@ -1154,34 +1111,28 @@
                 });
             });
 
-            // Add event listeners for "Add Child Record" buttons
             document.querySelectorAll('.add-child-btn').forEach(button => {
                 button.addEventListener('click', async (e) => {
                     const childTable = e.currentTarget.dataset.childTable;
                     const sampleId = e.currentTarget.dataset.sampleId;
                     const samplingDate = e.currentTarget.dataset.samplingDate;
+                    const experimentId = e.currentTarget.dataset.experimentId;
+                    const experimentDate = e.currentTarget.dataset.experimentDate;
 
                     let prefilledData = { sample_id: sampleId };
 
-                    // Dynamically pre-fill common FKs or date fields needed for composite PKs/partitions
                     if (sample.project_id) prefilledData.project_id = sample.project_id;
-                    if (sample.sampler_person_id) prefilledData.person_id = sample.sampler_person_id; // Default person
+                    if (sample.sampler_person_id) prefilledData.person_id = sample.sampler_person_id;
                     if (sample.external_name) prefilledData.external_name = sample.external_name;
                     
-                    // Crucial for partitioning and composite PKs:
-                    if (samplingDate && (childTable === 'lab.fish' || childTable === 'lab.sampling' || childTable === 'lab.fishing' || childTable === 'lab.samples')) {
+                    if (samplingDate) {
                          prefilledData.sampling_date = samplingDate;
                     }
                     
-                    // For tables partitioned by experiment_date, set a default to today if not provided by parent
-                    const tablesPartitionedByExperimentDate = ['lab.tissue', 'lab.otoliths', 'lab.dna', 'lab.rna', 'lab.sediments', 'lab.water', 'lab.experiments_samples', 'lab.dissections', 'lab.extraction', 'lab.nanodrop', 'lab.qubit', 'lab.tapestation', 'lab.pcr', 'lab.gelelectrophoresis', 'lab.qpcr', 'lab.library', 'lab.sequencing'];
-                    if (tablesPartitionedByExperimentDate.includes(childTable)) {
-                        prefilledData.experiment_date = formatDateForInput(new Date().toISOString());
-                        // If there's a current experiment linked to the sample's project, could try to use it
-                        // For now, no automatic experiment_id filling here, user should select or create
-                    }
+                    if (experimentId) prefilledData.experiment_id = experimentId;
+                    if (experimentDate) prefilledData.experiment_date = experimentDate;
 
-                    // For specific date/time fields that are often part of PKs or are required
+
                     if (childTable === 'lab.dissections') prefilledData.dissection_date = formatDateForInput(new Date().toISOString());
                     if (childTable === 'lab.extraction') prefilledData.extraction_date = formatDateForInput(new Date().toISOString());
                     if (childTable === 'lab.nanodrop' || childTable === 'lab.qubit' || childTable === 'lab.tapestation') prefilledData.measurement_date = formatDateForInput(new Date().toISOString());
@@ -1192,7 +1143,6 @@
                     if (childTable === 'lab.sequencing') prefilledData.sequencing_date = formatDateForInput(new Date().toISOString());
                     if (childTable === 'bioinformatics.analysis_runs') prefilledData.run_date = formatDateTimeForInput(new Date().toISOString());
                     
-                    // Pre-fill parent_sample_id for direct children
                     if (['lab.fish', 'lab.tissue', 'lab.dna', 'lab.rna', 'lab.sediments', 'lab.water'].includes(childTable)) {
                         prefilledData.parent_sample_id = sampleId;
                     }
@@ -1202,7 +1152,6 @@
             });
         }
 
-        // --- MODAL LOGIC (reused from other pages) ---
         function showModal(content) {
             const container = document.getElementById('modal-container');
             container.innerHTML = content;
@@ -1220,9 +1169,6 @@
 
         async function showCreateEditModal(record = null, specificTable = null) {
             console.log("Showing create/edit modal. Record:", record, "Specific Table:", specificTable);
-            // isEditing means we're modifying an existing record (so PKs are in `record`)
-            // If specificTable is provided, it's always a "create" operation for that specific child table,
-            // even if `record` contains pre-filled data for foreign keys.
             const isEditing = record !== null && !specificTable; 
             const targetTableName = specificTable || currentTableName; 
             const [schemaName, tableName] = targetTableName.split('.');
@@ -1235,14 +1181,12 @@
             
             const pkColumnsForTargetTable = await getPrimaryKeysForTable(schemaName, tableName);
 
-            // Fetch all reference data for dropdowns
             const [persons, statuses, projects, samplesTypes, samplingEvents, cruises, species, units, genes, workflows, workflowSteps, equipment, suppliers, inventoryItems, publicationTypes, referenceDatabases, analysisPipelines] = await Promise.all([ 
                 getReferenceData('personal', 'reference'), 
                 getReferenceData('status', 'reference'),
                 getReferenceData('projects', 'lims'),
                 getReferenceData('samples_type', 'reference'),
-                // For sampling events, fetch them with location_name for display
-                apiFetch('table/lab/sampling?order_by=sampling_date&order_direction=desc&limit=100'), // Limit for performance
+                apiFetch('table/lab/sampling?order_by=sampling_date&order_direction=desc&limit=100'),
                 getReferenceData('cruises', 'lims'),
                 getReferenceData('species', 'reference'),
                 getReferenceData('units', 'reference'),
@@ -1262,22 +1206,18 @@
             targetTableSchema.forEach(col => {
                 const isAutoGenerated = col.column_name.includes('_id') && col.column_default && col.column_default.includes('nextval');
                 
-                // Determine if a field should be hidden (auto-generated on creation)
                 const isHiddenField = (!isEditing && isAutoGenerated);
-                // Determine if a field should be read-only (primary key when editing, but not auto-generated)
-                const isReadOnlyField = (isEditing && pkColumnsForTargetTable.includes(col.column_name) && !isAutoGenerated);
+                let isReadOnlyField = (isEditing && pkColumnsForTargetTable.includes(col.column_name) && !isAutoGenerated);
                 
-                // Allow specific date PKs to be editable as they are part of form input (e.g., experiment_date, sampling_date)
                 if (isReadOnlyField && col.data_type === 'date') {
-                    isReadOnlyField = false; // Allow editing of date PKs for composite keys
+                    isReadOnlyField = false;
                 }
 
                 if (col.column_name.includes('password_hash') || col.column_name.includes('search_vector')) {
-                    return; // Always exclude these
+                    return;
                 }
 
                 let value = record ? (record[col.column_name] || '') : (col.column_default ? col.column_default.replace(/::[a-z_]+/g, '').replace(/'/g, '') : '');
-                // If pre-filled data (from `record` param) is available, use it instead of default/existing value
                 if (record && record[col.column_name] !== undefined) {
                     value = record[col.column_name];
                 }
@@ -1288,14 +1228,12 @@
                 let optionsHtml = '';
 
                 if (isHiddenField) {
-                    // Hidden input for auto-generated fields, no label or display
                     formFieldsHtml += `<input type="hidden" name="${col.column_name}" value="${value}">`;
                     return;
                 }
 
                 if (isReadOnlyField) {
-                    extraAttrs += ' readonly'; // Mark as read-only for editing PKs
-                    // For display consistency, convert date/datetime values to readable format if read-only
+                    extraAttrs += ' readonly';
                     if (col.data_type === 'date') value = formatDateForInput(value);
                     if (col.data_type === 'timestamp with time zone' || col.data_type === 'timestamp without time zone') value = formatDateTimeForInput(value);
                 }
@@ -1317,7 +1255,7 @@
                     case 'integer':
                     case 'numeric':
                     case 'bigint':
-                        inputType = 'text'; // Keep as text to allow flexible input (e.g., with commas/periods)
+                        inputType = 'text';
                         break;
                     case 'date':
                         inputType = 'date';
@@ -1331,7 +1269,7 @@
                     case 'boolean':
                         inputType = 'checkbox';
                         extraAttrs += value ? ' checked' : '';
-                        value = ''; // Checkboxes don't use the 'value' attribute this way
+                        value = '';
                         break;
                     case 'text':
                     case 'character varying':
@@ -1353,7 +1291,7 @@
                             </div>
                         `;
                         return;
-                    case 'USER-DEFINED': // For geometry type from PostGIS
+                    case 'USER-DEFINED':
                         if (col.column_name.includes('geom')) {
                              formFieldsHtml += `
                                 <div class="md:col-span-2 ${isReadOnlyField ? 'opacity-70' : ''}">
@@ -1367,8 +1305,7 @@
                         break;
                 }
 
-                // Handle dropdowns for foreign keys
-                if (col.column_name.endsWith('_id')) { // Check for _id for FKs
+                if (col.column_name.endsWith('_id')) {
                     let refData = [];
                     let valueKey = col.column_name;
                     let displayKey = col.column_name; 
@@ -1383,23 +1320,18 @@
                         refData = samplesTypes; displayKey = 'sample_type_abrv';
                     } else if (col.column_name.includes('sampling_id') && samplingEvents) {
                          refData = samplingEvents; 
-                         displayKey = 'sampling_id'; // Display sampling ID, or location if preferred
+                         displayKey = 'sampling_id';
                          optionsHtml = `<option value="">-- Select ${label} --</option>`;
                          optionsHtml += refData.map(item => `<option value="${item.sampling_id}" ${value == item.sampling_id ? 'selected' : ''}>${item.sampling_id} (${item.location_name || 'N/A'})</option>`).join('');
-                         // Add sampling_date as a hidden field if sampling_id is selected and it's a composite PK
-                         // This is crucial for tables that use (sampling_id, sampling_date) as a composite PK/FK
-                         const samplingIdValue = record ? record.sampling_id : null;
-                         const matchingSamplingEvent = samplingEvents.find(s => s.sampling_id === samplingIdValue);
-                         if (matchingSamplingEvent && matchingSamplingEvent.sampling_date) {
-                             formFieldsHtml += `<input type="hidden" name="sampling_date_from_sampling_id" value="${formatDateForInput(matchingSamplingEvent.sampling_date)}">`;
-                         }
+                         
                          formFieldsHtml += `
                              <div class="${isReadOnlyField ? 'opacity-70' : ''}">
                                  <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
                                  <select name="${col.column_name}" class="w-full mt-1 p-2 border rounded" ${isReadOnlyField ? 'disabled' : ''}>${optionsHtml}</select>
+                                 <input type="hidden" name="sampling_date_from_sampling_id" value="${record && record.sampling_date ? formatDateForInput(record.sampling_date) : ''}">
                              </div>
                          `;
-                         return; // Handled
+                         return;
                     } else if (col.column_name.includes('cruise_id') && cruises) {
                          refData = cruises; displayKey = 'cruise_id';
                     } else if (col.column_name.includes('species_id') && species) {
@@ -1439,7 +1371,6 @@
                     }
                 }
 
-                // Default input field for remaining columns
                 formFieldsHtml += `
                     <div class="${isHiddenField ? 'hidden' : ''} ${isReadOnlyField ? 'opacity-70' : ''}">
                         <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
@@ -1482,10 +1413,8 @@
                 
                 let body;
                 if (hasFileSelected) {
-                    console.log("File detected. Using FormData for submission.");
                     body = new FormData(formElement);
                 } else {
-                    console.log("No file selected. Using JSON for submission.");
                     body = {};
                     const formData = new FormData(formElement);
                     formData.forEach((value, key) => {
@@ -1518,7 +1447,6 @@
                                  throw new Error(`Error parsing geometry for ${formatColumnName(key)}`);
                              }
                          } else if (key === 'sampling_date_from_sampling_id') {
-                            // This is a helper field, not a direct column, so don't include in body for backend
                             return;
                          }
                         else {
@@ -1526,8 +1454,6 @@
                         }
                     });
 
-                    // For composite PKs involving a date, ensure the date component is present if it's not auto-generated
-                    // and might have been selected via an ID (e.g., sampling_id)
                     const datePkColumn = pkColumnsForTargetTable.find(pk => pk.includes('date'));
                     if (!isEditing && datePkColumn && !body[datePkColumn]) {
                         const associatedDate = formElement.querySelector('[name="sampling_date_from_sampling_id"]');
@@ -1540,11 +1466,11 @@
                 const method = isEditing ? 'PUT' : 'POST';
                 
                 let endpoint = `table/${schemaName}/${tableName}`;
-                let recordForDetailsUpdate = record; // Use current record for refreshing details after update/create
+                let recordForDetailsUpdate = record;
 
                 if (isEditing) {
                     const pkValuesForApi = {};
-                    const originalPkValues = getPkValues(record); // Get PKs from the original record
+                    const originalPkValues = getPkValues(record);
                     for (const key in originalPkValues) {
                         const colSchema = targetTableSchema.find(s => s.column_name === key);
                         if (colSchema && colSchema.data_type === 'date') {
@@ -1564,12 +1490,9 @@
                     console.log("API call successful:", result);
                     showToast(`${isEditing ? 'Updated' : 'Created'} record successfully!`, "success");
                     closeModal(); 
-                    // Refresh the main table list
                     loadAndRenderTable(currentTableName); 
 
-                    // After successful creation/update, refresh the sample details view
-                    // (always refresh the main sample details if a child was added/edited, or if the main sample was edited)
-                    if (recordForDetailsUpdate && recordForDetailsUpdate.sample_id) { // If there was a parent sample to refresh
+                    if (recordForDetailsUpdate && recordForDetailsUpdate.sample_id) {
                         const mainSamplePkValues = {
                             sample_id: recordForDetailsUpdate.sample_id,
                             sampling_date: recordForDetailsUpdate.sampling_date ? formatDateForInput(recordForDetailsUpdate.sampling_date) : undefined
@@ -1577,7 +1500,7 @@
                         setTimeout(() => {
                             renderSampleDetails(mainSamplePkValues);
                         }, 100);
-                    } else if (result.sample_id && result.sampling_date) { // If a new main sample was just created
+                    } else if (result.sample_id && result.sampling_date) {
                         const newSamplePkValues = {
                             sample_id: result.sample_id,
                             sampling_date: formatDateForInput(result.sampling_date)
@@ -1675,19 +1598,19 @@
             });
         }
 
-        async function downloadCsvTemplate(fullTableName) {
-            console.log("downloadCsvTemplate called for:", fullTableName);
-            if (!fullTableName) {
-                showToast("Please select a table to download its template.", "error"); // Changed alert to toast
+        async function downloadCsvTemplate() {
+            console.log("downloadCsvTemplate called.");
+            if (!currentTableName) {
+                showToast("Please select a table to download its template.", "error");
                 return;
             }
 
-            const [schemaName, tableName] = fullTableName.split('.');
+            const [schemaName, tableName] = currentTableName.split('.');
             const schema = await getTableSchema(schemaName, tableName);
 
             if (!schema || schema.error) {
                 console.error("Failed to fetch table schema for template:", schema ? schema.error : 'Unknown error');
-                showToast('Failed to fetch table schema for template: ' + (schema ? schema.error : 'Unknown error'), "error"); // Changed alert to toast
+                showToast('Failed to fetch table schema for template: ' + (schema ? schema.error : 'Unknown error'), "error");
                 return;
             }
 
@@ -1695,18 +1618,15 @@
                 !col.column_name.includes('attachment') && 
                 !col.column_name.includes('password_hash') && 
                 !col.column_name.includes('search_vector') &&
-                !col.column_name.includes('geom') && // Exclude PostGIS geometry columns
-                !(col.column_default && col.column_default.includes('nextval')) && // Exclude auto-generated default values
-                !col.column_name.includes('created_at') && // Exclude audit columns
-                !col.column_name.includes('last_modified_at') // Exclude audit columns
+                !col.column_name.includes('geom') && 
+                !(col.column_default && col.column_default.includes('nextval')) && 
+                !col.column_name.includes('created_at') && 
+                !col.column_name.includes('last_modified_at') 
             ).map(col => col.column_name);
 
-            // Add back primary key columns if they were filtered out by the above logic
-            // For template, usually you want all columns for user to fill
             const pkCols = await getPrimaryKeysForTable(schemaName, tableName);
             pkCols.forEach(pkCol => {
                 const pkColSchema = schema.find(c => c.column_name === pkCol);
-                // Only prepend if it's a primary key not auto-generated
                 if (pkColSchema && !(pkColSchema.column_default && pkColSchema.column_default.includes('nextval'))) {
                     if (!headers.includes(pkCol)) {
                         headers.unshift(pkCol);
@@ -1715,7 +1635,7 @@
             });
             
             console.log("CSV Template Headers:", headers);
-            const csv = unparseCSV([headers], { header: false }); //
+            const csv = unparseCSV([headers], { header: false });
             
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
@@ -1831,12 +1751,17 @@
 
         async function downloadBulkModifyTemplate() {
             console.log("downloadBulkModifyTemplate called.");
-            console.log("Attempting to download Bulk Modify template for:", currentTableName);
+            if (!currentTableName) {
+                showToast("Please select a table to download its bulk modify template.", "error");
+                return;
+            }
+
             const [schemaName, tableName] = currentTableName.split('.');
             const schema = await getTableSchema(schemaName, tableName);
             const pkColumns = await getPrimaryKeysForTable(schemaName, tableName);
 
             if (!schema || schema.error) {
+                console.error("Failed to fetch table schema for template:", schema ? schema.error : 'Unknown error');
                 showToast('Failed to fetch table schema for template: ' + (schema ? schema.error : 'Unknown error'), "error");
                 return;
             }
@@ -1856,7 +1781,7 @@
             headers = [...new Set([...headers, ...commonEditableColumns])];
 
             console.log("Bulk Modify Template Headers:", headers);
-            const csv = PapaParse.unparse([headers], { header: false });
+            const csv = unparseCSV([headers], { header: false });
             
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
@@ -1867,19 +1792,18 @@
             document.body.removeChild(link);
             URL.revokeObjectURL(link.href);
             console.log("Bulk modify template download initiated.");
-            showToast("Bulk modify template downloaded successfully!", "success");
+            showToast("Bulk modify template downloaded successfully!", 'success');
         }
 
-        async function initializePage() {
+        function initializePage() {
             setupTabListeners();
-            await populateDynamicTableSelect();
-            await loadAndRenderTable(currentTableName); 
+            populateDynamicTableSelect();
+            loadAndRenderTable(currentTableName); 
 
-            document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal(null, 'lab.samples')); 
+            document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal(null, 'lab.parental_samples'));
             document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal);
             document.getElementById('bulk-modify-btn').addEventListener('click', showBulkModifyModal);
-            // This button now directly calls downloadCsvTemplate for the currently active table.
-            document.getElementById('download-template-general-btn').addEventListener('click', () => downloadCsvTemplate(currentTableName));
+            document.getElementById('download-template-general-btn').addEventListener('click', downloadCsvTemplate);
         }
 
         function setupTabListeners() {
@@ -1908,10 +1832,10 @@
             
             select.innerHTML = '<option value="">-- Select Sample Sub-Table --</option>'; 
             select.innerHTML += `<option value="lab.detailed_samples_view">lab.detailed_samples_view (Overview)</option>`; 
-            select.innerHTML += `<option value="lab.samples">lab.samples (Core Data)</option>`; 
+            select.innerHTML += `<option value="lab.parental_samples">lab.parental_samples (Core Data)</option>`; 
 
             if (sampleTables && !sampleTables.error) {
-                const otherSampleTables = sampleTables.filter(t => t !== 'lab.samples' && t !== 'lab.detailed_samples_view'); 
+                const otherSampleTables = sampleTables.filter(t => t !== 'lab.parental_samples' && t !== 'lab.detailed_samples_view'); 
                 otherSampleTables.forEach(table => {
                     select.innerHTML += `<option value="${table}">${table}</option>`;
                 });
@@ -1933,34 +1857,119 @@
             tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Loading data...</td></tr>`;
             lucide.createIcons();
 
-            const [data, schema, pkInfo] = await Promise.all([
-                apiFetch(`table/${schemaName}/${tableName}`),
-                getTableSchema(schemaName, tableName),
-                getPrimaryKeysForTable(schemaName, tableName)
-            ]);
+            let dataPromises = [];
+            let schemaPromises = [];
+            let pkPromises = [];
+            let tableNamesToFetch = [];
 
-            if (data && !data.error && schema && !schema.error && pkInfo && !pkInfo.error) {
-                console.log(`Successfully loaded data for ${fullTableName}. Data count: ${data.length}`);
-                currentTableData = data;
-                currentTableSchema = schema;
-                pkMappingCache[`pk.${fullTableName}`] = pkInfo; // Update PK cache
-                applyFiltersAndSort();
-                // Ensure the "Download Template" button is enabled if a table is successfully loaded
-                const downloadButton = document.getElementById('download-template-general-btn');
-                if (downloadButton) {
-                    downloadButton.disabled = false;
+            if (fullTableName === 'lab.detailed_samples_view') {
+                // For the overview, fetch data from parental samples directly
+                // And then fetch from common child tables to display them in the main list
+                tableNamesToFetch = [
+                    'lab.parental_samples',
+                    'lab.fish',
+                    'lab.dna',
+                    'lab.rna',
+                    'lab.tissue',
+                    'lab.water',
+                    'lab.sediments'
+                ];
+
+                for (const name of tableNamesToFetch) {
+                    const [s, t] = name.split('.');
+                    dataPromises.push(apiFetch(`table/${s}/${t}`));
+                    schemaPromises.push(getTableSchema(s, t));
+                    pkPromises.push(getPrimaryKeysForTable(s, t));
                 }
             } else {
-                console.error(`Failed to load data for ${fullTableName}. Data error: ${data ? data.error : 'N/A'}, Schema error: ${schema ? schema.error : 'N/A'}`);
-                tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-red-500">Error loading data for ${fullTableName}: ${data ? data.error : schema ? schema.error : 'Unknown error'}</td></tr>`;
-                // Disable the "Download Template" button if table loading fails
-                const downloadButton = document.getElementById('download-template-general-btn');
-                if (downloadButton) {
-                    downloadButton.disabled = true;
+                // For other selected tables, just fetch that one table
+                const [s, t] = fullTableName.split('.');
+                dataPromises.push(apiFetch(`table/${s}/${t}`));
+                schemaPromises.push(getTableSchema(s, t));
+                pkPromises.push(getPrimaryKeysForTable(s, t));
+            }
+
+            const [allDataResults, allSchemaResults, allPkResults] = await Promise.all([
+                Promise.all(dataPromises),
+                Promise.all(schemaPromises),
+                Promise.all(pkPromises)
+            ]);
+
+            let combinedData = [];
+            let primarySchema = [];
+            let primaryPkInfo = [];
+
+            if (fullTableName === 'lab.detailed_samples_view') {
+                // Combine data and normalize for display
+                // Use the schema from 'lab.parental_samples' as the base for table headers
+                const parentalSamplesIndex = tableNamesToFetch.indexOf('lab.parental_samples');
+                if (parentalSamplesIndex !== -1 && allSchemaResults[parentalSamplesIndex] && !allSchemaResults[parentalSamplesIndex].error) {
+                    primarySchema = allSchemaResults[parentalSamplesIndex];
+                    primaryPkInfo = allPkResults[parentalSamplesIndex];
+                } else {
+                    console.error("Failed to load schema for lab.parental_samples. Cannot render combined view.");
+                    tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-red-500">Error: Could not load base schema for samples overview.</td></tr>`;
+                    return;
+                }
+
+                for (let i = 0; i < tableNamesToFetch.length; i++) {
+                    const data = allDataResults[i];
+                    const schema = allSchemaResults[i];
+                    const tableName = tableNamesToFetch[i];
+                    
+                    if (data && !data.error && schema && !schema.error) {
+                        data.forEach(item => {
+                            let unifiedItem = {};
+                            // Use primary schema columns for consistency
+                            primarySchema.forEach(col => {
+                                unifiedItem[col.column_name] = item[col.column_name] !== undefined ? item[col.column_name] : null;
+                            });
+                            // Add essential PKs and type info for details fetching
+                            const pkCols = allPkResults[i];
+                            pkCols.forEach(pkCol => {
+                                unifiedItem[pkCol] = item[pkCol];
+                            });
+                            unifiedItem.sample_id = item.sample_id; // Ensure sample_id is always present
+                            unifiedItem.sampling_date = item.sampling_date; // Ensure sampling_date is always present
+                            unifiedItem.original_table = tableName; // Store original table name for details fetching
+
+                            combinedData.push(unifiedItem);
+                        });
+                    } else {
+                        console.warn(`Failed to load data for ${tableName} during combined view. Skipping.`, data ? data.error : 'Unknown error');
+                    }
+                }
+                currentTableData = combinedData;
+                currentTableSchema = primarySchema; // Use parental_samples schema for main table
+                pkMappingCache[`pk.${fullTableName}`] = primaryPkInfo; // Use parental_samples PK for overview click
+            } else {
+                // For other specific tables, just use the data and schema from that single fetch
+                const data = allDataResults[0];
+                const schema = allSchemaResults[0];
+                const pkInfo = allPkResults[0];
+
+                if (data && !data.error && schema && !schema.error && pkInfo && !pkInfo.error) {
+                    currentTableData = data;
+                    currentTableSchema = schema;
+                    pkMappingCache[`pk.${fullTableName}`] = pkInfo;
+                } else {
+                    console.error(`Failed to load data for ${fullTableName}. Data error: ${data ? data.error : 'N/A'}, Schema error: ${schema ? schema.error : 'N/A'}`);
+                    tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-red-500">Error loading data for ${fullTableName}: ${data ? data.error : schema ? schema.error : 'Unknown error'}</td></tr>`;
+                    const downloadButton = document.getElementById('download-template-general-btn');
+                    if (downloadButton) {
+                        downloadButton.disabled = true;
+                    }
+                    return; // Exit if loading main data failed
                 }
             }
-        }
 
+            const downloadButton = document.getElementById('download-template-general-btn');
+            if (downloadButton) {
+                downloadButton.disabled = false;
+            }
+
+            applyFiltersAndSort(); // Apply client-side filters and sort on the combined data
+        }
     </script>
 </body>
 </html>

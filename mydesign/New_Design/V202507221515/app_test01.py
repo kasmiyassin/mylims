@@ -4,7 +4,7 @@ from waitress import serve
 import os
 import bcrypt
 import base64
-import json
+import json # Import json module
 from typing import Any, Dict, List, Optional, Tuple, Union
 from datetime import datetime, timedelta, time
 import psycopg2
@@ -61,7 +61,7 @@ PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     ('lims', 'permits'): 'permit_id',
     ('lims', 'primers'): 'primer_id',
     ('lims', 'sop'): 'sop_id',
-    ('lims', 'workflow_steps'): 'step_id', # Changed to step_id as it's the PK
+    ('lims', 'workflow_steps'): ['workflow_id', 'step_number'], # Composite PK
     ('lims', 'equipment'): 'equipment_id',
     ('lims', 'suppliers'): 'supplier_id',
     ('lims', 'inventory_items'): 'item_id',
@@ -77,7 +77,7 @@ PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     ('lab', 'protocol_runs'): 'protocol_run_id', # Primary key for protocol_runs
     ('lab', 'sampling'): ['sampling_id', 'sampling_date'], # Composite PK
     ('lab', 'master_samples'): 'sample_id',
-    ('lab', 'parental_samples'): ['sample_id', 'sampling_date'], # Corrected to parental_samples with composite PK
+    ('lab', 'samples'): ['sample_id', 'sampling_date'], # Composite PK
     ('lab', 'fishing'): ['fishing_id', 'sampling_date'], # Composite PK
     ('lab', 'storage_log'): 'log_id', # Serial PK
     ('lab', 'fish'): ['sample_id', 'sampling_date'], # Composite PK
@@ -115,19 +115,19 @@ PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
 
     # Views (for read-only access, PKs here are for conceptual filtering, not for PUT/DELETE)
     ('reference', 'complete_species_taxon_view'): 'taxon_id',
-    ('lab', 'detailed_samples_view'): 'sample_id', # This view's underlying table is lab.parental_samples
+    ('lab', 'detailed_samples_view'): 'sample_id', # This view's underlying table is lab.samples
     ('lims', 'project_overview_view'): 'project_id', # This view's underlying table is lims.projects
-    ('lab', 'sample_workflow_progress_view'): 'sample_id', # Underlying: lab.parental_samples
-    ('lab', 'storage_inventory_view'): 'storage_id', # Underlying: lab.storage, lab.parental_samples
+    ('lab', 'sample_workflow_progress_view'): 'sample_id', # Underlying: lab.samples
+    ('lab', 'storage_inventory_view'): 'storage_id', # Underlying: lab.storage, lab.samples
     ('lab', 'experiment_summary_view'): 'experiment_id', # Underlying: lab.experiments
     ('bioinformatics', 'analysis_results_summary'): 'run_id', # Underlying: multiple bioinfo tables
     ('lims', 'project_financial_summary_view'): 'project_id', # Underlying: lims.projects, lims.orders
     ('bioinformatics', 'full_analysis_results_view'): 'project_id', # Underlying: multiple bioinfo tables
-    ('lab', 'storage_occupancy_view'): 'storage_id', # Underlying: lab.storage, lab.parental_samples
+    ('lab', 'storage_occupancy_view'): 'storage_id', # Underlying: lab.storage, lab.samples
     ('lims', 'project_comprehensive_summary_view'): 'project_id', # Underlying: lims.projects, lab.experiments_projects, etc.
     ('lab', 'experiment_progress_overview_view'): 'experiment_id', # Underlying: lab.experiments, etc.
     ('lims', 'reagent_status_view'): 'reagent_complete_name', # Underlying: lims.reagents
-    ('lab', 'sample_full_details_view'): 'sample_id', # Underlying: lab.parental_samples, and many others
+    ('lab', 'sample_full_details_view'): 'sample_id', # Underlying: lab.samples, and many others
     ('reference', 'taxon_hierarchy_view'): 'taxon_id', # Underlying: reference.taxon, reference.species
     ('lab', 'monthly_sample_reception_mv'): 'reception_month', # Materialized view
     ('lims', 'project_personnel_view'): ['project_id', 'person_id'], # Underlying: lims.project_persons
@@ -138,11 +138,11 @@ PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
 # This dictionary helps the frontend suggest navigating to the base table for modification.
 # Format: 'schema.view_name': 'schema.base_table_name'
 VIEW_TO_BASE_TABLE_MAPPING: Dict[str, str] = {
-    'lab.detailed_samples_view': 'lab.parental_samples', # Corrected base table
+    'lab.detailed_samples_view': 'lab.samples',
     'lims.project_overview_view': 'lims.projects',
-    'lab.sample_workflow_progress_view': 'lab.parental_samples', # Corrected base table
+    'lab.sample_workflow_progress_view': 'lab.samples',
     'lims.reagent_status_view': 'lims.reagents',
-    'lab.sample_full_details_view': 'lab.parental_samples', # Corrected base table
+    'lab.sample_full_details_view': 'lab.samples',
     'lims.project_personnel_view': 'lims.project_persons',
     'lims.order_details_view': 'lims.orders',
     # Add more mappings as needed for other views
@@ -185,23 +185,11 @@ def teardown_request_func(exception=None):
 # --- Helper Functions ---
 # Modified get_pk_columns to return a list of PK column names
 def get_pk_columns(schema: str, table: str) -> List[str]:
-    # Corrected table name for parental samples in PK_MAPPING lookup
-    lookup_table = 'parental_samples' if table.lower() == 'samples' and schema.lower() == 'lab' else table.lower()
-    
-    pk_info = PK_MAPPING.get((schema.lower(), lookup_table))
+    pk_info = PK_MAPPING.get((schema.lower(), table.lower()))
     if pk_info is None:
-        print(f"WARNING: No primary key mapping found for {schema}.{table}. "
+        print(f"WARNING: No primary key mapping found for {schema}.{table}. Defaulting to ['nr']. "
               "Please ensure PK_MAPPING is correct and matches database column casing.")
-        # Attempt to dynamically find PK if not mapped, or return a sensible default
-        # This dynamic lookup would query information_schema.table_constraints
-        # For now, stick to mapped or default 'nr' or 'id'
-        # Fallback to common PK names if not explicitly mapped and not found dynamically
-        if 'nr' in _get_column_types(g.db_conn, schema, table):
-            return ['nr']
-        elif 'id' in _get_column_types(g.db_conn, schema, table):
-            return ['id']
-        else:
-            return [] # No default, let the frontend handle missing PK error
+        return ['nr']
     if isinstance(pk_info, str):
         return [pk_info]
     return pk_info
@@ -361,8 +349,8 @@ def global_search(search_term: str):
             f'SELECT project_id, title FROM "lims"."projects" WHERE project_search_vector @@ {ts_query_func} OR project_id ILIKE %s OR title ILIKE %s LIMIT 5',
             (search_term, search_pattern, search_pattern)
         ),
-        "samples": ( # Searching in parental_samples as it's the main samples table
-            f'SELECT sample_id, external_name, sample_status_id FROM "lab"."parental_samples" WHERE sample_search_vector @@ {ts_query_func} OR sample_id ILIKE %s OR external_name ILIKE %s LIMIT 5',
+        "samples": (
+            f'SELECT sample_id, external_name, sample_status_id FROM "lab"."samples" WHERE sample_search_vector @@ {ts_query_func} OR sample_id ILIKE %s OR external_name ILIKE %s LIMIT 5',
             (search_term, search_pattern, search_pattern)
         ),
         "experiments": (
@@ -393,7 +381,6 @@ def global_search(search_term: str):
             'SELECT person_id, full_name FROM "reference"."personal" WHERE person_id ILIKE %s OR full_name ILIKE %s LIMIT 5',
             (search_pattern, search_pattern)
         ),
-        # Views: The UI asks for these specific views
         "detailed_samples_view": (
             'SELECT sample_id, external_name, sample_type_abrv, project_title FROM "lab"."detailed_samples_view" WHERE sample_id ILIKE %s OR external_name ILIKE %s OR project_title ILIKE %s LIMIT 5',
             (search_pattern, search_pattern, search_pattern)
@@ -454,19 +441,18 @@ def get_dashboard_stats():
             """, (current_month_start.date(),))
             stats['experiments_this_month'] = cur.fetchone()['experiments_this_month']
 
-            # 4. Reagents Expiring (within the next 30 days, from `lims.reagents`)
+            # 4. Active Order Number (replacing Reagents Expiring)
             cur.execute("""
-                SELECT COUNT(*) AS reagents_expiring_soon
-                FROM "lims"."reagents"
-                WHERE "expire_date" BETWEEN CURRENT_DATE AND CURRENT_DATE + interval '30 day'
-                AND "status_id" != 'Expired';
+                SELECT COUNT(*) AS active_orders
+                FROM "lims"."orders"
+                WHERE "status_id" = 'Active';
             """)
-            stats['reagents_expiring_soon'] = cur.fetchone()['reagents_expiring_soon']
+            stats['active_orders'] = cur.fetchone()['active_orders']
 
             # 5. How much storage is full (number of storage units with assigned samples)
             cur.execute("""
                 SELECT COUNT(DISTINCT storage_id) AS occupied_storage_units
-                FROM "lab"."parental_samples" -- Changed from lab.samples
+                FROM "lab"."samples"
                 WHERE storage_id IS NOT NULL AND storage_position IS NOT NULL;
             """)
             stats['occupied_storage_units'] = cur.fetchone()['occupied_storage_units']
@@ -491,8 +477,7 @@ def get_dashboard_stats():
             """, (ninety_days_ago,))
             most_active_person = cur.fetchone()
             stats['most_active_person'] = most_active_person['user_id'] if most_active_person else 'N/A'
-            # The dashboard UI only expects the name, not the count directly, but keeping it for completeness.
-            # stats['most_active_person_activity_count'] = most_active_person['activity_count'] if most_active_person else 0
+            stats['most_active_person_activity_count'] = most_active_person['activity_count'] if most_active_person else 0
 
         return jsonify(stats), 200
     except Exception as e:
@@ -528,15 +513,12 @@ def get_table_schema(schema: str, table: str):
     """
     try:
         conn = g.db_conn
-        
-        # Adjust table name for lookup if it's the `samples` alias in the UI
-        actual_table_name_for_lookup = 'parental_samples' if table.lower() == 'samples' and schema.lower() == 'lab' else table
-        
-        resolved_names = _resolve_table_casing(conn, schema, actual_table_name_for_lookup)
+
+        resolved_names = _resolve_table_casing(conn, schema, table)
         if not resolved_names:
             return jsonify({"error": f"Table or view '{schema}.{table}' not found or inaccessible."}), 404
         
-        actual_schema, actual_table = resolved_names # This is the actual DB table name (e.g., parental_samples)
+        actual_schema, actual_table = resolved_names
 
         # Query to get column information AND table_type
         query = """
@@ -556,8 +538,7 @@ def get_table_schema(schema: str, table: str):
             columns = cur.fetchall()
         
         # Add primary key information to the schema
-        # Pass the original requested table name to get_pk_columns, as PK_MAPPING uses simplified names
-        pk_columns = get_pk_columns(schema, table) 
+        pk_columns = get_pk_columns(actual_schema, actual_table)
         for col in columns:
             col['is_primary_key'] = col['column_name'] in pk_columns
 
@@ -572,14 +553,11 @@ def get_table_data(schema: str, table: str):
     try:
         conn = g.db_conn
 
-        # Adjust table name for lookup if it's the `samples` alias in the UI
-        actual_table_name_for_lookup = 'parental_samples' if table.lower() == 'samples' and schema.lower() == 'lab' else table
-        
-        resolved_names = _resolve_table_casing(conn, schema, actual_table_name_for_lookup)
+        resolved_names = _resolve_table_casing(conn, schema, table)
         if not resolved_names:
             return jsonify({"error": f"Table or view '{schema}.{table}' not found or inaccessible."}), 404
         
-        actual_schema, actual_table = resolved_names # This is the actual DB table name (e.g., parental_samples)
+        actual_schema, actual_table = resolved_names
         
         where_clauses: List[str] = []
         params: List[Any] = []
@@ -604,130 +582,127 @@ def get_table_data(schema: str, table: str):
                 return None
 
         # --- SPECIAL HANDLING FOR TABLES FILTERED BY experiment_id/date ---
-        # List of tables that have (experiment_id, experiment_date) as part of their composite PK or directly
-        tables_with_direct_exp_pk = ['experiments', 'tissue', 'otoliths', 'dna', 'rna', 'sediments', 'water', 'dissections', 'extraction', 'nanodrop', 'qubit', 'tapestation', 'pcr', 'gelelectrophoresis', 'qpcr', 'library', 'sequencing']
-        tables_with_exp_fk = ['experiments_projects', 'experiments_samples', 'protocol_runs'] # These use experiment_id, experiment_date as FK
-
         if filter_experiment_id_value and filter_experiment_date_value:
             filter_exp_date_obj = parse_date_filter(filter_experiment_date_value)
 
-            if actual_schema.lower() == 'lab' and actual_table.lower() in tables_with_direct_exp_pk + tables_with_exp_fk:
-                # Tables that directly have experiment_id and experiment_date
-                where_clauses.append(f'"{actual_table}"."experiment_id" = %s') # Exact match for ID
-                params.append(filter_experiment_id_value)
+            if actual_schema.lower() == 'lab' and actual_table.lower() == 'experiments':
+                where_clauses.append(f'"{actual_table}"."experiment_id" ILIKE %s')
+                params.append(f'%{filter_experiment_id_value}%')
                 where_clauses.append(f'"{actual_table}"."experiment_date" = %s')
                 params.append(filter_exp_date_obj)
-            elif actual_schema.lower() == 'lab' and actual_table.lower() == 'sampling':
-                # lab.sampling has experiment_id, experiment_date but they can be NULL.
-                # Assuming filtering wants only records explicitly linked to an experiment.
-                where_clauses.append(f'"{actual_table}"."experiment_id" = %s')
-                params.append(filter_experiment_id_value)
-                where_clauses.append(f'"{actual_table}"."experiment_date" = %s')
-                params.append(filter_exp_date_obj)
-            elif actual_schema.lower() == 'lab' and actual_table.lower() == 'fishing':
-                 # lab.fishing's experiment_id/date are populated by trigger from lab.sampling.
-                 # Filter directly on fishing table's experiment_id/date.
-                where_clauses.append(f'"{actual_table}"."experiment_id" = %s')
-                params.append(filter_experiment_id_value)
+            elif actual_schema.lower() == 'lab' and actual_table.lower() in ['experiments_projects', 'experiments_samples', 'protocol_runs', 'dissections', 'extraction', 'nanodrop', 'qubit', 'tapestation', 'pcr', 'gelelectrophoresis', 'qpcr', 'library', 'sequencing', 'datasets', 'tissue', 'otoliths', 'dna', 'rna', 'sediments', 'water']:
+                # These tables directly contain experiment_id and experiment_date
+                where_clauses.append(f'"{actual_table}"."experiment_id" ILIKE %s')
+                params.append(f'%{filter_experiment_id_value}%')
                 where_clauses.append(f'"{actual_table}"."experiment_date" = %s')
                 params.append(filter_exp_date_obj)
             elif actual_schema.lower() == 'bioinformatics' and actual_table.lower() == 'analysis_runs':
-                # analysis_runs links to sequencing, which links to experiments
-                # For `analysis_runs`, its PK is `(run_id, run_date)`, but it has `sequencing_id, sequencing_date` as FK.
-                # We need to join to `lab.sequencing` to filter by `experiment_id`.
                 base_query_from += f"""
                     JOIN "lab"."sequencing" AS S ON "{actual_table}".sequencing_id = S.sequencing_id 
                     AND "{actual_table}".sequencing_date = S.sequencing_date
                 """
-                where_clauses.append(f'S.experiment_id = %s')
-                params.append(filter_experiment_id_value)
-                where_clauses.append(f'S.experiment_date = %s') # This is actually sequencing's prep_date as exp date.
+                where_clauses.append(f'S.experiment_id ILIKE %s')
+                params.append(f'%{filter_experiment_id_value}%')
+                where_clauses.append(f'S.experiment_date = %s')
                 params.append(filter_exp_date_obj)
             elif actual_schema.lower() == 'bioinformatics' and actual_table.lower() == 'edna_assignments':
-                # edna_assignments links to analysis_runs, which links to sequencing, which links to experiments
                 base_query_from += f"""
                     JOIN "bioinformatics"."analysis_runs" AS AR ON "{actual_table}".run_id = AR.run_id 
                     AND "{actual_table}".run_date = AR.run_date
                     JOIN "lab"."sequencing" AS S ON AR.sequencing_id = S.sequencing_id 
                     AND AR.sequencing_date = S.sequencing_date
                 """
-                where_clauses.append(f'S.experiment_id = %s')
-                params.append(filter_experiment_id_value)
+                where_clauses.append(f'S.experiment_id ILIKE %s')
+                params.append(f'%{filter_experiment_id_value}%')
                 where_clauses.append(f'S.experiment_date = %s')
                 params.append(filter_exp_date_obj)
         
         # --- SPECIAL HANDLING FOR TABLES FILTERED BY sample_id/sampling_date ---
-        # Note: Frontend might send `table=samples` but we use `parental_samples`
         elif filter_sample_id_value:
-            if actual_schema.lower() == 'lab' and actual_table.lower() == 'parental_samples':
+            if actual_schema.lower() == 'lab' and actual_table.lower() == 'samples':
                 # Main samples table, direct filter
-                where_clauses.append(f'"{actual_table}"."sample_id" = %s') # Exact match for ID
-                params.append(filter_sample_id_value)
+                where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s')
+                params.append(f'%{filter_sample_id_value}%')
                 if filter_sampling_date_value:
                     filter_samp_date_obj = parse_date_filter(filter_sampling_date_value)
                     where_clauses.append(f'"{actual_table}"."sampling_date" = %s')
                     params.append(filter_samp_date_obj)
-            elif actual_schema.lower() == 'lab' and actual_table.lower() in ['fish', 'storage_log']:
-                # These tables directly contain sample_id and potentially sampling_date as part of PK/FK
-                where_clauses.append(f'"{actual_table}"."sample_id" = %s')
-                params.append(filter_sample_id_value)
+            elif actual_schema.lower() == 'lab' and actual_table.lower() in ['fish', 'fishing', 'storage_log']:
+                # These tables directly contain sample_id (or sampling_id which is related to sample_id)
+                # and sampling_date
+                where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s') # Assuming sample_id for fish, storage_log
+                params.append(f'%{filter_sample_id_value}%')
                 if filter_sampling_date_value:
                     filter_samp_date_obj = parse_date_filter(filter_sampling_date_value)
                     where_clauses.append(f'"{actual_table}"."sampling_date" = %s')
                     params.append(filter_samp_date_obj)
+                # Special case for 'fishing' table which uses 'sampling_id'
+                if actual_table.lower() == 'fishing':
+                    # Need to join to lab.samples to filter by sample_id
+                    base_query_from += f"""
+                        JOIN "lab"."samples" AS S ON "{actual_table}".sampling_id = S.sampling_id
+                        AND "{actual_table}".sampling_date = S.sampling_date
+                    """
+                    where_clauses.append(f'S.sample_id ILIKE %s')
+                    params.append(f'%{filter_sample_id_value}%')
+                    if filter_sampling_date_value:
+                        filter_samp_date_obj = parse_date_filter(filter_sampling_date_value)
+                        where_clauses.append(f'S.sampling_date = %s')
+                        params.append(filter_samp_date_obj)
             elif actual_schema.lower() == 'lab' and actual_table.lower() == 'sampling':
-                # Sampling table can be filtered by sample_id via join to parental_samples
+                # Sampling table can be filtered by sample_id via join
                 base_query_from += f"""
-                    JOIN "lab"."parental_samples" AS S ON "{actual_table}".sampling_id = S.sampling_id
+                    JOIN "lab"."samples" AS S ON "{actual_table}".sampling_id = S.sampling_id
                     AND "{actual_table}".sampling_date = S.sampling_date
                 """
-                where_clauses.append(f'S.sample_id = %s')
-                params.append(filter_sample_id_value)
+                where_clauses.append(f'S.sample_id ILIKE %s')
+                params.append(f'%{filter_sample_id_value}%')
                 if filter_sampling_date_value:
                     filter_samp_date_obj = parse_date_filter(filter_sampling_date_value)
                     where_clauses.append(f'S.sampling_date = %s')
                     params.append(filter_samp_date_obj)
             elif actual_schema.lower() == 'lab' and actual_table.lower() in ['tissue', 'otoliths', 'dna', 'rna', 'sediments', 'water', 'experiments_samples', 'dissections', 'extraction', 'nanodrop', 'qubit', 'tapestation', 'pcr', 'gelelectrophoresis', 'qpcr', 'library', 'sequencing']:
-                # These tables have sample_id (usually as FK to master_samples)
-                where_clauses.append(f'"{actual_table}"."sample_id" = %s')
-                params.append(filter_sample_id_value)
-                # Note: These tables are partitioned by `experiment_date` (or `measurement_date`, `pcr_date`, etc.),
-                # not `sampling_date`. If a date filter is needed for these, it should be their specific date.
+                # These tables have sample_id and experiment_id/date, but can be filtered by sample_id directly
+                where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s')
+                params.append(f'%{filter_sample_id_value}%')
+                # No additional date filter added here as they are partitioned by experiment_date, not sampling_date
             elif actual_schema.lower() == 'bioinformatics' and actual_table.lower() == 'analysis_runs':
-                # analysis_runs is linked to samples via sequencing table
+                # analysis_runs is linked to samples via sequencing
                 base_query_from += f"""
                     JOIN "lab"."sequencing" AS SEQ ON "{actual_table}".sequencing_id = SEQ.sequencing_id
                     AND "{actual_table}".sequencing_date = SEQ.sequencing_date
                 """
-                where_clauses.append(f'SEQ.sample_id = %s')
-                params.append(filter_sample_id_value)
+                where_clauses.append(f'SEQ.sample_id ILIKE %s')
+                params.append(f'%{filter_sample_id_value}%')
             elif actual_schema.lower() == 'bioinformatics' and actual_table.lower() == 'edna_assignments':
                 # edna_assignments directly has sample_id
-                where_clauses.append(f'"{actual_table}"."sample_id" = %s')
-                params.append(filter_sample_id_value)
-            elif actual_schema.lower() == 'lab' and actual_table.lower() == 'sample_full_details_view':
-                # This view has sample_id directly
-                where_clauses.append(f'"{actual_table}"."sample_id" = %s')
-                params.append(filter_sample_id_value)
-        
+                where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s')
+                params.append(f'%{filter_sample_id_value}%')
+            
         # --- SPECIAL HANDLING FOR lims.projects WHEN FILTERED BY project_id ---
-        # The frontend's `filter_project_id` parameter can apply to different tables.
-        # This block ensures filtering the `lims.projects` table itself or its views.
-        if actual_schema.lower() == 'lims' and actual_table.lower() == 'projects' and filter_project_id_value:
-            where_clauses.append(f'"{actual_table}"."project_id" = %s') # Direct filter on projects table
-            params.append(filter_project_id_value)
+        elif actual_schema.lower() == 'lims' and actual_table.lower() == 'projects' and filter_project_id_value:
+            # Modify the base query to perform a JOIN with experiments_projects
+            base_query_from += f"""
+                JOIN "lab"."experiments_projects" AS EP ON "{actual_table}".project_id = EP.project_id
+            """
+            # Add the project_id filter to the WHERE clause using the junction table alias
+            where_clauses.append(f'EP.project_id ILIKE %s')
+            params.append(f'%{filter_project_id_value}%')
             
         # --- NEW: Handle filter_protocol_id for lab.protocol_runs ---
         if filter_protocol_id_value and actual_schema.lower() == 'lab' and actual_table.lower() == 'protocol_runs':
-            where_clauses.append(f'"{actual_table}"."sop_id" = %s') # protocol_runs filters by sop_id, not protocol_id
+            where_clauses.append(f'"{actual_table}"."protocol_id" = %s')
             params.append(filter_protocol_id_value)
 
         # --- NEW: Handle exclude_status_id filter ---
         if exclude_status_id_value:
             # This applies to any table that has a 'status_id' column
-            if _get_column_types(conn, actual_schema, actual_table).get('status_id'):
-                where_clauses.append(f'"{actual_table}"."status_id" != %s')
-                params.append(exclude_status_id_value)
+            where_clauses.append(f'"{actual_table}"."status_id" != %s')
+            params.append(exclude_status_id_value)
+
+
+        order_by_column: Optional[str] = None
+        order_direction: str = 'ASC'
 
         # Iterate through all query arguments to apply filters, skipping already handled ones
         for key, value in request.args.items():
@@ -735,27 +710,42 @@ def get_table_data(schema: str, table: str):
                 continue
             
             # Skip filters already handled by special blocks
-            # Added more specific checks for filter_project_id_value to prevent double-adding
-            if (key == 'filter_project_id' and filter_project_id_value and actual_table.lower() == 'projects') or \
+            if (key == 'filter_project_id' and filter_project_id_value) or \
                (key == 'filter_experiment_id' and filter_experiment_id_value) or \
                (key == 'filter_experiment_date' and filter_experiment_date_value) or \
                (key == 'filter_sample_id' and filter_sample_id_value) or \
                (key == 'filter_sampling_date' and filter_sampling_date_value) or \
                (key == 'filter_protocol_id' and filter_protocol_id_value) or \
-               (key == 'exclude_status_id' and exclude_status_id_value) or \
-               (key == 'limit') or (key == 'offset') or \
-               (key == 'order_by') or (key == 'order_direction'):
+               (key == 'exclude_status_id' and exclude_status_id_value): # Exclude this from generic parsing
                 continue
 
+            if key == 'limit' or key == 'offset':
+                continue
+            elif key == 'order_by':
+                order_by_column = value
+                continue
+            elif key == 'order_direction':
+                if value.upper() in ['ASC', 'DESC']:
+                    order_direction = value.upper()
+                continue
             # Specific filter for 'expire_date_within_30_days' for reagents dashboard stat
-            if key == 'filter_expire_date_within_30_days' and value.lower() == 'true':
-                if actual_schema.lower() == 'lims' and actual_table.lower() == 'reagents':
-                    where_clauses.append(f'"expire_date" BETWEEN CURRENT_DATE AND CURRENT_DATE + interval \'30 day\'')
+            elif key == 'filter_expire_date_within_30_days' and value.lower() == 'true':
+                where_clauses.append(f'"expire_date" BETWEEN CURRENT_DATE AND CURRENT_DATE + interval \'30 day\'')
                 continue # No param needed for this one
 
             # Standard list of filterable columns (ensure it contains all columns you might filter by)
-            # This list should ideally be dynamic from schema or a more comprehensive mapping
-            filterable_columns = list(_get_column_types(conn, actual_schema, actual_table).keys())
+            filterable_columns = [
+                'sample_id', 'status_id', 'sop_id', 'person_id', 'project_id', 
+                'room_id', 'vessel_id', 'region_id', 'ecosystem_id', 'category_id', 'sample_type_id', 'gene_id', 'taxon_id', 'species_id', 'unit_id', 
+                'contact_id', 'customer_id', 'workflow_id', 'permit_id', 'primer_id', 'step_number', 'equipment_id', 'supplier_id', 'item_id', 'fi_order_nr', 'reagent_id', 'publication_type_id', 'publication_id', 
+                'storage_id', 'experiment_id', 'experiment_project_id', 'protocol_run_id', 'sampling_id', 'master_sample_id', 'log_id', 'fishing_id', 'otolith_id', 'dataset_id', 
+                'db_id', 'pipeline_id', 'run_id', 'assignment_id', 
+                'external_name', 'title', 'full_name', 'customer_name', 'experiment_title', 'reagent_complete_name', 'lot', 'de_name', 'en_name', 'sample_type_abrv', 'workflow_name', 'pipeline_name', 'db_name', 'item_name', 'supplier_name', 'vessel_name', 'region_abrv', 'ecosystem_abrv', 'unit_name', 'unit_abbreviation', 'pi_person_id', 'funder', 'temperature_c', 'box', 'freezer', 'sex', 'stomach_contents_jsonb',
+                'mail', 'protocol_text', # Added protocol_text for filtering if needed
+                'path', 
+                # Date/Timestamp fields for filtering
+                'reception_date', 'experiment_date', 'dissection_date', 'extraction_date', 'measurement_date', 'pcr_date', 'run_date', 'prep_date', 'sequencing_date', 'order_date', 'expire_date', 'date_publication', 'date_submission', 'valid_from', 'valid_to', 'link_date', 'move_date', 'action_timestamp', 'created_at', 'date_realise', 'sampling_date'
+            ]
             
             # Handling date/year filters
             if key.startswith('filter_') and (key.endswith('_month') or key.endswith('_year')):
@@ -766,7 +756,6 @@ def get_table_data(schema: str, table: str):
                     if key.endswith('_month'):
                         try:
                             start_date_of_month = datetime.strptime(value, '%Y-%m').date()
-                            # Get last day of the month by adding one month and subtracting one day
                             end_date_of_month = (start_date_of_month.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
                             where_clauses.append(f'"{col_name}" BETWEEN %s AND %s')
                             params.extend([start_date_of_month, end_date_of_month])
@@ -785,13 +774,11 @@ def get_table_data(schema: str, table: str):
             elif key.startswith('filter_'): # General text/ID filters
                 col_name = key[len('filter_'):]
                 if col_name in filterable_columns:
-                    # Apply ILIKE for text-based filters for broader search
                     where_clauses.append(f'"{col_name}" ILIKE %s')
                     params.append(f'%{value}%')
                 else:
                     print(f"Warning: Filter by non-filterable column '{col_name}' skipped.")
             elif key in filterable_columns: # Direct equality match for non-filter_ prefixed keys
-                # Use exact match for keys not prefixed with 'filter_'
                 where_clauses.append(f'"{key}" = %s')
                 params.append(value)
 
@@ -801,27 +788,20 @@ def get_table_data(schema: str, table: str):
             query += f" WHERE {' AND '.join(where_clauses)}"
             
         # Add ORDER BY clause
-        order_by_column = request.args.get('order_by')
-        order_direction = request.args.get('order_direction', 'ASC').upper()
-
         if order_by_column:
             # Ensure order_by_column is qualified if it's from a joined table
-            # Default to main table for ordering
-            quoted_order_by_column = f'"{actual_table}"."{order_by_column}"' 
-            
-            # Specific handling for joined tables if the order_by column is from them
-            if (actual_schema.lower() == 'bioinformatics' and actual_table.lower() == 'analysis_runs' and order_by_column in ['experiment_id', 'experiment_date']):
-                quoted_order_by_column = f'S."{order_by_column}"' # From sequencing table alias 'S'
-            elif (actual_schema.lower() == 'bioinformatics' and actual_table.lower() == 'edna_assignments' and order_by_column in ['experiment_id', 'experiment_date']):
-                quoted_order_by_column = f'S."{order_by_column}"' # From sequencing table alias 'S'
-            elif (actual_schema.lower() == 'lab' and actual_table.lower() == 'sampling') and order_by_column in ['sample_id', 'sampling_date']:
-                # If sampling is joined to parental_samples for filtering, order by the alias
-                if filter_sample_id_value:
+            # This logic needs to be careful to apply to the correct alias or original table
+            if order_by_column in ['experiment_id', 'experiment_date'] and (actual_schema.lower() == 'bioinformatics' and actual_table.lower() in ['analysis_runs', 'edna_assignments']):
+                # For these cases, order by the joined table 'S' (sequencing)
+                quoted_order_by_column = f'S."{order_by_column}"' 
+            elif order_by_column in ['sample_id', 'sampling_date'] and (actual_schema.lower() == 'lab' and actual_table.lower() in ['fishing', 'sampling']):
+                 # For fishing/sampling, if filtering by sample_id, order by S.sample_id
+                if filter_sample_id_value: # Only if a join with S is active
                     quoted_order_by_column = f'S."{order_by_column}"'
-                # If not explicitly filtered by sample_id, order by sampling table's own columns
-                else:
+                else: # Otherwise, order by the table's own column
                     quoted_order_by_column = f'"{actual_table}"."{order_by_column}"'
-            
+            else:
+                quoted_order_by_column = f'"{actual_table}"."{order_by_column}"'
             query += f' ORDER BY {quoted_order_by_column} {order_direction}'
             
         # Add LIMIT and OFFSET clauses
@@ -853,9 +833,7 @@ def get_table_data(schema: str, table: str):
 def create_record(schema: str, table: str):
     conn = g.db_conn
     try:
-        # Resolve table name for DB interaction, e.g., 'samples' -> 'parental_samples'
-        actual_table_name_for_db = 'parental_samples' if table.lower() == 'samples' and schema.lower() == 'lab' else table
-        resolved_names = _resolve_table_casing(conn, schema, actual_table_name_for_db)
+        resolved_names = _resolve_table_casing(conn, schema, table)
         if not resolved_names:
             return jsonify({"error": f"Table '{schema}.{table}' not found or inaccessible."}), 404
         actual_schema, actual_table = resolved_names
@@ -891,13 +869,9 @@ def create_record(schema: str, table: str):
         # Extract custom fields for linked tables before filtering for main table insertion
         project_ids_str = None
         sample_ids_str = None
-        linked_person_ids_str = None # For lims.projects
-
         if actual_schema.lower() == 'lab' and actual_table.lower() == 'experiments':
             project_ids_str = data.pop('project_ids', None) # Pop to remove from main table columns
             sample_ids_str = data.pop('sample_ids', None) # Pop to remove from main table columns
-        elif actual_schema.lower() == 'lims' and actual_table.lower() == 'projects':
-            linked_person_ids_str = data.pop('linked_person_ids', None)
 
         # Filtered data now only contains columns that map directly to the DB table
         # Convert empty strings to None, and ensure attachment is handled.
@@ -914,20 +888,6 @@ def create_record(schema: str, table: str):
                 except json.JSONDecodeError:
                     print(f"WARNING: Invalid JSON for column '{k}'. Storing as None. Value: {v}")
                     filtered_data[k] = None # Store None if JSON is invalid
-            # Handle geometry types (WKT or GeoJSON string to PostGIS geometry)
-            elif column_types.get(k) == 'USER-DEFINED' and v is not None and (isinstance(v, str) and (v.upper().startswith('POINT(') or v.strip().startswith('{'))):
-                try:
-                    # Attempt to parse WKT or GeoJSON string into a PostGIS geometry object
-                    # This requires psycopg2 to handle geometry types correctly, often with a custom adapter
-                    # For simplicity, if it's a string, we'll let psycopg2 handle it if it can.
-                    # If it's a JSON string for GeoJSON, parse it.
-                    if isinstance(v, str) and v.strip().startswith('{'): # Assume GeoJSON
-                        filtered_data[k] = json.dumps(json.loads(v)) # Store GeoJSON as string for psycopg2, it will convert.
-                    else: # Assume WKT
-                        filtered_data[k] = v # Pass WKT string directly
-                except (json.JSONDecodeError, Exception) as e:
-                    print(f"WARNING: Invalid geometry format for column '{k}'. Storing as None. Value: {v}. Error: {e}")
-                    filtered_data[k] = None
             else:
                 filtered_data[k] = v
             
@@ -977,19 +937,6 @@ def create_record(schema: str, table: str):
                             print(f"  Warning: Could not link sample {sample_id} to experiment {experiment_id}: {e}")
                             # Log error but allow other links/main record to proceed
             
-            # Handle linked_person_ids for lims.projects
-            elif actual_schema.lower() == 'lims' and actual_table.lower() == 'projects' and new_record and linked_person_ids_str:
-                project_id = new_record['project_id']
-                person_list = [p.strip() for p in linked_person_ids_str.split(';') if p.strip()]
-                for person_id in person_list:
-                    try:
-                        cur.execute(
-                            'INSERT INTO "lims"."project_persons" ("project_id", "person_id", "link_date") VALUES (%s, %s, CURRENT_DATE);',
-                            (project_id, person_id)
-                        )
-                    except Exception as e:
-                        print(f"  Warning: Could not link person {person_id} to project {project_id}: {e}")
-
             conn.commit() # Commit all changes in the transaction
         return jsonify(transform_row_for_json(new_record)), 201
     except Exception as e:    
@@ -1001,16 +948,13 @@ def create_record(schema: str, table: str):
 @app.route(f'{API_PREFIX}/table/<string:schema>/<string:table>', methods=['PUT'])
 def update_record(schema: str, table: str):
     try:
-        # Resolve table name for DB interaction, e.g., 'samples' -> 'parental_samples'
-        actual_table_name_for_db = 'parental_samples' if table.lower() == 'samples' and schema.lower() == 'lab' else table
-        resolved_names = _resolve_table_casing(conn, schema, actual_table_name_for_db)
+        conn = g.db_conn
+        resolved_names = _resolve_table_casing(conn, schema, table)
         if not resolved_names:
             return jsonify({"error": f"Table '{schema}.{table}' not found or inaccessible."}), 404
         actual_schema, actual_table = resolved_names
 
-        pk_columns = get_pk_columns(schema, table) # Get all PK columns. Pass original `table` to get correct PK.
-        if not pk_columns:
-            return jsonify({"error": f"Primary key not defined for {schema}.{table}. Cannot perform update."}), 400
+        pk_columns = get_pk_columns(schema, table) # Get all PK columns
 
         # Get column types for JSONB handling
         column_types = _get_column_types(conn, actual_schema, actual_table)
@@ -1040,7 +984,6 @@ def update_record(schema: str, table: str):
 
         set_clauses: List[str] = []
         values: List[Any] = []
-        pk_where_clauses: List[str] = [] # Initialize pk_where_clauses here
         
         if (actual_schema.lower() == 'reference' and actual_table.lower() == 'personal') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
@@ -1065,19 +1008,6 @@ def update_record(schema: str, table: str):
                     print(f"WARNING: Invalid JSON for column '{key}'. Storing as None. Value: {val}")
                     set_clauses.append(f'"{key}" = %s')
                     values.append(None) # Store None if JSON is invalid
-            # Handle geometry types (WKT or GeoJSON string to PostGIS geometry)
-            elif column_types.get(key) == 'USER-DEFINED' and val is not None and (isinstance(val, str) and (val.upper().startswith('POINT(') or val.strip().startswith('{'))):
-                try:
-                    if isinstance(val, str) and val.strip().startswith('{'): # Assume GeoJSON
-                        set_clauses.append(f'"{key}" = %s')
-                        values.append(json.dumps(json.loads(val))) # Store GeoJSON as string for psycopg2, it will convert.
-                    else: # Assume WKT
-                        set_clauses.append(f'"{key}" = %s')
-                        values.append(val) # Pass WKT string directly
-                except (json.JSONDecodeError, Exception) as e:
-                    print(f"WARNING: Invalid geometry format for column '{key}'. Storing as None. Value: {val}. Error: {e}")
-                    set_clauses.append(f'"{key}" = %s')
-                    values.append(None)
             else:
                 set_clauses.append(f'"{key}" = %s')
                 values.append(None if val == '' else val)    
@@ -1086,8 +1016,9 @@ def update_record(schema: str, table: str):
             return jsonify({"error": "No fields to update"}), 400
 
         # Construct WHERE clause for composite primary key
+        where_pk_clauses = []
         for pk_col in pk_columns:
-            pk_where_clauses.append(f'"{pk_col}" = %s')
+            where_pk_clauses.append(f'"{pk_col}" = %s')
             pk_val = pk_values_from_request[pk_col]
             # Special handling for date columns in PK comparison in backend
             if 'date' in pk_col.lower() and pk_val is not None:
@@ -1121,16 +1052,12 @@ def update_record(schema: str, table: str):
 def delete_record(schema: str, table: str):
     conn = g.db_conn
     try:
-        # Resolve table name for DB interaction, e.g., 'samples' -> 'parental_samples'
-        actual_table_name_for_db = 'parental_samples' if table.lower() == 'samples' and schema.lower() == 'lab' else table
-        resolved_names = _resolve_table_casing(conn, schema, actual_table_name_for_db)
+        resolved_names = _resolve_table_casing(conn, schema, table)
         if not resolved_names:
             return jsonify({"error": f"Table '{schema}.{table}' not found or inaccessible."}), 404
         actual_schema, actual_table = resolved_names
 
-        pk_columns = get_pk_columns(schema, table) # Pass original `table` to get correct PK
-        if not pk_columns:
-            return jsonify({"error": f"Primary key not defined for {schema}.{table}. Cannot perform deletion."}), 400
+        pk_columns = get_pk_columns(schema, table) # Get all PK columns
 
         # Collect PK values from query parameters
         pk_values_from_request = []
@@ -1172,9 +1099,7 @@ def delete_record(schema: str, table: str):
 def batch_upload(schema: str, table: str):
     conn = g.db_conn
     try:
-        # Resolve table name for DB interaction, e.g., 'samples' -> 'parental_samples'
-        actual_table_name_for_db = 'parental_samples' if table.lower() == 'samples' and schema.lower() == 'lab' else table
-        resolved_names = _resolve_table_casing(conn, schema, actual_table_name_for_db)
+        resolved_names = _resolve_table_casing(conn, schema, table)
         if not resolved_names:
             return jsonify({"error": f"Table '{schema}.{table}' not found or inaccessible."}), 404
         actual_schema, actual_table = resolved_names
@@ -1191,7 +1116,7 @@ def batch_upload(schema: str, table: str):
 
         inserted_count = 0
         
-        # Special handling for 'lab.experiments'
+        # Special handling for 'lab.experiments' due to linked tables
         if actual_schema.lower() == 'lab' and actual_table.lower() == 'experiments':
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 for record_data in records: # Use record_data to avoid conflict with `record`
@@ -1210,16 +1135,6 @@ def batch_upload(schema: str, table: str):
                             except json.JSONDecodeError:
                                 print(f"WARNING: Invalid JSON for column '{k}' during batch upload. Storing as None. Value: {v}")
                                 filtered_record[k] = None
-                        # Handle geometry types (WKT or GeoJSON string)
-                        elif column_types.get(k) == 'USER-DEFINED' and v is not None and (isinstance(v, str) and (v.upper().startswith('POINT(') or v.strip().startswith('{'))):
-                            try:
-                                if isinstance(v, str) and v.strip().startswith('{'): # Assume GeoJSON
-                                    filtered_record[k] = json.dumps(json.loads(v))
-                                else: # Assume WKT
-                                    filtered_record[k] = v
-                            except (json.JSONDecodeError, Exception) as e:
-                                print(f"WARNING: Invalid geometry format for column '{k}'. Storing as None. Value: {v}. Error: {e}")
-                                filtered_record[k] = None
                         else:
                             filtered_record[k] = v
                     
@@ -1232,10 +1147,13 @@ def batch_upload(schema: str, table: str):
                             filtered_record['password_hash'] = hashed_password.decode('utf-8')
                         filtered_record.pop('password', None)
                     
-                    # Handle attachment for batch upload (assuming base64 encoded string in JSON)
+                    # Handle attachment if applicable (copied from create_record, assuming it's already in the dict for batch)
+                    # For batch upload, files would typically be base64 encoded strings in the JSON data,
+                    # not actual Werkzeug FileStorage objects.
                     if 'attachment' in filtered_record and filtered_record['attachment'] == '':
                         filtered_record['attachment'] = None
                     elif 'attachment' in filtered_record and isinstance(filtered_record['attachment'], str):
+                            # Assuming base64 encoded string from CSV/XLSX
                             try:
                                 filtered_record['attachment'] = base64.b64decode(filtered_record['attachment'])
                             except Exception as e:
@@ -1304,16 +1222,6 @@ def batch_upload(schema: str, table: str):
                             except json.JSONDecodeError:
                                 print(f"WARNING: Invalid JSON for column '{k}' during batch upload. Storing as None. Value: {v}")
                                 filtered_record[k] = None
-                        # Handle geometry types
-                        elif column_types.get(k) == 'USER-DEFINED' and v is not None and (isinstance(v, str) and (v.upper().startswith('POINT(') or v.strip().startswith('{'))):
-                            try:
-                                if isinstance(v, str) and v.strip().startswith('{'): # Assume GeoJSON
-                                    filtered_record[k] = json.dumps(json.loads(v))
-                                else: # Assume WKT
-                                    filtered_record[k] = v
-                            except (json.JSONDecodeError, Exception) as e:
-                                print(f"WARNING: Invalid geometry format for column '{k}'. Storing as None. Value: {v}. Error: {e}")
-                                filtered_record[k] = None
                         else:
                             filtered_record[k] = v
 
@@ -1379,16 +1287,6 @@ def batch_upload(schema: str, table: str):
                         except json.JSONDecodeError:
                             print(f"WARNING: Invalid JSON for column '{k}' during batch upload. Storing as None. Value: {v}")
                             temp_record[k] = None
-                    # Handle geometry types
-                    elif column_types.get(k) == 'USER-DEFINED' and v is not None and (isinstance(v, str) and (v.upper().startswith('POINT(') or v.strip().startswith('{'))):
-                        try:
-                            if isinstance(v, str) and v.strip().startswith('{'): # Assume GeoJSON
-                                temp_record[k] = json.dumps(json.loads(v))
-                            else: # Assume WKT
-                                temp_record[k] = v
-                        except (json.JSONDecodeError, Exception) as e:
-                            print(f"WARNING: Invalid geometry format for column '{k}'. Storing as None. Value: {v}. Error: {e}")
-                            temp_record[k] = None
 
                 processed_records_for_insertion.append({k: (v if v != '' else None) for k, v in temp_record.items()})
 
@@ -1422,9 +1320,7 @@ def batch_upload(schema: str, table: str):
 def batch_update(schema: str, table: str):
     conn = g.db_conn
     try:
-        # Resolve table name for DB interaction, e.g., 'samples' -> 'parental_samples'
-        actual_table_name_for_db = 'parental_samples' if table.lower() == 'samples' and schema.lower() == 'lab' else table
-        resolved_names = _resolve_table_casing(conn, schema, actual_table_name_for_db)
+        resolved_names = _resolve_table_casing(conn, schema, table)
         if not resolved_names:
             return jsonify({"error": f"Table '{schema}.{table}' not found or inaccessible."}), 404
         actual_schema, actual_table = resolved_names
@@ -1436,7 +1332,7 @@ def batch_update(schema: str, table: str):
         if not records_to_update or not isinstance(records_to_update, list):
             return jsonify({"error": "Invalid data format. Expected a list of records for batch update."}), 400
 
-        pk_columns = get_pk_columns(schema, table) # Pass original `table` to get correct PK
+        pk_columns = get_pk_columns(schema, table)
         if not pk_columns:
             return jsonify({"error": f"Primary key not defined for {schema}.{table}. Cannot perform batch update."}), 400
 
@@ -1445,7 +1341,7 @@ def batch_update(schema: str, table: str):
             for record_data in records_to_update:
                 set_clauses: List[str] = []
                 values: List[Any] = []
-                pk_where_clauses: List[str] = [] # Initialize pk_where_clauses here
+                pk_where_clauses: List[str] = []
                 pk_values: List[Any] = []
 
                 # Separate PK fields from update fields
@@ -1453,10 +1349,9 @@ def batch_update(schema: str, table: str):
                     if key in pk_columns:
                         pk_where_clauses.append(f'"{key}" = %s')
                         # Handle date formatting for PKs if necessary (matches frontend sending format)
-                        # For batch update, pk_values are coming from record_data.
-                        if 'date' in key.lower() and isinstance(val, str):
+                        if 'date' in key.lower() and key in request.args and isinstance(request.args[key], str): # Check request.args for original PK value as string
                             try:
-                                val = datetime.strptime(val, '%Y-%m-%d').date()
+                                val = datetime.strptime(request.args[key], '%Y-%m-%d').date()
                             except ValueError:
                                 pass # Keep as string if not a valid date format
                         pk_values.append(val)
@@ -1468,19 +1363,6 @@ def batch_update(schema: str, table: str):
                                 values.append(json.loads(val))
                             except json.JSONDecodeError:
                                 print(f"WARNING: Invalid JSON for column '{key}' during batch update. Storing as None. Value: {val}")
-                                set_clauses.append(f'"{key}" = %s')
-                                values.append(None)
-                        # Handle geometry types
-                        elif column_types.get(key) == 'USER-DEFINED' and val is not None and (isinstance(val, str) and (val.upper().startswith('POINT(') or val.strip().startswith('{'))):
-                            try:
-                                if isinstance(val, str) and val.strip().startswith('{'): # Assume GeoJSON
-                                    set_clauses.append(f'"{key}" = %s')
-                                    values.append(json.dumps(json.loads(val)))
-                                else: # Assume WKT
-                                    set_clauses.append(f'"{key}" = %s')
-                                    values.append(val)
-                            except (json.JSONDecodeError, Exception) as e:
-                                print(f"WARNING: Invalid geometry format for column '{key}'. Storing as None. Value: {val}. Error: {e}")
                                 set_clauses.append(f'"{key}" = %s')
                                 values.append(None)
                         else:
