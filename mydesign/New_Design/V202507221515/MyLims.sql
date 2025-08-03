@@ -218,6 +218,7 @@ CREATE TABLE IF NOT EXISTS "lims"."customers" (
 
 CREATE TABLE IF NOT EXISTS "lims"."projects" (
     "project_id" text PRIMARY KEY,
+    "project_abrv" text,
     "title" text,
     "status_id" text,
     "pi_person_id" text,
