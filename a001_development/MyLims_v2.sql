@@ -185,6 +185,7 @@ CREATE TABLE IF NOT EXISTS "lims"."personal" (
     "attachment" bytea,
     "attachment_link" text
 );
+ALTER TABLE "lims"."personal" ADD COLUMN "personal_search_vector" tsvector;
 
 
 CREATE TABLE IF NOT EXISTS "lims"."external_contacts" (
@@ -1467,24 +1468,27 @@ $$ LANGUAGE plpgsql;
 -- ======================================================================
 -- F03. AUDIT LOGGING FUNCTION
 -- ======================================================================
-
 CREATE OR REPLACE FUNCTION "audit".if_modified_func() RETURNS TRIGGER AS $$
 DECLARE
     v_old_data jsonb;
     v_new_data jsonb;
     v_action text;
 BEGIN
-    -- Determine the action type
-    v_action := TG_OP;
-
-    -- Capture data based on the action
+    -- Determine the action type and set the single-character code
     IF (TG_OP = 'UPDATE') THEN
+        v_action := 'U';
         v_old_data := row_to_json(OLD)::jsonb;
         v_new_data := row_to_json(NEW)::jsonb;
     ELSIF (TG_OP = 'DELETE') THEN
+        v_action := 'D';
         v_old_data := row_to_json(OLD)::jsonb;
+        v_new_data := NULL; -- Correctly set new_data to NULL for deletions
     ELSIF (TG_OP = 'INSERT') THEN
+        v_action := 'I';
+        v_old_data := NULL; -- Correctly set old_data to NULL for insertions
         v_new_data := row_to_json(NEW)::jsonb;
+    ELSE
+        RETURN NULL; -- No action to log
     END IF;
 
     -- Insert the log entry
@@ -1502,6 +1506,11 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+
+
+
+
 
 -- ======================================================================
 -- F04. STATUS UPDATE FUNCTION
@@ -2197,43 +2206,23 @@ $$ LANGUAGE plpgsql;
 -- F08. LTREE PATH UPDATE FUNCTION
 -- ======================================================================
 -- Function to maintain the ltree path for hierarchical data.
-CREATE OR REPLACE FUNCTION "reference".update_taxon_ltree_paths()
+CREATE OR REPLACE FUNCTION "reference".update_taxon_ltree_path_for_row()
 RETURNS TRIGGER AS $$
+DECLARE
+    parent_path ltree;
 BEGIN
-    -- Update the path for all affected rows, starting from the root.
-    UPDATE "reference"."taxon" AS t
-    SET path = subquery.new_path
-    FROM (
-        WITH RECURSIVE taxon_paths AS (
-            -- Base case: The roots of the hierarchy
-            SELECT
-                taxon_id,
-                taxon_id::ltree AS new_path
-            FROM
-                "reference"."taxon"
-            WHERE
-                taxon_parent IS NULL
-
-            UNION ALL
-
-            -- Recursive step: Find children and build their paths
-            SELECT
-                t.taxon_id,
-                tp.new_path || t.taxon_id::ltree
-            FROM
-                taxon_paths tp
-            JOIN
-                "reference"."taxon" t ON t.taxon_parent = tp.taxon_id
-        )
-        SELECT
-            taxon_id,
-            new_path
-        FROM
-            taxon_paths
-    ) AS subquery
-    WHERE
-        t.taxon_id = subquery.taxon_id;
-    RETURN NULL;
+    -- If the new row has a parent, find the parent's path.
+    IF NEW.taxon_parent IS NOT NULL THEN
+        SELECT path INTO parent_path FROM "reference"."taxon" WHERE taxon_id = NEW.taxon_parent;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Parent taxon with ID % not found.', NEW.taxon_parent;
+        END IF;
+        NEW.path := parent_path || NEW.taxon_id;
+    ELSE
+        -- If the new row is a root, its path is just its own ID.
+        NEW.path := NEW.taxon_id;
+    END IF;
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -2434,9 +2423,12 @@ CREATE TRIGGER trg_update_pipeline_search BEFORE INSERT OR UPDATE ON "bioinforma
 -- Trigger for ltree path update
 CREATE TRIGGER trg_update_taxon_path AFTER INSERT OR UPDATE ON "reference"."taxon" FOR EACH STATEMENT EXECUTE FUNCTION "reference".update_taxon_ltree_paths();
 
--- Ensure the trigger is set to use the new function.
--- If the old trigger exists, you may need to drop and re-create it.
+-- new function.
 CREATE TRIGGER trg_populate_dates_for_root_sample BEFORE INSERT ON "lab"."root_samples" FOR EACH ROW EXECUTE FUNCTION "lab".populate_dates_for_root_sample();
+-- Drop the problematic statement-level trigger
+DROP TRIGGER IF EXISTS trg_update_taxon_path ON "reference"."taxon";
+-- new row-level trigger using the corrected function
+CREATE TRIGGER trg_update_taxon_path BEFORE INSERT OR UPDATE ON "reference"."taxon" FOR EACH ROW EXECUTE FUNCTION "reference".update_taxon_ltree_path_for_row();
 
 -- ======================================================================
 -- 2. INDEXES
@@ -3481,3 +3473,805 @@ ALTER TABLE "lab"."sequencing_run" ADD CONSTRAINT uc_seq_run_id_exp UNIQUE ("seq
 -- ALTER TABLE "lab"."Seq_dataset" ADD CONSTRAINT uc_seq_dataset_id_exp UNIQUE ("data_seq_id", "experiment_date");
 ALTER TABLE "lab"."datasets" ADD CONSTRAINT uc_dataset_id_reception UNIQUE ("dataset_id", "reception_date");
 ALTER TABLE "bioinformatics"."analysis_runs" ADD CONSTRAINT uc_run_id_exp UNIQUE ("run_id", "experiment_date");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- ================================================
+-- ================================================
+-- ================================================
+-- ================================================
+-- ======================================================================
+-- DEMO DATA GENERATION SCRIPT
+-- ======================================================================
+-- Note: This script assumes all tables, functions, and triggers from the
+-- provided schema script have been successfully created.
+-- ======================================================================
+
+-- Set the current date for the partitioning triggers
+SET "projects.current_date" = '2025-08-21';
+SET "lims.current_person_id" = 'jane.doe';
+
+-- ======================================================================
+-- 1. REFERENCE SCHEMA - BASE DATA
+-- ======================================================================
+
+-- 1.1 reference.status
+INSERT INTO "reference"."status" ("status_id", "notes") VALUES
+('Planned', 'The action or item is planned but not started.'),
+('Received', 'The item has been received and is ready for use.'),
+('In Progress', 'The work on this item is currently in progress.'),
+('Completed', 'The process has been successfully completed.'),
+('Dissection', 'The sample has undergone dissection.'),
+('Nanodrop QC', 'The sample has been checked with Nanodrop for quality control.'),
+('Qubit QC', 'The sample has been checked with Qubit for quality control.'),
+('Tapestation QC', 'The sample has been checked with Tapestation for quality control.'),
+('PCR Done', 'The Polymerase Chain Reaction step is completed.'),
+('qPCR Done', 'The quantitative PCR step is completed.'),
+('Library Prep', 'The sequencing library has been prepared.'),
+('Sequencing Done', 'The sequencing run is completed.'),
+('Bioinformatics Done', 'The bioinformatics analysis is completed.'),
+('Archived', 'The item is stored for long-term retention.'),
+('Destroyed', 'The item has been destroyed and is no longer available.'),
+('On Hold', 'The process is temporarily paused.');
+
+-- 1.2 reference.room
+INSERT INTO "reference"."room" ("room_id", "etage", "address", "institute", "city", "country") VALUES
+('R101', '1st Floor', '123 Ocean Blvd', 'Marine Research Institute', 'Bremerhaven', 'Germany'),
+('R202', '2nd Floor', '123 Ocean Blvd', 'Marine Research Institute', 'Bremerhaven', 'Germany');
+
+-- 1.3 reference.vessel
+INSERT INTO "reference"."vessel" ("vessel_id", "vessel_name", "belong_to") VALUES
+('RV_Meteor', 'Research Vessel Meteor', 'DFG'),
+('RV_Sonne', 'Research Vessel Sonne', 'BMF');
+
+-- 1.4 reference.region
+INSERT INTO "reference"."region" ("region_id", "region_abrv", "parent_region", "rank", "path") VALUES
+('Eur', 'Eu', NULL, 'Continent', 'Eur'),
+('Asia', 'As', NULL, 'Continent', 'Asia'),
+('Arctic', 'Arc', 'Eur', 'Region', 'Eur.Arctic'),
+('BalticSea', 'Blt', 'Eur', 'Sea', 'Eur.BalticSea'),
+('NorthSea', 'NSe', 'Eur', 'Sea', 'Eur.NorthSea');
+
+-- 1.5 reference.ecosystem
+INSERT INTO "reference"."ecosystem" ("ecosystem_id", "ecosystem_abrv", "country", "category", "path") VALUES
+('Freshwater', 'Fw', NULL, 'Terrestrial', 'Freshwater'),
+('Marine', 'Mar', NULL, 'Aquatic', 'Marine'),
+('Estuary', 'Est', NULL, 'Aquatic', 'Estuary');
+
+-- 1.6 reference.category
+INSERT INTO "reference"."category" ("category_id", "notes") VALUES
+('Consumables', 'General lab consumables'),
+('Kits', 'Reagent kits for specific protocols'),
+('Chemicals', 'General-purpose chemicals'),
+('Samples', 'Samples of biological origin');
+
+-- 1.7 reference.samples_type
+INSERT INTO "reference"."samples_type" ("sample_type_id", "sample_type_abrv", "rank") VALUES
+('Root', 'S', 'Primary'),
+('Fish', 'F', 'Biological'),
+('Tissue', 'T', 'Biological'),
+('DNA', 'D', 'Molecular'),
+('RNA', 'R', 'Molecular'),
+('PCR_Product', 'P', 'Molecular'),
+('Library', 'L', 'Molecular'),
+('Water', 'W', 'Environmental'),
+('Sediment', 'Sd', 'Environmental'),
+('Otolith', 'Ot', 'Biological');
+
+-- 1.8 reference.gene
+INSERT INTO "reference"."gene" ("gene_id") VALUES
+('16S rRNA'),
+('18S rRNA'),
+('COI');
+
+-- 1.9 reference.taxon
+INSERT INTO "reference"."taxon" ("taxon_id", "taxon_parent", "de_name", "en_name", "rank", "path") VALUES
+('Animalia', NULL, 'Tiere', 'Animals', 'Kingdom', 'Animalia'),
+('Chordata', 'Animalia', 'Wirbeltiere', 'Vertebrates', 'Phylum', 'Animalia.Chordata'),
+('Actinopterygii', 'Chordata', 'Strahlenflosser', 'Ray-finned fishes', 'Class', 'Animalia.Chordata.Actinopterygii'),
+('Gadiformes', 'Actinopterygii', 'Dorschartige', 'Cod-like fishes', 'Order', 'Animalia.Chordata.Actinopterygii.Gadiformes'),
+('Gadus', 'Gadiformes', 'Kabeljau-Gattung', 'Cod genus', 'Genus', 'Animalia.Chordata.Actinopterygii.Gadiformes.Gadus'),
+('Gadus_morhua', 'Gadus', 'Kabeljau', 'Atlantic Cod', 'Species', 'Animalia.Chordata.Actinopterygii.Gadiformes.Gadus.Gadus_morhua'),
+('Bacteria', NULL, 'Bakterien', 'Bacteria', 'Kingdom', 'Bacteria'),
+('Firmicutes', 'Bacteria', NULL, 'Firmicutes', 'Phylum', 'Bacteria.Firmicutes'),
+('Bacillales', 'Firmicutes', NULL, 'Bacillales', 'Order', 'Bacteria.Firmicutes.Bacillales'),
+('Bacteria_Unclassified', 'Bacteria', NULL, 'Unclassified Bacteria', 'Unclassified', 'Bacteria.Bacteria_Unclassified');
+
+-- 1.10 reference.units
+INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "unit_type", "parent_unit_id", "conversion_factor_to_parent") VALUES
+('meter', 'meter', 'm', 'Length', NULL, 1),
+('kilometer', 'kilometer', 'km', 'Length', 'meter', 1000),
+('millimeter', 'millimeter', 'mm', 'Length', 'meter', 0.001),
+('kilogram', 'kilogram', 'kg', 'Mass', NULL, 1),
+('gram', 'gram', 'g', 'Mass', 'kilogram', 0.001),
+('liter', 'liter', 'L', 'Volume', NULL, 1),
+('milliliter', 'milliliter', 'ml', 'Volume', 'liter', 0.001),
+('microliter', 'microliter', 'ul', 'Volume', 'milliliter', 0.001),
+('nanogram', 'nanogram', 'ng', 'Mass', 'kilogram', 0.000000001),
+('ng_ul', 'nanogram per microliter', 'ng/ul', 'Concentration', NULL, NULL),
+('microgram', 'microgram', 'ug', 'Mass', 'kilogram', 0.000001),
+('ug_L', 'microgram per liter', 'ug/L', 'Concentration', NULL, NULL),
+('Celsius', 'Degree Celsius', '°C', 'Temperature', NULL, NULL),
+('PSU', 'Practical Salinity Units', 'PSU', 'Salinity', NULL, NULL),
+('mg_L', 'milligram per liter', 'mg/L', 'Concentration', NULL, NULL),
+('NTU', 'Nephelometric Turbidity Units', 'NTU', 'Turbidity', NULL, NULL),
+('umol_m2s', 'micromoles per square meter per second', 'umol/(m²s)', 'Irradiance', NULL, NULL),
+('m_s', 'meters per second', 'm/s', 'Velocity', NULL, NULL),
+('hPa', 'Hectopascal', 'hPa', 'Pressure', NULL, NULL),
+('min', 'Minute', 'min', 'Time', NULL, NULL);
+
+-- 1.11 reference.reference_databases
+INSERT INTO "reference"."reference_databases" ("db_name", "db_version", "last_updated_date") VALUES
+('NCBI RefSeq', '2025-01', '2025-01-15'),
+('BOLD', '4.0.0', '2024-11-20'),
+('GTDB', 'R207', '2025-02-10');
+
+
+-- ======================================================================
+-- 2. LIMS SCHEMA - CORE DATA
+-- ======================================================================
+
+-- 2.1 lims.personal
+INSERT INTO "lims"."personal" ("person_id", "salutation", "full_name", "room", "telephone", "mail", "password_hash", "status_id") VALUES
+('john.smith', 'Mr.', 'John Smith', 'R101', '+49 123 456789', 'john.smith@lims.org', 'hashed_pass_1', 'Received'),
+('jane.doe', 'Ms.', 'Jane Doe', 'R202', '+49 123 987654', 'jane.doe@lims.org', 'hashed_pass_2', 'Received'),
+('peter.jones', 'Dr.', 'Peter Jones', 'R101', '+49 123 112233', 'peter.jones@lims.org', 'hashed_pass_3', 'Received');
+
+-- 2.2 lims.external_contacts
+INSERT INTO "lims"."external_contacts" ("contact_id", "full_name", "organization", "mail") VALUES
+('marine_research_uni', 'Dr. Schmidt', 'Marine Research University', 'schmidt@mru.de'),
+('fisheries_agency', 'Mr. Fischer', 'State Fisheries Agency', 'fischer@sfa.gov');
+
+-- 2.3 lims.customers
+INSERT INTO "lims"."customers" ("customer_id", "customer_name", "customer_abrv", "address", "mail", "password_hash") VALUES
+(DEFAULT, 'Blue Ocean Foundation', 'BOF', '100 Beach St', 'info@bof.org', 'hashed_pass_c1'),
+(DEFAULT, 'EcoSolutions GmbH', 'ESG', '200 Forest Rd', 'contact@ecosolutions.de', 'hashed_pass_c2');
+
+-- 2.4 lims.projects (manual IDs required)
+INSERT INTO "lims"."projects" ("project_id", "project_abrv", "title", "status_id", "pi_person_id", "funder", "customer_id", "start_date", "end_date", "description") VALUES
+('Proj_AquaGen', 'AquaGen', 'Aquatic Genetic Diversity Study', 'Completed', 'john.smith', 'EU Horizon', (SELECT customer_id FROM "lims"."customers" WHERE customer_abrv = 'BOF'), '2024-01-10', '2025-01-10', 'A project to assess genetic diversity of marine species.'),
+('Proj_BioMon', 'BioMon', 'Biodiversity Monitoring in the North Sea', 'In Progress', 'jane.doe', 'Ministry of Research', (SELECT customer_id FROM "lims"."customers" WHERE customer_abrv = 'ESG'), '2025-03-01', '2026-03-01', 'Long-term biodiversity monitoring with eDNA methods.');
+
+-- 2.5 lims.project_persons
+INSERT INTO "lims"."project_persons" ("project_id", "person_id", "role", "link_date") VALUES
+('Proj_AquaGen', 'john.smith', 'Project Lead', '2024-01-10'),
+('Proj_AquaGen', 'peter.jones', 'Researcher', '2024-02-15'),
+('Proj_BioMon', 'jane.doe', 'Project Lead', '2025-03-01'),
+('Proj_BioMon', 'john.smith', 'Collaborator', '2025-04-01');
+
+-- 2.6 lims.cruises (manual IDs required)
+INSERT INTO "lims"."cruises" ("cruise_id", "project_id", "vessel_id", "status_id", "region_id", "ecosystem_id", "chief_scientist_person_id", "start_date", "end_date") VALUES
+('CRUISE_NSe24', 'Proj_AquaGen', 'RV_Meteor', 'Completed', 'NorthSea', 'Marine', 'john.smith', '2024-05-20', '2024-06-15'),
+('CRUISE_Blt25', 'Proj_BioMon', 'RV_Sonne', 'In Progress', 'BalticSea', 'Estuary', 'jane.doe', '2025-04-10', '2025-05-05');
+
+-- 2.7 lab.storage (manual IDs required)
+INSERT INTO "lab"."storage" ("storage_id", "room_id", "freezer", "etage", "temperature_c", "box", "box_size_x", "box_size_y", "project_id") VALUES
+('S_R101_F1_B1', 'R101', 'Freezer 1', 'Ground Floor', -80, 'Box 1', 10, 10, 'Proj_AquaGen'),
+('S_R202_F2_B2', 'R202', 'Freezer 2', '1st Floor', -20, 'Box 2', 5, 5, 'Proj_BioMon');
+
+-- 2.8 lims.batch
+INSERT INTO "lims"."batch" ("batch_id", "batch_name") VALUES
+('Batch_DNA_Ext_001', 'Batch 1 for DNA Extraction'),
+('Batch_Lib_Prep_002', 'Batch 2 for Library Preparation');
+
+-- 2.9 lims.sop (manual IDs required)
+INSERT INTO "lims"."sop" ("sop_id", "title", "sop_id_origin", "version", "author_person_id", "date_realise", "sop_protocol") VALUES
+('SOP_DNA_Ext_v1', 'DNA Extraction from Fish Tissue', 'DNA_Ext_v1', '1', 'peter.jones', '2024-03-01', 'Detailed protocol for DNA extraction using a commercial kit.'),
+('SOP_Lib_Prep_v1', 'Library Preparation for Illumina Sequencing', 'Lib_Prep_v1', '1', 'jane.doe', '2024-04-10', 'Step-by-step guide for preparing sequencing libraries.');
+
+-- 2.10 lims.batch_steps
+INSERT INTO "lims"."batch_steps" ("step_id", "batch_id", "step_number", "step_name", "sop_id", "status_id") VALUES
+('Batch_DNA_Ext_001_1', 'Batch_DNA_Ext_001', 1, 'Sample Lysis', 'SOP_DNA_Ext_v1', 'Completed'),
+('Batch_DNA_Ext_001_2', 'Batch_DNA_Ext_001', 2, 'DNA Purification', 'SOP_DNA_Ext_v1', 'In Progress');
+
+-- 2.11 lims.primers (manual IDs required)
+INSERT INTO "lims"."primers" ("primer_id", "target_gene_id", "primer_sequence_fwd", "primer_sequence_rev", "reference") VALUES
+('16S_V4_F', '16S rRNA', 'GTGCCAGCMGCCGCGGTAA', 'GGACTACHVGGGTWTCTAAT', 'Reference A'),
+('COI_Fish_F', 'COI', 'GGTCAACAAATCATAAAGATATTGG', 'TAAACTTCAGGGTGACCAAAAAATCA', 'Reference B');
+
+-- 2.12 lims.publication_type (manual IDs required)
+INSERT INTO "lims"."publication_type" ("publication_type_id", "notes") VALUES
+('Journal_Article', 'Peer-reviewed journal publication'),
+('Conference_Abstract', 'Abstract from a conference proceeding'),
+('Thesis', 'Academic thesis (e.g., PhD, Master)');
+
+-- 2.13 lims.suppliers (manual IDs required)
+INSERT INTO "lims"."suppliers" ("supplier_id", "supplier_name", "contact_person", "mail") VALUES
+('Qiagen', 'Qiagen GmbH', 'Contact Qiagen', 'sales@qiagen.com'),
+('Sigma-Aldrich', 'Sigma-Aldrich', 'Contact Aldrich', 'info@sigma-aldrich.com');
+
+-- 2.14 lims.inventory_items (manual IDs required)
+INSERT INTO "lims"."inventory_items" ("item_id", "item_name", "category_id", "unit_id") VALUES
+('QIAampDNA', 'QIAamp DNA Mini Kit', 'Kits', NULL),
+('Ethanol', 'Ethanol 99.5%', 'Chemicals', 'liter');
+
+-- 2.15 lims.orders (manual IDs required)
+INSERT INTO "lims"."orders" ("fi_order_nr", "item_id", "category_id", "order_date", "price", "quantity", "project_id", "supplier_id", "status_id") VALUES
+('PO_AG24_001', 'QIAampDNA', 'Kits', '2024-02-15', 500.00, 1, 'Proj_AquaGen', 'Qiagen', 'Completed'),
+('PO_BM25_001', 'Ethanol', 'Chemicals', '2025-04-05', 50.00, 1, 'Proj_BioMon', 'Sigma-Aldrich', 'Received');
+
+-- 2.16 lims.reagents (manual IDs required)
+INSERT INTO "lims"."reagents" ("reagent_id", "reagent_complete_name", "category_id", "lot", "storage_id", "quantity_available", "quantity_unit_id", "reception_date", "expire_date", "order_id", "project_id", "status_id") VALUES
+('QIAamp_LotA', 'QIAamp DNA Mini Kit, Lot A', 'Kits', 'LotA123', 'S_R101_F1_B1', 50, 'gram', '2024-03-01', '2025-03-01', 'PO_AG24_001', 'Proj_AquaGen', 'Received'),
+('Ethanol_LotB', 'Ethanol 99.5%, Lot B', 'Chemicals', 'LotB456', 'S_R202_F2_B2', 10, 'liter', '2025-04-10', '2026-04-10', 'PO_BM25_001', 'Proj_BioMon', 'Received');
+
+-- 2.17 lims.equipment (manual IDs required)
+INSERT INTO "lims"."equipment" ("equipment_id", "equipment_name", "room_id", "lot") VALUES
+('Qubit_3', 'Qubit 3 Fluorometer', 'R101', 'LOTA123'),
+('Nanodrop_2000', 'Nanodrop 2000 Spectrophotometer', 'R101', 'LOTB456');
+
+-- ======================================================================
+-- 3. LAB SCHEMA - WORKFLOW DATA
+-- ======================================================================
+CREATE TABLE "lab"."sampling_y2025" PARTITION OF "lab"."sampling"
+    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+-- 3.1 lab.sampling (uses trigger for ID)
+-- Set the sampling date to be within the partition range
+INSERT INTO "lab"."sampling" ("sampling_date", "project_id", "cruise_id", "region_id", "ecosystem_id", "vessel_id", "depth_m", "location_name", "fishing_method", "total_catch_quantity_kg", "total_catch_quantity_fish", "status_id") VALUES
+('2025-05-01', 'Proj_BioMon', 'CRUISE_Blt25', 'BalticSea', 'Estuary', 'RV_Sonne', 15.5, 'Coastal Area 1', 'Netting', 25.5, 120, 'In Progress'),
+('2025-06-05', 'Proj_BioMon', 'CRUISE_Blt25', 'BalticSea', 'Marine', 'RV_Sonne', 30.0, 'Open Sea 2', 'Trawling', 50.0, 80, 'Planned');
+
+-- 3.2 lab.experiments (manual ID, uses trigger for partitioning)
+INSERT INTO "lab"."experiments" ("experiment_id", "experiment_date", "experiment_title", "aim", "method", "sop_id", "person_id", "status_id") VALUES
+('Exp_eDNA_001', '2025-08-20', 'eDNA Extraction from Water Samples', 'Extract high-quality DNA for sequencing.', 'Standard phenol-chloroform extraction.', 'SOP_DNA_Ext_v1', 'jane.doe', 'In Progress'),
+('Exp_qPCR_002', '2025-08-21', 'qPCR for Species Identification', 'Quantify specific fish DNA from eDNA samples.', 'qPCR with species-specific primers.', 'SOP_Lib_Prep_v1', 'peter.jones', 'In Progress');
+
+
+-- 3.3 lab.root_samples (manual IDs not required, triggers handle it)
+INSERT INTO "lab"."root_samples" ("sample_type_id", "project_id", "sample_creation_date", "sampling_id", "sampling_date", "sampler_person_id", "status_id") VALUES
+('Water', 'Proj_BioMon', '2025-05-01', '25EstBlt001', '2025-05-01', 'jane.doe', 'Received'),
+('Water', 'Proj_BioMon', '2025-05-01', '25EstBlt001', '2025-05-01', 'jane.doe', 'Received');
+
+-- 3.4 lab.dna (uses triggers for partitioning and ID)
+INSERT INTO "lab"."dna" ("sample_id", "sample_creation_date", "volume_ul", "concentration_ng_ul", "extraction_method", "extraction_date", "batch_id", "status_id") VALUES
+('W25BioMon001', '2025-05-01', 50, 25.5, 'Phenol-Chloroform', '2025-08-20', 'Batch_DNA_Ext_001', 'Received');
+
+-- 3.5 lab.qubit (uses triggers for partitioning and ID)
+INSERT INTO "lab"."qubit" ("sample_id", "sample_creation_date", "experiment_id", "experiment_date", "qubit_tube_conc", "tube_unit_id", "qubit_original_sample_conc", "original_sample_unit_id", "person_id", "status_id") VALUES
+('W25BioMon001', '2025-05-01', 'Exp_eDNA_001', '2025-08-20', 2.0, 'ng_ul', 100.0, 'ng_ul', 'peter.jones', 'Qubit QC');
+
+-- 3.6 lab.nanodrop (uses triggers for partitioning and ID)
+INSERT INTO "lab"."nanodrop" ("sample_id", "sample_creation_date", "experiment_id", "experiment_date", "nanodrop_concentration", "concentration_unit_id", "a260_280", "a260_230", "person_id", "status_id") VALUES
+('W25BioMon001', '2025-05-01', 'Exp_eDNA_001', '2025-08-20', 2.1, 'ng_ul', 1.85, 2.15, 'peter.jones', 'Nanodrop QC');
+
+-- 3.7 lab.pcr (uses triggers for partitioning and ID)
+INSERT INTO "lab"."pcr" ("sample_id", "sample_creation_date", "primer_id", "person_id", "kit", "storage_id", "project_id", "status_id") VALUES
+('W25BioMon001', '2025-05-01', '16S_V4_F', 'jane.doe', 'PCR Master Mix', 'S_R101_F1_B1', 'Proj_BioMon', 'PCR Done');
+
+-- 3.8 lab.library (manual IDs required, triggers handle partitioning)
+INSERT INTO "lab"."library" ("library_id", "experiment_id", "experiment_date", "sample_id", "sample_creation_date", "library_name", "person_id", "library_prep_kit", "index_sequence", "project_id", "status_id") VALUES
+('Lib_eDNA_001', 'Exp_eDNA_001', '2025-08-20', 'W25BioMon001', '2025-05-01', 'eDNA_Lib_1', 'john.smith', 'Nextera XT', 'GATTACA', 'Proj_BioMon', 'Library Prep');
+
+-- 3.9 lab.sequencing_run (uses triggers for partitioning and ID)
+INSERT INTO "lab"."sequencing_run" ("experiment_id", "experiment_date", "library_id", "sample_id", "sample_creation_date", "person_id", "sequencer", "flow_cell_id", "total_reads", "project_id", "status_id") VALUES
+('Exp_eDNA_001', '2025-08-20', 'Lib_eDNA_001', 'W25BioMon001', '2025-05-01', 'john.smith', 'MiSeq', 'FC-A1', 15000000, 'Proj_BioMon', 'Sequencing Done');
+
+-- 3.10 lab.datasets (uses triggers for partitioning and ID)
+INSERT INTO "lab"."datasets" ("sample_id", "sample_creation_date", "source_type", "ecosystem_id", "experiment_id", "experiment_date", "reception_date", "status_id", "storage_path") VALUES
+('W25BioMon001', '2025-05-01', 'Sequencing', 'Estuary', 'Exp_eDNA_001', '2025-08-20', '2025-08-21', 'Received', '/data/proj/biomon/raw_seq_data');
+
+-- ======================================================================
+-- 4. BIOINFORMATICS SCHEMA
+-- ======================================================================
+
+-- 4.1 bioinformatics.analysis_pipelines (uses trigger for ID)
+INSERT INTO "bioinformatics"."analysis_pipelines" ("pipeline_name", "version", "repository_link", "experiment_id", "experiment_date", "status_id") VALUES
+('eDNA_Metabarcoding_Pipeline', '1.0', 'https://github.com/my/pipeline', 'Exp_eDNA_001', '2025-08-20', 'Completed');
+
+-- 4.2 bioinformatics.analysis_runs (uses triggers for partitioning and ID)
+INSERT INTO "bioinformatics"."analysis_runs" ("pipeline_id", "sequencing_id", "sequencing_date", "person_id", "reference_db_id", "final_output_path", "experiment_id", "experiment_date", "status_id") VALUES
+('BI25_p001', 'RS25_001', '2025-08-20', 'peter.jones', (SELECT db_id FROM "reference"."reference_databases" WHERE db_name = 'NCBI RefSeq')::text, '/data/proj/biomon/analysis/run1', 'Exp_eDNA_001', '2025-08-21', 'Completed');
+
+-- 4.3 bioinformatics.edna_assignments (uses trigger for ID)
+INSERT INTO "bioinformatics"."edna_assignments" ("run_id", "sample_id", "sample_creation_date", "taxon_id", "read_count", "confidence", "experiment_id", "experiment_date", "status_id") VALUES
+('BI25_ar001', 'W25BioMon001', '2025-05-01', 'Gadus_morhua', 1500, 0.95, 'Exp_eDNA_001', '2025-08-21', 'Completed'),
+('BI25_ar001', 'W25BioMon001', '2025-05-01', 'Bacteria_Unclassified', 5000, 0.70, 'Exp_eDNA_001', '2025-08-21', 'Completed');
+
+-- ======================================================================
+-- 5. PROJECTS SCHEMA - WANDERFISCHE PROJECT
+-- ======================================================================
+
+-- 5.1 projects.ProjectWanderfische_FishingData (uses triggers for partitioning and ID)
+INSERT INTO "projects"."ProjectWanderfische_FishingData" ("agency_id", "project_id", "agency_record_id", "record_date", "location_description", "water_body_name", "water_body_type", "catchment_area", "original_latitude", "original_longitude", "original_srid", "created_by") VALUES
+('fisheries_agency', 'Proj_AquaGen', 'SFA_Rec_2024_001', '2024-06-01', 'Elbe Estuary Site A', 'Elbe', 'Estuary', 'Elbe', 53.9, 8.8, 4326, 'jane.doe');
+
+-- 5.2 projects.ProjectWanderfische_FishCatch
+INSERT INTO "projects"."ProjectWanderfische_FishCatch" ("fishing_record_id", "fishing_record_date", "taxon_id", "scientific_name_raw", "german_name_raw", "total_count", "adult_count", "notes") VALUES
+(1, '2024-06-01', 'Gadus_morhua', 'Gadus morhua', 'Kabeljau', 5, 3, 'All adult fish were tagged.'),
+(1, '2024-06-01', 'Gadus_morhua', 'Gadus morhua', 'Kabeljau', 2, 0, 'Juveniles found in the catch.');
+
+-- ======================================================================
+-- 6. ADDITIONAL LIMS DATA
+-- ======================================================================
+
+-- 6.1 lims.publications (manual IDs required)
+INSERT INTO "lims"."publications" ("publication_id", "publication_type_id", "title", "journal", "doi", "date_publication", "first_author_person_id", "project_id") VALUES
+('Pub_2025_001', 'Journal_Article', 'Genetic Diversity of Cod in the North Sea', 'Journal of Marine Science', '10.1016/j.jmarsys.2025.103756', '2025-07-20', 'john.smith', 'Proj_AquaGen');
+
+-- 6.2 lims.reagents (more data)
+INSERT INTO "lims"."reagents" ("reagent_id", "reagent_complete_name", "category_id", "lot", "storage_id", "quantity_available", "quantity_unit_id", "reception_date", "expire_date", "order_id", "project_id", "status_id") VALUES
+('ddH2O_LotC', 'Molecular Grade Water', 'Chemicals', 'LotC789', 'S_R101_F1_B1', 20, 'liter', '2024-05-10', '2026-05-10', NULL, 'Proj_AquaGen', 'Received');
+
+-- ======================================================================
+-- 7. ADDITIONAL LAB DATA
+-- ======================================================================
+
+-- 7.1 lab.experiments_projects (links experiments to projects)
+INSERT INTO "lab"."experiments_projects" ("experiment_id", "experiment_date", "project_id") VALUES
+('Exp_eDNA_001', '2025-08-20', 'Proj_BioMon'),
+('Exp_qPCR_002', '2025-08-21', 'Proj_BioMon');
+
+-- 7.2 lab.experiments_samples (links samples to experiments)
+INSERT INTO "lab"."experiments_samples" ("experiment_id", "experiment_date", "sample_id", "sample_creation_date") VALUES
+('Exp_eDNA_001', '2025-08-20', 'W25BioMon001', '2025-05-01');
+
+-- 7.3 lab.fishing (uses trigger for ID)
+INSERT INTO "lab"."fishing" ("sampling_id", "sampling_date", "taxon_id", "catch_kg") VALUES
+('25EstBlt001', '2025-05-01', 'Gadus_morhua', 15.2);
+
+-- 7.4 lab.individual_catch_catch (uses trigger for ID)
+INSERT INTO "lab"."individual_catch_catch" ("fishing_id", "sampling_date", "taxon_id", "SL_mm", "weight_g", "sex") VALUES
+('25EstBlt001_f001', '2025-05-01', 'Gadus_morhua', 350, 450, 'Male'),
+('25EstBlt001_f001', '2025-05-01', 'Gadus_morhua', 420, 600, 'Female');
+
+-- 7.5 lab.sampling_abiotic_data
+INSERT INTO "lab"."sampling_abiotic_data" ("sampling_id", "sampling_date", "temperature_sampling_depth_c", "salinity", "salinity_unit_id", "oxygen", "oxygen_unit_id") VALUES
+('25EstBlt001', '2025-05-01', 12.5, 28.5, 'PSU', 8.2, 'mg/L');
+
+-- 7.6 lab.root_samples (adding a fish sample from the same sampling event)
+INSERT INTO "lab"."root_samples" ("sample_type_id", "project_id", "sample_creation_date", "sampling_id", "sampling_date", "sampler_person_id", "status_id") VALUES
+('Fish', 'Proj_BioMon', '2025-05-01', '25EstBlt001', '2025-05-01', 'jane.doe', 'Received');
+
+-- 7.7 lab.fish (manual ID, linked to the new root sample)
+INSERT INTO "lab"."fish" ("sample_id", "sample_creation_date", "species_id", "total_length_mm", "weight_g", "sex", "project_id", "status_id") VALUES
+('F25BioMon002', '2025-05-01', 'Gadus_morhua', 425, 610, 'Female', 'Proj_BioMon', 'Received');
+
+-- 7.8 lab.dissections (uses trigger for ID and partitioning)
+INSERT INTO "lab"."dissections" ("sample_id", "sample_creation_date", "person_id", "project_id", "experiment_id", "experiment_date", "gonad_weight_g", "liver_weight_g", "status_id") VALUES
+('F25BioMon002', '2025-05-01', 'jane.doe', 'Proj_BioMon', 'Exp_eDNA_001', '2025-08-20', 55.2, 85.1, 'Completed');
+
+-- 7.9 lab.sequencing_run (more data)
+INSERT INTO "lab"."sequencing_run" ("experiment_id", "experiment_date", "library_id", "sample_id", "sample_creation_date", "person_id", "sequencer", "flow_cell_id", "total_reads", "project_id", "status_id") VALUES
+('Exp_eDNA_001', '2025-08-20', 'Lib_eDNA_001', 'W25BioMon002', '2025-05-01', 'john.smith', 'MiSeq', 'FC-A1', 12500000, 'Proj_BioMon', 'Sequencing Done');
+
+-- 7.10 lab.seq_dataset
+INSERT INTO "lab"."Seq_dataset" ("library_id", "sample_id", "sample_creation_date", "sequencing_run_id", "sequencer", "total_reads", "raw_data_path", "status_id", "project_id", "notes") VALUES
+('Lib_eDNA_001', 'W25BioMon001', '2025-05-01', 'RS25_001', 'MiSeq', 15000000, '/data/proj/biomon/raw_seq_data/W25BioMon001', 'Completed', 'Proj_BioMon', 'First dataset from a single sample.'),
+('Lib_eDNA_001', 'W25BioMon002', '2025-05-01', 'RS25_001', 'MiSeq', 12500000, '/data/proj/biomon/raw_seq_data/W25BioMon002', 'Completed', 'Proj_BioMon', 'Second dataset from a single sample.');
+
+-- ======================================================================
+-- 8. Final SELECT statements to view the generated data
+-- ======================================================================
+
+SELECT * FROM "reference"."status" LIMIT 5;
+SELECT * FROM "lims"."personal" LIMIT 5;
+SELECT * FROM "lims"."projects" LIMIT 5;
+SELECT * FROM "lims"."cruises" LIMIT 5;
+SELECT * FROM "lab"."sampling" LIMIT 5;
+SELECT * FROM "lab"."experiments" LIMIT 5;
+SELECT * FROM "lab"."root_samples" LIMIT 5;
+SELECT * FROM "lab"."dna" LIMIT 5;
+SELECT * FROM "lab"."qubit" LIMIT 5;
+SELECT * FROM "lab"."library" LIMIT 5;
+SELECT * FROM "lab"."sequencing_run" LIMIT 5;
+SELECT * FROM "bioinformatics"."analysis_runs" LIMIT 5;
+SELECT * FROM "bioinformatics"."edna_assignments" LIMIT 5;
+SELECT * FROM "projects"."ProjectWanderfische_FishingData" LIMIT 5;
+
+
+
+
+
+
+
+
+
+
+-- ----------------------------------------------------------------------------------
+-- ----------------------------------------------------------------------------------
+-- ----------------------------------------------------------------------------------
+-- ----------------------------------------------------------------------------------
+-- ----------------------------------------------------------------------------------
+-- ----------------------------------------------------------------------------------
+-- ALTER TABLE "lims"."personal" ADD COLUMN "personal_search_vector" tsvector;
+
+CREATE TEXT SEARCH DICTIONARY english_stem (TEMPLATE = snowball, LANGUAGE = english);
+CREATE TEXT SEARCH CONFIGURATION public.lims_english (COPY = english);
+ALTER TEXT SEARCH CONFIGURATION public.lims_english ALTER MAPPING FOR asciiword, asciihword, hword, hword_part, word WITH english_stem;
+
+
+ALTER TABLE "lims"."personal" ADD COLUMN "personal_search_vector" tsvector;
+ALTER TABLE "lims"."external_contacts" ADD COLUMN "contacts_search_vector" tsvector;
+ALTER TABLE "lims"."customers" ADD COLUMN "customer_search_vector" tsvector;
+ALTER TABLE "lims"."projects" ADD COLUMN "project_search_vector" tsvector;
+ALTER TABLE "lims"."sop" ADD COLUMN "sop_search_vector" tsvector;
+ALTER TABLE "lims"."equipment" ADD COLUMN "equipment_search_vector" tsvector;
+ALTER TABLE "lims"."suppliers" ADD COLUMN "supplier_search_vector" tsvector;
+ALTER TABLE "lims"."inventory_items" ADD COLUMN "inventory_search_vector" tsvector;
+ALTER TABLE "lims"."reagents" ADD COLUMN "reagent_search_vector" tsvector;
+ALTER TABLE "lims"."publications" ADD COLUMN "publication_search_vector" tsvector;
+ALTER TABLE "lab"."experiments" ADD COLUMN "experiment_search_vector" tsvector;
+ALTER TABLE "lab"."root_samples" ADD COLUMN "sample_search_vector" tsvector;
+ALTER TABLE "projects"."ProjectWanderfische_FishingData" ADD COLUMN "fishing_data_search_vector" tsvector;
+ALTER TABLE "projects"."ProjectWanderfische_FishCatch" ADD COLUMN "fish_catch_search_vector" tsvector;
+ALTER TABLE "projects"."ProjectWanderfische_Mail" ADD COLUMN "mail_search_vector" tsvector;
+ALTER TABLE "projects"."ProjectWanderfische_Conversation" ADD COLUMN "conversation_search_vector" tsvector;
+ALTER TABLE "projects"."ProjectWanderfische_ChatMessage" ADD COLUMN "chat_message_search_vector" tsvector;
+ALTER TABLE "lab"."storage" ADD COLUMN "storage_search_vector" tsvector;
+ALTER TABLE "bioinformatics"."analysis_pipelines" ADD COLUMN "pipeline_search_vector" tsvector;
+
+
+
+-- ############################################################################
+
+DO $$
+DECLARE
+    parent_table_name text;
+    partition_column text;
+    parent_schema text; -- Variable declaration is added here
+    start_date date;
+    end_date date;
+    table_list text[] := ARRAY[
+        'lab.experiments', -- 'lab.sampling', 
+		'lab.fishing', 'lab.individual_catch_catch',
+        'lab.sampling_abiotic_data', 'lab.root_samples', 'lab.fish', 'lab.tissue',
+        'lab.otoliths', 'lab.dna', 'lab.rna', 'lab.sediments', 'lab.water', 'lab.pcr',
+        'lab.dissections', 'lab.nanodrop', 'lab.qubit', 'lab.tapestation',
+        'lab.gelelectrophoresis', 'lab.qpcr', 'lab.library', 'lab.sequencing_run'
+        -- 'lab.Seq_dataset'
+    ];
+    rec_table RECORD;
+BEGIN
+    FOR rec_table IN SELECT unnest(table_list) AS full_name LOOP
+        -- Extract schema and table name
+        parent_schema := split_part(rec_table.full_name, '.', 1);
+        parent_table_name := split_part(rec_table.full_name, '.', 2);
+
+        -- Create a default partition to catch any data that falls outside of the defined ranges
+        BEGIN
+            EXECUTE format('CREATE TABLE %I.%I_default PARTITION OF %I.%I DEFAULT', parent_schema, parent_table_name, parent_schema, parent_table_name);
+        EXCEPTION
+            WHEN duplicate_table THEN
+                RAISE NOTICE 'Default partition for table %.% already exists.', parent_schema, parent_table_name;
+        END;
+
+        -- Iterate through years to create partitions
+        FOR start_date IN SELECT generate_series('2024-01-01'::date, '2025-01-01'::date, '1 year') LOOP
+            end_date := start_date + INTERVAL '1 year';
+            BEGIN
+                EXECUTE format('CREATE TABLE %I.%I_y%s PARTITION OF %I.%I FOR VALUES FROM (%L) TO (%L)',
+                    parent_schema, parent_table_name, EXTRACT(YEAR FROM start_date), parent_schema, parent_table_name, start_date, end_date);
+            EXCEPTION
+                WHEN duplicate_table THEN
+                    RAISE NOTICE 'Partition %_y%s for table %.% already exists.', parent_table_name, EXTRACT(YEAR FROM start_date), parent_schema, parent_table_name;
+            END;
+        END LOOP;
+    END LOOP;
+END $$;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CREATE OR REPLACE FUNCTION "lab".generate_sample_id()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_sample_type_abrv text;
+    id_prefix text;
+    next_serial integer;
+    parent_id_check text;
+BEGIN
+    -- Get sample type abbreviation for ID part
+    SELECT st."sample_type_abrv" INTO v_sample_type_abrv -- Corrected: Use an alias to refer to the column
+    FROM "reference"."samples_type" st
+    WHERE st."sample_type_id" = NEW.sample_type_id;
+
+    IF NEW.parent_sample_id IS NULL THEN
+        -- Case 1: Generating a new ROOT sample ID (e.g., S25Pprj_001)
+        DECLARE
+            sample_year text;
+            project_abrv text;
+            customer_abrv text;
+        BEGIN
+            sample_year := TO_CHAR(COALESCE(NEW.sample_creation_date, CURRENT_DATE), 'YY');
+            
+            IF NEW.project_id IS NOT NULL THEN
+                SELECT p."project_abrv" INTO project_abrv
+                FROM "lims"."projects" p
+                WHERE p."project_id" = NEW.project_id;
+                id_prefix := v_sample_type_abrv || sample_year || project_abrv;
+            ELSIF NEW.customer_id IS NOT NULL THEN
+                SELECT c."customer_abrv" INTO customer_abrv
+                FROM "lims"."customers" c
+                WHERE c."customer_id" = NEW.customer_id;
+                id_prefix := v_sample_type_abrv || sample_year || customer_abrv;
+            ELSE
+                RAISE EXCEPTION 'Cannot generate root sample ID: Missing project_id and customer_id.';
+            END IF;
+
+            SELECT COALESCE(MAX(SUBSTRING(rs."sample_id" FROM LENGTH(id_prefix) + 1)::INTEGER), 0)
+            INTO next_serial
+            FROM "lab"."root_samples" rs
+            WHERE rs."sample_id" LIKE id_prefix || '%';
+
+            NEW.sample_id := id_prefix || LPAD((next_serial + 1)::TEXT, 3, '0');
+        END;
+    ELSE
+        -- Case 2: Generating a CHILD sample ID (e.g., S25Pprj_001_F1)
+        -- First, validate that the parent_sample_id exists
+        SELECT rs."sample_id" INTO parent_id_check
+        FROM "lab"."root_samples" rs
+        WHERE rs."sample_id" = NEW.parent_sample_id;
+        
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Parent sample ID ''%'' not found. Cannot generate child ID.', NEW.parent_sample_id;
+        END IF;
+
+        id_prefix := NEW.parent_sample_id || '_' || v_sample_type_abrv;
+
+        SELECT COALESCE(MAX(SUBSTRING(rs."sample_id" FROM LENGTH(id_prefix) + 1)::INTEGER), 0)
+        INTO next_serial
+        FROM "lab"."root_samples" rs
+        WHERE rs."sample_id" LIKE id_prefix || '%';
+
+        NEW.sample_id := id_prefix || (next_serial + 1)::TEXT;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CREATE OR REPLACE FUNCTION "lab".populate_dates_for_root_sample()
+RETURNS TRIGGER AS $$
+DECLARE
+    parent_record RECORD;
+BEGIN
+    -- This trigger should fire BEFORE INSERT on the root_samples table.
+
+    -- Case 1: The sample is a new root sample (no parent or root ID specified).
+    IF NEW.parent_sample_id IS NULL AND NEW.root_sample_id IS NULL THEN
+        -- The root_sample_id and its creation date should be its own.
+        NEW.root_sample_id := NEW.sample_id;
+        NEW.root_sample_creation_date := NEW.sample_creation_date;
+        -- The parent fields remain NULL.
+        NEW.parent_sample_creation_date := NULL; -- Corrected column name
+
+    -- Case 2: The sample is a child with a specified parent.
+    ELSIF NEW.parent_sample_id IS NOT NULL THEN
+        -- Look up the parent's creation date and its root's ID and date.
+        SELECT "sample_creation_date", "root_sample_id", "root_sample_creation_date"
+        INTO parent_record
+        FROM "lab"."root_samples"
+        WHERE "sample_id" = NEW.parent_sample_id;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Associated parent sample not found for sample_id %', NEW.parent_sample_id;
+        END IF;
+
+        -- Copy the dates from the parent record.
+        NEW.parent_sample_creation_date := parent_record.sample_creation_date; -- Corrected column name
+        NEW.root_sample_id := parent_record.root_sample_id;
+        NEW.root_sample_creation_date := parent_record.root_sample_creation_date;
+        -- Set the current sample's creation date to NOW().
+        NEW.sample_creation_date := CURRENT_DATE;
+
+    -- Case 3: The sample directly references a root sample but not a parent.
+    ELSIF NEW.root_sample_id IS NOT NULL AND NEW.parent_sample_id IS NULL THEN
+        -- Look up the root's creation date.
+        SELECT "sample_creation_date"
+        INTO parent_record
+        FROM "lab"."root_samples"
+        WHERE "sample_id" = NEW.root_sample_id;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Associated root sample not found for root_sample_id %', NEW.root_sample_id;
+        END IF;
+
+        -- Set the root dates.
+        NEW.root_sample_creation_date := parent_record.sample_creation_date;
+        -- The parent fields remain NULL.
+        NEW.parent_sample_creation_date := NULL; -- Corrected column name
+        -- Set the current sample's creation date to NOW().
+        NEW.sample_creation_date := CURRENT_DATE;
+
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+
+
+
+
+
+
+
+
+
+-- Create a new function to set the status_id before insert
+CREATE OR REPLACE FUNCTION set_default_status_on_insert()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.status_id IS NULL THEN
+        NEW.status_id := 'Received';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create a new BEFORE INSERT trigger on root_samples
+CREATE TRIGGER trg_set_status_on_insert
+BEFORE INSERT ON "lab"."root_samples"
+FOR EACH ROW
+EXECUTE FUNCTION set_default_status_on_insert();
+
+CREATE OR REPLACE FUNCTION set_status_to_received_on_insert()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.status_id IS NULL THEN
+        NEW.status_id := 'Received';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Apply the new trigger to all relevant tables with a status_id column.
+CREATE TRIGGER trg_set_status_on_insert_cruises
+BEFORE INSERT ON "lims"."cruises"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_batch_steps
+BEFORE INSERT ON "lims"."batch_steps"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_reagents
+BEFORE INSERT ON "lims"."reagents"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_experiments
+BEFORE INSERT ON "lab"."experiments"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_sampling
+BEFORE INSERT ON "lab"."sampling"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_root_samples
+BEFORE INSERT ON "lab"."root_samples"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_fish
+BEFORE INSERT ON "lab"."fish"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_tissue
+BEFORE INSERT ON "lab"."tissue"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_otoliths
+BEFORE INSERT ON "lab"."otoliths"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_dna
+BEFORE INSERT ON "lab"."dna"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_rna
+BEFORE INSERT ON "lab"."rna"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_sediments
+BEFORE INSERT ON "lab"."sediments"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_water
+BEFORE INSERT ON "lab"."water"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_pcr
+BEFORE INSERT ON "lab"."pcr"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_dissections
+BEFORE INSERT ON "lab"."dissections"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_nanodrop
+BEFORE INSERT ON "lab"."nanodrop"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_qubit
+BEFORE INSERT ON "lab"."qubit"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_tapestation
+BEFORE INSERT ON "lab"."tapestation"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_gelelectrophoresis
+BEFORE INSERT ON "lab"."gelelectrophoresis"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_qpcr
+BEFORE INSERT ON "lab"."qpcr"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_library
+BEFORE INSERT ON "lab"."library"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_sequencing_run
+BEFORE INSERT ON "lab"."sequencing_run"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_datasets
+BEFORE INSERT ON "lab"."datasets"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_pipelines
+BEFORE INSERT ON "bioinformatics"."analysis_pipelines"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_analysis_runs
+BEFORE INSERT ON "bioinformatics"."analysis_runs"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
+
+CREATE TRIGGER trg_set_status_on_insert_edna_assignments
+BEFORE INSERT ON "bioinformatics"."edna_assignments"
+FOR EACH ROW EXECUTE FUNCTION set_status_to_received_on_insert();
