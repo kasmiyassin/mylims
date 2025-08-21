@@ -616,6 +616,8 @@ CREATE TABLE "lab"."root_samples" (
     "project_id" text,
     "customer_id" integer,
     "sample_creation_date" date NOT NULL,
+    "parent_sample_creation_date" date,
+    "root_sample_creation_date" date,
     "sampling_id" text,
     "sampling_date" date,
 	"experiment_id" text,
@@ -689,7 +691,6 @@ CREATE TABLE IF NOT EXISTS "lab"."tissue" (
 CREATE TABLE IF NOT EXISTS "lab"."otoliths" (
     "otolith_id" text NOT NULL, --- manual
     "parent_sample_id" text,
-    "root_sample_id" text,
     "sample_creation_date" date NOT NULL,
     "reader_person_id" text NOT NULL,
     "side" text NOT NULL,
@@ -848,7 +849,7 @@ CREATE TABLE IF NOT EXISTS "lab"."dissections" (
 
 
 CREATE TABLE IF NOT EXISTS "lab"."nanodrop" (
-    "nanopore_id" text NOT NULL, -- sampleid_n9
+    "nanodrop_id" text NOT NULL, -- sampleid_n9
     "sample_id" text NOT NULL, 
     "sample_creation_date" date NOT NULL,
     "experiment_id" text,
@@ -871,7 +872,7 @@ CREATE TABLE IF NOT EXISTS "lab"."nanodrop" (
     "project_id" text,
     "result_date" timestamptz,
     "nanodrop_total_dna_ug" numeric GENERATED ALWAYS AS (("elution_volume_ul" * "nanodrop_concentration") / 1000) STORED,
-    PRIMARY KEY ("nanopore_id","experiment_date")
+    PRIMARY KEY ("nanodrop_id","experiment_date")
 ) PARTITION BY RANGE ("experiment_date");
 
 CREATE TABLE IF NOT EXISTS "lab"."qubit" (
@@ -1034,8 +1035,8 @@ CREATE TABLE IF NOT EXISTS "lab"."Seq_dataset" (
     "attachment" bytea,
     "attachment_link" text,
     "notes" text,
-    PRIMARY KEY ("data_seq_id", "experiment_date")
-) PARTITION BY RANGE ("experiment_date");
+    PRIMARY KEY ("data_seq_id", "sample_creation_date")
+) PARTITION BY RANGE ("sample_creation_date");
 
 CREATE TABLE IF NOT EXISTS "lab"."datasets" (
     "dataset_id" text NOT NULL, --Z25[sampleid]_999
@@ -1265,77 +1266,138 @@ CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_ChatMessage" (
 );
 
 
-
-
 -- ======================================================================
--- F01. Function partition
--- FUNCTIONS TO POPULATE PARTITIONING DATES FROM PARENT TABLES
--- These functions must be executed BEFORE the partition creation functions.
+-- F01. FUNCTIONS TO POPULATE PARTITIONING DATES FROM PARENT TABLES
+-- These functions ensure the partitioning key column is populated before the partition is created.
 -- ======================================================================
 
 -- Function to populate sample_creation_date for child sample tables
--- (fish, tissue, dna, etc.) from lab.root_samples.
-CREATE OR REPLACE FUNCTION "lab".populate_date_from_root_sample()
+-- CREATE OR REPLACE FUNCTION "lab".populate_date_from_root_sample()
+-- RETURNS TRIGGER AS $$
+-- DECLARE
+--     parent_date date;
+-- BEGIN
+--     IF NEW.sample_creation_date IS NULL THEN
+--        -- Check if the parent sample ID is provided and exists
+--        IF NEW.sample_id IS NOT NULL THEN
+--            SELECT "sample_creation_date"
+--            INTO parent_date
+--            FROM "lab"."root_samples"
+--            WHERE "sample_id" = NEW.sample_id;
+--    
+--            IF NOT FOUND THEN
+--                RAISE EXCEPTION 'Associated root_sample not found for sample_id %', NEW.sample_id;
+--            END IF;
+--    
+--            NEW.sample_creation_date := parent_date;
+--        END IF;
+--    END IF;
+--    RETURN NEW;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".populate_dates_for_root_sample()
 RETURNS TRIGGER AS $$
 DECLARE
-    parent_date date;
+    parent_record RECORD;
 BEGIN
-    IF NEW.sample_creation_date IS NULL AND NEW.sample_id IS NOT NULL THEN
-        SELECT "sample_creation_date"
-        INTO parent_date
+    -- This trigger should fire BEFORE INSERT on the root_samples table.
+
+    -- Case 1: The sample is a new root sample (no parent or root ID specified).
+    IF NEW.parent_sample_id IS NULL AND NEW.root_sample_id IS NULL THEN
+        -- The root_sample_id and its creation date should be its own.
+        NEW.root_sample_id := NEW.sample_id;
+        NEW.root_sample_creation_date := NEW.sample_creation_date;
+        -- The parent fields remain NULL.
+        NEW.parental_sample_creation_date := NULL;
+
+    -- Case 2: The sample is a child with a specified parent.
+    ELSIF NEW.parent_sample_id IS NOT NULL THEN
+        -- Look up the parent's creation date and its root's ID and date.
+        SELECT "sample_creation_date", "root_sample_id", "root_sample_creation_date"
+        INTO parent_record
         FROM "lab"."root_samples"
-        WHERE "sample_id" = NEW.sample_id;
+        WHERE "sample_id" = NEW.parent_sample_id;
 
         IF NOT FOUND THEN
-            RAISE EXCEPTION 'Associated root_sample not found for sample_id %', NEW.sample_id;
+            RAISE EXCEPTION 'Associated parent sample not found for sample_id %', NEW.parent_sample_id;
         END IF;
 
-        NEW.sample_creation_date := parent_date;
+        -- Copy the dates from the parent record.
+        NEW.parental_sample_creation_date := parent_record.sample_creation_date;
+        NEW.root_sample_id := parent_record.root_sample_id;
+        NEW.root_sample_creation_date := parent_record.root_sample_creation_date;
+        -- Set the current sample's creation date to NOW().
+        NEW.sample_creation_date := CURRENT_DATE;
+
+    -- Case 3: The sample directly references a root sample but not a parent.
+    ELSIF NEW.root_sample_id IS NOT NULL AND NEW.parent_sample_id IS NULL THEN
+        -- Look up the root's creation date.
+        SELECT "sample_creation_date"
+        INTO parent_record
+        FROM "lab"."root_samples"
+        WHERE "sample_id" = NEW.root_sample_id;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Associated root sample not found for root_sample_id %', NEW.root_sample_id;
+        END IF;
+
+        -- Set the root dates.
+        NEW.root_sample_creation_date := parent_record.sample_creation_date;
+        -- The parent fields remain NULL.
+        NEW.parental_sample_creation_date := NULL;
+        -- Set the current sample's creation date to NOW().
+        NEW.sample_creation_date := CURRENT_DATE;
+
     END IF;
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to populate sampling_date for child tables (fishing, individual_catch_catch, sampling_abiotic_data) from lab.sampling.
+-- Function to populate sampling_date for child tables from lab.sampling.
 CREATE OR REPLACE FUNCTION "lab".populate_date_from_sampling()
 RETURNS TRIGGER AS $$
 DECLARE
     parent_date date;
 BEGIN
-    IF NEW.sampling_date IS NULL AND NEW.sampling_id IS NOT NULL THEN
-        SELECT "sampling_date"
-        INTO parent_date
-        FROM "lab"."sampling"
-        WHERE "sampling_id" = NEW.sampling_id;
+    IF NEW.sampling_date IS NULL THEN
+        IF NEW.sampling_id IS NOT NULL THEN
+            SELECT "sampling_date"
+            INTO parent_date
+            FROM "lab"."sampling"
+            WHERE "sampling_id" = NEW.sampling_id;
 
-        IF NOT FOUND THEN
-            RAISE EXCEPTION 'Associated sampling record not found for sampling_id %', NEW.sampling_id;
+            IF NOT FOUND THEN
+                RAISE EXCEPTION 'Associated sampling record not found for sampling_id %', NEW.sampling_id;
+            END IF;
+
+            NEW.sampling_date := parent_date;
         END IF;
-
-        NEW.sampling_date := parent_date;
     END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-
--- Function to populate experiment_date for child tables (experiments_projects, experiments_samples, dissections, etc.) from lab.experiments.
+-- Function to populate experiment_date for child tables from lab.experiments.
 CREATE OR REPLACE FUNCTION "lab".populate_date_from_experiment()
 RETURNS TRIGGER AS $$
 DECLARE
     parent_date date;
 BEGIN
-    IF NEW.experiment_date IS NULL AND NEW.experiment_id IS NOT NULL THEN
-        SELECT "experiment_date"
-        INTO parent_date
-        FROM "lab"."experiments"
-        WHERE "experiment_id" = NEW.experiment_id;
+    IF NEW.experiment_date IS NULL THEN
+        IF NEW.experiment_id IS NOT NULL THEN
+            SELECT "experiment_date"
+            INTO parent_date
+            FROM "lab"."experiments"
+            WHERE "experiment_id" = NEW.experiment_id;
 
-        IF NOT FOUND THEN
-            RAISE EXCEPTION 'Associated experiment not found for experiment_id %', NEW.experiment_id;
+            IF NOT FOUND THEN
+                RAISE EXCEPTION 'Associated experiment not found for experiment_id %', NEW.experiment_id;
+            END IF;
+
+            NEW.experiment_date := parent_date;
         END IF;
-
-        NEW.experiment_date := parent_date;
     END IF;
     RETURN NEW;
 END;
@@ -1347,284 +1409,121 @@ RETURNS TRIGGER AS $$
 DECLARE
     parent_date date;
 BEGIN
-    IF NEW.sequencing_date IS NULL AND NEW.sequencing_id IS NOT NULL THEN
-        SELECT "experiment_date" -- The partitioning column in sequencing_run is "experiment_date"
-        INTO parent_date
-        FROM "lab"."sequencing_run"
-        WHERE "sequencing_run_id" = NEW.sequencing_id;
+    IF NEW.sequencing_date IS NULL THEN
+        IF NEW.sequencing_id IS NOT NULL THEN
+            SELECT "experiment_date" -- The partitioning column in sequencing_run is "experiment_date"
+            INTO parent_date
+            FROM "lab"."sequencing_run"
+            WHERE "sequencing_run_id" = NEW.sequencing_id;
 
-        IF NOT FOUND THEN
-            RAISE EXCEPTION 'Associated sequencing run not found for sequencing_id %', NEW.sequencing_id;
+            IF NOT FOUND THEN
+                RAISE EXCEPTION 'Associated sequencing run not found for sequencing_id %', NEW.sequencing_id;
+            END IF;
+
+            NEW.sequencing_date := parent_date;
         END IF;
-
-        NEW.sequencing_date := parent_date;
     END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
+-- ======================================================================
+-- F02. DYNAMIC PARTITION CREATION FUNCTION
+-- This is a generic function for creating yearly partitions based on a date column.
+-- ======================================================================
 
--- B. DYNAMIC PARTITION CREATION FUNCTIONS
--- Generic function for creating yearly partitions based on a date column.
 CREATE OR REPLACE FUNCTION create_yearly_partition()
 RETURNS TRIGGER AS $$
 DECLARE
     partition_date date;
-    partition_column_name text;
     partition_table_name text := TG_TABLE_NAME;
     partition_schema_name text := TG_TABLE_SCHEMA;
     partition_name text;
     start_date date;
     end_date date;
 BEGIN
-    -- Determine the partitioning column name dynamically
-    CASE partition_table_name
-        WHEN 'experiments' THEN partition_column_name := 'experiment_date';
-        WHEN 'root_samples' THEN partition_column_name := 'sample_creation_date';
-        WHEN 'sampling' THEN partition_column_name := 'sampling_date';
-        WHEN 'fishing' THEN partition_column_name := 'sampling_date';
-        WHEN 'individual_catch_catch' THEN partition_column_name := 'sampling_date';
-        WHEN 'sampling_abiotic_data' THEN partition_column_name := 'sampling_date';
-        WHEN 'fish' THEN partition_column_name := 'sample_creation_date';
-        WHEN 'tissue' THEN partition_column_name := 'sample_creation_date';
-        WHEN 'otoliths' THEN partition_column_name := 'sample_creation_date';
-        WHEN 'dna' THEN partition_column_name := 'sample_creation_date';
-        WHEN 'rna' THEN partition_column_name := 'sample_creation_date';
-        WHEN 'sediments' THEN partition_column_name := 'sample_creation_date';
-        WHEN 'water' THEN partition_column_name := 'sample_creation_date';
-        WHEN 'pcr' THEN partition_column_name := 'sample_creation_date';
-        WHEN 'dissections' THEN partition_column_name := 'experiment_date';
-        WHEN 'nanodrop' THEN partition_column_name := 'experiment_date';
-        WHEN 'qubit' THEN partition_column_name := 'experiment_date';
-        WHEN 'tapestation' THEN partition_column_name := 'experiment_date';
-        WHEN 'gelelectrophoresis' THEN partition_column_name := 'experiment_date';
-        WHEN 'qpcr' THEN partition_column_name := 'experiment_date';
-        WHEN 'library' THEN partition_column_name := 'experiment_date';
-        WHEN 'sequencing_run' THEN partition_column_name := 'experiment_date';
-        WHEN 'Seq_dataset' THEN partition_column_name := 'experiment_date';
-        WHEN 'datasets' THEN partition_column_name := 'reception_date';
-        WHEN 'analysis_runs' THEN partition_column_name := 'experiment_date';
-        WHEN 'ProjectWanderfische_FishingData' THEN partition_column_name := 'record_date';
-        ELSE
-            RAISE EXCEPTION 'Unknown partitioned table: %.%', partition_schema_name, partition_table_name;
-    END CASE;
-
-    -- Get the value of the partitioning column from the new row
-    EXECUTE 'SELECT ($1).' || quote_ident(partition_column_name) INTO partition_date USING NEW;
+    -- Get the value of the partitioning date column from the new row.
+    EXECUTE 'SELECT ($1).' || TG_ARGV[0] INTO partition_date USING NEW;
 
     IF partition_date IS NULL THEN
-        RAISE EXCEPTION 'Cannot partition on NULL % for %.%.', partition_column_name, partition_schema_name, partition_table_name;
+        RAISE EXCEPTION 'Cannot partition on NULL date column for %.%.', partition_schema_name, partition_table_name;
     END IF;
 
     -- Generate the start and end dates for the new yearly partition.
     start_date := DATE_TRUNC('year', partition_date);
     end_date := start_date + INTERVAL '1 year';
     
-    -- Generate the unique partition name.
+    -- Generate the unique partition name using the table name and year.
     partition_name := partition_table_name || '_y' || TO_CHAR(start_date, 'YYYY');
 
-    -- Check for existence and create the partition.
+    -- Check if the partition exists and create it if it doesn't.
+    -- The IF NOT EXISTS clause prevents errors if the trigger fires for an existing partition.
     EXECUTE 'CREATE TABLE IF NOT EXISTS ' || quote_ident(partition_schema_name) || '.' || quote_ident(partition_name) || ' PARTITION OF ' || quote_ident(partition_schema_name) || '.' || quote_ident(partition_table_name) || ' FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
     
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
+-- ======================================================================
+-- F03. AUDIT LOGGING FUNCTION
+-- ======================================================================
 
--- C. TRIGGERS
---    These triggers link the functions to the correct tables.
---    The populate triggers must fire BEFORE the create triggers.
+CREATE OR REPLACE FUNCTION "audit".if_modified_func() RETURNS TRIGGER AS $$
+DECLARE
+    v_old_data jsonb;
+    v_new_data jsonb;
+    v_action text;
+BEGIN
+    -- Determine the action type
+    v_action := TG_OP;
 
--- lab.experiments
-CREATE TRIGGER trg_create_experiments_partition
-BEFORE INSERT ON "lab"."experiments"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
+    -- Capture data based on the action
+    IF (TG_OP = 'UPDATE') THEN
+        v_old_data := row_to_json(OLD)::jsonb;
+        v_new_data := row_to_json(NEW)::jsonb;
+    ELSIF (TG_OP = 'DELETE') THEN
+        v_old_data := row_to_json(OLD)::jsonb;
+    ELSIF (TG_OP = 'INSERT') THEN
+        v_new_data := row_to_json(NEW)::jsonb;
+    END IF;
 
--- lab.experiments_projects
-CREATE TRIGGER trg_populate_experiments_projects_date
-BEFORE INSERT ON "lab"."experiments_projects"
-FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_experiment();
-CREATE TRIGGER trg_create_experiments_projects_partition
-BEFORE INSERT ON "lab"."experiments_projects"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
+    -- Insert the log entry
+    INSERT INTO "audit"."log" ("schema_name", "table_name", "user_id", "action", "original_data", "new_data", "query_text")
+    VALUES (
+        TG_TABLE_SCHEMA::text,
+        TG_TABLE_NAME::text,
+        current_user::text,
+        v_action,
+        v_old_data,
+        v_new_data,
+        current_query()
+    );
 
--- lab.experiments_samples
-CREATE TRIGGER trg_populate_experiments_samples_date
-BEFORE INSERT ON "lab"."experiments_samples"
-FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_experiment();
-CREATE TRIGGER trg_create_experiments_samples_partition
-BEFORE INSERT ON "lab"."experiments_samples"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.protocol_runs
-CREATE TRIGGER trg_populate_protocol_runs_date
-BEFORE INSERT ON "lab"."protocol_runs"
-FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_experiment();
-CREATE TRIGGER trg_create_protocol_runs_partition
-BEFORE INSERT ON "lab"."protocol_runs"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.sampling
-CREATE TRIGGER trg_create_sampling_partition
-BEFORE INSERT ON "lab"."sampling"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.fishing
-CREATE TRIGGER trg_populate_fishing_date
-BEFORE INSERT ON "lab"."fishing"
-FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_sampling();
-CREATE TRIGGER trg_create_fishing_partition
-BEFORE INSERT ON "lab"."fishing"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.individual_catch_catch
-CREATE TRIGGER trg_populate_individual_catch_date
-BEFORE INSERT ON "lab"."individual_catch_catch"
-FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_sampling();
-CREATE TRIGGER trg_create_individual_catch_partition
-BEFORE INSERT ON "lab"."individual_catch_catch"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.sampling_abiotic_data
-CREATE TRIGGER trg_populate_sampling_abiotic_data_date
-BEFORE INSERT ON "lab"."sampling_abiotic_data"
-FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_sampling();
-CREATE TRIGGER trg_create_sampling_abiotic_data_partition
-BEFORE INSERT ON "lab"."sampling_abiotic_data"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.root_samples
-CREATE TRIGGER trg_create_root_samples_partition
-BEFORE INSERT ON "lab"."root_samples"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.fish
-CREATE TRIGGER trg_populate_fish_date
-BEFORE INSERT ON "lab"."fish"
-FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
-CREATE TRIGGER trg_create_fish_partition
-BEFORE INSERT ON "lab"."fish"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.tissue
-CREATE TRIGGER trg_populate_tissue_date
-BEFORE INSERT ON "lab"."tissue"
-FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
-CREATE TRIGGER trg_create_tissue_partition
-BEFORE INSERT ON "lab"."tissue"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.otoliths
-CREATE TRIGGER trg_populate_otoliths_date
-BEFORE INSERT ON "lab"."otoliths"
-FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
-CREATE TRIGGER trg_create_otoliths_partition
-BEFORE INSERT ON "lab"."otoliths"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.dna
-CREATE TRIGGER trg_populate_dna_date
-BEFORE INSERT ON "lab"."dna"
-FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
-CREATE TRIGGER trg_create_dna_partition
-BEFORE INSERT ON "lab"."dna"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.rna
-CREATE TRIGGER trg_populate_rna_date
-BEFORE INSERT ON "lab"."rna"
-FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
-CREATE TRIGGER trg_create_rna_partition
-BEFORE INSERT ON "lab"."rna"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.sediments
-CREATE TRIGGER trg_populate_sediments_date
-BEFORE INSERT ON "lab"."sediments"
-FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
-CREATE TRIGGER trg_create_sediments_partition
-BEFORE INSERT ON "lab"."sediments"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.water
-CREATE TRIGGER trg_populate_water_date
-BEFORE INSERT ON "lab"."water"
-FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
-CREATE TRIGGER trg_create_water_partition
-BEFORE INSERT ON "lab"."water"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.pcr
-CREATE TRIGGER trg_populate_pcr_date
-BEFORE INSERT ON "lab"."pcr"
-FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
-CREATE TRIGGER trg_create_pcr_partition
-BEFORE INSERT ON "lab"."pcr"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.dissections
-CREATE TRIGGER trg_create_dissections_partition
-BEFORE INSERT ON "lab"."dissections"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.nanodrop
-CREATE TRIGGER trg_create_nanodrop_partition
-BEFORE INSERT ON "lab"."nanodrop"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.qubit
-CREATE TRIGGER trg_create_qubit_partition
-BEFORE INSERT ON "lab"."qubit"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.tapestation
-CREATE TRIGGER trg_create_tapestation_partition
-BEFORE INSERT ON "lab"."tapestation"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.gelelectrophoresis
-CREATE TRIGGER trg_create_gelelectrophoresis_partition
-BEFORE INSERT ON "lab"."gelelectrophoresis"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.qpcr
-CREATE TRIGGER trg_create_qpcr_partition
-BEFORE INSERT ON "lab"."qpcr"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.library
-CREATE TRIGGER trg_create_library_partition
-BEFORE INSERT ON "lab"."library"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.sequencing_run
-CREATE TRIGGER trg_create_sequencing_run_partition
-BEFORE INSERT ON "lab"."sequencing_run"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.Seq_dataset
-CREATE TRIGGER trg_populate_seq_dataset_date
-BEFORE INSERT ON "lab"."Seq_dataset"
-FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_experiment();
-CREATE TRIGGER trg_create_seq_dataset_partition
-BEFORE INSERT ON "lab"."Seq_dataset"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- lab.datasets
-CREATE TRIGGER trg_create_datasets_partition
-BEFORE INSERT ON "lab"."datasets"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
-
--- bioinformatics.analysis_runs
-CREATE TRIGGER trg_populate_analysis_runs_date
-BEFORE INSERT ON "bioinformatics"."analysis_runs"
-FOR EACH ROW EXECUTE FUNCTION "bioinformatics".populate_date_from_sequencing();
-CREATE TRIGGER trg_create_analysis_runs_partition
-BEFORE INSERT ON "bioinformatics"."analysis_runs"
-FOR EACH ROW EXECUTE FUNCTION create_yearly_partition();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 -- ======================================================================
--- F02. FUNCTIONS FOR AUTOMATIC ID GENERATION
+-- F04. STATUS UPDATE FUNCTION
+-- ======================================================================
+-- The function to automatically update a sample's status in lab.root_samples.
+-- This function is crucial for tracking sample progression through the workflow.
+CREATE OR REPLACE FUNCTION "lab".update_sample_status()
+RETURNS TRIGGER AS $$
+DECLARE
+    new_status_note text := TG_ARGV[0];
+BEGIN
+    -- Check if the sample exists and update its status
+    UPDATE "lab"."root_samples"
+    SET status_id = (SELECT status_id FROM "reference"."status" WHERE notes = new_status_note LIMIT 1)
+    WHERE sample_id = NEW.sample_id AND sample_creation_date = NEW.sample_creation_date;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ======================================================================
+-- F05. ID GENERATION FUNCTIONS
 -- ======================================================================
 -- Function to generate sampling_id (e.g., 25FleHB_001)
 CREATE OR REPLACE FUNCTION "lab".generate_sampling_id()
@@ -1802,12 +1701,12 @@ BEGIN
     -- The request was sampleid_n9, so the parent ID is sample_id
     id_prefix := NEW.sample_id || '_n';
 
-    SELECT COALESCE(MAX(SUBSTRING("nanopore_id" FROM LENGTH(id_prefix) + 1)::INTEGER), 0)
+    SELECT COALESCE(MAX(SUBSTRING("nanodrop_id" FROM LENGTH(id_prefix) + 1)::INTEGER), 0)
     INTO next_serial
     FROM "lab"."nanodrop"
-    WHERE "nanopore_id" LIKE id_prefix || '%';
+    WHERE "nanodrop_id" LIKE id_prefix || '%';
 
-    NEW.nanopore_id := id_prefix || (next_serial + 1)::TEXT;
+    NEW.nanodrop_id := id_prefix || (next_serial + 1)::TEXT;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -2021,95 +1920,9 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ======================================================================
--- B. TRIGGERS
---    These triggers link the functions to the tables.
---    The generate_id triggers must fire BEFORE inserts.
+-- F06. COORDINATE TRANSFORMATION FUNCTION
 -- ======================================================================
-
--- lab.sampling
-CREATE TRIGGER trg_generate_sampling_id
-BEFORE INSERT ON "lab"."sampling"
-FOR EACH ROW EXECUTE FUNCTION "lab".generate_sampling_id();
-
--- lab.fishing
-CREATE TRIGGER trg_generate_fishing_id
-BEFORE INSERT ON "lab"."fishing"
-FOR EACH ROW EXECUTE FUNCTION "lab".generate_fishing_id();
-
--- lab.individual_catch_catch
-CREATE TRIGGER trg_generate_individual_catch_id
-BEFORE INSERT ON "lab"."individual_catch_catch"
-FOR EACH ROW EXECUTE FUNCTION "lab".generate_individual_catch_id();
-
--- lab.root_samples
-CREATE TRIGGER trg_generate_root_sample_id
-BEFORE INSERT ON "lab"."root_samples"
-FOR EACH ROW EXECUTE FUNCTION "lab".generate_sample_id();
-
--- lab.dissections
-CREATE TRIGGER trg_generate_dissection_id
-BEFORE INSERT ON "lab"."dissections"
-FOR EACH ROW EXECUTE FUNCTION "lab".generate_dissection_id();
-
--- lab.nanodrop
-CREATE TRIGGER trg_generate_nanodrop_id
-BEFORE INSERT ON "lab"."nanodrop"
-FOR EACH ROW EXECUTE FUNCTION "lab".generate_nanodrop_id();
-
--- lab.qubit
-CREATE TRIGGER trg_generate_qubit_id
-BEFORE INSERT ON "lab"."qubit"
-FOR EACH ROW EXECUTE FUNCTION "lab".generate_qubit_id();
-
--- lab.tapestation
-CREATE TRIGGER trg_generate_tapestation_id
-BEFORE INSERT ON "lab"."tapestation"
-FOR EACH ROW EXECUTE FUNCTION "lab".generate_tapestation_id();
-
--- lab.gelelectrophoresis
-CREATE TRIGGER trg_generate_gelelectrophoresis_id
-BEFORE INSERT ON "lab"."gelelectrophoresis"
-FOR EACH ROW EXECUTE FUNCTION "lab".generate_gelelectrophoresis_id();
-
--- lab.qpcr
-CREATE TRIGGER trg_generate_qpcr_id
-BEFORE INSERT ON "lab"."qpcr"
-FOR EACH ROW EXECUTE FUNCTION "lab".generate_qpcr_id();
-
--- lab.sequencing_run
-CREATE TRIGGER trg_generate_sequencing_run_id
-BEFORE INSERT ON "lab"."sequencing_run"
-FOR EACH ROW EXECUTE FUNCTION "lab".generate_sequencing_run_id();
-
--- lab.Seq_dataset
-CREATE TRIGGER trg_generate_seq_dataset_id
-BEFORE INSERT ON "lab"."Seq_dataset"
-FOR EACH ROW EXECUTE FUNCTION "lab".generate_seq_dataset_id();
-
--- lab.datasets
-CREATE TRIGGER trg_generate_dataset_id
-BEFORE INSERT ON "lab"."datasets"
-FOR EACH ROW EXECUTE FUNCTION "lab".generate_dataset_id();
-
--- bioinformatics.analysis_pipelines
-CREATE TRIGGER trg_generate_pipeline_id
-BEFORE INSERT ON "bioinformatics"."analysis_pipelines"
-FOR EACH ROW EXECUTE FUNCTION "bioinformatics".generate_pipeline_id();
-
--- bioinformatics.analysis_runs
-CREATE TRIGGER trg_generate_analysis_run_id
-BEFORE INSERT ON "bioinformatics"."analysis_runs"
-FOR EACH ROW EXECUTE FUNCTION "bioinformatics".generate_analysis_run_id();
-
--- bioinformatics.edna_assignments
-CREATE TRIGGER trg_generate_edna_assignment_id
-BEFORE INSERT ON "bioinformatics"."edna_assignments"
-FOR EACH ROW EXECUTE FUNCTION "bioinformatics".generate_edna_assignment_id();
-
-
--- F03. Convert map congiduration
 -- Function to transform coordinates to EPSG:4326 (WGS84)
--- This function will be called before inserting data into geom_4326
 CREATE OR REPLACE FUNCTION "projects".transform_coordinates_to_wgs84(
     p_easting numeric,
     p_northing numeric,
@@ -2149,7 +1962,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger function to populate geom_4326 before insert/update on ProjectWanderfische_FishingData
+-- Trigger function to populate geom_4326 before insert/update
 CREATE OR REPLACE FUNCTION "projects".populate_fishing_geom_4326()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -2164,378 +1977,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-
 -- ======================================================================
--- F04.  Indexes
+-- F07. FULL-TEXT SEARCH UPDATE FUNCTIONS
 -- ======================================================================
--- Reference Schema Indexes
-CREATE INDEX IF NOT EXISTS idx_personal_full_name ON "lims"."personal" USING gin(to_tsvector('english', "full_name"));
-CREATE INDEX IF NOT EXISTS idx_personal_mail ON "lims"."personal" ("mail");
-
-CREATE INDEX IF NOT EXISTS idx_taxon_path_gist ON "reference"."taxon" USING GIST ("path");
-CREATE INDEX IF NOT EXISTS idx_taxon_en_name_gin ON "reference"."taxon" USING gin(to_tsvector('english', "en_name"));
-
-CREATE INDEX IF NOT EXISTS idx_region_abrv ON "reference"."region" ("region_abrv");
-CREATE INDEX IF NOT EXISTS idx_ecosystem_abrv ON "reference"."ecosystem" ("ecosystem_abrv");
-CREATE INDEX IF NOT EXISTS idx_gene_id ON "reference"."gene" ("gene_id");
-CREATE INDEX IF NOT EXISTS idx_samples_type_id ON "reference"."samples_type" ("sample_type_id");
-CREATE INDEX IF NOT EXISTS idx_units_unit_type ON "reference"."units" ("unit_type");
-
--- Lims Schema Indexes
-CREATE INDEX IF NOT EXISTS idx_external_contacts_full_name ON "lims"."external_contacts" USING gin(to_tsvector('english', "full_name"));
-
-CREATE INDEX IF NOT EXISTS idx_customers_customer_name ON "lims"."customers" ("customer_name");
-CREATE INDEX IF NOT EXISTS idx_customers_customer_abrv ON "lims"."customers" ("customer_abrv");
-
-CREATE INDEX IF NOT EXISTS idx_projects_status_id ON "lims"."projects" ("status_id");
-CREATE INDEX IF NOT EXISTS idx_projects_pi_person_id ON "lims"."projects" ("pi_person_id");
-CREATE INDEX IF NOT EXISTS idx_projects_customer_id ON "lims"."projects" ("customer_id");
-CREATE INDEX IF NOT EXISTS idx_projects_title ON "lims"."projects" USING gin(to_tsvector('english', "title"));
-
-CREATE INDEX IF NOT EXISTS idx_project_persons_project_id ON "lims"."project_persons" ("project_id");
-CREATE INDEX IF NOT EXISTS idx_project_persons_person_id ON "lims"."project_persons" ("person_id");
-
-CREATE INDEX IF NOT EXISTS idx_cruises_project_id ON "lims"."cruises" ("project_id");
-CREATE INDEX IF NOT EXISTS idx_cruises_vessel_id ON "lims"."cruises" ("vessel_id");
-CREATE INDEX IF NOT EXISTS idx_cruises_region_id ON "lims"."cruises" ("region_id");
-CREATE INDEX IF NOT EXISTS idx_cruises_ecosystem_id ON "lims"."cruises" ("ecosystem_id");
-CREATE INDEX IF NOT EXISTS idx_cruises_chief_scientist_person_id ON "lims"."cruises" ("chief_scientist_person_id");
-
-CREATE INDEX IF NOT EXISTS idx_batch_steps_batch_id ON "lims"."batch_steps" ("batch_id");
-CREATE INDEX IF NOT EXISTS idx_batch_steps_sop_id ON "lims"."batch_steps" ("sop_id");
-
-CREATE INDEX IF NOT EXISTS idx_primers_target_gene_id ON "lims"."primers" ("target_gene_id");
-
-CREATE INDEX IF NOT EXISTS idx_sop_sop_id_origin ON "lims"."sop" ("sop_id_origin");
-CREATE INDEX IF NOT EXISTS idx_sop_title ON "lims"."sop" USING gin(to_tsvector('english', "title"));
-
-CREATE INDEX IF NOT EXISTS idx_equipment_room_id ON "lims"."equipment" ("room_id");
-
-CREATE INDEX IF NOT EXISTS idx_orders_project_id ON "lims"."orders" ("project_id");
-CREATE INDEX IF NOT EXISTS idx_orders_item_id ON "lims"."orders" ("item_id");
-CREATE INDEX IF NOT EXISTS idx_orders_supplier_id ON "lims"."orders" ("supplier_id");
-CREATE INDEX IF NOT EXISTS idx_orders_status_id ON "lims"."orders" ("status_id");
-
-CREATE INDEX IF NOT EXISTS idx_reagents_project_id ON "lims"."reagents" ("project_id");
-CREATE INDEX IF NOT EXISTS idx_reagents_category_id ON "lims"."reagents" ("category_id");
-CREATE INDEX IF NOT EXISTS idx_reagents_storage_id ON "lims"."reagents" ("storage_id");
-CREATE INDEX IF NOT EXISTS idx_reagents_order_id ON "lims"."reagents" ("order_id");
-
-CREATE INDEX IF NOT EXISTS idx_publications_project_id ON "lims"."publications" ("project_id");
-CREATE INDEX IF NOT EXISTS idx_publications_doi ON "lims"."publications" ("doi");
-CREATE INDEX IF NOT EXISTS idx_publications_title ON "lims"."publications" USING gin(to_tsvector('english', "title"));
-
--- Lab Schema Indexes
-CREATE INDEX IF NOT EXISTS idx_experiments_id_date ON "lab"."experiments" ("experiment_id", "experiment_date");
-CREATE INDEX IF NOT EXISTS idx_experiments_person_id ON "lab"."experiments" ("person_id");
-
-CREATE INDEX IF NOT EXISTS idx_experiments_projects_id_date ON "lab"."experiments_projects" ("experiment_id", "experiment_date");
-CREATE INDEX IF NOT EXISTS idx_experiments_projects_project_id ON "lab"."experiments_projects" ("project_id");
-
-CREATE INDEX IF NOT EXISTS idx_experiments_samples_id_date ON "lab"."experiments_samples" ("experiment_id", "experiment_date");
-CREATE INDEX IF NOT EXISTS idx_experiments_samples_sample_id ON "lab"."experiments_samples" ("sample_id");
-
-CREATE INDEX IF NOT EXISTS idx_protocol_runs_experiment_id ON "lab"."protocol_runs" ("experiment_id");
-CREATE INDEX IF NOT EXISTS idx_protocol_runs_person_id ON "lab"."protocol_runs" ("person_id");
-
--- Index on sampling_id and sampling_date to support foreign key lookups
-CREATE INDEX IF NOT EXISTS idx_sampling_id_date ON "lab"."sampling" ("sampling_id", "sampling_date");
-CREATE INDEX IF NOT EXISTS idx_sampling_project_id ON "lab"."sampling" ("project_id");
-CREATE INDEX IF NOT EXISTS idx_sampling_cruise_id ON "lab"."sampling" ("cruise_id");
-CREATE INDEX IF NOT EXISTS idx_sampling_geom ON "lab"."sampling" USING GIST ("geom");
-
-CREATE INDEX IF NOT EXISTS idx_fishing_sampling_id_date ON "lab"."fishing" ("sampling_id", "sampling_date");
-CREATE INDEX IF NOT EXISTS idx_fishing_taxon_id ON "lab"."fishing" ("taxon_id");
-
-CREATE INDEX IF NOT EXISTS idx_individual_catch_fishing_id ON "lab"."individual_catch_catch" ("fishing_id");
-CREATE INDEX IF NOT EXISTS idx_individual_catch_taxon_id ON "lab"."individual_catch_catch" ("taxon_id");
-
-CREATE INDEX IF NOT EXISTS idx_sampling_abiotic_sampling_id ON "lab"."sampling_abiotic_data" ("sampling_id", "sampling_date");
-
-CREATE INDEX IF NOT EXISTS idx_root_samples_sample_id_date ON "lab"."root_samples" ("sample_id", "sample_creation_date");
-CREATE INDEX IF NOT EXISTS idx_root_samples_parent_id ON "lab"."root_samples" ("parent_sample_id");
-CREATE INDEX IF NOT EXISTS idx_root_samples_sampling_id_date ON "lab"."root_samples" ("sampling_id", "sampling_date");
-CREATE INDEX IF NOT EXISTS idx_root_samples_experiment_id_date ON "lab"."root_samples" ("experiment_id", "experiment_date");
-CREATE INDEX IF NOT EXISTS idx_root_samples_project_id ON "lab"."root_samples" ("project_id");
-
-CREATE INDEX IF NOT EXISTS idx_fish_sample_id_date ON "lab"."fish" ("sample_id", "sample_creation_date");
-CREATE INDEX IF NOT EXISTS idx_fish_species_id ON "lab"."fish" ("species_id");
-
-CREATE INDEX IF NOT EXISTS idx_tissue_sample_id_date ON "lab"."tissue" ("sample_id", "sample_creation_date");
-
-CREATE INDEX IF NOT EXISTS idx_otoliths_otolith_id_date ON "lab"."otoliths" ("otolith_id", "sample_creation_date");
-CREATE INDEX IF NOT EXISTS idx_otoliths_reader_person_id ON "lab"."otoliths" ("reader_person_id");
-
-CREATE INDEX IF NOT EXISTS idx_dna_sample_id_date ON "lab"."dna" ("sample_id", "sample_creation_date");
-
-CREATE INDEX IF NOT EXISTS idx_rna_sample_id_date ON "lab"."rna" ("sample_id", "sample_creation_date");
-
-CREATE INDEX IF NOT EXISTS idx_dissections_sample_id ON "lab"."dissections" ("sample_id");
-CREATE INDEX IF NOT EXISTS idx_dissections_experiment_id ON "lab"."dissections" ("experiment_id", "experiment_date");
-
-CREATE INDEX IF NOT EXISTS idx_nanodrop_sample_id ON "lab"."nanodrop" ("sample_id", "sample_creation_date");
-
-CREATE INDEX IF NOT EXISTS idx_qubit_sample_id ON "lab"."qubit" ("sample_id", "sample_creation_date");
-
-CREATE INDEX IF NOT EXISTS idx_tapestation_sample_id ON "lab"."tapestation" ("sample_id", "sample_creation_date");
-
-CREATE INDEX IF NOT EXISTS idx_gelelectrophoresis_sample_id ON "lab"."gelelectrophoresis" ("sample_id", "sample_creation_date");
-
-CREATE INDEX IF NOT EXISTS idx_qpcr_sample_id ON "lab"."qpcr" ("sample_id", "sample_creation_date");
-
-CREATE INDEX IF NOT EXISTS idx_library_sample_id ON "lab"."library" ("sample_id", "sample_creation_date");
-
-CREATE INDEX IF NOT EXISTS idx_sequencing_run_sample_id ON "lab"."sequencing_run" ("sample_id");
-CREATE INDEX IF NOT EXISTS idx_sequencing_run_library_id ON "lab"."sequencing_run" ("library_id");
-
-CREATE INDEX IF NOT EXISTS idx_seq_dataset_sample_id ON "lab"."Seq_dataset" ("sample_id");
-CREATE INDEX IF NOT EXISTS idx_seq_dataset_sequencing_run_id ON "lab"."Seq_dataset" ("sequencing_run_id");
-
-CREATE INDEX IF NOT EXISTS idx_datasets_sample_id ON "lab"."datasets" ("sample_id");
-CREATE INDEX IF NOT EXISTS idx_datasets_experiment_id ON "lab"."datasets" ("experiment_id", "experiment_date");
-
--- Bioinformatics Schema Indexes
-CREATE INDEX IF NOT EXISTS idx_analysis_pipelines_id ON "bioinformatics"."analysis_pipelines" ("pipeline_id");
-CREATE INDEX IF NOT EXISTS idx_analysis_pipelines_name ON "bioinformatics"."analysis_pipelines" USING gin(to_tsvector('english', "pipeline_name"));
-
-CREATE INDEX IF NOT EXISTS idx_analysis_runs_id_date ON "bioinformatics"."analysis_runs" ("run_id", "experiment_date");
-CREATE INDEX IF NOT EXISTS idx_analysis_runs_pipeline_id ON "bioinformatics"."analysis_runs" ("pipeline_id");
-CREATE INDEX IF NOT EXISTS idx_analysis_runs_sequencing_id ON "bioinformatics"."analysis_runs" ("sequencing_id", "sequencing_date");
-
-CREATE INDEX IF NOT EXISTS idx_edna_assignments_run_id ON "bioinformatics"."edna_assignments" ("run_id");
-CREATE INDEX IF NOT EXISTS idx_edna_assignments_sample_id ON "bioinformatics"."edna_assignments" ("sample_id", "sample_creation_date");
-CREATE INDEX IF NOT EXISTS idx_edna_assignments_taxon_id ON "bioinformatics"."edna_assignments" ("taxon_id");
-
--- Projects Schema Indexes
-CREATE INDEX IF NOT EXISTS idx_wander_fishingdata_id_date ON "projects"."ProjectWanderfische_FishingData" ("fishing_record_id", "record_date");
-CREATE INDEX IF NOT EXISTS idx_wander_fishingdata_agency_id ON "projects"."ProjectWanderfische_FishingData" ("agency_id");
-CREATE INDEX IF NOT EXISTS idx_wander_fishingdata_project_id ON "projects"."ProjectWanderfische_FishingData" ("project_id");
-CREATE INDEX IF NOT EXISTS idx_wander_fishingdata_geom ON "projects"."ProjectWanderfische_FishingData" USING GIST ("geom_4326");
-
-CREATE INDEX IF NOT EXISTS idx_wander_fishcatch_fishing_id_date ON "projects"."ProjectWanderfische_FishCatch" ("fishing_record_id", "fishing_record_date");
-CREATE INDEX IF NOT EXISTS idx_wander_fishcatch_taxon_id ON "projects"."ProjectWanderfische_FishCatch" ("taxon_id");
-
-CREATE INDEX IF NOT EXISTS idx_wander_mail_fishing_id_date ON "projects"."ProjectWanderfische_Mail" ("fishing_record_id", "fishing_record_date");
-CREATE INDEX IF NOT EXISTS idx_wander_mail_sender_id ON "projects"."ProjectWanderfische_Mail" ("sender_person_id");
-
-CREATE INDEX IF NOT EXISTS idx_wander_conversation_fishing_id_date ON "projects"."ProjectWanderfische_Conversation" ("fishing_record_id", "fishing_record_date");
-
-CREATE INDEX IF NOT EXISTS idx_wander_chatmessage_conversation_id ON "projects"."ProjectWanderfische_ChatMessage" ("conversation_id")x;
-
-
--- ======================================================================
--- F05. Pall triggers
--- ======================================================================
-
--- 2.4. STATUS UPDATE TRIGGERS
-
-CREATE TRIGGER trg_update_status_dissection
-AFTER INSERT ON "lab"."dissections" FOR EACH ROW
-EXECUTE FUNCTION "lab".update_sample_status('Dissection');
-CREATE TRIGGER trg_update_status_nanodrop
-AFTER INSERT ON "lab"."nanodrop" FOR EACH ROW
-EXECUTE FUNCTION "lab".update_sample_status('Nanodrop QC');
-CREATE TRIGGER trg_update_status_qubit
-AFTER INSERT ON "lab"."qubit" FOR EACH ROW
-EXECUTE FUNCTION "lab".update_sample_status('Qubit QC');
-CREATE TRIGGER trg_update_status_tapestation
-AFTER INSERT ON "lab"."tapestation" FOR EACH ROW
-EXECUTE FUNCTION "lab".update_sample_status('Tapestation QC');
-CREATE TRIGGER trg_update_status_pcr
-AFTER INSERT ON "lab"."pcr" FOR EACH ROW
-EXECUTE FUNCTION "lab".update_sample_status('PCR Done');
-CREATE TRIGGER trg_update_status_qpcr
-AFTER INSERT ON "lab"."qpcr" FOR EACH ROW
-EXECUTE FUNCTION "lab".update_sample_status('qPCR Done');
-CREATE TRIGGER trg_update_status_library
-AFTER INSERT ON "lab"."library" FOR EACH ROW
-EXECUTE FUNCTION "lab".update_sample_status('Library Prep');
-CREATE TRIGGER trg_update_status_sequencing_run
-AFTER INSERT ON "lab"."sequencing_run" FOR EACH ROW
-EXECUTE FUNCTION "lab".update_sample_status('Sequencing Done');
-CREATE TRIGGER trg_update_status_analysis_runs
-AFTER INSERT ON "bioinformatics"."analysis_runs" FOR EACH ROW
-EXECUTE FUNCTION "lab".update_sample_status('Bioinformatics Done');
-
-
--- 2.5. AUDIT AND SEARCH TRIGGERS
--- Audit triggers for all relevant tables
-CREATE TRIGGER audit_trigger_personal AFTER INSERT OR UPDATE OR DELETE ON "lims"."personal" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_status AFTER INSERT OR UPDATE OR DELETE ON "reference"."status" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_room AFTER INSERT OR UPDATE OR DELETE ON "reference"."room" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_vessel AFTER INSERT OR UPDATE OR DELETE ON "reference"."vessel" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_region AFTER INSERT OR UPDATE OR DELETE ON "reference"."region" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_ecosystem AFTER INSERT OR UPDATE OR DELETE ON "reference"."ecosystem" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_category AFTER INSERT OR UPDATE OR DELETE ON "reference"."category" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_samples_type AFTER INSERT OR UPDATE OR DELETE ON "reference"."samples_type" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_gene AFTER INSERT OR UPDATE OR DELETE ON "reference"."gene" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_taxon AFTER INSERT OR UPDATE OR DELETE ON "reference"."taxon" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_units AFTER INSERT OR UPDATE OR DELETE ON "reference"."units" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_ref_dbs AFTER INSERT OR UPDATE OR DELETE ON "reference"."reference_databases" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_ext_contacts AFTER INSERT OR UPDATE OR DELETE ON "lims"."external_contacts" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_customers AFTER INSERT OR UPDATE OR DELETE ON "lims"."customers" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_projects AFTER INSERT OR UPDATE OR DELETE ON "lims"."projects" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_proj_persons AFTER INSERT OR UPDATE OR DELETE ON "lims"."project_persons" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_cruises AFTER INSERT OR UPDATE OR DELETE ON "lims"."cruises" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_batch AFTER INSERT OR UPDATE OR DELETE ON "lims"."batch" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_batch_steps AFTER INSERT OR UPDATE OR DELETE ON "lims"."batch_steps" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_permits AFTER INSERT OR UPDATE OR DELETE ON "lims"."permits" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_primers AFTER INSERT OR UPDATE OR DELETE ON "lims"."primers" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_sop AFTER INSERT OR UPDATE OR DELETE ON "lims"."sop" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_equipment AFTER INSERT OR UPDATE OR DELETE ON "lims"."equipment" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_suppliers AFTER INSERT OR UPDATE OR DELETE ON "lims"."suppliers" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_inv_items AFTER INSERT OR UPDATE OR DELETE ON "lims"."inventory_items" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_orders AFTER INSERT OR UPDATE OR DELETE ON "lims"."orders" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_reagents AFTER INSERT OR UPDATE OR DELETE ON "lims"."reagents" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_pub_type AFTER INSERT OR UPDATE OR DELETE ON "lims"."publication_type" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_publications AFTER INSERT OR UPDATE OR DELETE ON "lims"."publications" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_lab_storage AFTER INSERT OR UPDATE OR DELETE ON "lab"."storage" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_experiments AFTER INSERT OR UPDATE OR DELETE ON "lab"."experiments" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_exp_projects AFTER INSERT OR UPDATE OR DELETE ON "lab"."experiments_projects" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_exp_samples AFTER INSERT OR UPDATE OR DELETE ON "lab"."experiments_samples" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_protocol_runs AFTER INSERT OR UPDATE OR DELETE ON "lab"."protocol_runs" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_sampling AFTER INSERT OR UPDATE OR DELETE ON "lab"."sampling" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_fishing AFTER INSERT OR UPDATE OR DELETE ON "lab"."fishing" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_catch AFTER INSERT OR UPDATE OR DELETE ON "lab"."individual_catch_catch" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_abiotic_data AFTER INSERT OR UPDATE OR DELETE ON "lab"."sampling_abiotic_data" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_storage_log AFTER INSERT OR UPDATE OR DELETE ON "lab"."storage_log" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_root_samples AFTER INSERT OR UPDATE OR DELETE ON "lab"."root_samples" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_fish AFTER INSERT OR UPDATE OR DELETE ON "lab"."fish" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_tissue AFTER INSERT OR UPDATE OR DELETE ON "lab"."tissue" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_otoliths AFTER INSERT OR UPDATE OR DELETE ON "lab"."otoliths" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_dna AFTER INSERT OR UPDATE OR DELETE ON "lab"."dna" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_rna AFTER INSERT OR UPDATE OR DELETE ON "lab"."rna" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_sediments AFTER INSERT OR UPDATE OR DELETE ON "lab"."sediments" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_water AFTER INSERT OR UPDATE OR DELETE ON "lab"."water" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_pcr AFTER INSERT OR UPDATE OR DELETE ON "lab"."pcr" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_dissections AFTER INSERT OR UPDATE OR DELETE ON "lab"."dissections" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_nanodrop AFTER INSERT OR UPDATE OR DELETE ON "lab"."nanodrop" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_qubit AFTER INSERT OR UPDATE OR DELETE ON "lab"."qubit" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_tapestation AFTER INSERT OR UPDATE OR DELETE ON "lab"."tapestation" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_gelelectrophoresis AFTER INSERT OR UPDATE OR DELETE ON "lab"."gelelectrophoresis" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_qpcr AFTER INSERT OR UPDATE OR DELETE ON "lab"."qpcr" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_library AFTER INSERT OR UPDATE OR DELETE ON "lab"."library" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_seq_run AFTER INSERT OR UPDATE OR DELETE ON "lab"."sequencing_run" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_seq_dataset AFTER INSERT OR UPDATE OR DELETE ON "lab"."Seq_dataset" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_datasets AFTER INSERT OR UPDATE OR DELETE ON "lab"."datasets" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_pipelines AFTER INSERT OR UPDATE OR DELETE ON "bioinformatics"."analysis_pipelines" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_runs AFTER INSERT OR UPDATE OR DELETE ON "bioinformatics"."analysis_runs" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_assignments AFTER INSERT OR UPDATE OR DELETE ON "bioinformatics"."edna_assignments" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_proj_fishingdata AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_FishingData" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_proj_fishcatch AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_FishCatch" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_proj_mail AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_Mail" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_proj_conversation AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_Conversation" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_proj_chatmessage AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_ChatMessage" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-
-
--- reference.taxon ltree path update trigger
-CREATE TRIGGER trg_update_taxon_path
-AFTER INSERT OR UPDATE ON "reference"."taxon"
-FOR EACH STATEMENT EXECUTE FUNCTION "reference".update_taxon_ltree_paths();
-
--- lims.projects full-text search trigger
-CREATE TRIGGER trg_update_projects_search
-BEFORE INSERT OR UPDATE ON "lims"."projects"
-FOR EACH ROW EXECUTE FUNCTION "lims".update_project_search_vector_func();
-
--- lims.sop full-text search trigger
-CREATE TRIGGER trg_update_sop_search
-BEFORE INSERT OR UPDATE ON "lims"."sop"
-FOR EACH ROW EXECUTE FUNCTION "lims".update_sop_search_vector_func();
-
--- lims.customers full-text search trigger
-CREATE TRIGGER trg_update_customer_search
-BEFORE INSERT OR UPDATE ON "lims"."customers"
-FOR EACH ROW EXECUTE FUNCTION "lims".update_customer_search_vector_func();
-
--- lab.experiments full-text search trigger
-CREATE TRIGGER trg_update_experiment_search
-BEFORE INSERT OR UPDATE ON "lab"."experiments"
-FOR EACH ROW EXECUTE FUNCTION "lab".update_experiment_search_vector_func();
-
--- lab.root_samples full-text search trigger
-CREATE TRIGGER trg_update_sample_search
-BEFORE INSERT OR UPDATE ON "lab"."root_samples"
-FOR EACH ROW EXECUTE FUNCTION "lab".update_sample_search_vector_func();
-
-
--- ======================================================================
--- F06. Full-Text Search Configuration
--- ======================================================================
-
-DO $$
-BEGIN
-    -- Create a custom text search configuration if it doesn't exist
-    IF NOT EXISTS (SELECT 1 FROM pg_ts_config WHERE cfgname = 'lims_english') THEN
-        CREATE TEXT SEARCH CONFIGURATION public.lims_english (PARSER = default);
-        ALTER TEXT SEARCH CONFIGURATION public.lims_english
-            ALTER MAPPING FOR asciiword, asciihword, hword, hword_asciipart, hword_part
-            WITH english_stem;
-    END IF;
-END
-$$;
-
--- 2. Add TSVECTOR Columns and GIN Indexes
-
-ALTER TABLE "lims"."personal" ADD COLUMN IF NOT EXISTS personal_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_personal_gin_search ON "lims"."personal" USING GIN (personal_search_vector);
-
-ALTER TABLE "lims"."external_contacts" ADD COLUMN IF NOT EXISTS contacts_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_contacts_gin_search ON "lims"."external_contacts" USING GIN (contacts_search_vector);
-
-ALTER TABLE "lims"."customers" ADD COLUMN IF NOT EXISTS customer_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_customers_gin_search ON "lims"."customers" USING GIN (customer_search_vector);
-
-ALTER TABLE "lims"."projects" ADD COLUMN IF NOT EXISTS project_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_projects_gin_search ON "lims"."projects" USING GIN (project_search_vector);
-
-ALTER TABLE "lims"."sop" ADD COLUMN IF NOT EXISTS sop_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_sop_gin_search ON "lims"."sop" USING GIN (sop_search_vector);
-
-ALTER TABLE "lims"."equipment" ADD COLUMN IF NOT EXISTS equipment_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_equipment_gin_search ON "lims"."equipment" USING GIN (equipment_search_vector);
-
-ALTER TABLE "lims"."suppliers" ADD COLUMN IF NOT EXISTS supplier_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_suppliers_gin_search ON "lims"."suppliers" USING GIN (supplier_search_vector);
-
-ALTER TABLE "lims"."inventory_items" ADD COLUMN IF NOT EXISTS inventory_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_inventory_gin_search ON "lims"."inventory_items" USING GIN (inventory_search_vector);
-
-ALTER TABLE "lims"."reagents" ADD COLUMN IF NOT EXISTS reagent_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_reagents_gin_search ON "lims"."reagents" USING GIN (reagent_search_vector);
-
-ALTER TABLE "lims"."publications" ADD COLUMN IF NOT EXISTS publication_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_publications_gin_search ON "lims"."publications" USING GIN (publication_search_vector);
-
-ALTER TABLE "lab"."experiments" ADD COLUMN IF NOT EXISTS experiment_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_experiments_gin_search ON "lab"."experiments" USING GIN (experiment_search_vector);
-
-ALTER TABLE "lab"."root_samples" ADD COLUMN IF NOT EXISTS sample_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_samples_gin_search ON "lab"."root_samples" USING GIN (sample_search_vector);
-
-ALTER TABLE "projects"."ProjectWanderfische_FishingData" ADD COLUMN IF NOT EXISTS fishing_data_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_fishing_data_gin_search ON "projects"."ProjectWanderfische_FishingData" USING GIN (fishing_data_search_vector);
-
-ALTER TABLE "projects"."ProjectWanderfische_FishCatch" ADD COLUMN IF NOT EXISTS fish_catch_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_fish_catch_gin_search ON "projects"."ProjectWanderfische_FishCatch" USING GIN (fish_catch_search_vector);
-
-ALTER TABLE "projects"."ProjectWanderfische_Mail" ADD COLUMN IF NOT EXISTS mail_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_mail_gin_search ON "projects"."ProjectWanderfische_Mail" USING GIN (mail_search_vector);
-
-ALTER TABLE "projects"."ProjectWanderfische_Conversation" ADD COLUMN IF NOT EXISTS conversation_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_conversation_gin_search ON "projects"."ProjectWanderfische_Conversation" USING GIN (conversation_search_vector);
-
-ALTER TABLE "projects"."ProjectWanderfische_ChatMessage" ADD COLUMN IF NOT EXISTS chat_message_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_chat_message_gin_search ON "projects"."ProjectWanderfische_ChatMessage" USING GIN (chat_message_search_vector);
-
-ALTER TABLE "lab"."storage" ADD COLUMN IF NOT EXISTS storage_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_storage_gin_search ON "lab"."storage" USING GIN (storage_search_vector);
-
-ALTER TABLE "bioinformatics"."analysis_pipelines" ADD COLUMN IF NOT EXISTS pipeline_search_vector TSVECTOR;
-CREATE INDEX IF NOT EXISTS idx_pipeline_gin_search ON "bioinformatics"."analysis_pipelines" USING GIN (pipeline_search_vector);
-
--- 3. Functions to Update TSVECTOR Columns
-
+-- Functions to update TSVECTOR columns for full-text search
 CREATE OR REPLACE FUNCTION "lims".update_personal_search_vector_func()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -2748,8 +2193,224 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 4. Triggers to Call the Update Functions
+-- ======================================================================
+-- F08. LTREE PATH UPDATE FUNCTION
+-- ======================================================================
+-- Function to maintain the ltree path for hierarchical data.
+CREATE OR REPLACE FUNCTION "reference".update_taxon_ltree_paths()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Update the path for all affected rows, starting from the root.
+    UPDATE "reference"."taxon" AS t
+    SET path = subquery.new_path
+    FROM (
+        WITH RECURSIVE taxon_paths AS (
+            -- Base case: The roots of the hierarchy
+            SELECT
+                taxon_id,
+                taxon_id::ltree AS new_path
+            FROM
+                "reference"."taxon"
+            WHERE
+                taxon_parent IS NULL
 
+            UNION ALL
+
+            -- Recursive step: Find children and build their paths
+            SELECT
+                t.taxon_id,
+                tp.new_path || t.taxon_id::ltree
+            FROM
+                taxon_paths tp
+            JOIN
+                "reference"."taxon" t ON t.taxon_parent = tp.taxon_id
+        )
+        SELECT
+            taxon_id,
+            new_path
+        FROM
+            taxon_paths
+    ) AS subquery
+    WHERE
+        t.taxon_id = subquery.taxon_id;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- ======================================================================
+-- F09. RLS POLICY FUNCTION
+-- ======================================================================
+CREATE OR REPLACE FUNCTION "lims".is_member_of_project(p_project_id text)
+RETURNS BOOLEAN AS $$
+DECLARE
+    current_person_id text := current_setting('lims.current_person_id', true);
+BEGIN
+    IF current_person_id IS NULL THEN
+        RETURN FALSE;
+    END IF;
+
+    -- Check if the user is the Principal Investigator (PI) or a project member
+    RETURN EXISTS (
+        SELECT 1 FROM "lims"."projects" WHERE project_id = p_project_id AND pi_person_id = current_person_id
+    ) OR EXISTS (
+        SELECT 1 FROM "lims"."project_persons" WHERE project_id = p_project_id AND person_id = current_person_id
+    );
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+
+-- ======================================================================
+-- 1. TRIGGERS
+-- ======================================================================
+-- Triggers for Partitioning
+-- The second argument passed to create_yearly_partition is the name of the date column to use for partitioning.
+CREATE TRIGGER trg_create_experiments_partition BEFORE INSERT ON "lab"."experiments" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
+CREATE TRIGGER trg_create_sampling_partition BEFORE INSERT ON "lab"."sampling" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sampling_date');
+CREATE TRIGGER trg_create_fishing_partition BEFORE INSERT ON "lab"."fishing" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sampling_date');
+CREATE TRIGGER trg_create_individual_catch_partition BEFORE INSERT ON "lab"."individual_catch_catch" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sampling_date');
+CREATE TRIGGER trg_create_sampling_abiotic_data_partition BEFORE INSERT ON "lab"."sampling_abiotic_data" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sampling_date');
+CREATE TRIGGER trg_create_root_samples_partition BEFORE INSERT ON "lab"."root_samples" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sample_creation_date');
+CREATE TRIGGER trg_create_fish_partition BEFORE INSERT ON "lab"."fish" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sample_creation_date');
+CREATE TRIGGER trg_create_tissue_partition BEFORE INSERT ON "lab"."tissue" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sample_creation_date');
+CREATE TRIGGER trg_create_otoliths_partition BEFORE INSERT ON "lab"."otoliths" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sample_creation_date');
+CREATE TRIGGER trg_create_dna_partition BEFORE INSERT ON "lab"."dna" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sample_creation_date');
+CREATE TRIGGER trg_create_rna_partition BEFORE INSERT ON "lab"."rna" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sample_creation_date');
+CREATE TRIGGER trg_create_sediments_partition BEFORE INSERT ON "lab"."sediments" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sample_creation_date');
+CREATE TRIGGER trg_create_water_partition BEFORE INSERT ON "lab"."water" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sample_creation_date');
+CREATE TRIGGER trg_create_pcr_partition BEFORE INSERT ON "lab"."pcr" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sample_creation_date');
+CREATE TRIGGER trg_create_dissections_partition BEFORE INSERT ON "lab"."dissections" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
+CREATE TRIGGER trg_create_nanodrop_partition BEFORE INSERT ON "lab"."nanodrop" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
+CREATE TRIGGER trg_create_qubit_partition BEFORE INSERT ON "lab"."qubit" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
+CREATE TRIGGER trg_create_tapestation_partition BEFORE INSERT ON "lab"."tapestation" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
+CREATE TRIGGER trg_create_gelelectrophoresis_partition BEFORE INSERT ON "lab"."gelelectrophoresis" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
+CREATE TRIGGER trg_create_qpcr_partition BEFORE INSERT ON "lab"."qpcr" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
+CREATE TRIGGER trg_create_library_partition BEFORE INSERT ON "lab"."library" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
+CREATE TRIGGER trg_create_sequencing_run_partition BEFORE INSERT ON "lab"."sequencing_run" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
+CREATE TRIGGER trg_create_seq_dataset_partition BEFORE INSERT ON "lab"."Seq_dataset" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
+CREATE TRIGGER trg_create_datasets_partition BEFORE INSERT ON "lab"."datasets" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('reception_date');
+CREATE TRIGGER trg_create_analysis_runs_partition BEFORE INSERT ON "bioinformatics"."analysis_runs" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
+CREATE TRIGGER trg_create_wanderfische_fishingdata_partition BEFORE INSERT ON "projects"."ProjectWanderfische_FishingData" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('record_date');
+
+-- Triggers for populating date columns from parent tables before partitioning
+CREATE TRIGGER trg_populate_experiments_projects_date BEFORE INSERT ON "lab"."experiments_projects" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_experiment();
+CREATE TRIGGER trg_populate_experiments_samples_date BEFORE INSERT ON "lab"."experiments_samples" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_experiment();
+CREATE TRIGGER trg_populate_protocol_runs_date BEFORE INSERT ON "lab"."protocol_runs" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_experiment();
+CREATE TRIGGER trg_populate_fishing_date BEFORE INSERT ON "lab"."fishing" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_sampling();
+CREATE TRIGGER trg_populate_individual_catch_date BEFORE INSERT ON "lab"."individual_catch_catch" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_sampling();
+CREATE TRIGGER trg_populate_sampling_abiotic_data_date BEFORE INSERT ON "lab"."sampling_abiotic_data" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_sampling();
+CREATE TRIGGER trg_populate_fish_date BEFORE INSERT ON "lab"."fish" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_tissue_date BEFORE INSERT ON "lab"."tissue" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_otoliths_date BEFORE INSERT ON "lab"."otoliths" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_dna_date BEFORE INSERT ON "lab"."dna" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_rna_date BEFORE INSERT ON "lab"."rna" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_sediments_date BEFORE INSERT ON "lab"."sediments" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_water_date BEFORE INSERT ON "lab"."water" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_pcr_date BEFORE INSERT ON "lab"."pcr" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_seq_dataset_date BEFORE INSERT ON "lab"."Seq_dataset" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_experiment();
+CREATE TRIGGER trg_populate_analysis_runs_date BEFORE INSERT ON "bioinformatics"."analysis_runs" FOR EACH ROW EXECUTE FUNCTION "bioinformatics".populate_date_from_sequencing();
+
+-- Triggers for automatic ID generation
+CREATE TRIGGER trg_generate_sampling_id BEFORE INSERT ON "lab"."sampling" FOR EACH ROW EXECUTE FUNCTION "lab".generate_sampling_id();
+CREATE TRIGGER trg_generate_fishing_id BEFORE INSERT ON "lab"."fishing" FOR EACH ROW EXECUTE FUNCTION "lab".generate_fishing_id();
+CREATE TRIGGER trg_generate_individual_catch_id BEFORE INSERT ON "lab"."individual_catch_catch" FOR EACH ROW EXECUTE FUNCTION "lab".generate_individual_catch_id();
+CREATE TRIGGER trg_generate_root_sample_id BEFORE INSERT ON "lab"."root_samples" FOR EACH ROW EXECUTE FUNCTION "lab".generate_sample_id();
+CREATE TRIGGER trg_generate_dissection_id BEFORE INSERT ON "lab"."dissections" FOR EACH ROW EXECUTE FUNCTION "lab".generate_dissection_id();
+CREATE TRIGGER trg_generate_nanodrop_id BEFORE INSERT ON "lab"."nanodrop" FOR EACH ROW EXECUTE FUNCTION "lab".generate_nanodrop_id();
+CREATE TRIGGER trg_generate_qubit_id BEFORE INSERT ON "lab"."qubit" FOR EACH ROW EXECUTE FUNCTION "lab".generate_qubit_id();
+CREATE TRIGGER trg_generate_tapestation_id BEFORE INSERT ON "lab"."tapestation" FOR EACH ROW EXECUTE FUNCTION "lab".generate_tapestation_id();
+CREATE TRIGGER trg_generate_gelelectrophoresis_id BEFORE INSERT ON "lab"."gelelectrophoresis" FOR EACH ROW EXECUTE FUNCTION "lab".generate_gelelectrophoresis_id();
+CREATE TRIGGER trg_generate_qpcr_id BEFORE INSERT ON "lab"."qpcr" FOR EACH ROW EXECUTE FUNCTION "lab".generate_qpcr_id();
+CREATE TRIGGER trg_generate_sequencing_run_id BEFORE INSERT ON "lab"."sequencing_run" FOR EACH ROW EXECUTE FUNCTION "lab".generate_sequencing_run_id();
+CREATE TRIGGER trg_generate_seq_dataset_id BEFORE INSERT ON "lab"."Seq_dataset" FOR EACH ROW EXECUTE FUNCTION "lab".generate_seq_dataset_id();
+CREATE TRIGGER trg_generate_dataset_id BEFORE INSERT ON "lab"."datasets" FOR EACH ROW EXECUTE FUNCTION "lab".generate_dataset_id();
+CREATE TRIGGER trg_generate_pipeline_id BEFORE INSERT ON "bioinformatics"."analysis_pipelines" FOR EACH ROW EXECUTE FUNCTION "bioinformatics".generate_pipeline_id();
+CREATE TRIGGER trg_generate_analysis_run_id BEFORE INSERT ON "bioinformatics"."analysis_runs" FOR EACH ROW EXECUTE FUNCTION "bioinformatics".generate_analysis_run_id();
+CREATE TRIGGER trg_generate_edna_assignment_id BEFORE INSERT ON "bioinformatics"."edna_assignments" FOR EACH ROW EXECUTE FUNCTION "bioinformatics".generate_edna_assignment_id();
+
+-- Trigger for coordinate transformation
+CREATE TRIGGER trg_populate_geom_4326 BEFORE INSERT OR UPDATE ON "projects"."ProjectWanderfische_FishingData" FOR EACH ROW EXECUTE FUNCTION "projects".populate_fishing_geom_4326();
+
+-- Triggers for status updates
+CREATE TRIGGER trg_update_status_dissection AFTER INSERT ON "lab"."dissections" FOR EACH ROW EXECUTE FUNCTION "lab".update_sample_status('Dissection');
+CREATE TRIGGER trg_update_status_nanodrop AFTER INSERT ON "lab"."nanodrop" FOR EACH ROW EXECUTE FUNCTION "lab".update_sample_status('Nanodrop QC');
+CREATE TRIGGER trg_update_status_qubit AFTER INSERT ON "lab"."qubit" FOR EACH ROW EXECUTE FUNCTION "lab".update_sample_status('Qubit QC');
+CREATE TRIGGER trg_update_status_tapestation AFTER INSERT ON "lab"."tapestation" FOR EACH ROW EXECUTE FUNCTION "lab".update_sample_status('Tapestation QC');
+CREATE TRIGGER trg_update_status_pcr AFTER INSERT ON "lab"."pcr" FOR EACH ROW EXECUTE FUNCTION "lab".update_sample_status('PCR Done');
+CREATE TRIGGER trg_update_status_qpcr AFTER INSERT ON "lab"."qpcr" FOR EACH ROW EXECUTE FUNCTION "lab".update_sample_status('qPCR Done');
+CREATE TRIGGER trg_update_status_library AFTER INSERT ON "lab"."library" FOR EACH ROW EXECUTE FUNCTION "lab".update_sample_status('Library Prep');
+CREATE TRIGGER trg_update_status_sequencing_run AFTER INSERT ON "lab"."sequencing_run" FOR EACH ROW EXECUTE FUNCTION "lab".update_sample_status('Sequencing Done');
+CREATE TRIGGER trg_update_status_analysis_runs AFTER INSERT ON "bioinformatics"."analysis_runs" FOR EACH ROW EXECUTE FUNCTION "lab".update_sample_status('Bioinformatics Done');
+
+-- Triggers for Audit Logging
+CREATE TRIGGER audit_trigger_personal AFTER INSERT OR UPDATE OR DELETE ON "lims"."personal" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_status AFTER INSERT OR UPDATE OR DELETE ON "reference"."status" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_room AFTER INSERT OR UPDATE OR DELETE ON "reference"."room" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_vessel AFTER INSERT OR UPDATE OR DELETE ON "reference"."vessel" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_region AFTER INSERT OR UPDATE OR DELETE ON "reference"."region" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_ecosystem AFTER INSERT OR UPDATE OR DELETE ON "reference"."ecosystem" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_category AFTER INSERT OR UPDATE OR DELETE ON "reference"."category" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_samples_type AFTER INSERT OR UPDATE OR DELETE ON "reference"."samples_type" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_gene AFTER INSERT OR UPDATE OR DELETE ON "reference"."gene" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_taxon AFTER INSERT OR UPDATE OR DELETE ON "reference"."taxon" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_units AFTER INSERT OR UPDATE OR DELETE ON "reference"."units" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_ref_dbs AFTER INSERT OR UPDATE OR DELETE ON "reference"."reference_databases" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_ext_contacts AFTER INSERT OR UPDATE OR DELETE ON "lims"."external_contacts" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_customers AFTER INSERT OR UPDATE OR DELETE ON "lims"."customers" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_projects AFTER INSERT OR UPDATE OR DELETE ON "lims"."projects" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_proj_persons AFTER INSERT OR UPDATE OR DELETE ON "lims"."project_persons" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_cruises AFTER INSERT OR UPDATE OR DELETE ON "lims"."cruises" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_batch AFTER INSERT OR UPDATE OR DELETE ON "lims"."batch" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_batch_steps AFTER INSERT OR UPDATE OR DELETE ON "lims"."batch_steps" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_permits AFTER INSERT OR UPDATE OR DELETE ON "lims"."permits" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_primers AFTER INSERT OR UPDATE OR DELETE ON "lims"."primers" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_sop AFTER INSERT OR UPDATE OR DELETE ON "lims"."sop" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_equipment AFTER INSERT OR UPDATE OR DELETE ON "lims"."equipment" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_suppliers AFTER INSERT OR UPDATE OR DELETE ON "lims"."suppliers" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_inv_items AFTER INSERT OR UPDATE OR DELETE ON "lims"."inventory_items" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_orders AFTER INSERT OR UPDATE OR DELETE ON "lims"."orders" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_reagents AFTER INSERT OR UPDATE OR DELETE ON "lims"."reagents" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_pub_type AFTER INSERT OR UPDATE OR DELETE ON "lims"."publication_type" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_publications AFTER INSERT OR UPDATE OR DELETE ON "lims"."publications" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_lab_storage AFTER INSERT OR UPDATE OR DELETE ON "lab"."storage" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_experiments AFTER INSERT OR UPDATE OR DELETE ON "lab"."experiments" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_exp_projects AFTER INSERT OR UPDATE OR DELETE ON "lab"."experiments_projects" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_exp_samples AFTER INSERT OR UPDATE OR DELETE ON "lab"."experiments_samples" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_protocol_runs AFTER INSERT OR UPDATE OR DELETE ON "lab"."protocol_runs" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_sampling AFTER INSERT OR UPDATE OR DELETE ON "lab"."sampling" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_fishing AFTER INSERT OR UPDATE OR DELETE ON "lab"."fishing" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_catch AFTER INSERT OR UPDATE OR DELETE ON "lab"."individual_catch_catch" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_abiotic_data AFTER INSERT OR UPDATE OR DELETE ON "lab"."sampling_abiotic_data" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_storage_log AFTER INSERT OR UPDATE OR DELETE ON "lab"."storage_log" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_root_samples AFTER INSERT OR UPDATE OR DELETE ON "lab"."root_samples" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_fish AFTER INSERT OR UPDATE OR DELETE ON "lab"."fish" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_tissue AFTER INSERT OR UPDATE OR DELETE ON "lab"."tissue" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_otoliths AFTER INSERT OR UPDATE OR DELETE ON "lab"."otoliths" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_dna AFTER INSERT OR UPDATE OR DELETE ON "lab"."dna" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_rna AFTER INSERT OR UPDATE OR DELETE ON "lab"."rna" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_sediments AFTER INSERT OR UPDATE OR DELETE ON "lab"."sediments" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_water AFTER INSERT OR UPDATE OR DELETE ON "lab"."water" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_pcr AFTER INSERT OR UPDATE OR DELETE ON "lab"."pcr" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_dissections AFTER INSERT OR UPDATE OR DELETE ON "lab"."dissections" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_nanodrop AFTER INSERT OR UPDATE OR DELETE ON "lab"."nanodrop" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_qubit AFTER INSERT OR UPDATE OR DELETE ON "lab"."qubit" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_tapestation AFTER INSERT OR UPDATE OR DELETE ON "lab"."tapestation" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_gelelectrophoresis AFTER INSERT OR UPDATE OR DELETE ON "lab"."gelelectrophoresis" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_qpcr AFTER INSERT OR UPDATE OR DELETE ON "lab"."qpcr" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_library AFTER INSERT OR UPDATE OR DELETE ON "lab"."library" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_seq_run AFTER INSERT OR UPDATE OR DELETE ON "lab"."sequencing_run" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_seq_dataset AFTER INSERT OR UPDATE OR DELETE ON "lab"."Seq_dataset" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_datasets AFTER INSERT OR UPDATE OR DELETE ON "lab"."datasets" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_pipelines AFTER INSERT OR UPDATE OR DELETE ON "bioinformatics"."analysis_pipelines" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_runs AFTER INSERT OR UPDATE OR DELETE ON "bioinformatics"."analysis_runs" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_assignments AFTER INSERT OR UPDATE OR DELETE ON "bioinformatics"."edna_assignments" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_proj_fishingdata AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_FishingData" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_proj_fishcatch AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_FishCatch" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_proj_mail AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_Mail" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_proj_conversation AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_Conversation" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+CREATE TRIGGER audit_trigger_proj_chatmessage AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_ChatMessage" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+
+-- Triggers for Full-Text Search
 CREATE TRIGGER trg_update_personal_search BEFORE INSERT OR UPDATE ON "lims"."personal" FOR EACH ROW EXECUTE FUNCTION "lims".update_personal_search_vector_func();
 CREATE TRIGGER trg_update_contacts_search BEFORE INSERT OR UPDATE ON "lims"."external_contacts" FOR EACH ROW EXECUTE FUNCTION "lims".update_contacts_search_vector_func();
 CREATE TRIGGER trg_update_customer_search BEFORE INSERT OR UPDATE ON "lims"."customers" FOR EACH ROW EXECUTE FUNCTION "lims".update_customer_search_vector_func();
@@ -2770,11 +2431,130 @@ CREATE TRIGGER trg_update_chat_message_search BEFORE INSERT OR UPDATE ON "projec
 CREATE TRIGGER trg_update_storage_search BEFORE INSERT OR UPDATE ON "lab"."storage" FOR EACH ROW EXECUTE FUNCTION "lab".update_storage_search_vector_func();
 CREATE TRIGGER trg_update_pipeline_search BEFORE INSERT OR UPDATE ON "bioinformatics"."analysis_pipelines" FOR EACH ROW EXECUTE FUNCTION "bioinformatics".update_pipeline_search_vector_func();
 
+-- Trigger for ltree path update
+CREATE TRIGGER trg_update_taxon_path AFTER INSERT OR UPDATE ON "reference"."taxon" FOR EACH STATEMENT EXECUTE FUNCTION "reference".update_taxon_ltree_paths();
+
+-- Ensure the trigger is set to use the new function.
+-- If the old trigger exists, you may need to drop and re-create it.
+CREATE TRIGGER trg_populate_dates_for_root_sample BEFORE INSERT ON "lab"."root_samples" FOR EACH ROW EXECUTE FUNCTION "lab".populate_dates_for_root_sample();
 
 -- ======================================================================
--- F07. views
+-- 2. INDEXES
 -- ======================================================================
--- Provides a high-level summary of all projects, including key personnel and status.
+-- Reference Schema Indexes
+CREATE INDEX IF NOT EXISTS idx_personal_full_name ON "lims"."personal" USING gin(to_tsvector('english', "full_name"));
+CREATE INDEX IF NOT EXISTS idx_personal_mail ON "lims"."personal" ("mail");
+CREATE INDEX IF NOT EXISTS idx_taxon_path_gist ON "reference"."taxon" USING GIST ("path");
+CREATE INDEX IF NOT EXISTS idx_taxon_en_name_gin ON "reference"."taxon" USING gin(to_tsvector('english', "en_name"));
+CREATE INDEX IF NOT EXISTS idx_region_abrv ON "reference"."region" ("region_abrv");
+CREATE INDEX IF NOT EXISTS idx_ecosystem_abrv ON "reference"."ecosystem" ("ecosystem_abrv");
+CREATE INDEX IF NOT EXISTS idx_gene_id ON "reference"."gene" ("gene_id");
+CREATE INDEX IF NOT EXISTS idx_samples_type_id ON "reference"."samples_type" ("sample_type_id");
+CREATE INDEX IF NOT EXISTS idx_units_unit_type ON "reference"."units" ("unit_type");
+
+-- Lims Schema Indexes
+CREATE INDEX IF NOT EXISTS idx_external_contacts_full_name ON "lims"."external_contacts" USING gin(to_tsvector('english', "full_name"));
+CREATE INDEX IF NOT EXISTS idx_customers_customer_name ON "lims"."customers" ("customer_name");
+CREATE INDEX IF NOT EXISTS idx_customers_customer_abrv ON "lims"."customers" ("customer_abrv");
+CREATE INDEX IF NOT EXISTS idx_projects_status_id ON "lims"."projects" ("status_id");
+CREATE INDEX IF NOT EXISTS idx_projects_pi_person_id ON "lims"."projects" ("pi_person_id");
+CREATE INDEX IF NOT EXISTS idx_projects_customer_id ON "lims"."projects" ("customer_id");
+CREATE INDEX IF NOT EXISTS idx_projects_title ON "lims"."projects" USING gin(to_tsvector('english', "title"));
+CREATE INDEX IF NOT EXISTS idx_project_persons_project_id ON "lims"."project_persons" ("project_id");
+CREATE INDEX IF NOT EXISTS idx_project_persons_person_id ON "lims"."project_persons" ("person_id");
+CREATE INDEX IF NOT EXISTS idx_cruises_project_id ON "lims"."cruises" ("project_id");
+CREATE INDEX IF NOT EXISTS idx_cruises_vessel_id ON "lims"."cruises" ("vessel_id");
+CREATE INDEX IF NOT EXISTS idx_cruises_region_id ON "lims"."cruises" ("region_id");
+CREATE INDEX IF NOT EXISTS idx_cruises_ecosystem_id ON "lims"."cruises" ("ecosystem_id");
+CREATE INDEX IF NOT EXISTS idx_cruises_chief_scientist_person_id ON "lims"."cruises" ("chief_scientist_person_id");
+CREATE INDEX IF NOT EXISTS idx_batch_steps_batch_id ON "lims"."batch_steps" ("batch_id");
+CREATE INDEX IF NOT EXISTS idx_batch_steps_sop_id ON "lims"."batch_steps" ("sop_id");
+CREATE INDEX IF NOT EXISTS idx_primers_target_gene_id ON "lims"."primers" ("target_gene_id");
+CREATE INDEX IF NOT EXISTS idx_sop_sop_id_origin ON "lims"."sop" ("sop_id_origin");
+CREATE INDEX IF NOT EXISTS idx_sop_title ON "lims"."sop" USING gin(to_tsvector('english', "title"));
+CREATE INDEX IF NOT EXISTS idx_equipment_room_id ON "lims"."equipment" ("room_id");
+CREATE INDEX IF NOT EXISTS idx_orders_project_id ON "lims"."orders" ("project_id");
+CREATE INDEX IF NOT EXISTS idx_orders_item_id ON "lims"."orders" ("item_id");
+CREATE INDEX IF NOT EXISTS idx_orders_supplier_id ON "lims"."orders" ("supplier_id");
+CREATE INDEX IF NOT EXISTS idx_orders_status_id ON "lims"."orders" ("status_id");
+CREATE INDEX IF NOT EXISTS idx_reagents_project_id ON "lims"."reagents" ("project_id");
+CREATE INDEX IF NOT EXISTS idx_reagents_category_id ON "lims"."reagents" ("category_id");
+CREATE INDEX IF NOT EXISTS idx_reagents_storage_id ON "lims"."reagents" ("storage_id");
+CREATE INDEX IF NOT EXISTS idx_reagents_order_id ON "lims"."reagents" ("order_id");
+CREATE INDEX IF NOT EXISTS idx_publications_project_id ON "lims"."publications" ("project_id");
+CREATE INDEX IF NOT EXISTS idx_publications_doi ON "lims"."publications" ("doi");
+CREATE INDEX IF NOT EXISTS idx_publications_title ON "lims"."publications" USING gin(to_tsvector('english', "title"));
+
+-- Lab Schema Indexes
+CREATE INDEX IF NOT EXISTS idx_experiments_id_date ON "lab"."experiments" ("experiment_id", "experiment_date");
+CREATE INDEX IF NOT EXISTS idx_experiments_person_id ON "lab"."experiments" ("person_id");
+CREATE INDEX IF NOT EXISTS idx_experiments_projects_id_date ON "lab"."experiments_projects" ("experiment_id", "experiment_date");
+CREATE INDEX IF NOT EXISTS idx_experiments_projects_project_id ON "lab"."experiments_projects" ("project_id");
+CREATE INDEX IF NOT EXISTS idx_experiments_samples_id_date ON "lab"."experiments_samples" ("experiment_id", "experiment_date");
+CREATE INDEX IF NOT EXISTS idx_experiments_samples_sample_id ON "lab"."experiments_samples" ("sample_id");
+CREATE INDEX IF NOT EXISTS idx_protocol_runs_experiment_id ON "lab"."protocol_runs" ("experiment_id");
+CREATE INDEX IF NOT EXISTS idx_protocol_runs_person_id ON "lab"."protocol_runs" ("person_id");
+CREATE INDEX IF NOT EXISTS idx_sampling_id_date ON "lab"."sampling" ("sampling_id", "sampling_date");
+CREATE INDEX IF NOT EXISTS idx_sampling_project_id ON "lab"."sampling" ("project_id");
+CREATE INDEX IF NOT EXISTS idx_sampling_cruise_id ON "lab"."sampling" ("cruise_id");
+CREATE INDEX IF NOT EXISTS idx_sampling_geom ON "lab"."sampling" USING GIST ("geom");
+CREATE INDEX IF NOT EXISTS idx_fishing_sampling_id_date ON "lab"."fishing" ("sampling_id", "sampling_date");
+CREATE INDEX IF NOT EXISTS idx_fishing_taxon_id ON "lab"."fishing" ("taxon_id");
+CREATE INDEX IF NOT EXISTS idx_individual_catch_fishing_id ON "lab"."individual_catch_catch" ("fishing_id");
+CREATE INDEX IF NOT EXISTS idx_individual_catch_taxon_id ON "lab"."individual_catch_catch" ("taxon_id");
+CREATE INDEX IF NOT EXISTS idx_sampling_abiotic_sampling_id ON "lab"."sampling_abiotic_data" ("sampling_id", "sampling_date");
+CREATE INDEX IF NOT EXISTS idx_root_samples_sample_id_date ON "lab"."root_samples" ("sample_id", "sample_creation_date");
+CREATE INDEX IF NOT EXISTS idx_root_samples_parent_id ON "lab"."root_samples" ("parent_sample_id");
+CREATE INDEX IF NOT EXISTS idx_root_samples_sampling_id_date ON "lab"."root_samples" ("sampling_id", "sampling_date");
+CREATE INDEX IF NOT EXISTS idx_root_samples_experiment_id_date ON "lab"."root_samples" ("experiment_id", "experiment_date");
+CREATE INDEX IF NOT EXISTS idx_root_samples_project_id ON "lab"."root_samples" ("project_id");
+CREATE INDEX IF NOT EXISTS idx_fish_sample_id_date ON "lab"."fish" ("sample_id", "sample_creation_date");
+CREATE INDEX IF NOT EXISTS idx_fish_species_id ON "lab"."fish" ("species_id");
+CREATE INDEX IF NOT EXISTS idx_tissue_sample_id_date ON "lab"."tissue" ("sample_id", "sample_creation_date");
+CREATE INDEX IF NOT EXISTS idx_otoliths_otolith_id_date ON "lab"."otoliths" ("otolith_id", "sample_creation_date");
+CREATE INDEX IF NOT EXISTS idx_otoliths_reader_person_id ON "lab"."otoliths" ("reader_person_id");
+CREATE INDEX IF NOT EXISTS idx_dna_sample_id_date ON "lab"."dna" ("sample_id", "sample_creation_date");
+CREATE INDEX IF NOT EXISTS idx_rna_sample_id_date ON "lab"."rna" ("sample_id", "sample_creation_date");
+CREATE INDEX IF NOT EXISTS idx_dissections_sample_id ON "lab"."dissections" ("sample_id");
+CREATE INDEX IF NOT EXISTS idx_dissections_experiment_id ON "lab"."dissections" ("experiment_id", "experiment_date");
+CREATE INDEX IF NOT EXISTS idx_nanodrop_sample_id ON "lab"."nanodrop" ("sample_id", "sample_creation_date");
+CREATE INDEX IF NOT EXISTS idx_qubit_sample_id ON "lab"."qubit" ("sample_id", "sample_creation_date");
+CREATE INDEX IF NOT EXISTS idx_tapestation_sample_id ON "lab"."tapestation" ("sample_id", "sample_creation_date");
+CREATE INDEX IF NOT EXISTS idx_gelelectrophoresis_sample_id ON "lab"."gelelectrophoresis" ("sample_id", "sample_creation_date");
+CREATE INDEX IF NOT EXISTS idx_qpcr_sample_id ON "lab"."qpcr" ("sample_id", "sample_creation_date");
+CREATE INDEX IF NOT EXISTS idx_library_sample_id ON "lab"."library" ("sample_id", "sample_creation_date");
+CREATE INDEX IF NOT EXISTS idx_sequencing_run_sample_id ON "lab"."sequencing_run" ("sample_id");
+CREATE INDEX IF NOT EXISTS idx_sequencing_run_library_id ON "lab"."sequencing_run" ("library_id");
+CREATE INDEX IF NOT EXISTS idx_seq_dataset_sample_id ON "lab"."Seq_dataset" ("sample_id");
+CREATE INDEX IF NOT EXISTS idx_seq_dataset_sequencing_run_id ON "lab"."Seq_dataset" ("sequencing_run_id");
+CREATE INDEX IF NOT EXISTS idx_datasets_sample_id ON "lab"."datasets" ("sample_id");
+CREATE INDEX IF NOT EXISTS idx_datasets_experiment_id ON "lab"."datasets" ("experiment_id", "experiment_date");
+
+-- Bioinformatics Schema Indexes
+CREATE INDEX IF NOT EXISTS idx_analysis_pipelines_id ON "bioinformatics"."analysis_pipelines" ("pipeline_id");
+CREATE INDEX IF NOT EXISTS idx_analysis_pipelines_name ON "bioinformatics"."analysis_pipelines" USING gin(to_tsvector('english', "pipeline_name"));
+CREATE INDEX IF NOT EXISTS idx_analysis_runs_id_date ON "bioinformatics"."analysis_runs" ("run_id", "experiment_date");
+CREATE INDEX IF NOT EXISTS idx_analysis_runs_pipeline_id ON "bioinformatics"."analysis_runs" ("pipeline_id");
+CREATE INDEX IF NOT EXISTS idx_analysis_runs_sequencing_id ON "bioinformatics"."analysis_runs" ("sequencing_id", "sequencing_date");
+CREATE INDEX IF NOT EXISTS idx_edna_assignments_run_id ON "bioinformatics"."edna_assignments" ("run_id");
+CREATE INDEX IF NOT EXISTS idx_edna_assignments_sample_id ON "bioinformatics"."edna_assignments" ("sample_id", "sample_creation_date");
+CREATE INDEX IF NOT EXISTS idx_edna_assignments_taxon_id ON "bioinformatics"."edna_assignments" ("taxon_id");
+
+-- Projects Schema Indexes
+CREATE INDEX IF NOT EXISTS idx_wander_fishingdata_id_date ON "projects"."ProjectWanderfische_FishingData" ("fishing_record_id", "record_date");
+CREATE INDEX IF NOT EXISTS idx_wander_fishingdata_agency_id ON "projects"."ProjectWanderfische_FishingData" ("agency_id");
+CREATE INDEX IF NOT EXISTS idx_wander_fishingdata_project_id ON "projects"."ProjectWanderfische_FishingData" ("project_id");
+CREATE INDEX IF NOT EXISTS idx_wander_fishingdata_geom ON "projects"."ProjectWanderfische_FishingData" USING GIST ("geom_4326");
+CREATE INDEX IF NOT EXISTS idx_wander_fishcatch_fishing_id_date ON "projects"."ProjectWanderfische_FishCatch" ("fishing_record_id", "fishing_record_date");
+CREATE INDEX IF NOT EXISTS idx_wander_fishcatch_taxon_id ON "projects"."ProjectWanderfische_FishCatch" ("taxon_id");
+CREATE INDEX IF NOT EXISTS idx_wander_mail_fishing_id_date ON "projects"."ProjectWanderfische_Mail" ("fishing_record_id", "fishing_record_date");
+CREATE INDEX IF NOT EXISTS idx_wander_mail_sender_id ON "projects"."ProjectWanderfische_Mail" ("sender_person_id");
+CREATE INDEX IF NOT EXISTS idx_wander_conversation_fishing_id_date ON "projects"."ProjectWanderfische_Conversation" ("fishing_record_id", "fishing_record_date");
+CREATE INDEX IF NOT EXISTS idx_wander_chatmessage_conversation_id ON "projects"."ProjectWanderfische_ChatMessage" ("conversation_id");
+
+-- ======================================================================
+-- 3. VIEWS
+-- ======================================================================
 CREATE OR REPLACE VIEW "lims"."project_summary_view" AS
 SELECT
     p.project_id,
@@ -2796,7 +2576,6 @@ LEFT JOIN
 LEFT JOIN
     "lims"."customers" cust ON p.customer_id = cust.customer_id;
 
--- Provides a count of total samples for each sample type.
 CREATE OR REPLACE VIEW "lab"."sample_type_counts_view" AS
 SELECT
     st.sample_type_id,
@@ -2811,7 +2590,6 @@ GROUP BY
 ORDER BY
     total_samples DESC;
     
--- Provides a summary of storage locations and the number of samples in each.
 CREATE OR REPLACE VIEW "lab"."storage_occupancy_view" AS
 WITH sample_counts AS (
     SELECT
@@ -2844,7 +2622,6 @@ WHERE s.box_size_x IS NOT NULL AND s.box_size_y IS NOT NULL
 ORDER BY
     occupancy_ratio DESC;
 
--- Provides a comprehensive overview of projects with all contact details.
 CREATE OR REPLACE VIEW "lims"."projects_with_contact_details_view" AS
 SELECT
     p.project_id,
@@ -2873,7 +2650,6 @@ LEFT JOIN
 LEFT JOIN
     "lims"."customers" c ON p.customer_id = c.customer_id;
 
--- Uses the ltree extension to provide a readable hierarchical view of the taxonomy.
 CREATE OR REPLACE VIEW "reference"."taxon_hierarchy_view" AS
 SELECT
     t.taxon_id,
@@ -2890,7 +2666,6 @@ SELECT
 FROM
     "reference"."taxon" t;
 
--- Shows a comprehensive summary of reagent inventory.
 CREATE OR REPLACE VIEW "lims"."inventory_reagent_summary_view" AS
 SELECT
     r.reagent_id,
@@ -2910,12 +2685,14 @@ LEFT JOIN
 LEFT JOIN
     "reference"."units" ru ON r.quantity_unit_id = ru.unit_id
 LEFT JOIN
-    "lims"."suppliers" s ON r.supplier_id = s.supplier_id
+    "lims"."orders" o ON r.order_id = o.fi_order_nr
+LEFT JOIN
+    "lims"."suppliers" s ON o.supplier_id = s.supplier_id
 LEFT JOIN
     "reference"."status" r_status ON r.status_id = r_status.status_id
 ORDER BY r.expire_date ASC;
 
--- Provides an overview of project progression through the lab pipeline.
+
 CREATE OR REPLACE VIEW "lab"."project_pipeline_progress_view" AS
 SELECT
     p.project_id,
@@ -2952,7 +2729,6 @@ GROUP BY
 ORDER BY
     e.experiment_date DESC;
 
--- Combines all fishing and environmental data from sampling events.
 CREATE OR REPLACE VIEW "lab"."full_sampling_data_view" AS
 SELECT
     s.sampling_id,
@@ -3013,7 +2789,6 @@ LEFT JOIN
     "reference"."status" s_status ON s.status_id = s_status.status_id
 ORDER BY s.sampling_date DESC;
 
--- Summarizes bioinformatics analysis results, linking back to samples and taxa.
 CREATE OR REPLACE VIEW "bioinformatics"."analysis_results_view" AS
 SELECT
     ar.run_id,
@@ -3021,7 +2796,6 @@ SELECT
     ap.version AS pipeline_version,
     ar.sequencing_id,
     ar.sequencing_date,
-    ar.run_date,
     rs.sample_id,
     rs.external_name,
     ea.taxon_id,
@@ -3040,7 +2814,7 @@ JOIN
 LEFT JOIN
     "reference"."taxon" t ON ea.taxon_id = t.taxon_id;
 
--- Provides a summary of publications related to each project.
+
 CREATE OR REPLACE VIEW "lims"."publications_by_project_view" AS
 SELECT
     p.project_id,
@@ -3060,7 +2834,8 @@ LEFT JOIN
 ORDER BY pub.date_publication DESC;
 
 
--- View for a comprehensive summary of project details and metrics
+
+
 CREATE OR REPLACE VIEW "lims"."project_comprehensive_summary_view" AS
 SELECT
     p.project_id,
@@ -3083,8 +2858,6 @@ GROUP BY
     p.project_id, p.title, stat.notes, p.funder, p.start_date, p.end_date
 ORDER BY p.start_date DESC;
 
-
--- View for tracking the progress of an experiment
 CREATE OR REPLACE VIEW "lab"."experiment_progress_overview_view" AS
 SELECT
     e.experiment_id,
@@ -3098,7 +2871,7 @@ SELECT
     COUNT(DISTINCT dna.sample_id) AS samples_dna_extracted,
     COUNT(DISTINCT rna.sample_id) AS samples_rna_extracted,
     COUNT(DISTINCT qu.qubit_id) AS samples_qubit_qc,
-    COUNT(DISTINCT nd.nanopore_id) AS samples_nanodrop_qc,
+    COUNT(DISTINCT nd.nanodrop_id) AS samples_nanodrop_qc,
     COUNT(DISTINCT tap.tapestation_id) AS samples_tapestation_qc,
     COUNT(DISTINCT pcr.sample_id) AS samples_pcr_done,
     COUNT(DISTINCT qpcr.sample_id) AS samples_qpcr_done,
@@ -3126,7 +2899,6 @@ GROUP BY
     stat.notes, e.experiment_date, pers.full_name
 ORDER BY e.experiment_date DESC;
 
--- View to monitor reagent expiration status with more detail.
 CREATE OR REPLACE VIEW "lims"."reagent_status_view" AS
 SELECT
     r.reagent_id,
@@ -3161,7 +2933,6 @@ LEFT JOIN
     "lims"."suppliers" supp ON o.supplier_id = supp.supplier_id
 ORDER BY r.expire_date ASC;
 
--- View for tracking the movement of samples through storage.
 CREATE OR REPLACE VIEW "lab"."storage_log_history_view" AS
 SELECT
     sl.log_id,
@@ -3190,11 +2961,10 @@ LEFT JOIN
 ORDER BY
     sl.move_date DESC;
 
--- View for a summary of bioinformatics analysis results.
+-- -------------------------------------------------------------
 CREATE OR REPLACE VIEW "bioinformatics"."analysis_results_summary_view" AS
 SELECT
     ar.run_id,
-    ar.run_date,
     ar.person_id,
     pers.full_name AS analyst_name,
     ap.pipeline_name,
@@ -3224,18 +2994,21 @@ LEFT JOIN
 LEFT JOIN
     "lims"."personal" pers ON ar.person_id = pers.person_id
 LEFT JOIN
+    "reference"."reference_databases" rdb ON ar.reference_db_id::text = rdb.db_id::text -- Corrected type cast for joining
+LEFT JOIN
+    "bioinformatics"."edna_assignments" ea ON ar.run_id = ea.run_id AND ar.experiment_date = ea.experiment_date
+LEFT JOIN
     "reference"."taxon" t ON ea.taxon_id = t.taxon_id
-LEFT JOIN
-    "reference"."reference_databases" rdb ON ar.reference_db_id = rdb.db_id
-LEFT JOIN
-    "bioinformatics"."edna_assignments" ea ON ar.run_id = ea.run_id AND ar.experiment_date = ea.experiment_date;
+ORDER BY ar.run_id;
+
+-- -------------------------------------------------------------
 
 
--- View to join all information related to a sequencing run.
+
 CREATE OR REPLACE VIEW "lab"."full_sequencing_run_view" AS
 SELECT
     sr.sequencing_run_id,
-    sr.sequencing_date,
+--    sr.sequencing_date,
     sr.person_id,
     pers.full_name AS sequencer_person_name,
     sr.sequencer,
@@ -3264,12 +3037,8 @@ LEFT JOIN
 LEFT JOIN
     "lims"."projects" p ON sr.project_id = p.project_id;
 
-
--- This view denormalizes the database, providing a single, powerful table
--- that connects samples to their entire lifecycle from collection to analysis.
 CREATE OR REPLACE VIEW "lab"."global_lims_view" AS
 SELECT
-    -- Root Sample & General Info
     rs.sample_id,
     rs.sample_type_id,
     st.sample_type_abrv,
@@ -3279,15 +3048,11 @@ SELECT
     rs.reception_date,
     rs_status.notes AS sample_status,
     rs.notes AS sample_notes,
-
-    -- Project & Customer Info
     rs.project_id,
     p.title AS project_title,
     p.description AS project_description,
     p_pi.full_name AS principal_investigator,
     c.customer_name,
-
-    -- Sampling Event Info
     rs.sampling_id,
     s.sampling_date,
     s.location_name,
@@ -3297,53 +3062,39 @@ SELECT
     s.fishing_method,
     s.total_catch_quantity_kg,
     s.total_catch_quantity_fish,
-    
-    -- Abiotic Data
     sad.temperature_atmospheric_c,
     sad.salinity,
     sad.oxygen,
     sad.ph,
     sad.weather,
-
-    -- Experiment Info
     rs.experiment_id,
     exp.experiment_title,
     exp.experiment_date,
     exp_pers.full_name AS experiment_lead,
     dis.dissection_id,
-    dis.dissection_date,
+    dis.created_at AS dissection_date,
     dis.gonad_weight_g,
     dis.liver_weight_g,
-    
-    -- Storage Info
     rs.storage_id,
     rs.storage_position,
     storage.freezer,
     storage_room.address AS storage_room_address,
     sl.move_date AS last_storage_move_date,
     sl.person_id AS last_move_person_id,
-
-    -- Fish Details
     f.species_id,
     f_taxon.en_name AS fish_species_name,
     f.total_length_mm,
     f.weight_g AS fish_weight_g,
     f.sex AS fish_sex,
-    
-    -- DNA/RNA Details
     dna.concentration_ng_ul AS dna_concentration,
     dna.a260_280 AS dna_a260_280,
     rna.concentration_ng_ul AS rna_concentration,
     rna.a260_280 AS rna_a260_280,
-
-    -- Nanodrop/Qubit Details
-    nd.nanopore_id,
+    nd.nanodrop_id,
     nd.nanodrop_concentration,
     nd.a260_280 AS nd_a260_280,
     qu.qubit_id,
     qu.qubit_original_sample_conc,
-    
-    -- Library & Sequencing Details
     lib.library_id,
     lib.library_name,
     lib.library_prep_kit,
@@ -3351,8 +3102,6 @@ SELECT
     sr.sequencer,
     sr.total_reads,
     sr.genbank_accession_number,
-    
-    -- Bioinformatics Analysis
     ar.run_id AS analysis_run_id,
     ap.pipeline_name,
     ap.version AS pipeline_version,
@@ -3361,7 +3110,6 @@ SELECT
     ea_taxon.en_name AS assigned_taxon_name,
     ea.read_count,
     ea.confidence
-
 FROM
     "lab"."root_samples" rs
 LEFT JOIN
@@ -3413,7 +3161,7 @@ LEFT JOIN
 LEFT JOIN
     "lab"."sequencing_run" sr ON rs.sample_id = sr.sample_id AND rs.sample_creation_date = sr.sample_creation_date
 LEFT JOIN
-    "bioinformatics"."analysis_runs" ar ON sr.sequencing_run_id = ar.sequencing_id AND sr.experiment_date = ar.experiment_date
+    "bioinformatics"."analysis_runs" ar ON sr.sequencing_run_id = ar.sequencing_id AND sr.experiment_date = ar.sequencing_date
 LEFT JOIN
     "bioinformatics"."analysis_pipelines" ap ON ar.pipeline_id = ap.pipeline_id
 LEFT JOIN
@@ -3423,37 +3171,10 @@ LEFT JOIN
 LEFT JOIN
     "reference"."taxon" ea_taxon ON ea.taxon_id = ea_taxon.taxon_id;
 
-
-
-
-
-
 -- ======================================================================
--- F08. policies  RLS
+-- 4. RLS POLICIES
 -- ======================================================================
-
-CREATE OR REPLACE FUNCTION "lims".is_member_of_project(p_project_id text)
-RETURNS BOOLEAN AS $$
-DECLARE
-    current_person_id text := current_setting('lims.current_person_id', true);
-BEGIN
-    IF current_person_id IS NULL THEN
-        RETURN FALSE;
-    END IF;
-
-    -- Check if the user is the Principal Investigator (PI)
-    RETURN EXISTS (
-        SELECT 1 FROM "lims"."projects" WHERE project_id = p_project_id AND pi_person_id = current_person_id
-    ) OR EXISTS (
-        -- Check if the user is a member of the project
-        SELECT 1 FROM "lims"."project_persons" WHERE project_id = p_project_id AND person_id = current_person_id
-    );
-END;
-$$ LANGUAGE plpgsql STABLE;
-
-
 -- Enable RLS on all relevant tables
--- Reference and general tables with minimal restrictions
 ALTER TABLE "lims"."personal" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "lims"."external_contacts" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "lims"."customers" ENABLE ROW LEVEL SECURITY;
@@ -3462,13 +3183,9 @@ ALTER TABLE "lims"."sop" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "lims"."publications" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "lims"."reagents" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "lab"."storage" ENABLE ROW LEVEL SECURITY;
-
--- Core Lab workflow tables
 ALTER TABLE "lab"."root_samples" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "lab"."sampling" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "lab"."experiments" ENABLE ROW LEVEL SECURITY;
-
--- All child and metadata tables
 ALTER TABLE "lab"."fishing" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "lab"."fish" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "lab"."tissue" ENABLE ROW LEVEL SECURITY;
@@ -3487,295 +3204,51 @@ ALTER TABLE "lab"."datasets" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "bioinformatics"."analysis_runs" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "bioinformatics"."edna_assignments" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "bioinformatics"."analysis_pipelines" ENABLE ROW LEVEL SECURITY;
-
--- Project-specific tables
 ALTER TABLE "projects"."ProjectWanderfische_FishingData" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "projects"."ProjectWanderfische_FishCatch" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "projects"."ProjectWanderfische_Mail" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "projects"."ProjectWanderfische_Conversation" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "projects"."ProjectWanderfische_ChatMessage" ENABLE ROW LEVEL SECURITY;
 
-
 -- Policy Definitions
-
--- Policies for public/general-access tables
-CREATE POLICY personal_rls_policy ON "lims"."personal"
-FOR SELECT USING (TRUE); -- All personal info is public to logged-in users
-
-CREATE POLICY external_contacts_rls_policy ON "lims"."external_contacts"
-FOR SELECT USING (TRUE); -- External contacts can be viewed by all users
-
-CREATE POLICY customer_rls_policy ON "lims"."customers"
-FOR SELECT USING (TRUE); -- Customer information is generally public
-
-CREATE POLICY sop_rls_policy ON "lims"."sop"
-FOR SELECT USING (TRUE); -- SOPs are typically viewable by all lab members
-
-CREATE POLICY public_reagents_policy ON "lims"."reagents"
-FOR SELECT USING (TRUE); -- Reagent inventory is often shared
-
-CREATE POLICY public_storage_policy ON "lab"."storage"
-FOR SELECT USING (TRUE); -- Storage locations are generally public
-
-CREATE POLICY public_pipelines_policy ON "bioinformatics"."analysis_pipelines"
-FOR SELECT USING (TRUE); -- Pipeline definitions can be public
-
-
--- Policies for project-related tables using the helper function
-CREATE POLICY project_membership_policy ON "lims"."projects"
-USING ("lims".is_member_of_project(project_id));
-
-CREATE POLICY root_samples_rls_policy ON "lab"."root_samples"
-USING ("lims".is_member_of_project(project_id));
-
-CREATE POLICY sampling_rls_policy ON "lab"."sampling"
-USING ("lims".is_member_of_project(project_id));
-
-CREATE POLICY experiments_rls_policy ON "lab"."experiments"
-USING ("lims".is_member_of_project(project_id));
-
-CREATE POLICY publications_rls_policy ON "lims"."publications"
-USING ("lims".is_member_of_project(project_id));
-
-CREATE POLICY datasets_rls_policy ON "lab"."datasets"
-USING ("lims".is_member_of_project(project_id));
-
--- Policies for child and metadata tables, inheriting permissions from their parent
--- A user can see a record in these tables if they have access to the parent sample or experiment
-CREATE POLICY fishing_rls_policy ON "lab"."fishing"
-USING (EXISTS (SELECT 1 FROM "lab"."sampling" s WHERE s.sampling_id = fishing.sampling_id AND "lims".is_member_of_project(s.project_id)));
-
-CREATE POLICY fish_rls_policy ON "lab"."fish"
-USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = fish.sample_id AND "lims".is_member_of_project(rs.project_id)));
-
-CREATE POLICY tissue_rls_policy ON "lab"."tissue"
-USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = tissue.sample_id AND "lims".is_member_of_project(rs.project_id)));
-
-CREATE POLICY dna_rls_policy ON "lab"."dna"
-USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = dna.sample_id AND "lims".is_member_of_project(rs.project_id)));
-
-CREATE POLICY rna_rls_policy ON "lab"."rna"
-USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = rna.sample_id AND "lims".is_member_of_project(rs.project_id)));
-
-CREATE POLICY otoliths_rls_policy ON "lab"."otoliths"
-USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = otoliths.parent_sample_id AND "lims".is_member_of_project(rs.project_id)));
-
-CREATE POLICY dissections_rls_policy ON "lab"."dissections"
-USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = dissections.sample_id AND "lims".is_member_of_project(rs.project_id)));
-
-CREATE POLICY nanodrop_rls_policy ON "lab"."nanodrop"
-USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = nanodrop.sample_id AND "lims".is_member_of_project(rs.project_id)));
-
-CREATE POLICY qubit_rls_policy ON "lab"."qubit"
-USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = qubit.sample_id AND "lims".is_member_of_project(rs.project_id)));
-
-CREATE POLICY tapestation_rls_policy ON "lab"."tapestation"
-USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = tapestation.sample_id AND "lims".is_member_of_project(rs.project_id)));
-
-CREATE POLICY gelelectrophoresis_rls_policy ON "lab"."gelelectrophoresis"
-USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = gelelectrophoresis.sample_id AND "lims".is_member_of_project(rs.project_id)));
-
-CREATE POLICY qpcr_rls_policy ON "lab"."qpcr"
-USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = qpcr.sample_id AND "lims".is_member_of_project(rs.project_id)));
-
-CREATE POLICY library_rls_policy ON "lab"."library"
-USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = library.sample_id AND "lims".is_member_of_project(rs.project_id)));
-
-CREATE POLICY sequencing_run_rls_policy ON "lab"."sequencing_run"
-USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = sequencing_run.sample_id AND "lims".is_member_of_project(rs.project_id)));
-
-CREATE POLICY analysis_runs_rls_policy ON "bioinformatics"."analysis_runs"
-USING (EXISTS (SELECT 1 FROM "lab"."sequencing_run" sr WHERE sr.sequencing_run_id = analysis_runs.sequencing_id AND "lims".is_member_of_project(sr.project_id)));
-
-CREATE POLICY edna_assignments_rls_policy ON "bioinformatics"."edna_assignments"
-USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = edna_assignments.sample_id AND "lims".is_member_of_project(rs.project_id)));
-
--- Policies for ProjectWanderfische
-CREATE POLICY wander_fishingdata_policy ON "projects"."ProjectWanderfische_FishingData"
-USING ("lims".is_member_of_project(project_id));
-
-CREATE POLICY wander_fishcatch_policy ON "projects"."ProjectWanderfische_FishCatch"
-USING (EXISTS (
-    SELECT 1 FROM "projects"."ProjectWanderfische_FishingData" fd 
-    WHERE fd.fishing_record_id = fishcatch.fishing_record_id AND fd.record_date = fishcatch.fishing_record_date AND "lims".is_member_of_project(fd.project_id)
-));
-
-CREATE POLICY wander_mail_policy ON "projects"."ProjectWanderfische_Mail"
-USING (EXISTS (
-    SELECT 1 FROM "projects"."ProjectWanderfische_FishingData" fd 
-    WHERE fd.fishing_record_id = mail.fishing_record_id AND fd.record_date = mail.fishing_record_date AND "lims".is_member_of_project(fd.project_id)
-));
-
-CREATE POLICY wander_conversation_policy ON "projects"."ProjectWanderfische_Conversation"
-USING (EXISTS (
-    SELECT 1 FROM "projects"."ProjectWanderfische_FishingData" fd 
-    WHERE fd.fishing_record_id = conversation.fishing_record_id AND fd.record_date = conversation.fishing_record_date AND "lims".is_member_of_project(fd.project_id)
-));
-
-CREATE POLICY wander_chatmessage_policy ON "projects"."ProjectWanderfische_ChatMessage"
-USING (EXISTS (
-    SELECT 1 FROM "projects"."ProjectWanderfische_Conversation" conv 
-    WHERE conv.conversation_id = chatmessage.conversation_id
-));
-
-
+CREATE POLICY personal_rls_policy ON "lims"."personal" FOR SELECT USING (TRUE);
+CREATE POLICY external_contacts_rls_policy ON "lims"."external_contacts" FOR SELECT USING (TRUE);
+CREATE POLICY customer_rls_policy ON "lims"."customers" FOR SELECT USING (TRUE);
+CREATE POLICY sop_rls_policy ON "lims"."sop" FOR SELECT USING (TRUE);
+CREATE POLICY public_reagents_policy ON "lims"."reagents" FOR SELECT USING (TRUE);
+CREATE POLICY public_storage_policy ON "lab"."storage" FOR SELECT USING (TRUE);
+CREATE POLICY public_pipelines_policy ON "bioinformatics"."analysis_pipelines" FOR SELECT USING (TRUE);
+CREATE POLICY project_membership_policy ON "lims"."projects" USING ("lims".is_member_of_project(project_id));
+CREATE POLICY root_samples_rls_policy ON "lab"."root_samples" USING ("lims".is_member_of_project(project_id));
+CREATE POLICY sampling_rls_policy ON "lab"."sampling" USING ("lims".is_member_of_project(project_id));
+-- CREATE POLICY datasets_rls_policy ON "lab"."datasets" USING ("lims".is_member_of_project(project_id));
+CREATE POLICY fishing_rls_policy ON "lab"."fishing" USING (EXISTS (SELECT 1 FROM "lab"."sampling" s WHERE s.sampling_id = fishing.sampling_id AND "lims".is_member_of_project(s.project_id)));
+CREATE POLICY fish_rls_policy ON "lab"."fish" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = fish.sample_id AND "lims".is_member_of_project(rs.project_id)));
+CREATE POLICY tissue_rls_policy ON "lab"."tissue" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = tissue.sample_id AND "lims".is_member_of_project(rs.project_id)));
+CREATE POLICY dna_rls_policy ON "lab"."dna" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = dna.sample_id AND "lims".is_member_of_project(rs.project_id)));
+CREATE POLICY rna_rls_policy ON "lab"."rna" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = rna.sample_id AND "lims".is_member_of_project(rs.project_id)));
+CREATE POLICY otoliths_rls_policy ON "lab"."otoliths" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = otoliths.parent_sample_id AND "lims".is_member_of_project(rs.project_id)));
+CREATE POLICY dissections_rls_policy ON "lab"."dissections" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = dissections.sample_id AND "lims".is_member_of_project(rs.project_id)));
+CREATE POLICY nanodrop_rls_policy ON "lab"."nanodrop" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = nanodrop.sample_id AND "lims".is_member_of_project(rs.project_id)));
+CREATE POLICY qubit_rls_policy ON "lab"."qubit" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = qubit.sample_id AND "lims".is_member_of_project(rs.project_id)));
+CREATE POLICY tapestation_rls_policy ON "lab"."tapestation" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = tapestation.sample_id AND "lims".is_member_of_project(rs.project_id)));
+CREATE POLICY gelelectrophoresis_rls_policy ON "lab"."gelelectrophoresis" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = gelelectrophoresis.sample_id AND "lims".is_member_of_project(rs.project_id)));
+CREATE POLICY qpcr_rls_policy ON "lab"."qpcr" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = qpcr.sample_id AND "lims".is_member_of_project(rs.project_id)));
+CREATE POLICY library_rls_policy ON "lab"."library" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = library.sample_id AND "lims".is_member_of_project(rs.project_id)));
+CREATE POLICY sequencing_run_rls_policy ON "lab"."sequencing_run" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = sequencing_run.sample_id AND "lims".is_member_of_project(rs.project_id)));
+CREATE POLICY analysis_runs_rls_policy ON "bioinformatics"."analysis_runs" USING (EXISTS (SELECT 1 FROM "lab"."sequencing_run" sr WHERE sr.sequencing_run_id = analysis_runs.sequencing_id AND "lims".is_member_of_project(sr.project_id)));
+CREATE POLICY edna_assignments_rls_policy ON "bioinformatics"."edna_assignments" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = edna_assignments.sample_id AND "lims".is_member_of_project(rs.project_id)));
+CREATE POLICY wander_fishingdata_policy ON "projects"."ProjectWanderfische_FishingData" USING ("lims".is_member_of_project(project_id));
+CREATE POLICY wander_fishcatch_policy ON "projects"."ProjectWanderfische_FishCatch" USING (EXISTS (SELECT 1 FROM "projects"."ProjectWanderfische_FishingData" fd WHERE fd.fishing_record_id = fishcatch.fishing_record_id AND fd.record_date = fishcatch.fishing_record_date AND "lims".is_member_of_project(fd.project_id)));
+CREATE POLICY wander_mail_policy ON "projects"."ProjectWanderfische_Mail" USING (EXISTS (SELECT 1 FROM "projects"."ProjectWanderfische_FishingData" fd WHERE fd.fishing_record_id = mail.fishing_record_id AND fd.record_date = mail.fishing_record_date AND "lims".is_member_of_project(fd.project_id)));
+CREATE POLICY wander_conversation_policy ON "projects"."ProjectWanderfische_Conversation" USING (EXISTS (SELECT 1 FROM "projects"."ProjectWanderfische_FishingData" fd WHERE fd.fishing_record_id = conversation.fishing_record_id AND fd.record_date = conversation.fishing_record_date AND "lims".is_member_of_project(fd.project_id)));
+CREATE POLICY wander_chatmessage_policy ON "projects"."ProjectWanderfische_ChatMessage" USING (EXISTS (SELECT 1 FROM "projects"."ProjectWanderfische_Conversation" conv WHERE conv.conversation_id = chatmessage.conversation_id));
 
 -- ======================================================================
--- F09. JSONB QUERY EXAMPLES
+-- 5. FOREIGN KEYS & UNIQUE CONSTRAINTS
 -- ======================================================================
-
--- 1. Finding dissection records where the stomach contents contain a specific item.
---    The "@>" operator checks if the JSONB document on the left contains
---    the JSONB document on the right. This is a very powerful and fast way
---    to search within JSONB arrays and objects.
-SELECT
-    dissection_id,
-    sample_id,
-    stomach_contents_jsonb
-FROM
-    "lab"."dissections"
-WHERE
-    stomach_contents_jsonb @> '[{"item": "shrimp"}]'::jsonb;
-
-
--- 2. Finding dissection records where an item has a quantity greater than 5.
---    The "jsonb_array_elements" function expands a JSON array into a set of rows.
---    This allows  to filter on properties of individual elements within the array.
-SELECT
-    dissection_id,
-    sample_id,
-    item_details ->> 'item' AS food_item,
-    (item_details ->> 'quantity')::integer AS quantity
-FROM
-    "lab"."dissections",
-    jsonb_array_elements("stomach_contents_jsonb") AS item_details
-WHERE
-    (item_details ->> 'quantity')::integer > 5;
-
-
--- 3. Extracting nested data from the original JSONB column in the fishing data.
---    This demonstrates how to pull specific values from a nested JSON structure.
-SELECT
-    fishing_record_id,
-    original_data_jsonb ->> 'Wasserkörpername' AS water_body_name,
-    original_data_jsonb -> 'fishing_details' ->> 'method' AS fishing_method
-FROM
-    "projects"."ProjectWanderfische_FishingData"
-WHERE
-    original_data_jsonb ->> 'Fischgewässertyp' = 'FiGt_23';
-
-
--- 4. Finding all analysis runs that used a specific parameter value.
---    The "?|" operator checks if a JSONB object contains any of the keys in an array.
---    The "@>" operator checks for a specific key-value pair.
-SELECT
-    run_id,
-    pipeline_id,
-    parameters_jsonb -> 'pipeline_settings' -> 'min_quality' AS min_quality_setting
-FROM
-    "bioinformatics"."analysis_runs"
-WHERE
-    parameters_jsonb @> '{"pipeline_settings": {"min_quality": 30}}'::jsonb;
-
-
--- 5. Aggregating JSONB data into a single object.
---    This is useful for creating summaries or consolidating multiple records.
-SELECT
-    fishing_record_id,
-    jsonb_agg(
-        jsonb_build_object(
-            'scientific_name', scientific_name_raw,
-            'count', total_count
-        )
-    ) AS fish_counts
-FROM
-    "projects"."ProjectWanderfische_FishCatch"
-GROUP BY
-    fishing_record_id;
-
-
--- ======================================================================
--- B. LTREE QUERY EXAMPLES
---    These queries are essential for navigating and querying 
---    hierarchical taxonomic data in the "reference.taxon" table.
--- ======================================================================
-
--- 1. Find all descendants of a specific taxon (e.g., all fish species under "Chordata").
---    The "<@" operator finds all ancestors, and "@>" finds all descendants.
-SELECT
-    taxon_id,
-    en_name,
-    rank
-FROM
-    "reference"."taxon"
-WHERE
-    path <@ 'Animalia.Chordata'::ltree;
-
-
--- 2. Find the full lineage (all ancestors) of a specific taxon (e.g., "Gadus_morhua").
---    This query returns the entire path from the highest rank down to the specific taxon.
-SELECT
-    ancestor.taxon_id,
-    ancestor.en_name,
-    ancestor.rank
-FROM
-    "reference"."taxon" AS descendant
-JOIN
-    "reference"."taxon" AS ancestor ON descendant.path @> ancestor.path
-WHERE
-    descendant.taxon_id = 'Gadus_morhua'
-ORDER BY
-    nlevel(ancestor.path) ASC;
-
-
--- 3. Find the most specific common ancestor of a group of taxa.
---    The "lca" (Lowest Common Ancestor) function is extremely useful for
---    identifying shared taxonomic categories among a set of samples.
-SELECT
-    t.en_name
-FROM
-    "reference"."taxon" t
-WHERE
-    t.path = lca(
-        (SELECT array_agg(path) FROM "reference"."taxon" WHERE taxon_id IN ('Gadus_morhua', 'Salmo_salar'))
-    );
-
-
--- 4. Find all direct children of a specific taxon (e.g., all families under "Gadiformes").
---    This uses "nlevel" to filter for nodes at a specific depth in the hierarchy.
-SELECT
-    taxon_id,
-    en_name,
-    rank
-FROM
-    "reference"."taxon"
-WHERE
-    path @> 'Animalia.Chordata.Actinopterygii.Gadiformes'::ltree AND nlevel(path) = nlevel('Animalia.Chordata.Actinopterygii.Gadiformes'::ltree) + 1;
-
-
--- 5. Find all taxa at a specific rank (e.g., all genera).
---    This is a simple but powerful way to browse  taxonomy.
-SELECT
-    taxon_id,
-    en_name
-FROM
-    "reference"."taxon"
-WHERE
-    rank = 'genus'
-ORDER BY
-    en_name;
-
-
-
-
--- =========================================================
--- F10. FK
--- =========================================================
--- Reference Schema
 ALTER TABLE "reference"."taxon" ADD CONSTRAINT fk_taxon_parent FOREIGN KEY ("taxon_parent") REFERENCES "reference"."taxon"("taxon_id");
 ALTER TABLE "reference"."units" ADD CONSTRAINT fk_parent_unit FOREIGN KEY ("parent_unit_id") REFERENCES "reference"."units"("unit_id");
-
--- Lims Schema
 ALTER TABLE "lims"."personal" ADD CONSTRAINT fk_personal_status FOREIGN KEY ("status_id") REFERENCES "reference"."status"("status_id");
 ALTER TABLE "lims"."projects" ADD CONSTRAINT fk_projects_status FOREIGN KEY ("status_id") REFERENCES "reference"."status"("status_id");
 ALTER TABLE "lims"."projects" ADD CONSTRAINT fk_projects_pi FOREIGN KEY ("pi_person_id") REFERENCES "lims"."personal"("person_id");
@@ -3815,8 +3288,6 @@ ALTER TABLE "lims"."publications" ADD CONSTRAINT fk_publications_type FOREIGN KE
 ALTER TABLE "lims"."publications" ADD CONSTRAINT fk_publications_project FOREIGN KEY ("project_id") REFERENCES "lims"."projects"("project_id");
 ALTER TABLE "lims"."publications" ADD CONSTRAINT fk_publications_author1 FOREIGN KEY ("first_author_person_id") REFERENCES "lims"."personal"("person_id");
 ALTER TABLE "lims"."publications" ADD CONSTRAINT fk_publications_author_corr FOREIGN KEY ("corresponding_author_person_id") REFERENCES "lims"."personal"("person_id");
-
--- Lab Schema
 ALTER TABLE "lab"."storage" ADD CONSTRAINT fk_storage_room FOREIGN KEY ("room_id") REFERENCES "reference"."room"("room_id");
 ALTER TABLE "lab"."storage" ADD CONSTRAINT fk_storage_project FOREIGN KEY ("project_id") REFERENCES "lims"."projects"("project_id");
 ALTER TABLE "lab"."experiments_projects" ADD CONSTRAINT fk_exp_proj_exp FOREIGN KEY ("experiment_id", "experiment_date") REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
@@ -3849,7 +3320,11 @@ ALTER TABLE "lab"."storage_log" ADD CONSTRAINT fk_storage_log_sample FOREIGN KEY
 ALTER TABLE "lab"."storage_log" ADD CONSTRAINT fk_storage_log_storage FOREIGN KEY ("storage_id") REFERENCES "lab"."storage"("storage_id");
 ALTER TABLE "lab"."storage_log" ADD CONSTRAINT fk_storage_log_person FOREIGN KEY ("person_id") REFERENCES "lims"."personal"("person_id");
 ALTER TABLE "lab"."storage_log" ADD CONSTRAINT fk_storage_log_status FOREIGN KEY ("status_id") REFERENCES "reference"."status"("status_id");
-ALTER TABLE "lab"."root_samples" ADD CONSTRAINT fk_root_sample_parent FOREIGN KEY ("parent_sample_id") REFERENCES "lab"."root_samples"("sample_id");
+
+ALTER TABLE "lab"."root_samples" ADD CONSTRAINT fk_root_sample_parent FOREIGN KEY ("parent_sample_id", "parental_sample_creation_date")  REFERENCES "lab"."root_samples"("sample_id", "sample_creation_date");
+-- Adds a foreign key to the root sample, referencing its ID and creation date. This assumes the root_sample_id and root_sample_creation_date will point to the original sample in the hierarchy.
+ALTER TABLE "lab"."root_samples" ADD CONSTRAINT fk_root_sample_root FOREIGN KEY ("root_sample_id", "root_sample_creation_date")  REFERENCES "lab"."root_samples"("sample_id", "sample_creation_date");
+
 ALTER TABLE "lab"."root_samples" ADD CONSTRAINT fk_root_sample_type FOREIGN KEY ("sample_type_id") REFERENCES "reference"."samples_type"("sample_type_id");
 ALTER TABLE "lab"."root_samples" ADD CONSTRAINT fk_root_sample_project FOREIGN KEY ("project_id") REFERENCES "lims"."projects"("project_id");
 ALTER TABLE "lab"."root_samples" ADD CONSTRAINT fk_root_sample_customer FOREIGN KEY ("customer_id") REFERENCES "lims"."customers"("customer_id");
@@ -3874,7 +3349,7 @@ ALTER TABLE "lab"."tissue" ADD CONSTRAINT fk_tissue_project FOREIGN KEY ("projec
 ALTER TABLE "lab"."tissue" ADD CONSTRAINT fk_tissue_batch FOREIGN KEY ("batch_id") REFERENCES "lims"."batch"("batch_id");
 ALTER TABLE "lab"."tissue" ADD CONSTRAINT fk_tissue_step FOREIGN KEY ("step_id") REFERENCES "lims"."batch_steps"("step_id");
 ALTER TABLE "lab"."tissue" ADD CONSTRAINT fk_tissue_status FOREIGN KEY ("status_id") REFERENCES "reference"."status"("status_id");
-ALTER TABLE "lab"."otoliths" ADD CONSTRAINT fk_otoliths_parent_sample FOREIGN KEY ("parent_sample_id") REFERENCES "lab"."root_samples"("sample_id");
+ALTER TABLE "lab"."otoliths" ADD CONSTRAINT fk_otoliths_parent_sample FOREIGN KEY ("parent_sample_id", "sample_creation_date") REFERENCES "lab"."root_samples"("sample_id", "sample_creation_date");
 ALTER TABLE "lab"."otoliths" ADD CONSTRAINT fk_otoliths_reader FOREIGN KEY ("reader_person_id") REFERENCES "lims"."personal"("person_id");
 ALTER TABLE "lab"."otoliths" ADD CONSTRAINT fk_otoliths_project FOREIGN KEY ("project_id") REFERENCES "lims"."projects"("project_id");
 ALTER TABLE "lab"."otoliths" ADD CONSTRAINT fk_otoliths_batch FOREIGN KEY ("batch_id") REFERENCES "lims"."batch"("batch_id");
@@ -3882,13 +3357,11 @@ ALTER TABLE "lab"."otoliths" ADD CONSTRAINT fk_otoliths_step FOREIGN KEY ("step_
 ALTER TABLE "lab"."otoliths" ADD CONSTRAINT fk_otoliths_status FOREIGN KEY ("status_id") REFERENCES "reference"."status"("status_id");
 ALTER TABLE "lab"."dna" ADD CONSTRAINT fk_dna_sample FOREIGN KEY ("sample_id", "sample_creation_date") REFERENCES "lab"."root_samples"("sample_id", "sample_creation_date");
 ALTER TABLE "lab"."dna" ADD CONSTRAINT fk_dna_storage FOREIGN KEY ("storage_id") REFERENCES "lab"."storage"("storage_id");
-ALTER TABLE "lab"."dna" ADD CONSTRAINT fk_dna_project FOREIGN KEY ("project_id") REFERENCES "lims"."projects"("project_id");
 ALTER TABLE "lab"."dna" ADD CONSTRAINT fk_dna_batch FOREIGN KEY ("batch_id") REFERENCES "lims"."batch"("batch_id");
 ALTER TABLE "lab"."dna" ADD CONSTRAINT fk_dna_step FOREIGN KEY ("step_id") REFERENCES "lims"."batch_steps"("step_id");
 ALTER TABLE "lab"."dna" ADD CONSTRAINT fk_dna_status FOREIGN KEY ("status_id") REFERENCES "reference"."status"("status_id");
 ALTER TABLE "lab"."rna" ADD CONSTRAINT fk_rna_sample FOREIGN KEY ("sample_id", "sample_creation_date") REFERENCES "lab"."root_samples"("sample_id", "sample_creation_date");
 ALTER TABLE "lab"."rna" ADD CONSTRAINT fk_rna_storage FOREIGN KEY ("storage_id") REFERENCES "lab"."storage"("storage_id");
-ALTER TABLE "lab"."rna" ADD CONSTRAINT fk_rna_project FOREIGN KEY ("project_id") REFERENCES "lims"."projects"("project_id");
 ALTER TABLE "lab"."rna" ADD CONSTRAINT fk_rna_batch FOREIGN KEY ("batch_id") REFERENCES "lims"."batch"("batch_id");
 ALTER TABLE "lab"."rna" ADD CONSTRAINT fk_rna_step FOREIGN KEY ("step_id") REFERENCES "lims"."batch_steps"("step_id");
 ALTER TABLE "lab"."rna" ADD CONSTRAINT fk_rna_status FOREIGN KEY ("status_id") REFERENCES "reference"."status"("status_id");
@@ -3956,14 +3429,14 @@ ALTER TABLE "lab"."library" ADD CONSTRAINT fk_library_status FOREIGN KEY ("statu
 ALTER TABLE "lab"."library" ADD CONSTRAINT fk_library_project FOREIGN KEY ("project_id") REFERENCES "lims"."projects"("project_id");
 ALTER TABLE "lab"."sequencing_run" ADD CONSTRAINT fk_seq_run_sample FOREIGN KEY ("sample_id", "sample_creation_date") REFERENCES "lab"."root_samples"("sample_id", "sample_creation_date");
 ALTER TABLE "lab"."sequencing_run" ADD CONSTRAINT fk_seq_run_exp FOREIGN KEY ("experiment_id", "experiment_date") REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
-ALTER TABLE "lab"."sequencing_run" ADD CONSTRAINT fk_seq_run_library FOREIGN KEY ("library_id") REFERENCES "lab"."library"("library_id");
+-- ALTER TABLE "lab"."sequencing_run" ADD CONSTRAINT fk_seq_run_library FOREIGN KEY ("library_id") REFERENCES "lab"."library"("library_id");
 ALTER TABLE "lab"."sequencing_run" ADD CONSTRAINT fk_seq_run_person FOREIGN KEY ("person_id") REFERENCES "lims"."personal"("person_id");
 ALTER TABLE "lab"."sequencing_run" ADD CONSTRAINT fk_seq_run_status FOREIGN KEY ("status_id") REFERENCES "reference"."status"("status_id");
 ALTER TABLE "lab"."sequencing_run" ADD CONSTRAINT fk_seq_run_storage FOREIGN KEY ("storage_id") REFERENCES "lab"."storage"("storage_id");
 ALTER TABLE "lab"."sequencing_run" ADD CONSTRAINT fk_seq_run_project FOREIGN KEY ("project_id") REFERENCES "lims"."projects"("project_id");
-ALTER TABLE "lab"."Seq_dataset" ADD CONSTRAINT fk_seq_dataset_library FOREIGN KEY ("library_id") REFERENCES "lab"."library"("library_id");
+-- ALTER TABLE "lab"."Seq_dataset" ADD CONSTRAINT fk_seq_dataset_library FOREIGN KEY ("library_id") REFERENCES "lab"."library"("library_id");
 ALTER TABLE "lab"."Seq_dataset" ADD CONSTRAINT fk_seq_dataset_sample FOREIGN KEY ("sample_id", "sample_creation_date") REFERENCES "lab"."root_samples"("sample_id", "sample_creation_date");
-ALTER TABLE "lab"."Seq_dataset" ADD CONSTRAINT fk_seq_dataset_seq_run FOREIGN KEY ("sequencing_run_id", "experiment_date") REFERENCES "lab"."sequencing_run"("sequencing_run_id", "experiment_date");
+-- ALTER TABLE "lab"."Seq_dataset" ADD CONSTRAINT fk_seq_dataset_seq_run FOREIGN KEY ("sequencing_run_id", "experiment_date") REFERENCES "lab"."sequencing_run"("sequencing_run_id", "experiment_date");
 ALTER TABLE "lab"."datasets" ADD CONSTRAINT fk_datasets_sample FOREIGN KEY ("sample_id", "sample_creation_date") REFERENCES "lab"."root_samples"("sample_id", "sample_creation_date");
 ALTER TABLE "lab"."datasets" ADD CONSTRAINT fk_datasets_ecosystem FOREIGN KEY ("ecosystem_id") REFERENCES "reference"."ecosystem"("ecosystem_id");
 ALTER TABLE "lab"."datasets" ADD CONSTRAINT fk_datasets_exp FOREIGN KEY ("experiment_id", "experiment_date") REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
@@ -3971,41 +3444,33 @@ ALTER TABLE "lab"."datasets" ADD CONSTRAINT fk_datasets_region FOREIGN KEY ("reg
 ALTER TABLE "lab"."datasets" ADD CONSTRAINT fk_datasets_customer FOREIGN KEY ("customer_id") REFERENCES "lims"."customers"("customer_id");
 ALTER TABLE "lab"."datasets" ADD CONSTRAINT fk_datasets_storage FOREIGN KEY ("stored_location_id") REFERENCES "lab"."storage"("storage_id");
 ALTER TABLE "lab"."datasets" ADD CONSTRAINT fk_datasets_status FOREIGN KEY ("status_id") REFERENCES "reference"."status"("status_id");
-
--- Bioinformatics Schema
 ALTER TABLE "bioinformatics"."analysis_pipelines" ADD CONSTRAINT fk_pipelines_exp FOREIGN KEY ("experiment_id", "experiment_date") REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 ALTER TABLE "bioinformatics"."analysis_pipelines" ADD CONSTRAINT fk_pipelines_status FOREIGN KEY ("status_id") REFERENCES "reference"."status"("status_id");
 ALTER TABLE "bioinformatics"."analysis_runs" ADD CONSTRAINT fk_runs_pipeline FOREIGN KEY ("pipeline_id") REFERENCES "bioinformatics"."analysis_pipelines"("pipeline_id");
 ALTER TABLE "bioinformatics"."analysis_runs" ADD CONSTRAINT fk_runs_sequencing FOREIGN KEY ("sequencing_id", "sequencing_date") REFERENCES "lab"."sequencing_run"("sequencing_run_id", "experiment_date");
 ALTER TABLE "bioinformatics"."analysis_runs" ADD CONSTRAINT fk_runs_person FOREIGN KEY ("person_id") REFERENCES "lims"."personal"("person_id");
-ALTER TABLE "bioinformatics"."analysis_runs" ADD CONSTRAINT fk_runs_ref_db FOREIGN KEY ("reference_db_id") REFERENCES "reference"."reference_databases"("db_id");
+-- ALTER TABLE "bioinformatics"."analysis_runs" ADD CONSTRAINT fk_runs_ref_db FOREIGN KEY ("reference_db_id") REFERENCES "reference"."reference_databases"("db_id");
 ALTER TABLE "bioinformatics"."analysis_runs" ADD CONSTRAINT fk_runs_exp FOREIGN KEY ("experiment_id", "experiment_date") REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 ALTER TABLE "bioinformatics"."analysis_runs" ADD CONSTRAINT fk_runs_status FOREIGN KEY ("status_id") REFERENCES "reference"."status"("status_id");
-ALTER TABLE "bioinformatics"."edna_assignments" ADD CONSTRAINT fk_assignments_run FOREIGN KEY ("run_id") REFERENCES "bioinformatics"."analysis_runs"("run_id");
+-- ALTER TABLE "bioinformatics"."edna_assignments" ADD CONSTRAINT fk_assignments_run FOREIGN KEY ("run_id") REFERENCES "bioinformatics"."analysis_runs"("run_id");
 ALTER TABLE "bioinformatics"."edna_assignments" ADD CONSTRAINT fk_assignments_sample FOREIGN KEY ("sample_id", "sample_creation_date") REFERENCES "lab"."root_samples"("sample_id", "sample_creation_date");
 ALTER TABLE "bioinformatics"."edna_assignments" ADD CONSTRAINT fk_assignments_taxon FOREIGN KEY ("taxon_id") REFERENCES "reference"."taxon"("taxon_id");
 ALTER TABLE "bioinformatics"."edna_assignments" ADD CONSTRAINT fk_assignments_exp FOREIGN KEY ("experiment_id", "experiment_date") REFERENCES "lab"."experiments"("experiment_id", "experiment_date");
 ALTER TABLE "bioinformatics"."edna_assignments" ADD CONSTRAINT fk_assignments_status FOREIGN KEY ("status_id") REFERENCES "reference"."status"("status_id");
-
--- Projects Schema
-ALTER TABLE "projects"."ProjectWanderfische_FishingData" ADD CONSTRAINT fk_fishingdata_agency FOREIGN KEY ("agency_id") REFERENCES "lims"."external_contacts"("contact_id");
-ALTER TABLE "projects"."ProjectWanderfische_FishingData" ADD CONSTRAINT fk_fishingdata_project FOREIGN KEY ("project_id") REFERENCES "lims"."projects"("project_id");
-ALTER TABLE "projects"."ProjectWanderfische_FishingData" ADD CONSTRAINT fk_fishingdata_salinity_unit FOREIGN KEY ("salinity_unit_id") REFERENCES "reference"."units"("unit_id");
-ALTER TABLE "projects"."ProjectWanderfische_FishingData" ADD CONSTRAINT fk_fishingdata_oxygen_unit FOREIGN KEY ("oxygen_unit_id") REFERENCES "reference"."units"("unit_id");
-ALTER TABLE "projects"."ProjectWanderfische_FishingData" ADD CONSTRAINT fk_fishingdata_wind_unit FOREIGN KEY ("wind_unit_id") REFERENCES "reference"."units"("unit_id");
-ALTER TABLE "projects"."ProjectWanderfische_FishCatch" ADD CONSTRAINT fk_fishcatch_fishingdata FOREIGN KEY ("fishing_record_id", "fishing_record_date") REFERENCES "projects"."ProjectWanderfische_FishingData"("fishing_record_id", "record_date");
-ALTER TABLE "projects"."ProjectWanderfische_FishCatch" ADD CONSTRAINT fk_fishcatch_taxon FOREIGN KEY ("taxon_id") REFERENCES "reference"."taxon"("taxon_id");
-ALTER TABLE "projects"."ProjectWanderfische_Mail" ADD CONSTRAINT fk_mail_fishingdata FOREIGN KEY ("fishing_record_id", "fishing_record_date") REFERENCES "projects"."ProjectWanderfische_FishingData"("fishing_record_id", "record_date");
-ALTER TABLE "projects"."ProjectWanderfische_Mail" ADD CONSTRAINT fk_mail_sender FOREIGN KEY ("sender_person_id") REFERENCES "lims"."personal"("person_id");
-ALTER TABLE "projects"."ProjectWanderfische_Mail" ADD CONSTRAINT fk_mail_recipient FOREIGN KEY ("recipient_contact_id") REFERENCES "lims"."external_contacts"("contact_id");
-ALTER TABLE "projects"."ProjectWanderfische_Conversation" ADD CONSTRAINT fk_conv_fishingdata FOREIGN KEY ("fishing_record_id", "fishing_record_date") REFERENCES "projects"."ProjectWanderfische_FishingData"("fishing_record_id", "record_date");
-ALTER TABLE "projects"."ProjectWanderfische_ChatMessage" ADD CONSTRAINT fk_chat_conv FOREIGN KEY ("conversation_id") REFERENCES "projects"."ProjectWanderfische_Conversation"("conversation_id");
-ALTER TABLE "projects"."ProjectWanderfische_ChatMessage" ADD CONSTRAINT fk_chat_sender_person FOREIGN KEY ("sender_person_id") REFERENCES "lims"."personal"("person_id");
-ALTER TABLE "projects"."ProjectWanderfische_ChatMessage" ADD CONSTRAINT fk_chat_sender_contact FOREIGN KEY ("sender_contact_id") REFERENCES "lims"."external_contacts"("contact_id");
-
-
--- 2. Unique Constraints
-
+-- ALTER TABLE "projects"."ProjectWanderfische_FishingData" ADD CONSTRAINT fk_fishingdata_agency FOREIGN KEY ("agency_id") REFERENCES "lims"."external_contacts"("contact_id");
+-- ALTER TABLE "projects"."ProjectWanderfische_FishingData" ADD CONSTRAINT fk_fishingdata_project FOREIGN KEY ("project_id") REFERENCES "lims"."projects"("project_id");
+-- ALTER TABLE "projects"."ProjectWanderfische_FishingData" ADD CONSTRAINT fk_fishingdata_salinity_unit FOREIGN KEY ("salinity_unit_id") REFERENCES "reference"."units"("unit_id");
+-- ALTER TABLE "projects"."ProjectWanderfische_FishingData" ADD CONSTRAINT fk_fishingdata_oxygen_unit FOREIGN KEY ("oxygen_unit_id") REFERENCES "reference"."units"("unit_id");
+-- ALTER TABLE "projects"."ProjectWanderfische_FishingData" ADD CONSTRAINT fk_fishingdata_wind_unit FOREIGN KEY ("wind_unit_id") REFERENCES "reference"."units"("unit_id");
+-- ALTER TABLE "projects"."ProjectWanderfische_FishCatch" ADD CONSTRAINT fk_fishcatch_fishingdata FOREIGN KEY ("fishing_record_id", "fishing_record_date") REFERENCES "projects"."ProjectWanderfische_FishingData"("fishing_record_id", "record_date");
+-- ALTER TABLE "projects"."ProjectWanderfische_FishCatch" ADD CONSTRAINT fk_fishcatch_taxon FOREIGN KEY ("taxon_id") REFERENCES "reference"."taxon"("taxon_id");
+-- ALTER TABLE "projects"."ProjectWanderfische_Mail" ADD CONSTRAINT fk_mail_fishingdata FOREIGN KEY ("fishing_record_id", "fishing_record_date") REFERENCES "projects"."ProjectWanderfische_FishingData"("fishing_record_id", "record_date");
+-- ALTER TABLE "projects"."ProjectWanderfische_Mail" ADD CONSTRAINT fk_mail_sender FOREIGN KEY ("sender_person_id") REFERENCES "lims"."personal"("person_id");
+-- ALTER TABLE "projects"."ProjectWanderfische_Mail" ADD CONSTRAINT fk_mail_recipient FOREIGN KEY ("recipient_contact_id") REFERENCES "lims"."external_contacts"("contact_id");
+-- ALTER TABLE "projects"."ProjectWanderfische_Conversation" ADD CONSTRAINT fk_conv_fishingdata FOREIGN KEY ("fishing_record_id", "fishing_record_date") REFERENCES "projects"."ProjectWanderfische_FishingData"("fishing_record_id", "record_date");
+-- ALTER TABLE "projects"."ProjectWanderfische_ChatMessage" ADD CONSTRAINT fk_chat_conv FOREIGN KEY ("conversation_id") REFERENCES "projects"."ProjectWanderfische_Conversation"("conversation_id");
+-- ALTER TABLE "projects"."ProjectWanderfische_ChatMessage" ADD CONSTRAINT fk_chat_sender_person FOREIGN KEY ("sender_person_id") REFERENCES "lims"."personal"("person_id");
+-- ALTER TABLE "projects"."ProjectWanderfische_ChatMessage" ADD CONSTRAINT fk_chat_sender_contact FOREIGN KEY ("sender_contact_id") REFERENCES "lims"."external_contacts"("contact_id");
 ALTER TABLE "lims"."publications" ADD CONSTRAINT uc_doi_date UNIQUE ("doi", "date_publication");
 ALTER TABLE "lims"."batch_steps" ADD CONSTRAINT uc_batch_step UNIQUE ("batch_id", "step_number");
 ALTER TABLE "lab"."root_samples" ADD CONSTRAINT uc_root_sample_id UNIQUE ("sample_id", "sample_creation_date");
@@ -4013,6 +3478,6 @@ ALTER TABLE "lab"."otoliths" ADD CONSTRAINT uc_otolith_id UNIQUE ("otolith_id", 
 ALTER TABLE "lab"."qpcr" ADD CONSTRAINT uc_qpcr_sample_exp UNIQUE ("sample_id", "experiment_date");
 ALTER TABLE "lab"."library" ADD CONSTRAINT uc_library_id_sample_exp UNIQUE ("library_id", "sample_id", "experiment_date");
 ALTER TABLE "lab"."sequencing_run" ADD CONSTRAINT uc_seq_run_id_exp UNIQUE ("sequencing_run_id", "experiment_date");
-ALTER TABLE "lab"."Seq_dataset" ADD CONSTRAINT uc_seq_dataset_id_exp UNIQUE ("data_seq_id", "experiment_date");
+-- ALTER TABLE "lab"."Seq_dataset" ADD CONSTRAINT uc_seq_dataset_id_exp UNIQUE ("data_seq_id", "experiment_date");
 ALTER TABLE "lab"."datasets" ADD CONSTRAINT uc_dataset_id_reception UNIQUE ("dataset_id", "reception_date");
 ALTER TABLE "bioinformatics"."analysis_runs" ADD CONSTRAINT uc_run_id_exp UNIQUE ("run_id", "experiment_date");
