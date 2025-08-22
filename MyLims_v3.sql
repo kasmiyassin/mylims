@@ -1236,39 +1236,6 @@ CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_ChatMessage" (
 -- 9. FUNCTIONS
 -- ======================================================================
 
--- F01. DYNAMIC PARTITION CREATION FUNCTION
--- This is a generic function for creating yearly partitions based on a date column.
-CREATE OR REPLACE FUNCTION create_yearly_partition()
-RETURNS TRIGGER AS $$
-DECLARE
-    partition_date date;
-    partition_table_name text := TG_TABLE_NAME;
-    partition_schema_name text := TG_TABLE_SCHEMA;
-    partition_name text;
-    start_date date;
-    end_date date;
-BEGIN
-    -- Get the value of the partitioning date column from the new row.
-    EXECUTE 'SELECT ($1).' || quote_ident(TG_ARGV[0]) INTO partition_date USING NEW;
-
-    IF partition_date IS NULL THEN
-        RAISE EXCEPTION 'Cannot partition on NULL date column for %.%.', partition_schema_name, partition_table_name;
-    END IF;
-
-    -- Generate the start and end dates for the new yearly partition.
-    start_date := DATE_TRUNC('year', partition_date);
-    end_date := start_date + INTERVAL '1 year';
-    
-    -- Generate the unique partition name using the table name and year.
-    partition_name := partition_table_name || '_y' || TO_CHAR(start_date, 'YYYY');
-
-    -- Check if the partition exists and create it if it doesn't.
-    EXECUTE 'CREATE TABLE IF NOT EXISTS ' || quote_ident(partition_schema_name) || '.' || quote_ident(partition_name) || ' PARTITION OF ' || quote_ident(partition_schema_name) || '.' || quote_ident(partition_table_name) || ' FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
-    
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
 -- F02. AUDIT LOGGING FUNCTION
 CREATE OR REPLACE FUNCTION "audit".if_modified_func() RETURNS TRIGGER AS $$
 DECLARE
@@ -1835,35 +1802,6 @@ $$ LANGUAGE plpgsql;
 -- ======================================================================
 -- 10. TRIGGERS
 -- ======================================================================
-
--- Triggers for Dynamic Partitioning
-CREATE TRIGGER trg_create_experiments_partition BEFORE INSERT ON "lab"."experiments" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
-CREATE TRIGGER trg_create_sampling_partition BEFORE INSERT ON "lab"."sampling" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sampling_date');
-CREATE TRIGGER trg_create_fishing_partition BEFORE INSERT ON "lab"."fishing" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sampling_date');
-CREATE TRIGGER trg_create_individual_catch_partition BEFORE INSERT ON "lab"."individual_catch_catch" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sampling_date');
-CREATE TRIGGER trg_create_sampling_abiotic_data_partition BEFORE INSERT ON "lab"."sampling_abiotic_data" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sampling_date');
-CREATE TRIGGER trg_create_root_samples_partition BEFORE INSERT ON "lab"."root_samples" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sample_creation_date');
-CREATE TRIGGER trg_create_fish_partition BEFORE INSERT ON "lab"."fish" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sample_creation_date');
-CREATE TRIGGER trg_create_tissue_partition BEFORE INSERT ON "lab"."tissue" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sample_creation_date');
-CREATE TRIGGER trg_create_otoliths_partition BEFORE INSERT ON "lab"."otoliths" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sample_creation_date');
-CREATE TRIGGER trg_create_dna_partition BEFORE INSERT ON "lab"."dna" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sample_creation_date');
-CREATE TRIGGER trg_create_rna_partition BEFORE INSERT ON "lab"."rna" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sample_creation_date');
-CREATE TRIGGER trg_create_sediments_partition BEFORE INSERT ON "lab"."sediments" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sample_creation_date');
-CREATE TRIGGER trg_create_water_partition BEFORE INSERT ON "lab"."water" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('sample_creation_date');
-CREATE TRIGGER trg_create_pcr_partition BEFORE INSERT ON "lab"."pcr" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('pcr_date');
-CREATE TRIGGER trg_create_dissections_partition BEFORE INSERT ON "lab"."dissections" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
-CREATE TRIGGER trg_create_nanodrop_partition BEFORE INSERT ON "lab"."nanodrop" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
-CREATE TRIGGER trg_create_qubit_partition BEFORE INSERT ON "lab"."qubit" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
-CREATE TRIGGER trg_create_tapestation_partition BEFORE INSERT ON "lab"."tapestation" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
-CREATE TRIGGER trg_create_gelelectrophoresis_partition BEFORE INSERT ON "lab"."gelelectrophoresis" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
-CREATE TRIGGER trg_create_qpcr_partition BEFORE INSERT ON "lab"."qpcr" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('qpcr_date');
-CREATE TRIGGER trg_create_library_partition BEFORE INSERT ON "lab"."library" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
-CREATE TRIGGER trg_create_sequencing_run_partition BEFORE INSERT ON "lab"."sequencing_run" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('experiment_date');
-CREATE TRIGGER trg_create_seq_dataset_partition BEFORE INSERT ON "lab"."seq_dataset" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('data_seq_date');
-CREATE TRIGGER trg_create_datasets_partition BEFORE INSERT ON "lab"."datasets" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('reception_date');
-CREATE TRIGGER trg_create_analysis_runs_partition BEFORE INSERT ON "bioinformatics"."analysis_runs" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('run_date');
-CREATE TRIGGER trg_create_edna_assignments_partition BEFORE INSERT ON "bioinformatics"."edna_assignments" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('assignment_date');
-CREATE TRIGGER trg_create_wanderfische_fishingdata_partition BEFORE INSERT ON "projects"."ProjectWanderfische_FishingData" FOR EACH ROW EXECUTE FUNCTION create_yearly_partition('record_date');
 
 -- Triggers for Populating Dates from Parent Tables
 CREATE TRIGGER trg_populate_experiments_projects_date BEFORE INSERT ON "lab"."experiments_projects" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_experiment();
@@ -3096,6 +3034,7 @@ ALTER TABLE "lab"."datasets" ADD CONSTRAINT uc_dataset_id_reception UNIQUE ("dat
 ALTER TABLE "bioinformatics"."analysis_runs" ADD CONSTRAINT uc_run_id_date UNIQUE ("run_id", "run_date");
 ALTER TABLE "bioinformatics"."edna_assignments" ADD CONSTRAINT uc_assignment_id_date UNIQUE ("assignment_id", "assignment_date");
 
+-- ###############################################################
 -- Dummy partition tables for initial setup
 -- ###############################################################
 -- Correct DO$$ code
@@ -3132,7 +3071,7 @@ BEGIN
                 RAISE NOTICE 'Default partition for table %.% already exists.', parent_schema, parent_table_name;
         END;
 
-        FOR start_date IN SELECT generate_series(date_trunc('year', now()) - INTERVAL '2 years', date_trunc('year', now()) + INTERVAL '2 years', '1 year') LOOP
+        FOR start_date IN SELECT generate_series(date_trunc('year', now()) - INTERVAL '2 years', date_trunc('year', now()) + INTERVAL '10 years', '1 year') LOOP
             end_date := start_date + INTERVAL '1 year';
             yearly_partition_name := parent_table_name || '_y' || EXTRACT(YEAR FROM start_date);
             BEGIN
@@ -3147,33 +3086,490 @@ BEGIN
 END $$;
 
 
-CREATE OR REPLACE FUNCTION create_yearly_partition()
-RETURNS TRIGGER AS $$
-DECLARE
-    partition_date date;
-    partition_table_name text := TG_TABLE_NAME;
-    partition_schema_name text := TG_TABLE_SCHEMA;
-    partition_name text;
-    start_date date;
-    end_date date;
-BEGIN
-    -- Get the value of the partitioning date column from the new row.
-    EXECUTE 'SELECT ($1).' || quote_ident(TG_ARGV[0]) INTO partition_date USING NEW;
 
-    IF partition_date IS NULL THEN
-        RAISE EXCEPTION 'Cannot partition on NULL date column for %.%.', partition_schema_name, partition_table_name;
-    END IF;
 
-    -- Generate the start and end dates for the new yearly partition.
-    start_date := DATE_TRUNC('year', partition_date);
-    end_date := start_date + INTERVAL '1 year';
-    
-    -- Generate the unique partition name using the table name and year.
-    partition_name := partition_table_name || '_y' || TO_CHAR(start_date, 'YYYY');
 
-    -- Check if the partition exists and create it if it doesn't.
-    EXECUTE 'CREATE TABLE IF NOT EXISTS ' || quote_ident(partition_schema_name) || '.' || quote_ident(partition_name) || ' PARTITION OF ' || quote_ident(partition_schema_name) || '.' || quote_ident(partition_table_name) || ' FOR VALUES FROM (''' || start_date || ''') TO (''' || end_date || ''');';
-    
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- ======================================================================
+-- DEMO DATA GENERATION SCRIPT
+-- ======================================================================
+-- Set a context date for partitioning triggers. This helps ensure data
+-- is inserted into the correct partitions.
+SET "projects.current_date" = '2025-08-20';
+SET "lims.current_person_id" = 'jane.doe';
+
+-- ======================================================================
+-- 1. REFERENCE SCHEMA - BASE DATA
+-- ======================================================================
+
+-- 1.1 reference.status
+INSERT INTO "reference"."status" ("status_id", "notes") VALUES
+('Planned', 'The action or item is planned but not started.'),
+('Received', 'The item has been received and is ready for use.'),
+('In Progress', 'The work on this item is currently in progress.'),
+('Completed', 'The process has been successfully completed.'),
+('Dissection', 'The sample has undergone dissection.'),
+('Nanodrop QC', 'The sample has been checked with Nanodrop for quality control.'),
+('Qubit QC', 'The sample has been checked with Qubit for quality control.'),
+('Tapestation QC', 'The sample has been checked with Tapestation for quality control.'),
+('PCR Done', 'The Polymerase Chain Reaction step is completed.'),
+('qPCR Done', 'The quantitative PCR step is completed.'),
+('Library Prep', 'The sequencing library has been prepared.'),
+('Sequencing Done', 'The sequencing run is completed.'),
+('Bioinformatics Done', 'The bioinformatics analysis is completed.'),
+('Archived', 'The item is stored for long-term retention.'),
+('Destroyed', 'The item has been destroyed and is no longer available.'),
+('On Hold', 'The process is temporarily paused.');
+
+-- 1.2 reference.room
+INSERT INTO "reference"."room" ("room_id", "etage", "address", "institute", "city", "country") VALUES
+('R101', '1st Floor', '123 Ocean Blvd', 'Marine Research Institute', 'Bremerhaven', 'Germany'),
+('R202', '2nd Floor', '123 Ocean Blvd', 'Marine Research Institute', 'Bremerhaven', 'Germany');
+
+-- 1.3 reference.vessel
+INSERT INTO "reference"."vessel" ("vessel_id", "vessel_name", "belong_to") VALUES
+('RV_Meteor', 'Research Vessel Meteor', 'DFG'),
+('RV_Sonne', 'Research Vessel Sonne', 'BMF');
+
+-- 1.4 reference.region
+INSERT INTO "reference"."region" ("region_id", "region_abrv", "parent_region", "rank", "path") VALUES
+('Eur', 'Eu', NULL, 'Continent', 'Eur'),
+('Asia', 'As', NULL, 'Continent', 'Asia'),
+('Arctic', 'Arc', 'Eur', 'Region', 'Eur.Arctic'),
+('BalticSea', 'Blt', 'Eur', 'Sea', 'Eur.BalticSea'),
+('NorthSea', 'NSe', 'Eur', 'Sea', 'Eur.NorthSea');
+
+-- 1.5 reference.ecosystem
+INSERT INTO "reference"."ecosystem" ("ecosystem_id", "ecosystem_abrv", "country", "category", "path") VALUES
+('Freshwater', 'Fw', NULL, 'Terrestrial', 'Freshwater'),
+('Marine', 'Mar', NULL, 'Aquatic', 'Marine'),
+('Estuary', 'Est', NULL, 'Aquatic', 'Estuary');
+
+-- 1.6 reference.category
+INSERT INTO "reference"."category" ("category_id", "notes") VALUES
+('Consumables', 'General lab consumables'),
+('Kits', 'Reagent kits for specific protocols'),
+('Chemicals', 'General-purpose chemicals'),
+('Samples', 'Samples of biological origin');
+
+-- 1.7 reference.samples_type
+INSERT INTO "reference"."samples_type" ("sample_type_id", "sample_type_abrv", "rank") VALUES
+('Root', 'S', 'Primary'),
+('Fish', 'F', 'Biological'),
+('Tissue', 'T', 'Biological'),
+('DNA', 'D', 'Molecular'),
+('RNA', 'R', 'Molecular'),
+('PCR_Product', 'P', 'Molecular'),
+('Library', 'L', 'Molecular'),
+('Water', 'W', 'Environmental'),
+('Sediment', 'Sd', 'Environmental'),
+('Otolith', 'Ot', 'Biological');
+
+-- 1.8 reference.gene
+INSERT INTO "reference"."gene" ("gene_id") VALUES
+('16S rRNA'),
+('18S rRNA'),
+('COI');
+
+-- 1.9 reference.taxon
+INSERT INTO "reference"."taxon" ("taxon_id", "taxon_parent", "de_name", "en_name", "rank", "path") VALUES
+('Animalia', NULL, 'Tiere', 'Animals', 'Kingdom', 'Animalia'),
+('Chordata', 'Animalia', 'Wirbeltiere', 'Vertebrates', 'Phylum', 'Animalia.Chordata'),
+('Actinopterygii', 'Chordata', 'Strahlenflosser', 'Ray-finned fishes', 'Class', 'Animalia.Chordata.Actinopterygii'),
+('Gadiformes', 'Actinopterygii', 'Dorschartige', 'Cod-like fishes', 'Order', 'Animalia.Chordata.Actinopterygii.Gadiformes'),
+('Gadus', 'Gadiformes', 'Kabeljau-Gattung', 'Cod genus', 'Genus', 'Animalia.Chordata.Actinopterygii.Gadiformes.Gadus'),
+('Gadus_morhua', 'Gadus', 'Kabeljau', 'Atlantic Cod', 'Species', 'Animalia.Chordata.Actinopterygii.Gadiformes.Gadus.Gadus_morhua'),
+('Bacteria', NULL, 'Bakterien', 'Bacteria', 'Kingdom', 'Bacteria'),
+('Firmicutes', 'Bacteria', NULL, 'Firmicutes', 'Phylum', 'Bacteria.Firmicutes'),
+('Bacillales', 'Firmicutes', NULL, 'Bacillales', 'Order', 'Bacteria.Firmicutes.Bacillales'),
+('Bacteria_Unclassified', 'Bacteria', NULL, 'Unclassified Bacteria', 'Unclassified', 'Bacteria.Bacteria_Unclassified');
+
+-- 1.10 reference.units
+INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "unit_type", "parent_unit_id", "conversion_factor_to_parent") VALUES
+('meter', 'meter', 'm', 'Length', NULL, 1),
+('kilometer', 'kilometer', 'km', 'Length', 'meter', 1000),
+('millimeter', 'millimeter', 'mm', 'Length', 'meter', 0.001),
+('kilogram', 'kilogram', 'kg', 'Mass', NULL, 1),
+('gram', 'gram', 'g', 'Mass', 'kilogram', 0.001),
+('liter', 'liter', 'L', 'Volume', NULL, 1),
+('milliliter', 'milliliter', 'ml', 'Volume', 'liter', 0.001),
+('microliter', 'microliter', 'ul', 'Volume', 'milliliter', 0.001),
+('nanogram', 'nanogram', 'ng', 'Mass', 'kilogram', 0.000000001),
+('ng_ul', 'nanogram per microliter', 'ng/ul', 'Concentration', NULL, NULL),
+('microgram', 'microgram', 'ug', 'Mass', 'kilogram', 0.000001),
+('ug_L', 'microgram per liter', 'ug/L', 'Concentration', NULL, NULL),
+('Celsius', 'Degree Celsius', '°C', 'Temperature', NULL, NULL),
+('PSU', 'Practical Salinity Units', 'PSU', 'Salinity', NULL, NULL),
+('mg_L', 'milligram per liter', 'mg/L', 'Concentration', NULL, NULL),
+('NTU', 'Nephelometric Turbidity Units', 'NTU', 'Turbidity', NULL, NULL),
+('umol_m2s', 'micromoles per square meter per second', 'umol/(m²s)', 'Irradiance', NULL, NULL),
+('m_s', 'meters per second', 'm/s', 'Velocity', NULL, NULL),
+('hPa', 'Hectopascal', 'hPa', 'Pressure', NULL, NULL),
+('min', 'Minute', 'min', 'Time', NULL, NULL);
+
+-- 1.11 reference.reference_databases
+INSERT INTO "reference"."reference_databases" ("db_name", "db_version", "last_updated_date") VALUES
+('NCBI RefSeq', '2025-01', '2025-01-15'),
+('BOLD', '4.0.0', '2024-11-20'),
+('GTDB', 'R207', '2025-02-10');
+
+
+-- ======================================================================
+-- 2. LIMS SCHEMA - CORE DATA
+-- ======================================================================
+
+-- 2.1 lims.personal
+INSERT INTO "lims"."personal" ("person_id", "salutation", "full_name", "room", "telephone", "mail", "password_hash", "status_id") VALUES
+('john.smith', 'Mr.', 'John Smith', 'R101', '+49 123 456789', 'john.smith@lims.org', 'hashed_pass_1', 'Received'),
+('jane.doe', 'Ms.', 'Jane Doe', 'R202', '+49 123 987654', 'jane.doe@lims.org', 'hashed_pass_2', 'Received'),
+('peter.jones', 'Dr.', 'Peter Jones', 'R101', '+49 123 112233', 'peter.jones@lims.org', 'hashed_pass_3', 'Received');
+
+-- 2.2 lims.external_contacts
+INSERT INTO "lims"."external_contacts" ("contact_id", "full_name", "organization", "mail") VALUES
+('marine_research_uni', 'Dr. Schmidt', 'Marine Research University', 'schmidt@mru.de'),
+('fisheries_agency', 'Mr. Fischer', 'State Fisheries Agency', 'fischer@sfa.gov');
+
+-- 2.3 lims.customers
+INSERT INTO "lims"."customers" ("customer_name", "customer_abrv", "address", "mail", "password_hash") VALUES
+('Blue Ocean Foundation', 'BOF', '100 Beach St', 'info@bof.org', 'hashed_pass_c1'),
+('EcoSolutions GmbH', 'ESG', '200 Forest Rd', 'contact@ecosolutions.de', 'hashed_pass_c2');
+
+-- 2.4 lims.projects
+INSERT INTO "lims"."projects" ("project_id", "project_abrv", "title", "status_id", "pi_person_id", "funder", "customer_id", "start_date", "end_date", "description") VALUES
+('Proj_AquaGen', 'AquaGen', 'Aquatic Genetic Diversity Study', 'Completed', 'john.smith', 'EU Horizon', (SELECT customer_id FROM "lims"."customers" WHERE customer_abrv = 'BOF'), '2024-01-10', '2025-01-10', 'A project to assess genetic diversity of marine species.'),
+('Proj_BioMon', 'BioMon', 'Biodiversity Monitoring in the North Sea', 'In Progress', 'jane.doe', 'Ministry of Research', (SELECT customer_id FROM "lims"."customers" WHERE customer_abrv = 'ESG'), '2025-03-01', '2026-03-01', 'Long-term biodiversity monitoring with eDNA methods.');
+
+-- 2.5 lims.project_persons
+INSERT INTO "lims"."project_persons" ("project_id", "person_id", "role", "link_date") VALUES
+('Proj_AquaGen', 'john.smith', 'Project Lead', '2024-01-10'),
+('Proj_AquaGen', 'peter.jones', 'Researcher', '2024-02-15'),
+('Proj_BioMon', 'jane.doe', 'Project Lead', '2025-03-01'),
+('Proj_BioMon', 'john.smith', 'Collaborator', '2025-04-01');
+
+-- 2.6 lims.cruises
+INSERT INTO "lims"."cruises" ("cruise_id", "project_id", "vessel_id", "status_id", "region_id", "ecosystem_id", "chief_scientist_person_id", "start_date", "end_date") VALUES
+('CRUISE_NSe24', 'Proj_AquaGen', 'RV_Meteor', 'Completed', 'NorthSea', 'Marine', 'john.smith', '2024-05-20', '2024-06-15'),
+('CRUISE_Blt25', 'Proj_BioMon', 'RV_Sonne', 'In Progress', 'BalticSea', 'Estuary', 'jane.doe', '2025-04-10', '2025-05-05');
+
+-- 2.7 lab.storage
+INSERT INTO "lab"."storage" ("storage_id", "room_id", "freezer", "etage", "temperature_c", "box", "box_size_x", "box_size_y", "project_id") VALUES
+('S_R101_F1_B1', 'R101', 'Freezer 1', 'Ground Floor', -80, 'Box 1', 10, 10, 'Proj_AquaGen'),
+('S_R202_F2_B2', 'R202', 'Freezer 2', '1st Floor', -20, 'Box 2', 5, 5, 'Proj_BioMon');
+
+-- 2.8 lims.batch
+INSERT INTO "lims"."batch" ("batch_id", "batch_name") VALUES
+('Batch_DNA_Ext_001', 'Batch 1 for DNA Extraction'),
+('Batch_Lib_Prep_002', 'Batch 2 for Library Preparation');
+
+-- 2.9 lims.sop
+INSERT INTO "lims"."sop" ("sop_id", "title", "sop_id_origin", "version", "author_person_id", "date_realise", "sop_protocol") VALUES
+('SOP_DNA_Ext_v1', 'DNA Extraction from Fish Tissue', 'DNA_Ext_v1', '1', 'peter.jones', '2024-03-01', 'Detailed protocol for DNA extraction using a commercial kit.'),
+('SOP_Lib_Prep_v1', 'Library Preparation for Illumina Sequencing', 'Lib_Prep_v1', '1', 'jane.doe', '2024-04-10', 'Step-by-step guide for preparing sequencing libraries.');
+
+-- 2.10 lims.batch_steps
+INSERT INTO "lims"."batch_steps" ("step_id", "batch_id", "step_number", "step_name", "sop_id", "status_id") VALUES
+('Batch_DNA_Ext_001_1', 'Batch_DNA_Ext_001', 1, 'Sample Lysis', 'SOP_DNA_Ext_v1', 'Completed'),
+('Batch_DNA_Ext_001_2', 'Batch_DNA_Ext_001', 2, 'DNA Purification', 'SOP_DNA_Ext_v1', 'In Progress');
+
+-- 2.11 lims.primers
+INSERT INTO "lims"."primers" ("primer_id", "target_gene_id", "primer_sequence_fwd", "primer_sequence_rev", "reference") VALUES
+('16S_V4_F', '16S rRNA', 'GTGCCAGCMGCCGCGGTAA', 'GGACTACHVGGGTWTCTAAT', 'Reference A'),
+('COI_Fish_F', 'COI', 'GGTCAACAAATCATAAAGATATTGG', 'TAAACTTCAGGGTGACCAAAAAATCA', 'Reference B');
+
+-- 2.12 lims.publication_type
+INSERT INTO "lims"."publication_type" ("publication_type_id", "notes") VALUES
+('Journal_Article', 'Peer-reviewed journal publication'),
+('Conference_Abstract', 'Abstract from a conference proceeding'),
+('Thesis', 'Academic thesis (e.g., PhD, Master)');
+
+-- 2.13 lims.suppliers
+INSERT INTO "lims"."suppliers" ("supplier_id", "supplier_name", "contact_person", "mail") VALUES
+('Qiagen', 'Qiagen GmbH', 'Contact Qiagen', 'sales@qiagen.com'),
+('Sigma-Aldrich', 'Sigma-Aldrich', 'Contact Aldrich', 'info@sigma-aldrich.com');
+
+-- 2.14 lims.inventory_items
+INSERT INTO "lims"."inventory_items" ("item_id", "item_name", "category_id", "unit_id") VALUES
+('QIAampDNA', 'QIAamp DNA Mini Kit', 'Kits', NULL),
+('Ethanol', 'Ethanol 99.5%', 'Chemicals', 'liter');
+
+-- 2.15 lims.orders
+INSERT INTO "lims"."orders" ("fi_order_nr", "item_id", "category_id", "order_date", "price", "quantity", "project_id", "supplier_id", "status_id") VALUES
+('PO_AG24_001', 'QIAampDNA', 'Kits', '2024-02-15', 500.00, 1, 'Proj_AquaGen', 'Qiagen', 'Completed'),
+('PO_BM25_001', 'Ethanol', 'Chemicals', '2025-04-05', 50.00, 1, 'Proj_BioMon', 'Sigma-Aldrich', 'Received');
+
+-- 2.16 lims.reagents
+INSERT INTO "lims"."reagents" ("reagent_id", "reagent_complete_name", "category_id", "lot", "storage_id", "storage_position", "quantity_available", "quantity_unit_id", "reception_date", "expire_date", "order_id", "project_id", "status_id") VALUES
+('QIAamp_LotA', 'QIAamp DNA Mini Kit, Lot A', 'Kits', 'LotA123', 'S_R101_F1_B1', 1, 50, 'gram', '2024-03-01', '2025-03-01', 'PO_AG24_001', 'Proj_AquaGen', 'Received'),
+('Ethanol_LotB', 'Ethanol 99.5%, Lot B', 'Chemicals', 'LotB456', 'S_R202_F2_B2', 1, 10, 'liter', '2025-04-10', '2026-04-10', 'PO_BM25_001', 'Proj_BioMon', 'Received');
+
+-- 2.17 lims.equipment
+INSERT INTO "lims"."equipment" ("equipment_id", "equipment_name", "room_id", "lot") VALUES
+('Qubit_3', 'Qubit 3 Fluorometer', 'R101', 'LOTA123'),
+('Nanodrop_2000', 'Nanodrop 2000 Spectrophotometer', 'R101', 'LOTB456');
+
+-- 2.18 lims.permits
+INSERT INTO "lims"."permits" ("permit_id", "permit_number", "issuing_authority", "valid_from", "valid_to", "reference") VALUES
+('Permit-12345', 'DE-BW-12345', 'State Environmental Agency', '2025-01-01', '2025-12-31', 'Fishing permit for Baltic Sea');
+
+
+-- 2.19 lims.publications
+INSERT INTO "lims"."publications" ("publication_id", "publication_type_id", "title", "journal", "doi", "date_publication", "first_author_person_id", "project_id") VALUES
+('Pub-2025-001', 'Journal_Article', 'Genetic Diversity of Cod in the North Sea', 'Journal of Marine Science', '10.1016/j.jmarsys.2025.103756', '2025-07-20', 'john.smith', 'Proj_AquaGen');
+
+
+-- ======================================================================
+-- 3. LAB SCHEMA - WORKFLOW DATA
+-- ======================================================================
+
+-- 3.1 lab.sampling
+-- Insert sampling data for a cruise.
+INSERT INTO "lab"."sampling" ("sampling_date", "project_id", "cruise_id", "region_id", "ecosystem_id", "vessel_id", "depth_m", "location_name", "fishing_method", "total_catch_quantity_kg", "total_catch_quantity_fish", "status_id") VALUES
+('2025-05-01', 'Proj_BioMon', 'CRUISE_Blt25', 'BalticSea', 'Estuary', 'RV_Sonne', 15.5, 'Coastal Area 1', 'Netting', 25.5, 120, 'In Progress'),
+('2025-06-05', 'Proj_BioMon', 'CRUISE_Blt25', 'BalticSea', 'Marine', 'RV_Sonne', 30.0, 'Open Sea 2', 'Trawling', 50.0, 80, 'Planned');
+
+
+
+-- 3.2 lab.experiments
+-- The trigger will automatically create the partition for the year 2025.
+INSERT INTO "lab"."experiments" ("experiment_id", "experiment_date", "experiment_title", "aim", "method", "sop_id", "person_id", "status_id") VALUES
+('Exp_eDNA_001', '2025-08-20', 'eDNA Extraction from Water Samples', 'Extract high-quality DNA for sequencing.', 'Standard phenol-chloroform extraction.', 'SOP_DNA_Ext_v1', 'jane.doe', 'In Progress'),
+('Exp_qPCR_002', '2025-08-21', 'qPCR for Species Identification', 'Quantify specific fish DNA from eDNA samples.', 'qPCR with species-specific primers.', 'SOP_Lib_Prep_v1', 'peter.jones', 'In Progress');
+
+-- 3.3 lab.root_samples
+-- The trigger automatically generates 'sample_id' for new root samples.
+INSERT INTO "lab"."root_samples" ("sample_type_id", "project_id", "sample_creation_date", "sampling_id", "sampling_date", "sampler_person_id", "status_id") VALUES
+('Water', 'Proj_BioMon', '2025-05-01', (SELECT "sampling_id" FROM "lab"."sampling" WHERE "location_name" = 'Coastal Area 1' LIMIT 1), '2025-05-01', 'jane.doe', 'Received'),
+('Sediment', 'Proj_BioMon', '2025-05-01', (SELECT "sampling_id" FROM "lab"."sampling" WHERE "location_name" = 'Coastal Area 1' LIMIT 1), '2025-05-01', 'jane.doe', 'Received');
+
+-- Retrieve the generated IDs for future inserts
+SELECT "sample_id" INTO @sample_id_w FROM "lab"."root_samples" WHERE "sample_type_id" = 'Water' AND "sample_creation_date" = '2025-05-01' LIMIT 1;
+SELECT "sample_id" INTO @sample_id_s FROM "lab"."root_samples" WHERE "sample_type_id" = 'Sediment' AND "sample_creation_date" = '2025-05-01' LIMIT 1;
+
+-- Creating a fish sample and its derivatives
+INSERT INTO "lab"."root_samples" ("sample_type_id", "project_id", "sample_creation_date", "sampling_id", "sampling_date", "sampler_person_id", "status_id") VALUES
+('Fish', 'Proj_BioMon', '2025-05-01', (SELECT "sampling_id" FROM "lab"."sampling" WHERE "location_name" = 'Coastal Area 1' LIMIT 1), '2025-05-01', 'jane.doe', 'Received');
+SELECT "sample_id" INTO @sample_id_f FROM "lab"."root_samples" WHERE "sample_type_id" = 'Fish' AND "sample_creation_date" = '2025-05-01' LIMIT 1;
+
+INSERT INTO "lab"."root_samples" ("sample_type_id", "project_id", "parent_sample_id", "sample_creation_date") VALUES
+('Tissue', 'Proj_BioMon', @sample_id_f, '2025-05-01');
+SELECT "sample_id" INTO @sample_id_t FROM "lab"."root_samples" WHERE "sample_type_id" = 'Tissue' AND "sample_creation_date" = '2025-05-01' ORDER BY "sample_id" DESC LIMIT 1;
+
+
+-- 3.4 lab.dna (uses triggers for partitioning and date population)
+-- The sample_creation_date will be populated from the root_samples record.
+INSERT INTO "lab"."dna" ("sample_id", "sample_creation_date", "volume_ul", "concentration_ng_ul", "extraction_method", "extraction_date", "batch_id", "status_id") VALUES
+(@sample_id_w, NULL, 50, 25.5, 'Phenol-Chloroform', '2025-08-20', 'Batch_DNA_Ext_001', 'Received'),
+(@sample_id_t, NULL, 100, 50.0, 'CTAB', '2025-08-20', 'Batch_DNA_Ext_001', 'Received');
+
+-- 3.5 lab.rna (uses triggers for partitioning and date population)
+INSERT INTO "lab"."rna" ("sample_id", "sample_creation_date", "volume_ul", "concentration_ng_ul", "extraction_method", "extraction_date", "kit", "status_id") VALUES
+(@sample_id_t, NULL, 40, 30.2, 'Trizol', '2025-08-21', 'RNA Kit', 'Received');
+
+-- 3.6 lab.qubit (uses triggers for partitioning and date population)
+INSERT INTO "lab"."qubit" ("sample_id", "sample_creation_date", "experiment_id", "experiment_date", "qubit_tube_conc", "tube_unit_id", "qubit_original_sample_conc", "original_sample_unit_id", "person_id", "status_id") VALUES
+(@sample_id_w, NULL, 'Exp_eDNA_001', '2025-08-20', 2.0, 'ng_ul', 100.0, 'ng_ul', 'peter.jones', 'Qubit QC');
+
+-- 3.7 lab.nanodrop (uses triggers for partitioning and date population)
+INSERT INTO "lab"."nanodrop" ("sample_id", "sample_creation_date", "experiment_id", "experiment_date", "nanodrop_concentration", "concentration_unit_id", "a260_280", "a260_230", "person_id", "status_id") VALUES
+(@sample_id_w, NULL, 'Exp_eDNA_001', '2025-08-20', 2.1, 'ng_ul', 1.85, 2.15, 'peter.jones', 'Nanodrop QC');
+
+-- 3.8 lab.gelelectrophoresis
+INSERT INTO "lab"."gelelectrophoresis" ("gelelectrophoresis_id", "sample_id", "sample_creation_date", "experiment_id", "experiment_date", "position", "ladder", "voltage", "band_size_bp", "gel_type", "run_time_minutes", "person_id", "status_id") VALUES
+('Gel-001', @sample_id_w, '2025-05-01', 'Exp_eDNA_001', '2025-08-20', 'A1', '1kb Ladder', 100, 500, 'Agarose 1%', 45, 'peter.jones', 'Completed');
+
+
+-- 3.9 lab.pcr
+INSERT INTO "lab"."pcr" ("pcr_id", "pcr_date", "sample_id", "sample_creation_date", "primer_id", "person_id", "kit", "storage_id", "project_id", "status_id") VALUES
+('pcr25_001', '2025-08-21', @sample_id_w, '2025-05-01', '16S_V4_F', 'jane.doe', 'PCR Master Mix', 'S_R101_F1_B1', 'Proj_BioMon', 'PCR Done');
+
+
+-- 3.10 lab.library
+INSERT INTO "lab"."library" ("library_id", "experiment_id", "experiment_date", "sample_id", "sample_creation_date", "library_name", "person_id", "library_prep_kit", "index_sequence", "project_id", "status_id") VALUES
+('Lib_eDNA_001', 'Exp_eDNA_001', '2025-08-20', @sample_id_w, '2025-05-01', 'eDNA_Lib_1', 'john.smith', 'Nextera XT', 'GATTACA', 'Proj_BioMon', 'Library Prep');
+
+-- 3.11 lab.sequencing_run
+INSERT INTO "lab"."sequencing_run" ("sequencing_run_id", "experiment_id", "experiment_date", "library_id", "prep_date", "sample_id", "sample_creation_date", "person_id", "sequencer", "flow_cell_id", "total_reads", "project_id", "status_id") VALUES
+('RS25_001', 'Exp_eDNA_001', '2025-08-20', 'Lib_eDNA_001', '2025-08-20', @sample_id_w, '2025-05-01', 'john.smith', 'MiSeq', 'FC-A1', 15000000, 'Proj_BioMon', 'Sequencing Done');
+
+-- 3.12 lab.datasets
+INSERT INTO "lab"."datasets" ("dataset_id", "sample_id", "sample_creation_date", "source_type", "ecosystem_id", "experiment_id", "experiment_date", "reception_date", "status_id", "storage_path") VALUES
+('Z25S25Bio_001', @sample_id_w, '2025-05-01', 'Sequencing', 'Estuary', 'Exp_eDNA_001', '2025-08-20', '2025-08-21', 'Received', '/data/proj/biomon/raw_seq_data');
+
+-- 3.13 lab.storage_log
+INSERT INTO "lab"."storage_log" ("sample_id", "sample_creation_date", "storage_id", "person_id", "status_id", "storage_position", "notes") VALUES
+(@sample_id_w, '2025-05-01', 'S_R101_F1_B1', 'jane.doe', 'Received', 'A1', 'Initial storage location after reception.');
+
+-- 3.14 lab.fishing
+INSERT INTO "lab"."fishing" ("sampling_id", "sampling_date", "taxon_id", "catch_kg") VALUES
+((SELECT "sampling_id" FROM "lab"."sampling" WHERE "location_name" = 'Coastal Area 1' LIMIT 1), '2025-05-01', 'Gadus_morhua', 15.2);
+
+-- 3.15 lab.individual_catch_catch
+INSERT INTO "lab"."individual_catch_catch" ("individual_catch_id", "fishing_id", "sampling_date", "taxon_id", "SL_mm", "weight_g", "sex") VALUES
+('25EstBlt001_f001_ic001', (SELECT "fishing_id" FROM "lab"."fishing" WHERE "sampling_id" = (SELECT "sampling_id" FROM "lab"."sampling" WHERE "location_name" = 'Coastal Area 1' LIMIT 1) LIMIT 1), '2025-05-01', 'Gadus_morhua', 350, 450, 'Male'),
+('25EstBlt001_f001_ic002', (SELECT "fishing_id" FROM "lab"."fishing" WHERE "sampling_id" = (SELECT "sampling_id" FROM "lab"."sampling" WHERE "location_name" = 'Coastal Area 1' LIMIT 1) LIMIT 1), '2025-05-01', 'Gadus_morhua', 420, 600, 'Female');
+
+-- 3.16 lab.sampling_abiotic_data
+INSERT INTO "lab"."sampling_abiotic_data" ("sampling_id", "sampling_date", "temperature_sampling_depth_c", "salinity", "salinity_unit_id", "oxygen", "oxygen_unit_id") VALUES
+((SELECT "sampling_id" FROM "lab"."sampling" WHERE "location_name" = 'Coastal Area 1' LIMIT 1), '2025-05-01', 12.5, 28.5, 'PSU', 8.2, 'mg/L');
+
+-- 3.17 lab.dissections
+INSERT INTO "lab"."dissections" ("dissection_id", "person_id", "sample_id", "sample_creation_date", "project_id", "experiment_id", "experiment_date", "gonad_weight_g", "liver_weight_g", "status_id") VALUES
+('S25BioMon003_d1', 'jane.doe', @sample_id_f, '2025-05-01', 'Proj_BioMon', 'Exp_eDNA_001', '2025-08-20', 55.2, 85.1, 'Completed');
+
+-- 3.18 lab.seq_dataset
+INSERT INTO "lab"."seq_dataset" ("data_seq_id", "sample_id", "sample_creation_date", "sequencing_run_id", "sequencer", "total_reads", "raw_data_path", "status_id", "project_id", "notes", "data_seq_date") VALUES
+('S25BioM_W_RS001', @sample_id_w, '2025-05-01', 'RS25_001', 'MiSeq', 15000000, '/data/raw_seq/S25BioMon001', 'Completed', 'Proj_BioMon', 'eDNA sequencing dataset from water sample', '2025-08-20');
+
+
+-- 3.19 lab.otoliths
+INSERT INTO "lab"."otoliths" ("otolith_id", "parent_sample_id", "sample_creation_date", "reader_person_id", "side", "age_reading_years", "project_id", "status_id") VALUES
+('F25BioM_Ot1', @sample_id_f, '2025-05-01', 'john.smith', 'left', 2.5, 'Proj_BioMon', 'Completed');
+
+-- 3.20 lab.tapestation
+INSERT INTO "lab"."tapestation" ("tapestation_id", "sample_id", "sample_creation_date", "experiment_id", "experiment_date", "position", "kit", "person_id", "status_id") VALUES
+('Tapes-001', @sample_id_w, '2025-05-01', 'Exp_eDNA_001', '2025-08-20', '1', 'DNA ScreenTape', 'peter.jones', 'Completed');
+
+-- 3.21 lab.water
+INSERT INTO "lab"."water" ("sample_id", "sample_creation_date", "volume_ul", "filter", "depth_m", "sampling_method", "conservation_buffer", "status_id") VALUES
+(@sample_id_w, '2025-05-01', 500, '0.45 um', 15.5, 'Niskin Bottle', 'Ethanol', 'Received');
+
+-- 3.22 lab.sediments
+INSERT INTO "lab"."sediments" ("sample_id", "sample_creation_date", "volume", "volume_unit_id", "depth_m", "sampling_method", "conservation_buffer", "status_id") VALUES
+(@sample_id_s, '2025-05-01', 100, 'milliliter', 15.5, 'Box Corer', 'DMSO', 'Received');
+
+-- ======================================================================
+-- 4. BIOINFORMATICS SCHEMA
+-- ======================================================================
+
+-- 4.1 bioinformatics.analysis_pipelines
+INSERT INTO "bioinformatics"."analysis_pipelines" ("pipeline_name", "version", "repository_link", "experiment_id", "experiment_date", "status_id") VALUES
+('eDNA_Metabarcoding_Pipeline', '1.0', 'https://github.com/my/pipeline', 'Exp_eDNA_001', '2025-08-20', 'Completed');
+
+-- 4.2 bioinformatics.analysis_runs
+INSERT INTO "bioinformatics"."analysis_runs" ("run_id", "run_date", "pipeline_id", "sequencing_id", "sequencing_date", "person_id", "reference_db_id", "final_output_path", "experiment_id", "experiment_date", "status_id") VALUES
+('BI25_ar001', '2025-08-21', (SELECT "pipeline_id" FROM "bioinformatics"."analysis_pipelines" WHERE "pipeline_name" = 'eDNA_Metabarcoding_Pipeline'), 'RS25_001', '2025-08-20', 'peter.jones', (SELECT "db_id" FROM "reference"."reference_databases" WHERE "db_name" = 'NCBI RefSeq'), '/data/proj/biomon/analysis/run1', 'Exp_eDNA_001', '2025-08-21', 'Completed');
+
+-- 4.3 bioinformatics.edna_assignments
+INSERT INTO "bioinformatics"."edna_assignments" ("assignment_id", "assignment_date", "run_id", "sample_id", "sample_creation_date", "taxon_id", "read_count", "confidence", "experiment_id", "experiment_date", "status_id") VALUES
+('BI25_S25Bio_001', '2025-08-21', 'BI25_ar001', @sample_id_w, '2025-05-01', 'Gadus_morhua', 1500, 0.95, 'Exp_eDNA_001', '2025-08-21', 'Completed'),
+('BI25_S25Bio_002', '2025-08-21', 'BI25_ar001', @sample_id_s, '2025-05-01', 'Bacteria_Unclassified', 5000, 0.70, 'Exp_eDNA_001', '2025-08-21', 'Completed');
+
+
+-- ======================================================================
+-- 5. PROJECTS SCHEMA - WANDERFISCHE PROJECT
+-- ======================================================================
+
+-- 5.1 projects.ProjectWanderfische_FishingData
+INSERT INTO "projects"."ProjectWanderfische_FishingData" ("agency_id", "project_id", "agency_record_id", "record_date", "location_description", "water_body_name", "water_body_type", "catchment_area", "original_latitude", "original_longitude", "original_srid", "created_by") VALUES
+('fisheries_agency', 'Proj_AquaGen', 'SFA_Rec_2024_001', '2024-06-01', 'Elbe Estuary Site A', 'Elbe', 'Estuary', 'Elbe', 53.9, 8.8, 4326, 'jane.doe');
+SELECT "fishing_record_id" INTO @wander_fishing_id FROM "projects"."ProjectWanderfische_FishingData" WHERE "agency_record_id" = 'SFA_Rec_2024_001';
+
+-- 5.2 projects.ProjectWanderfische_FishCatch
+INSERT INTO "projects"."ProjectWanderfische_FishCatch" ("fishing_record_id", "fishing_record_date", "taxon_id", "scientific_name_raw", "german_name_raw", "total_count", "adult_count", "notes") VALUES
+(@wander_fishing_id, '2024-06-01', 'Gadus_morhua', 'Gadus morhua', 'Kabeljau', 5, 3, 'All adult fish were tagged.'),
+(@wander_fishing_id, '2024-06-01', 'Gadus_morhua', 'Gadus morhua', 'Kabeljau', 2, 0, 'Juveniles found in the catch.');
+
+-- 5.3 projects.ProjectWanderfische_Mail
+INSERT INTO "projects"."ProjectWanderfische_Mail" ("fishing_record_id", "fishing_record_date", "sender_person_id", "recipient_contact_id", "subject", "body", "sent_at") VALUES
+(@wander_fishing_id, '2024-06-01', 'jane.doe', 'fisheries_agency', 'Data request for Elbe sampling', 'Hi, we are requesting raw data for the Elbe Estuary project.', '2024-06-05 10:00:00+02');
+
+-- 5.4 projects.ProjectWanderfische_Conversation
+INSERT INTO "projects"."ProjectWanderfische_Conversation" ("fishing_record_id", "fishing_record_date", "topic") VALUES
+(@wander_fishing_id, '2024-06-01', 'Data transfer discussion for Elbe Estuary');
+SELECT "conversation_id" INTO @wander_conv_id FROM "projects"."ProjectWanderfische_Conversation" WHERE "topic" LIKE 'Data transfer discussion%';
+
+-- 5.5 projects.ProjectWanderfische_ChatMessage
+INSERT INTO "projects"."ProjectWanderfische_ChatMessage" ("conversation_id", "sender_person_id", "message_text") VALUES
+(@wander_conv_id, 'jane.doe', 'Received your email. We are working on providing the raw data files.'),
+(@wander_conv_id, 'john.smith', 'Please compress the data before sending it.');
+
+
+-- ======================================================================
+-- 6. FINAL CHECK - SELECT ALL TABLES
+-- ======================================================================
+
+SELECT * FROM "reference"."status" LIMIT 5;
+SELECT * FROM "reference"."room" LIMIT 5;
+SELECT * FROM "reference"."vessel" LIMIT 5;
+SELECT * FROM "reference"."region" LIMIT 5;
+SELECT * FROM "reference"."ecosystem" LIMIT 5;
+SELECT * FROM "reference"."category" LIMIT 5;
+SELECT * FROM "reference"."samples_type" LIMIT 5;
+SELECT * FROM "reference"."gene" LIMIT 5;
+SELECT * FROM "reference"."taxon" LIMIT 5;
+SELECT * FROM "reference"."units" LIMIT 5;
+SELECT * FROM "reference"."reference_databases" LIMIT 5;
+SELECT * FROM "lims"."personal" LIMIT 5;
+SELECT * FROM "lims"."external_contacts" LIMIT 5;
+SELECT * FROM "lims"."customers" LIMIT 5;
+SELECT * FROM "lims"."projects" LIMIT 5;
+SELECT * FROM "lims"."project_persons" LIMIT 5;
+SELECT * FROM "lims"."cruises" LIMIT 5;
+SELECT * FROM "lab"."storage" LIMIT 5;
+SELECT * FROM "lims"."batch" LIMIT 5;
+SELECT * FROM "lims"."batch_steps" LIMIT 5;
+SELECT * FROM "lims"."permits" LIMIT 5;
+SELECT * FROM "lims"."primers" LIMIT 5;
+SELECT * FROM "lims"."sop" LIMIT 5;
+SELECT * FROM "lims"."equipment" LIMIT 5;
+SELECT * FROM "lims"."suppliers" LIMIT 5;
+SELECT * FROM "lims"."inventory_items" LIMIT 5;
+SELECT * FROM "lims"."orders" LIMIT 5;
+SELECT * FROM "lims"."reagents" LIMIT 5;
+SELECT * FROM "lims"."publication_type" LIMIT 5;
+SELECT * FROM "lims"."publications" LIMIT 5;
+SELECT * FROM "lab"."experiments" LIMIT 5;
+SELECT * FROM "lab"."experiments_projects" LIMIT 5;
+SELECT * FROM "lab"."experiments_samples" LIMIT 5;
+SELECT * FROM "lab"."protocol_runs" LIMIT 5;
+SELECT * FROM "lab"."sampling" LIMIT 5;
+SELECT * FROM "lab"."fishing" LIMIT 5;
+SELECT * FROM "lab"."individual_catch_catch" LIMIT 5;
+SELECT * FROM "lab"."sampling_abiotic_data" LIMIT 5;
+SELECT * FROM "lab"."storage_log" LIMIT 5;
+SELECT * FROM "lab"."root_samples" LIMIT 5;
+SELECT * FROM "lab"."fish" LIMIT 5;
+SELECT * FROM "lab"."tissue" LIMIT 5;
+SELECT * FROM "lab"."otoliths" LIMIT 5;
+SELECT * FROM "lab"."dna" LIMIT 5;
+SELECT * FROM "lab"."rna" LIMIT 5;
+SELECT * FROM "lab"."sediments" LIMIT 5;
+SELECT * FROM "lab"."water" LIMIT 5;
+SELECT * FROM "lab"."pcr" LIMIT 5;
+SELECT * FROM "lab"."dissections" LIMIT 5;
+SELECT * FROM "lab"."nanodrop" LIMIT 5;
+SELECT * FROM "lab"."qubit" LIMIT 5;
+SELECT * FROM "lab"."tapestation" LIMIT 5;
+SELECT * FROM "lab"."gelelectrophoresis" LIMIT 5;
+SELECT * FROM "lab"."qpcr" LIMIT 5;
+SELECT * FROM "lab"."library" LIMIT 5;
+SELECT * FROM "lab"."sequencing_run" LIMIT 5;
+SELECT * FROM "lab"."seq_dataset" LIMIT 5;
+SELECT * FROM "lab"."datasets" LIMIT 5;
+SELECT * FROM "bioinformatics"."analysis_pipelines" LIMIT 5;
+SELECT * FROM "bioinformatics"."analysis_runs" LIMIT 5;
+SELECT * FROM "bioinformatics"."edna_assignments" LIMIT 5;
+SELECT * FROM "projects"."ProjectWanderfische_FishingData" LIMIT 5;
+SELECT * FROM "projects"."ProjectWanderfische_FishCatch" LIMIT 5;
+SELECT * FROM "projects"."ProjectWanderfische_Mail" LIMIT 5;
+SELECT * FROM "projects"."ProjectWanderfische_Conversation" LIMIT 5;
+SELECT * FROM "projects"."ProjectWanderfische_ChatMessage" LIMIT 5;
