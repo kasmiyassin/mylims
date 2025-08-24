@@ -286,6 +286,7 @@ CREATE TABLE IF NOT EXISTS "lab"."storage" (
     "storage_position_format" text,
     "project_id" text REFERENCES "lims"."projects"("project_id"),
     "address" text,
+    "status_id" text, -- archived removed 
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -3296,6 +3297,7 @@ DO $$ BEGIN
     ('In Progress', 'The work on this item is currently in progress.'),
     ('Completed', 'The process has been successfully completed.'),
     ('Dissection', 'The sample has undergone dissection.'),
+    ('Otoliths_Reading', 'The sample has undergone dissection.'),
     ('Nanodrop QC', 'The sample has been checked with Nanodrop for quality control.'),
     ('Qubit QC', 'The sample has been checked with Qubit for quality control.'),
     ('Tapestation QC', 'The sample has been checked with Tapestation for quality control.'),
