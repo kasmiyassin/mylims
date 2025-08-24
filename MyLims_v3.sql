@@ -738,8 +738,7 @@ CREATE TABLE IF NOT EXISTS "lab"."tissue" (
 ) PARTITION BY RANGE ("creation_date");
 
 CREATE TABLE IF NOT EXISTS "lab"."otoliths" (
-    "otolith_id" text NOT NULL,
-    "parent_sample_id" text,
+    "sample_id" text NOT NULL,
     "sample_creation_date" date,
     "reader_person_id" text NOT NULL REFERENCES "lims"."personal"("person_id"),
     "side" text NOT NULL,
@@ -753,8 +752,8 @@ CREATE TABLE IF NOT EXISTS "lab"."otoliths" (
     "attachment" bytea,
     "attachment_link" text,
     "creation_date" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY ("otolith_id", "reader_person_id","side","creation_date"),
-    FOREIGN KEY ("parent_sample_id", "sample_creation_date") REFERENCES "lab"."root_samples"("sample_id", "sample_creation_date")
+    PRIMARY KEY ("sample_id", "reader_person_id","side","creation_date"),
+    FOREIGN KEY ("sample_id", "sample_creation_date") REFERENCES "lab"."root_samples"("sample_id", "sample_creation_date")
 ) PARTITION BY RANGE ("creation_date");
 
 CREATE TABLE IF NOT EXISTS "lab"."dna" (
@@ -2378,7 +2377,7 @@ CREATE INDEX IF NOT EXISTS idx_root_samples_project_id ON "lab"."root_samples" (
 CREATE INDEX IF NOT EXISTS idx_fish_sample_id_date ON "lab"."fish" ("sample_id", "sample_creation_date");
 CREATE INDEX IF NOT EXISTS idx_fish_species_id ON "lab"."fish" ("species_id");
 CREATE INDEX IF NOT EXISTS idx_tissue_sample_id_date ON "lab"."tissue" ("sample_id", "sample_creation_date");
-CREATE INDEX IF NOT EXISTS idx_otoliths_otolith_id_date ON "lab"."otoliths" ("otolith_id", "sample_creation_date");
+CREATE INDEX IF NOT EXISTS idx_otoliths_otolith_id_date ON "lab"."otoliths" ("sample_id", "sample_creation_date");
 CREATE INDEX IF NOT EXISTS idx_otoliths_reader_person_id ON "lab"."otoliths" ("reader_person_id");
 CREATE INDEX IF NOT EXISTS idx_dna_sample_id_date ON "lab"."dna" ("sample_id", "sample_creation_date");
 CREATE INDEX IF NOT EXISTS idx_rna_sample_id_date ON "lab"."rna" ("sample_id", "sample_creation_date");
@@ -3112,7 +3111,7 @@ CREATE POLICY fish_rls_policy ON "lab"."fish" USING (EXISTS (SELECT 1 FROM "lab"
 CREATE POLICY tissue_rls_policy ON "lab"."tissue" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = tissue.sample_id AND "lims".is_member_of_project(rs.project_id)));
 CREATE POLICY dna_rls_policy ON "lab"."dna" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = dna.sample_id AND "lims".is_member_of_project(rs.project_id)));
 CREATE POLICY rna_rls_policy ON "lab"."rna" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = rna.sample_id AND "lims".is_member_of_project(rs.project_id)));
-CREATE POLICY otoliths_rls_policy ON "lab"."otoliths" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = otoliths.parent_sample_id AND "lims".is_member_of_project(rs.project_id)));
+CREATE POLICY otoliths_rls_policy ON "lab"."otoliths" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = otoliths.sample_id AND "lims".is_member_of_project(rs.project_id)));
 CREATE POLICY dissections_rls_policy ON "lab"."dissections" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = dissections.sample_id AND "lims".is_member_of_project(rs.project_id)));
 CREATE POLICY nanodrop_rls_policy ON "lab"."nanodrop" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = nanodrop.sample_id AND "lims".is_member_of_project(rs.project_id)));
 CREATE POLICY qubit_rls_policy ON "lab"."qubit" USING (EXISTS (SELECT 1 FROM "lab"."root_samples" rs WHERE rs.sample_id = qubit.sample_id AND "lims".is_member_of_project(rs.project_id)));
@@ -3136,7 +3135,7 @@ CREATE POLICY wander_chatmessage_policy ON "projects"."ProjectWanderfische_ChatM
 ALTER TABLE "lims"."publications" ADD CONSTRAINT uc_doi_date UNIQUE ("doi", "date_publication");
 ALTER TABLE "lims"."batch_steps" ADD CONSTRAINT uc_batch_step UNIQUE ("batch_id", "step_number");
 ALTER TABLE "lab"."root_samples" ADD CONSTRAINT uc_root_sample_id UNIQUE ("sample_id", "sample_creation_date");
-ALTER TABLE "lab"."otoliths" ADD CONSTRAINT uc_otolith_id UNIQUE ("otolith_id", "reader_person_id", "side", "creation_date");
+ALTER TABLE "lab"."otoliths" ADD CONSTRAINT uc_otolith_id UNIQUE ("sample_id", "reader_person_id", "side", "creation_date");
 ALTER TABLE "lab"."qpcr" ADD CONSTRAINT uc_qpcr_id_date UNIQUE ("qpcr_id", "creation_date");
 ALTER TABLE "lab"."library" ADD CONSTRAINT uc_library_id_sample_exp UNIQUE ("library_id", "sample_id", "creation_date");
 ALTER TABLE "lab"."sequencing_run" ADD CONSTRAINT uc_seq_run_id_exp UNIQUE ("sequencing_run_id", "creation_date");
@@ -3505,15 +3504,15 @@ BEGIN
     ('Exp_qPCR_002', '2025-08-21', 'qPCR for Species Identification', 'Quantify specific fish DNA from eDNA samples.', 'qPCR with species-specific primers.', 'SOP_Lib_Prep_v1', 'peter.jones', 'In Progress');
 
     -- 3.3 lab.root_samples
-    INSERT INTO "lab"."root_samples" ("sample_type_id", "project_id", "sample_creation_date", "sampling_id", "sampling_date", "sampler_person_id", "status_id") VALUES
-    ('Water', 'Proj_BioMon', '2025-05-01', sampling_id_val, '2025-05-01', 'jane.doe', 'Received'),
-    ('Sediment', 'Proj_BioMon', '2025-05-01', sampling_id_val, '2025-05-01', 'jane.doe', 'Received');
+    INSERT INTO "lab"."root_samples" ("sample_type_id", "project_id", "sample_creation_date", "sampling_id", "sampler_person_id", "status_id") VALUES
+    ('Water', 'Proj_BioMon', '2025-05-01', sampling_id_val,  'jane.doe', 'Received'),
+    ('Sediment', 'Proj_BioMon', '2025-05-01', sampling_id_val,  'jane.doe', 'Received');
 
     SELECT "sample_id" INTO sample_id_w FROM "lab"."root_samples" WHERE "sample_type_id" = 'Water' AND "sample_creation_date" = '2025-05-01' LIMIT 1;
     SELECT "sample_id" INTO sample_id_s FROM "lab"."root_samples" WHERE "sample_type_id" = 'Sediment' AND "sample_creation_date" = '2025-05-01' LIMIT 1;
 
-    INSERT INTO "lab"."root_samples" ("sample_type_id", "project_id", "sample_creation_date", "sampling_id", "sampling_date", "sampler_person_id", "status_id") VALUES
-    ('Fish', 'Proj_BioMon', '2025-05-01', sampling_id_val, '2025-05-01', 'jane.doe', 'Received');
+    INSERT INTO "lab"."root_samples" ("sample_type_id", "project_id", "sample_creation_date", "sampling_id", "sampler_person_id", "status_id") VALUES
+    ('Fish', 'Proj_BioMon', '2025-05-01', sampling_id_val,  'jane.doe', 'Received');
     SELECT "sample_id" INTO sample_id_f FROM "lab"."root_samples" WHERE "sample_type_id" = 'Fish' AND "sample_creation_date" = '2025-05-01' LIMIT 1;
 
     INSERT INTO "lab"."root_samples" ("sample_type_id", "project_id", "parent_sample_id", "sample_creation_date") VALUES
@@ -3521,82 +3520,82 @@ BEGIN
     SELECT "sample_id" INTO sample_id_t FROM "lab"."root_samples" WHERE "sample_type_id" = 'Tissue' AND "sample_creation_date" = '2025-05-01' ORDER BY "sample_id" DESC LIMIT 1;
 
     -- 3.4 lab.dna
-    INSERT INTO "lab"."dna" ("sample_id", "sample_creation_date", "volume_ul", "concentration_ng_ul", "extraction_method", "extraction_date", "batch_id", "status_id") VALUES
-    (sample_id_w, NULL, 50, 25.5, 'Phenol-Chloroform', '2025-08-20', 'Batch_DNA_Ext_001', 'Received'),
-    (sample_id_t, NULL, 100, 50.0, 'CTAB', '2025-08-20', 'Batch_DNA_Ext_001', 'Received');
+    INSERT INTO "lab"."dna" ("sample_id", "volume_ul", "concentration_ng_ul", "extraction_method", "extraction_date", "batch_id", "status_id") VALUES
+    (sample_id_w, 50, 25.5, 'Phenol-Chloroform', '2025-08-20', 'Batch_DNA_Ext_001', 'Received'),
+    (sample_id_t, 100, 50.0, 'CTAB', '2025-08-20', 'Batch_DNA_Ext_001', 'Received');
 
     -- 3.5 lab.rna
-    INSERT INTO "lab"."rna" ("sample_id", "sample_creation_date", "volume_ul", "concentration_ng_ul", "extraction_method", "extraction_date", "kit", "status_id") VALUES
-    (sample_id_t, NULL, 40, 30.2, 'Trizol', '2025-08-21', 'RNA Kit', 'Received');
+    INSERT INTO "lab"."rna" ("sample_id", "volume_ul", "concentration_ng_ul", "extraction_method", "extraction_date", "kit", "status_id") VALUES
+    (sample_id_t, 40, 30.2, 'Trizol', '2025-08-21', 'RNA Kit', 'Received');
 
     -- 3.6 lab.qubit
-    INSERT INTO "lab"."qubit" ("sample_id", "sample_creation_date", "experiment_id", "experiment_date", "qubit_tube_conc", "tube_unit_id", "qubit_original_sample_conc", "original_sample_unit_id", "person_id", "status_id") VALUES
-    (sample_id_w, NULL, 'Exp_eDNA_001', '2025-08-20', 2.0, 'ng_ul', 100.0, 'ng_ul', 'peter.jones', 'Qubit QC');
+    INSERT INTO "lab"."qubit" ("sample_id", "experiment_id",  "qubit_tube_conc", "tube_unit_id", "qubit_original_sample_conc", "original_sample_unit_id", "person_id", "status_id") VALUES
+    (sample_id_w, 'Exp_eDNA_001', 2.0, 'ng_ul', 100.0, 'ng_ul', 'peter.jones', 'Qubit QC');
 
     -- 3.7 lab.nanodrop
-    INSERT INTO "lab"."nanodrop" ("sample_id", "sample_creation_date", "experiment_id", "experiment_date", "nanodrop_concentration", "concentration_unit_id", "a260_280", "a260_230", "person_id", "status_id") VALUES
-    (sample_id_w, NULL, 'Exp_eDNA_001', '2025-08-20', 2.1, 'ng_ul', 1.85, 2.15, 'peter.jones', 'Nanodrop QC');
+    INSERT INTO "lab"."nanodrop" ("sample_id", "experiment_id",  "nanodrop_concentration", "concentration_unit_id", "a260_280", "a260_230", "person_id", "status_id") VALUES
+    (sample_id_w, 'Exp_eDNA_001',  2.1, 'ng_ul', 1.85, 2.15, 'peter.jones', 'Nanodrop QC');
 
     -- 3.8 lab.gelelectrophoresis
-    INSERT INTO "lab"."gelelectrophoresis" ("gelelectrophoresis_id", "sample_id", "sample_creation_date", "experiment_id", "experiment_date", "position", "ladder", "voltage", "band_size_bp", "gel_type", "run_time_minutes", "person_id", "status_id") VALUES
-    ('Gel-001', sample_id_w, '2025-05-01', 'Exp_eDNA_001', '2025-08-20', 'A1', '1kb Ladder', 100, 500, 'Agarose 1%', 45, 'peter.jones', 'Completed');
+    INSERT INTO "lab"."gelelectrophoresis" ("gelelectrophoresis_id", "sample_id", "experiment_id", "experiment_date", "position", "ladder", "voltage", "band_size_bp", "gel_type", "run_time_minutes", "person_id", "status_id") VALUES
+    ('Gel-001', sample_id_w,  'Exp_eDNA_001', '2025-08-20', 'A1', '1kb Ladder', 100, 500, 'Agarose 1%', 45, 'peter.jones', 'Completed');
 
     -- 3.9 lab.pcr
-    INSERT INTO "lab"."pcr" ("pcr_id", "pcr_date", "sample_id", "sample_creation_date", "primer_id", "person_id", "kit", "storage_id", "project_id", "status_id") VALUES
-    ('pcr25_001', '2025-08-21', sample_id_w, '2025-05-01', '16S_V4_F', 'jane.doe', 'PCR Master Mix', 'S_R101_F1_B1', 'Proj_BioMon', 'PCR Done');
+    INSERT INTO "lab"."pcr" ("pcr_id", "pcr_date", "sample_id", "primer_id", "person_id", "kit", "storage_id", "project_id", "status_id") VALUES
+    ('pcr25_001', '2025-08-21', sample_id_w,  '16S_V4_F', 'jane.doe', 'PCR Master Mix', 'S_R101_F1_B1', 'Proj_BioMon', 'PCR Done');
 
     -- 3.10 lab.library
-    INSERT INTO "lab"."library" ("library_id", "experiment_id", "experiment_date", "sample_id", "sample_creation_date", "library_name", "person_id", "library_prep_kit", "index_sequence", "project_id", "status_id") VALUES
-    ('Lib_eDNA_001', 'Exp_eDNA_001', '2025-08-20', sample_id_w, '2025-05-01', 'eDNA_Lib_1', 'john.smith', 'Nextera XT', 'GATTACA', 'Proj_BioMon', 'Library Prep');
+    INSERT INTO "lab"."library" ("library_id", "experiment_id", "experiment_date", "sample_id", "library_name", "person_id", "library_prep_kit", "index_sequence", "project_id", "status_id") VALUES
+    ('Lib_eDNA_001', 'Exp_eDNA_001', '2025-08-20', sample_id_w,  'eDNA_Lib_1', 'john.smith', 'Nextera XT', 'GATTACA', 'Proj_BioMon', 'Library Prep');
 
     -- 3.11 lab.sequencing_run
-    INSERT INTO "lab"."sequencing_run" ("sequencing_run_id", "experiment_id", "experiment_date", "library_id", "prep_date", "sample_id", "sample_creation_date", "person_id", "sequencer", "flow_cell_id", "total_reads", "project_id", "status_id") VALUES
-    ('RS25_001', 'Exp_eDNA_001', '2025-08-20', 'Lib_eDNA_001', '2025-08-20', sample_id_w, '2025-05-01', 'john.smith', 'MiSeq', 'FC-A1', 15000000, 'Proj_BioMon', 'Sequencing Done');
+    INSERT INTO "lab"."sequencing_run" ("sequencing_run_id", "experiment_id", "experiment_date", "library_id", "prep_date", "sample_id", "person_id", "sequencer", "flow_cell_id", "total_reads", "project_id", "status_id") VALUES
+    ('RS25_001', 'Exp_eDNA_001', '2025-08-20', 'Lib_eDNA_001', '2025-08-20', sample_id_w,  'john.smith', 'MiSeq', 'FC-A1', 15000000, 'Proj_BioMon', 'Sequencing Done');
 
     -- 3.12 lab.datasets
-    INSERT INTO "lab"."datasets" ("dataset_id", "sample_id", "sample_creation_date", "source_type", "ecosystem_id", "experiment_id", "experiment_date", "reception_date", "status_id", "storage_path") VALUES
-    ('Z25S25Bio_001', sample_id_w, '2025-05-01', 'Sequencing', 'Estuary', 'Exp_eDNA_001', '2025-08-20', '2025-08-21', 'Received', '/data/proj/biomon/raw_seq_data');
+    INSERT INTO "lab"."datasets" ("dataset_id", "sample_id", "source_type", "ecosystem_id", "experiment_id", "experiment_date", "reception_date", "status_id", "storage_path") VALUES
+    ('Z25S25Bio_001', sample_id_w,  'Sequencing', 'Estuary', 'Exp_eDNA_001', '2025-08-20', '2025-08-21', 'Received', '/data/proj/biomon/raw_seq_data');
 
     -- 3.13 lab.storage_log
-    INSERT INTO "lab"."storage_log" ("sample_id", "sample_creation_date", "storage_id", "person_id", "status_id", "storage_position", "notes") VALUES
-    (sample_id_w, '2025-05-01', 'S_R101_F1_B1', 'jane.doe', 'Received', 'A1', 'Initial storage location after reception.');
+    INSERT INTO "lab"."storage_log" ("sample_id", "storage_id", "person_id", "status_id", "storage_position", "notes") VALUES
+    (sample_id_w,  'S_R101_F1_B1', 'jane.doe', 'Received', 'A1', 'Initial storage location after reception.');
 
     -- 3.14 lab.fishing
-    INSERT INTO "lab"."fishing" ("sampling_id", "sampling_date", "taxon_id", "catch_kg") VALUES
-    (sampling_id_val, '2025-05-01', 'Gadus_morhua', 15.2);
+    INSERT INTO "lab"."fishing" ("sampling_id",  "taxon_id", "catch_kg") VALUES
+    (sampling_id_val, 'Gadus_morhua', 15.2);
 
     -- 3.15 lab.individual_catch_catch
-    INSERT INTO "lab"."individual_catch_catch" ("sampling_id", "sampling_date", "taxon_id", "SL_mm", "weight_g", "sex") VALUES
-    (sampling_id_val, '2025-05-01', 'Gadus_morhua', 350, 450, 'Male'),
-    (sampling_id_val, '2025-05-01', 'Gadus_morhua', 420, 600, 'Female');
+    INSERT INTO "lab"."individual_catch_catch" ("sampling_id", "taxon_id", "SL_mm", "weight_g", "sex") VALUES
+    (sampling_id_val, 'Gadus_morhua', 350, 450, 'Male'),
+    (sampling_id_val,  'Gadus_morhua', 420, 600, 'Female');
 
     -- 3.16 lab.sampling_abiotic_data
-    INSERT INTO "lab"."sampling_abiotic_data" ("sampling_id", "sampling_date", "temperature_sampling_depth_c", "salinity", "salinity_unit_id", "oxygen", "oxygen_unit_id") VALUES
-    (sampling_id_val, '2025-05-01', 12.5, 28.5, 'PSU', 8.2, 'mg_L');
+    INSERT INTO "lab"."sampling_abiotic_data" ("sampling_id", "temperature_sampling_depth_c", "salinity", "salinity_unit_id", "oxygen", "oxygen_unit_id") VALUES
+    (sampling_id_val,  12.5, 28.5, 'PSU', 8.2, 'mg_L');
 
     -- 3.17 lab.dissections
-    INSERT INTO "lab"."dissections" ("dissection_id", "person_id", "sample_id", "sample_creation_date", "project_id", "experiment_id", "experiment_date", "gonad_weight_g", "liver_weight_g", "status_id") VALUES
-    ('S25BioMon003_d1', 'jane.doe', sample_id_f, '2025-05-01', 'Proj_BioMon', 'Exp_eDNA_001', '2025-08-20', 55.2, 85.1, 'Completed');
+    INSERT INTO "lab"."dissections" ("dissection_id", "person_id", "sample_id", "project_id", "experiment_id", "experiment_date", "gonad_weight_g", "liver_weight_g", "status_id") VALUES
+    ('S25BioMon003_d1', 'jane.doe', sample_id_f,  'Proj_BioMon', 'Exp_eDNA_001', '2025-08-20', 55.2, 85.1, 'Completed');
 
     -- 3.18 lab.seq_dataset
-    INSERT INTO "lab"."seq_dataset" ("data_seq_id", "sample_id", "sample_creation_date", "sequencing_run_id", "sequencer", "total_reads", "raw_data_path", "status_id", "project_id", "notes", "data_seq_date") VALUES
-    ('S25BioM_W_RS001', sample_id_w, '2025-05-01', 'RS25_001', 'MiSeq', 15000000, '/data/raw_seq/S25BioMon001', 'Completed', 'Proj_BioMon', 'eDNA sequencing dataset from water sample', '2025-08-20');
+    INSERT INTO "lab"."seq_dataset" ("data_seq_id", "sample_id", "sequencing_run_id", "sequencer", "total_reads", "raw_data_path", "status_id", "project_id", "notes", "data_seq_date") VALUES
+    ('S25BioM_W_RS001', sample_id_w,  'RS25_001', 'MiSeq', 15000000, '/data/raw_seq/S25BioMon001', 'Completed', 'Proj_BioMon', 'eDNA sequencing dataset from water sample', '2025-08-20');
 
     -- 3.19 lab.otoliths
-   INSERT INTO "lab"."otoliths" ("otolith_id", "sample_id", "sample_creation_date", "reader_person_id", "side", "age_reading_years", "project_id", "status_id") VALUES
-    ('F25BioM_Ot1', sample_id_f, '2025-05-01', 'john.smith', 'left', 2.5, 'Proj_BioMon', 'Completed');
+   INSERT INTO "lab"."otoliths" ("sample_id", "reader_person_id", "side", "age_reading_years", "project_id", "status_id") VALUES
+    (sample_id_f, 'john.smith', 'left', 2.5, 'Proj_BioMon', 'Completed');
 
     -- 3.20 lab.tapestation
     INSERT INTO "lab"."tapestation" ("tapestation_id", "sample_id", "experiment_id", "experiment_date", "position", "kit", "person_id", "status_id") VALUES
     ('Tapes-001', sample_id_w, 'Exp_eDNA_001', '2025-08-20', '1', 'DNA ScreenTape', 'peter.jones', 'Completed');
 
     -- 3.21 lab.water
-    INSERT INTO "lab"."water" ("sample_id", "sample_creation_date", "volume_L", "filter", "depth_m", "sampling_method", "conservation_buffer", "status_id") VALUES
-    (sample_id_w, '2025-05-01', 500, '0.45 um', 15.5, 'Niskin Bottle', 'Ethanol', 'Received');
+    INSERT INTO "lab"."water" ("sample_id", "volume_L", "filter", "depth_m", "sampling_method", "conservation_buffer", "status_id") VALUES
+    (sample_id_w,  500, '0.45 um', 15.5, 'Niskin Bottle', 'Ethanol', 'Received');
 
     -- 3.22 lab.sediments
-    INSERT INTO "lab"."sediments" ("sample_id", "sample_creation_date", "volume", "volume_unit_id", "depth_m", "sampling_method", "conservation_buffer", "status_id") VALUES
-    (sample_id_s, '2025-05-01', 100, 'milliliter', 15.5, 'Box Corer', 'DMSO', 'Received');
+    INSERT INTO "lab"."sediments" ("sample_id", "volume", "volume_unit_id", "depth_m", "sampling_method", "conservation_buffer", "status_id") VALUES
+    (sample_id_s,  100, 'milliliter', 15.5, 'Box Corer', 'DMSO', 'Received');
 
 END $$;
 -- ------------------------------------------------------------------------------------------------------------------
