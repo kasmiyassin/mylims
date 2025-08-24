@@ -24,49 +24,48 @@ CREATE SCHEMA IF NOT EXISTS "projects";
 -- =================================================================================================
 -- 3. ROLE-BASED ACCESS CONTROL (RBAC)
 -- =================================================================================================
-CREATE ROLE "lims_admin" WITH NOLOGIN;
-CREATE ROLE "project_manager" WITH NOLOGIN;
-CREATE ROLE "lab_technician" WITH NOLOGIN;
-CREATE ROLE "bioinformatician" WITH NOLOGIN;
-CREATE ROLE "read_only_user" WITH NOLOGIN;
+-- CREATE ROLE "lims_admin" WITH NOLOGIN;
+-- CREATE ROLE "project_manager" WITH NOLOGIN;
+-- CREATE ROLE "lab_technician" WITH NOLOGIN;
+-- CREATE ROLE "bioinformatician" WITH NOLOGIN;
+-- CREATE ROLE "read_only_user" WITH NOLOGIN;
 
 -- Grant Schema Usage
-GRANT USAGE ON SCHEMA "lab", "lims", "reference", "bioinformatics", "projects", "audit" TO "lims_admin", "project_manager", "lab_technician", "bioinformatician", "read_only_user";
+-- GRANT USAGE ON SCHEMA "lab", "lims", "reference", "bioinformatics", "projects", "audit" TO "lims_admin", "project_manager", "lab_technician", "bioinformatician", "read_only_user";
 
 -- Grant Permissions for lims_admin (Full Control)
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA "lab", "lims", "reference", "bioinformatics", "projects", "audit" TO "lims_admin";
-ALTER DEFAULT PRIVILEGES IN SCHEMA "lab", "lims", "reference", "bioinformatics", "projects", "audit" GRANT ALL ON TABLES TO "lims_admin";
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA "lab", "lims", "reference", "bioinformatics", "projects", "audit" TO "lims_admin";
-ALTER DEFAULT PRIVILEGES IN SCHEMA "lab", "lims", "reference", "bioinformatics", "projects", "audit" GRANT ALL ON SEQUENCES TO "lims_admin";
-
+-- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA "lab", "lims", "reference", "bioinformatics", "projects", "audit" TO "lims_admin";
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA "lab", "lims", "reference", "bioinformatics", "projects", "audit" GRANT ALL ON TABLES TO "lims_admin";
+-- GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA "lab", "lims", "reference", "bioinformatics", "projects", "audit" TO "lims_admin";
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA "lab", "lims", "reference", "bioinformatics", "projects", "audit" GRANT ALL ON SEQUENCES TO "lims_admin";
 
 -- Grant Permissions for project_manager
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA "lims", "projects" TO "project_manager";
-ALTER DEFAULT PRIVILEGES IN SCHEMA "lims", "projects" GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "project_manager";
-GRANT SELECT ON ALL TABLES IN SCHEMA "lab", "bioinformatics", "reference" TO "project_manager";
-ALTER DEFAULT PRIVILEGES IN SCHEMA "lab", "bioinformatics", "reference" GRANT SELECT ON TABLES TO "project_manager";
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA "lims", "projects" TO "project_manager";
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA "lims", "projects" GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "project_manager";
+-- GRANT SELECT ON ALL TABLES IN SCHEMA "lab", "bioinformatics", "reference" TO "project_manager";
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA "lab", "bioinformatics", "reference" GRANT SELECT ON TABLES TO "project_manager";
 
 -- Grant Permissions for lab_technician
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA "lab" TO "lab_technician";
-ALTER DEFAULT PRIVILEGES IN SCHEMA "lab" GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "lab_technician";
-GRANT SELECT, UPDATE ON ALL TABLES IN SCHEMA "lims" TO "lab_technician"; -- Can view projects, update inventory.
-ALTER DEFAULT PRIVILEGES IN SCHEMA "lims" GRANT SELECT, UPDATE ON TABLES TO "lab_technician";
-GRANT SELECT ON ALL TABLES IN SCHEMA "reference" TO "lab_technician";
-ALTER DEFAULT PRIVILEGES IN SCHEMA "reference" GRANT SELECT ON TABLES TO "lab_technician";
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA "lab" TO "lab_technician";
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA "lab" GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "lab_technician";
+-- GRANT SELECT, UPDATE ON ALL TABLES IN SCHEMA "lims" TO "lab_technician"; -- Can view projects, update inventory.
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA "lims" GRANT SELECT, UPDATE ON TABLES TO "lab_technician";
+-- GRANT SELECT ON ALL TABLES IN SCHEMA "reference" TO "lab_technician";
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA "reference" GRANT SELECT ON TABLES TO "lab_technician";
 
 -- Grant Permissions for bioinformatician
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA "bioinformatics" TO "bioinformatician";
-ALTER DEFAULT PRIVILEGES IN SCHEMA "bioinformatics" GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "bioinformatician";
-GRANT SELECT ON ALL TABLES IN SCHEMA "lab", "lims", "reference" TO "bioinformatician";
-ALTER DEFAULT PRIVILEGES IN SCHEMA "lab", "lims", "reference" GRANT SELECT ON TABLES TO "bioinformatician";
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA "bioinformatics" TO "bioinformatician";
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA "bioinformatics" GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "bioinformatician";
+-- GRANT SELECT ON ALL TABLES IN SCHEMA "lab", "lims", "reference" TO "bioinformatician";
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA "lab", "lims", "reference" GRANT SELECT ON TABLES TO "bioinformatician";
 
 -- Grant Permissions for read_only_user
-GRANT SELECT ON ALL TABLES IN SCHEMA "lab", "lims", "reference", "bioinformatics", "projects" TO "read_only_user";
-ALTER DEFAULT PRIVILEGES IN SCHEMA "lab", "lims", "reference", "bioinformatics", "projects" GRANT SELECT ON TABLES TO "read_only_user";
+-- GRANT SELECT ON ALL TABLES IN SCHEMA "lab", "lims", "reference", "bioinformatics", "projects" TO "read_only_user";
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA "lab", "lims", "reference", "bioinformatics", "projects" GRANT SELECT ON TABLES TO "read_only_user";
 
 -- Grant usage on sequences for roles that insert data
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA "lab", "lims", "reference", "bioinformatics", "projects" TO "project_manager", "lab_technician", "bioinformatician";
-ALTER DEFAULT PRIVILEGES IN SCHEMA "lab", "lims", "reference", "bioinformatics", "projects" GRANT USAGE, SELECT ON SEQUENCES TO "project_manager", "lab_technician", "bioinformatician";
+-- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA "lab", "lims", "reference", "bioinformatics", "projects" TO "project_manager", "lab_technician", "bioinformatician";
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA "lab", "lims", "reference", "bioinformatics", "projects" GRANT USAGE, SELECT ON SEQUENCES TO "project_manager", "lab_technician", "bioinformatician";
 
 
 -- =================================================================================================
@@ -511,9 +510,9 @@ CREATE TABLE IF NOT EXISTS "lab"."experiments_projects" (
 
 CREATE TABLE IF NOT EXISTS "lab"."experiments_samples" (
     "experiment_id" text NOT NULL,
-    "experiment_date" date NOT NULL,
+    "experiment_date" date,
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date ,
     "notes" text,
     PRIMARY KEY ("experiment_id", "experiment_date", "sample_id", "sample_creation_date"),
     FOREIGN KEY ("experiment_id", "experiment_date") REFERENCES "lab"."experiments"("experiment_id", "experiment_date")
@@ -586,7 +585,7 @@ CREATE TABLE IF NOT EXISTS "lab"."fishing" (
 
 CREATE TABLE IF NOT EXISTS "lab"."individual_catch_catch" (
     "individual_catch_id" text NOT NULL,
-    "fishing_id" text NOT NULL,
+    "sampling_id" text NOT NULL,
     "sampling_date" date NOT NULL,
     "taxon_id" text NOT NULL REFERENCES "reference"."taxon"("taxon_id"),
     "SL_mm" numeric,
@@ -600,7 +599,7 @@ CREATE TABLE IF NOT EXISTS "lab"."individual_catch_catch" (
     "attachment_link" text,
     "creation_date" timestamptz DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY ("individual_catch_id", "creation_date"),
-    FOREIGN KEY ("fishing_id", "creation_date") REFERENCES "lab"."fishing"("fishing_id", "creation_date")
+    FOREIGN KEY ("sampling_id", "sampling_date") REFERENCES "lab"."sampling"("sampling_id", "sampling_date")
 ) PARTITION BY RANGE ("creation_date");
 
 CREATE TABLE "lab"."sampling_abiotic_data" (
@@ -649,7 +648,7 @@ CREATE TABLE "lab"."root_samples" (
     "root_sample_id" text,
     "project_id" text REFERENCES "lims"."projects"("project_id"),
     "customer_id" integer REFERENCES "lims"."customers"("customer_id"),
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date ,
     "parent_sample_creation_date" date,
     "root_sample_creation_date" date,
     "sampling_id" text,
@@ -678,7 +677,7 @@ CREATE TABLE "lab"."root_samples" (
 CREATE TABLE IF NOT EXISTS "lab"."storage_log" (
     "log_id" serial PRIMARY KEY,
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date,
     "storage_id" text NOT NULL REFERENCES "lab"."storage"("storage_id"),
     "person_id" text REFERENCES "lims"."personal"("person_id"),
     "move_date" timestamptz DEFAULT CURRENT_TIMESTAMP,
@@ -690,7 +689,7 @@ CREATE TABLE IF NOT EXISTS "lab"."storage_log" (
 
 CREATE TABLE IF NOT EXISTS "lab"."fish" (
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date ,
     "species_id" text NOT NULL REFERENCES "reference"."taxon"("taxon_id"),
     "preservation_method" text,
     "total_length_mm" numeric,
@@ -720,7 +719,7 @@ ALTER TABLE "lab"."fish" ADD CONSTRAINT chk_fish_sex_enum CHECK ("sex" IN ('Male
 
 CREATE TABLE IF NOT EXISTS "lab"."tissue" (
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date,
     "weight_g" numeric,
     "tissue_type" text,
     "preservation_method" text,
@@ -740,8 +739,8 @@ CREATE TABLE IF NOT EXISTS "lab"."tissue" (
 
 CREATE TABLE IF NOT EXISTS "lab"."otoliths" (
     "otolith_id" text NOT NULL,
-    "parent_sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "parent_sample_id" text,
+    "sample_creation_date" date,
     "reader_person_id" text NOT NULL REFERENCES "lims"."personal"("person_id"),
     "side" text NOT NULL,
     "age_reading_years" numeric,
@@ -760,7 +759,7 @@ CREATE TABLE IF NOT EXISTS "lab"."otoliths" (
 
 CREATE TABLE IF NOT EXISTS "lab"."dna" (
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date,
     "volume_ul" numeric,
     "concentration_ng_ul" numeric,
     "a260_280" numeric,
@@ -789,7 +788,7 @@ CREATE TABLE IF NOT EXISTS "lab"."dna" (
 
 CREATE TABLE IF NOT EXISTS "lab"."rna" (
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date,
     "volume_ul" numeric,
     "concentration_ng_ul" numeric,
     "a260_280" numeric,
@@ -818,7 +817,7 @@ CREATE TABLE IF NOT EXISTS "lab"."rna" (
 
 CREATE TABLE IF NOT EXISTS "lab"."sediments" (
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date,
     "volume" numeric,
     "volume_unit_id" text REFERENCES "reference"."units"("unit_id"),
     "depth_m" numeric,
@@ -840,9 +839,9 @@ CREATE TABLE IF NOT EXISTS "lab"."sediments" (
 
 CREATE TABLE IF NOT EXISTS "lab"."water" (
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
-    "volume_ul" numeric,
-    "filter" text,
+    "sample_creation_date" date,
+    "volume_L" numeric,
+	"filter" text,
     "filter_pore_size_um" numeric,
     "depth_m" numeric,
     "sampling_method" text,
@@ -863,7 +862,7 @@ CREATE TABLE IF NOT EXISTS "lab"."water" (
 CREATE TABLE IF NOT EXISTS "lab"."pcr" (
     "pcr_id" text NOT NULL,
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date,
     "position" text,
     "primer_id" text REFERENCES "lims"."primers"("primer_id"),
     "pcr_blank_id" text,
@@ -887,7 +886,7 @@ CREATE TABLE IF NOT EXISTS "lab"."dissections" (
     "dissection_id" text NOT NULL,
     "person_id" text NOT NULL REFERENCES "lims"."personal"("person_id"),
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date,
     "project_id" text REFERENCES "lims"."projects"("project_id"),
     "experiment_id" text,
     "experiment_date" date, -- Populated by trigger
@@ -907,7 +906,7 @@ CREATE TABLE IF NOT EXISTS "lab"."dissections" (
 CREATE TABLE IF NOT EXISTS "lab"."nanodrop" (
     "nanodrop_id" text NOT NULL,
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date,
     "experiment_id" text,
     "experiment_date" date, -- Populated by trigger
     "nanodrop_concentration" numeric,
@@ -937,7 +936,7 @@ CREATE TABLE IF NOT EXISTS "lab"."nanodrop" (
 CREATE TABLE IF NOT EXISTS "lab"."qubit" (
     "qubit_id" text NOT NULL,
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date,
     "experiment_id" text,
     "experiment_date" date, -- Populated by trigger
     "run_id" text,
@@ -966,7 +965,7 @@ CREATE TABLE IF NOT EXISTS "lab"."qubit" (
 CREATE TABLE IF NOT EXISTS "lab"."tapestation" (
     "tapestation_id" text NOT NULL,
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date,
     "experiment_id" text,
     "experiment_date" date, -- Populated by trigger
     "position" text,
@@ -988,7 +987,7 @@ CREATE TABLE IF NOT EXISTS "lab"."tapestation" (
 CREATE TABLE IF NOT EXISTS "lab"."gelelectrophoresis" (
     "gelelectrophoresis_id" text NOT NULL,
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date,
     "experiment_id" text,
     "experiment_date" date, -- Populated by trigger
     "position" text,
@@ -1016,7 +1015,7 @@ CREATE TABLE IF NOT EXISTS "lab"."qpcr" (
     "experiment_id" text NOT NULL,
     "experiment_date" date NOT NULL,
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date,
     "position" text,
     "person_id" text REFERENCES "lims"."personal"("person_id"),
     "primer_id" text REFERENCES "lims"."primers"("primer_id"),
@@ -1044,7 +1043,7 @@ CREATE TABLE IF NOT EXISTS "lab"."library" (
     "experiment_id" text NOT NULL,
     "experiment_date" date, -- Populated by trigger
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date,
     "library_name" text,
     "person_id" text REFERENCES "lims"."personal"("person_id"),
     "library_prep_kit" text,
@@ -1096,7 +1095,7 @@ CREATE TABLE IF NOT EXISTS "lab"."sequencing_run" (
 CREATE TABLE IF NOT EXISTS "lab"."seq_dataset" (
     "data_seq_id" text NOT NULL,
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date,
     "sequencing_run_id" text,
     "sequencer" text,
     "index_sequence" text,
@@ -1162,7 +1161,6 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."analysis_pipelines" (
     "attachment_link" text,
     FOREIGN KEY ("experiment_id", "experiment_date") REFERENCES "lab"."experiments"("experiment_id", "experiment_date")
 );
-COMMENT ON TABLE "bioinformatics"."analysis_pipelines" IS 'Repository of bioinformatics analysis pipelines.';
 
 CREATE TABLE IF NOT EXISTS "bioinformatics"."analysis_runs" (
     "run_id" text NOT NULL,
@@ -1186,7 +1184,6 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."analysis_runs" (
     FOREIGN KEY ("sequencing_id", "sequencing_date") REFERENCES "lab"."sequencing_run"("sequencing_run_id", "creation_date"),
     FOREIGN KEY ("experiment_id", "experiment_date") REFERENCES "lab"."experiments"("experiment_id", "experiment_date")
 ) PARTITION BY RANGE ("creation_date");
-COMMENT ON TABLE "bioinformatics"."analysis_runs" IS 'Records the execution of a bioinformatics pipeline.';
 
 CREATE TABLE IF NOT EXISTS "bioinformatics"."edna_assignments" (
     "assignment_id" Text NOT NULL,
@@ -1194,7 +1191,7 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."edna_assignments" (
     "run_id" text NOT NULL,
     "run_creation_date" date NOT NULL,
     "sample_id" text NOT NULL,
-    "sample_creation_date" date NOT NULL,
+    "sample_creation_date" date,
     "taxon_id" text NOT NULL REFERENCES "reference"."taxon"("taxon_id"),
     "read_count" integer,
     "confidence" numeric,
@@ -1210,7 +1207,6 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."edna_assignments" (
     FOREIGN KEY ("sample_id", "sample_creation_date") REFERENCES "lab"."root_samples"("sample_id", "sample_creation_date"),
     FOREIGN KEY ("experiment_id", "experiment_date") REFERENCES "lab"."experiments"("experiment_id", "experiment_date")
 ) PARTITION BY RANGE ("creation_date");
-COMMENT ON TABLE "bioinformatics"."edna_assignments" IS 'Stores taxonomic assignments from eDNA analysis.';
 
 
 -- =================================================================================================
@@ -1269,7 +1265,6 @@ CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_FishingData" (
     "last_modified_by" text,
     PRIMARY KEY ("fishing_record_id", "record_date")
 ) PARTITION BY RANGE ("record_date");
-COMMENT ON TABLE "projects"."ProjectWanderfische_FishingData" IS 'Project-specific table for fishing data from external agencies.';
 
 CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_FishCatch" (
     "fish_catch_id" serial PRIMARY KEY,
@@ -1298,7 +1293,6 @@ CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_FishCatch" (
     "last_modified_by" text,
     FOREIGN KEY ("fishing_record_id", "fishing_record_date") REFERENCES "projects"."ProjectWanderfische_FishingData"("fishing_record_id", "record_date")
 );
-COMMENT ON TABLE "projects"."ProjectWanderfische_FishCatch" IS 'Project-specific table for fish catch details.';
 
 CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_Mail" (
     "mail_id" serial PRIMARY KEY,
@@ -1318,7 +1312,6 @@ CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_Mail" (
     "last_modified_by" text,
     FOREIGN KEY ("fishing_record_id", "fishing_record_date") REFERENCES "projects"."ProjectWanderfische_FishingData"("fishing_record_id", "record_date")
 );
-COMMENT ON TABLE "projects"."ProjectWanderfische_Mail" IS 'Project-specific log of email communications.';
 
 CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_Conversation" (
     "conversation_id" serial PRIMARY KEY,
@@ -1334,7 +1327,6 @@ CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_Conversation" (
     "last_modified_by" text,
     FOREIGN KEY ("fishing_record_id", "fishing_record_date") REFERENCES "projects"."ProjectWanderfische_FishingData"("fishing_record_id", "record_date")
 );
-COMMENT ON TABLE "projects"."ProjectWanderfische_Conversation" IS 'Project-specific log of conversations or topics.';
 
 -- NEW TABLE: To store individual messages within a conversation.
 CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_ChatMessage" (
@@ -1351,7 +1343,6 @@ CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_ChatMessage" (
     "created_by" text,
     CONSTRAINT chk_sender_not_null CHECK (sender_person_id IS NOT NULL OR sender_contact_id IS NOT NULL)
 );
-COMMENT ON TABLE "projects"."ProjectWanderfische_ChatMessage" IS 'Stores individual chat messages for conversations in the Wanderfische project.';
 
 
 -- =================================================================================================
@@ -1394,7 +1385,36 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-COMMENT ON FUNCTION "audit".if_modified_func() IS 'Generic trigger function to log all INSERT, UPDATE, and DELETE operations to the audit.log table.';
+
+-- ###################################### 
+-- F02a. CENTRALIZED DATE POPULATION FUNCTION
+-- This function populates sample_creation_date in child tables from root_samples.
+CREATE OR REPLACE FUNCTION "lab".populate_date_from_root_sample()
+RETURNS TRIGGER AS $$
+DECLARE
+    parent_date date;
+    parent_id text;
+    root_id text;
+    root_date date;
+BEGIN
+    IF NEW.sample_creation_date IS NULL THEN
+        -- Get the parent's sample_id
+        parent_id := NEW.sample_id;
+        -- Lookup the sample_creation_date in the root_samples table
+        SELECT rs.sample_creation_date
+        INTO parent_date
+        FROM "lab"."root_samples" rs
+        WHERE rs.sample_id = parent_id;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Associated root_sample not found for sample_id %', parent_id;
+        END IF;
+        NEW.sample_creation_date := parent_date;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+-- ########################################### 
 
 -- F02. ID GENERATION FUNCTION (ROOT SAMPLES)
 CREATE OR REPLACE FUNCTION "lab".generate_root_sample_id()
@@ -1448,7 +1468,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-COMMENT ON FUNCTION "lab".generate_root_sample_id() IS 'Generates a unique ID for a new root sample based on type, year, and project/customer.';
+
 
 -- F03. ID GENERATION FUNCTION (CHILD SAMPLES)
 CREATE OR REPLACE FUNCTION "lab".generate_child_sample_id()
@@ -1473,13 +1493,15 @@ BEGIN
     SELECT rs.sample_creation_date, rs.root_sample_id, rs.root_sample_creation_date
     INTO parent_record
     FROM "lab"."root_samples" rs
-    WHERE rs.sample_id = NEW.parent_sample_id AND rs.sample_creation_date = NEW.parent_sample_creation_date;
+    WHERE rs.sample_id = NEW.parent_sample_id;
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Parent sample ID ''%'' with date ''%'' not found. Cannot generate child ID.', NEW.parent_sample_id, NEW.parent_sample_creation_date;
+        RAISE EXCEPTION 'Parent sample ID ''%'' not found. Cannot generate child ID.', NEW.parent_sample_id;
     END IF;
 
+
     -- Populate root info from parent record
+    NEW.parent_sample_creation_date := parent_record.sample_creation_date;
     NEW.root_sample_id := parent_record.root_sample_id;
     NEW.root_sample_creation_date := parent_record.root_sample_creation_date;
     
@@ -1492,7 +1514,6 @@ BEGIN
 
     NEW.sample_id := id_prefix || (next_serial + 1)::TEXT;
     
-    -- Child sample creation date is the date of its creation
     IF NEW.sample_creation_date IS NULL THEN
       NEW.sample_creation_date := CURRENT_DATE;
     END IF;
@@ -1500,7 +1521,6 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-COMMENT ON FUNCTION "lab".generate_child_sample_id() IS 'Generates a unique ID for a new child sample based on its parent ID and type.';
 
 -- F04. COORDINATE TRANSFORMATION FUNCTION
 CREATE OR REPLACE FUNCTION "projects".transform_coordinates_to_wgs84(
@@ -1536,7 +1556,6 @@ BEGIN
     END IF;
 END;
 $$ LANGUAGE plpgsql;
-COMMENT ON FUNCTION "projects".transform_coordinates_to_wgs84 IS 'Transforms coordinates from various systems to the standard WGS84 (SRID 4326).';
 
 -- F05. RLS POLICY HELPER FUNCTION
 CREATE OR REPLACE FUNCTION "lims".is_member_of_project(p_project_id text)
@@ -1555,7 +1574,6 @@ BEGIN
     );
 END;
 $$ LANGUAGE plpgsql STABLE;
-COMMENT ON FUNCTION "lims".is_member_of_project IS 'Helper function for Row-Level Security policies to check if the current user is a member of a given project.';
 
 -- F06. LTREE PATH UPDATE FUNCTION
 CREATE OR REPLACE FUNCTION "reference".update_taxon_ltree_path_for_row()
@@ -1575,7 +1593,6 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-COMMENT ON FUNCTION "reference".update_taxon_ltree_path_for_row IS 'Automatically updates the ltree path for a taxon record based on its parent.';
 
 -- F07. STATUS UPDATE FUNCTION
 CREATE OR REPLACE FUNCTION "lab".update_sample_status()
@@ -1591,7 +1608,6 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-COMMENT ON FUNCTION "lab".update_sample_status IS 'Propagates status updates from child process tables (e.g., dna, library) to the parent root_samples table.';
 
 -- F08. ID GENERATION FUNCTIONS (VARIOUS TABLES)
 CREATE OR REPLACE FUNCTION "lab".generate_sampling_id() RETURNS TRIGGER AS $$
@@ -1620,7 +1636,7 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION "lab".generate_individual_catch_id() RETURNS TRIGGER AS $$
 DECLARE next_serial integer; id_prefix text;
 BEGIN
-    id_prefix := NEW.fishing_id || '_ic';
+    id_prefix := NEW.sampling_id || '_ic';
     SELECT COALESCE(MAX(SUBSTRING("individual_catch_id" FROM LENGTH(id_prefix) + 1)::INTEGER), 0) INTO next_serial FROM "lab"."individual_catch_catch" WHERE "individual_catch_id" LIKE id_prefix || '%';
     NEW.individual_catch_id := id_prefix || LPAD((next_serial + 1)::TEXT, 3, '0');
     RETURN NEW;
@@ -1764,7 +1780,6 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-COMMENT ON FUNCTION "lab".generate_sampling_id IS 'Collection of functions to auto-generate structured, sequential IDs for various record types.';
 
 -- F09. FULL-TEXT SEARCH SETUP AND FUNCTIONS
 -- Create a custom text search configuration
@@ -1815,7 +1830,6 @@ CREATE OR REPLACE FUNCTION "projects".update_chat_message_search_vector_func() R
 CREATE OR REPLACE FUNCTION "lab".update_storage_search_vector_func() RETURNS TRIGGER AS $$ BEGIN NEW.storage_search_vector = TO_TSVECTOR('public.lims_english', COALESCE(NEW.freezer, '')) || TO_TSVECTOR('public.lims_english', COALESCE(NEW.box, '')) || TO_TSVECTOR('public.lims_english', COALESCE(NEW.address, '')) || TO_TSVECTOR('public.lims_english', COALESCE(NEW.notes, '')); RETURN NEW; END; $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION "bioinformatics".update_pipeline_search_vector_func() RETURNS TRIGGER AS $$ BEGIN NEW.pipeline_search_vector = TO_TSVECTOR('public.lims_english', COALESCE(NEW.pipeline_name, '')) || TO_TSVECTOR('public.lims_english', COALESCE(NEW.version, '')) || TO_TSVECTOR('public.lims_english', COALESCE(NEW.notes, '')); RETURN NEW; END; $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION "bioinformatics".update_runs_search_vector_func() RETURNS TRIGGER AS $$ BEGIN NEW.runs_search_vector = TO_TSVECTOR('public.lims_english', COALESCE(NEW.run_id, '')) || TO_TSVECTOR('public.lims_english', COALESCE(NEW.final_output_path, '')) || TO_TSVECTOR('public.lims_english', COALESCE(NEW.notes, '')); RETURN NEW; END; $$ LANGUAGE plpgsql;
-COMMENT ON FUNCTION "lims".update_personal_search_vector_func IS 'Collection of functions to automatically update the ts_vector columns for full-text search.';
 
 -- F10. SET DEFAULT STATUS FUNCTION
 CREATE OR REPLACE FUNCTION set_default_status_on_insert()
@@ -1827,7 +1841,6 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-COMMENT ON FUNCTION set_default_status_on_insert IS 'Sets a default status for a new record if one is not provided.';
 
 -- F11. GLOBAL SEARCH FUNCTION
 CREATE OR REPLACE FUNCTION "public".search_all_tables(p_search_term text)
@@ -1860,7 +1873,6 @@ BEGIN
     END LOOP;
 END;
 $$ LANGUAGE plpgsql;
-COMMENT ON FUNCTION "public".search_all_tables IS 'Performs a global full-text search across all tables with a tsvector column.';
 
 
 -- =================================================================================================
@@ -1904,7 +1916,6 @@ BEGIN
     END IF;
 END;
 $$ LANGUAGE plpgsql;
-COMMENT ON FUNCTION manage_partitions IS 'Creates a monthly partition for a specified table and target date if it does not already exist. Should be run periodically.';
 
 -- 11.2. DATE PROPAGATION FUNCTIONS
 -- Function for tables linked to "lab"."root_samples"
@@ -1931,7 +1942,6 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-COMMENT ON FUNCTION lab.copy_date_from_root_sample IS 'Trigger function to copy the sample_creation_date from the root_samples table to child tables before insert.';
 
 -- Function for tables linked to "lab"."experiments"
 CREATE OR REPLACE FUNCTION lab.copy_date_from_experiment()
@@ -1951,7 +1961,6 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-COMMENT ON FUNCTION lab.copy_date_from_experiment IS 'Trigger function to copy the experiment_date from the experiments table to child tables before insert.';
 
 -- Function to set date columns to current date if NULL
 CREATE OR REPLACE FUNCTION "public".populate_date_if_null()
@@ -1982,8 +1991,95 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-COMMENT ON FUNCTION "public".populate_date_if_null IS 'Generic trigger to populate various date columns with the current date if they are null upon insert.';
 
+-- #################################################################################### 
+-- F12. SET DEFAULT STATUS FUNCTION
+CREATE OR REPLACE FUNCTION set_default_status_on_insert()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.status_id IS NULL THEN
+        NEW.status_id := 'Received';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- F13. POPULATE DATE FROM PARENT TABLES
+-- These functions ensure the date columns are populated from a parent table before a trigger for partitioning can fire.
+CREATE OR REPLACE FUNCTION "lab".populate_date_from_experiment()
+RETURNS TRIGGER AS $$
+DECLARE parent_date date;
+BEGIN
+    SELECT "experiment_date" INTO parent_date FROM "lab"."experiments" WHERE "experiment_id" = NEW.experiment_id;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Associated experiment not found for experiment_id %', NEW.experiment_id; END IF;
+    NEW.experiment_date := parent_date;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".populate_date_from_sampling()
+RETURNS TRIGGER AS $$
+DECLARE parent_date date;
+BEGIN
+    SELECT "sampling_date" INTO parent_date FROM "lab"."sampling" WHERE "sampling_id" = NEW.sampling_id;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Associated sampling record not found for sampling_id %', NEW.sampling_id; END IF;
+    NEW.sampling_date := parent_date;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "bioinformatics".populate_date_from_sequencing()
+RETURNS TRIGGER AS $$
+DECLARE parent_date date;
+BEGIN
+    SELECT "experiment_date" INTO parent_date FROM "lab"."sequencing_run" WHERE "sequencing_run_id" = NEW.sequencing_id;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Associated sequencing run not found for sequencing_id %', NEW.sequencing_id; END IF;
+    NEW.sequencing_date := parent_date;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- F14. POPULATE RUN DATE
+CREATE OR REPLACE FUNCTION "bioinformatics".populate_run_date()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.run_date IS NULL THEN
+    NEW.run_date := CURRENT_DATE;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".populate_pcr_date()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.pcr_date IS NULL THEN
+    NEW.pcr_date := CURRENT_DATE;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".populate_qpcr_date()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.qpcr_date IS NULL THEN
+    NEW.qpcr_date := CURRENT_DATE;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "lab".populate_seq_dataset_date()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.data_seq_date IS NULL THEN
+    NEW.data_seq_date := CURRENT_DATE;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+-- ################################################################################
 
 -- =================================================================================================
 -- 12. TRIGGERS
@@ -2009,29 +2105,59 @@ CREATE TRIGGER trg_generate_pipeline_id BEFORE INSERT ON "bioinformatics"."analy
 CREATE TRIGGER trg_generate_analysis_run_id BEFORE INSERT ON "bioinformatics"."analysis_runs" FOR EACH ROW EXECUTE FUNCTION "bioinformatics".generate_analysis_run_id();
 CREATE TRIGGER trg_generate_edna_assignment_id BEFORE INSERT ON "bioinformatics"."edna_assignments" FOR EACH ROW EXECUTE FUNCTION "bioinformatics".generate_edna_assignment_id();
 
--- 12.2. Triggers for Date Population & Partitioning
--- Apply date propagation triggers to all relevant child tables.
-CREATE TRIGGER trg_copy_fish_date BEFORE INSERT ON "lab"."fish" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_root_sample();
-CREATE TRIGGER trg_copy_tissue_date BEFORE INSERT ON "lab"."tissue" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_root_sample();
-CREATE TRIGGER trg_copy_otoliths_date BEFORE INSERT ON "lab"."otoliths" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_root_sample();
-CREATE TRIGGER trg_copy_dna_date BEFORE INSERT ON "lab"."dna" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_root_sample();
-CREATE TRIGGER trg_copy_rna_date BEFORE INSERT ON "lab"."rna" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_root_sample();
-CREATE TRIGGER trg_copy_sediments_date BEFORE INSERT ON "lab"."sediments" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_root_sample();
-CREATE TRIGGER trg_copy_water_date BEFORE INSERT ON "lab"."water" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_root_sample();
-CREATE TRIGGER trg_copy_dissections_date BEFORE INSERT ON "lab"."dissections" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_experiment();
-CREATE TRIGGER trg_copy_nanodrop_date BEFORE INSERT ON "lab"."nanodrop" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_experiment();
-CREATE TRIGGER trg_copy_qubit_date BEFORE INSERT ON "lab"."qubit" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_experiment();
-CREATE TRIGGER trg_copy_tapestation_date BEFORE INSERT ON "lab"."tapestation" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_experiment();
-CREATE TRIGGER trg_copy_gelelectrophoresis_date BEFORE INSERT ON "lab"."gelelectrophoresis" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_experiment();
-CREATE TRIGGER trg_copy_library_date BEFORE INSERT ON "lab"."library" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_experiment();
-CREATE TRIGGER trg_copy_sequencing_run_date BEFORE INSERT ON "lab"."sequencing_run" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_experiment();
+-- 12.2. Triggers for Date Population & Partitioning from Parent Tables
+-- CREATE TRIGGER trg_copy_fish_date BEFORE INSERT ON "lab"."fish" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_root_sample();
+-- CREATE TRIGGER trg_copy_tissue_date BEFORE INSERT ON "lab"."tissue" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_root_sample();
+-- CREATE TRIGGER trg_copy_otoliths_date BEFORE INSERT ON "lab"."otoliths" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_root_sample();
+-- CREATE TRIGGER trg_copy_dna_date BEFORE INSERT ON "lab"."dna" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_root_sample();
+-- CREATE TRIGGER trg_copy_rna_date BEFORE INSERT ON "lab"."rna" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_root_sample();
+-- CREATE TRIGGER trg_copy_sediments_date BEFORE INSERT ON "lab"."sediments" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_root_sample();
+-- CREATE TRIGGER trg_copy_water_date BEFORE INSERT ON "lab"."water" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_root_sample();
+-- CREATE TRIGGER trg_copy_dissections_date BEFORE INSERT ON "lab"."dissections" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_experiment();
+-- CREATE TRIGGER trg_copy_nanodrop_date BEFORE INSERT ON "lab"."nanodrop" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_experiment();
+-- CREATE TRIGGER trg_copy_qubit_date BEFORE INSERT ON "lab"."qubit" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_experiment();
+-- CREATE TRIGGER trg_copy_tapestation_date BEFORE INSERT ON "lab"."tapestation" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_experiment();
+-- CREATE TRIGGER trg_copy_gelelectrophoresis_date BEFORE INSERT ON "lab"."gelelectrophoresis" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_experiment();
+-- CREATE TRIGGER trg_copy_library_date BEFORE INSERT ON "lab"."library" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_experiment();
+-- CREATE TRIGGER trg_copy_sequencing_run_date BEFORE INSERT ON "lab"."sequencing_run" FOR EACH ROW EXECUTE FUNCTION lab.copy_date_from_experiment();
 
 -- Apply triggers to set dates if they are NULL
-CREATE TRIGGER trg_set_pcr_date BEFORE INSERT ON "lab"."pcr" FOR EACH ROW EXECUTE FUNCTION "public".populate_date_if_null();
-CREATE TRIGGER trg_set_qpcr_date BEFORE INSERT ON "lab"."qpcr" FOR EACH ROW EXECUTE FUNCTION "public".populate_date_if_null();
-CREATE TRIGGER trg_set_seq_dataset_date BEFORE INSERT ON "lab"."seq_dataset" FOR EACH ROW EXECUTE FUNCTION "public".populate_date_if_null();
-CREATE TRIGGER trg_set_run_date BEFORE INSERT ON "bioinformatics"."analysis_runs" FOR EACH ROW EXECUTE FUNCTION "public".populate_date_if_null();
-CREATE TRIGGER trg_set_edna_assignment_date BEFORE INSERT ON "bioinformatics"."edna_assignments" FOR EACH ROW EXECUTE FUNCTION "public".populate_date_if_null();
+-- CREATE TRIGGER trg_set_pcr_date BEFORE INSERT ON "lab"."pcr" FOR EACH ROW EXECUTE FUNCTION "public".populate_date_if_null();
+-- CREATE TRIGGER trg_set_qpcr_date BEFORE INSERT ON "lab"."qpcr" FOR EACH ROW EXECUTE FUNCTION "public".populate_date_if_null();
+-- CREATE TRIGGER trg_set_seq_dataset_date BEFORE INSERT ON "lab"."seq_dataset" FOR EACH ROW EXECUTE FUNCTION "public".populate_date_if_null();
+-- CREATE TRIGGER trg_set_run_date BEFORE INSERT ON "bioinformatics"."analysis_runs" FOR EACH ROW EXECUTE FUNCTION "public".populate_date_if_null();
+-- CREATE TRIGGER trg_set_edna_assignment_date BEFORE INSERT ON "bioinformatics"."edna_assignments" FOR EACH ROW EXECUTE FUNCTION "public".populate_date_if_null();
+
+-- ########################################### ####
+CREATE TRIGGER trg_populate_experiments_projects_date BEFORE INSERT ON "lab"."experiments_projects" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_experiment();
+CREATE TRIGGER trg_populate_experiments_samples_date BEFORE INSERT ON "lab"."experiments_samples" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_experiment();
+CREATE TRIGGER trg_populate_protocol_runs_date BEFORE INSERT ON "lab"."protocol_runs" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_experiment();
+CREATE TRIGGER trg_populate_fishing_date BEFORE INSERT ON "lab"."fishing" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_sampling();
+CREATE TRIGGER trg_populate_individual_catch_date BEFORE INSERT ON "lab"."individual_catch_catch" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_sampling();
+CREATE TRIGGER trg_populate_sampling_abiotic_data_date BEFORE INSERT ON "lab"."sampling_abiotic_data" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_sampling();
+CREATE TRIGGER trg_populate_fish_date BEFORE INSERT ON "lab"."fish" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_tissue_date BEFORE INSERT ON "lab"."tissue" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_otoliths_date BEFORE INSERT ON "lab"."otoliths" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_dna_date BEFORE INSERT ON "lab"."dna" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_rna_date BEFORE INSERT ON "lab"."rna" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_sediments_date BEFORE INSERT ON "lab"."sediments" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_water_date BEFORE INSERT ON "lab"."water" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_pcr_date BEFORE INSERT ON "lab"."pcr" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_qpcr_date BEFORE INSERT ON "lab"."qpcr" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_seq_dataset_date BEFORE INSERT ON "lab"."seq_dataset" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_sequencing_run_date BEFORE INSERT ON "lab"."sequencing_run" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+CREATE TRIGGER trg_populate_analysis_runs_date BEFORE INSERT ON "bioinformatics"."analysis_runs" FOR EACH ROW EXECUTE FUNCTION "bioinformatics".populate_date_from_sequencing();
+CREATE TRIGGER trg_populate_edna_assignments_date BEFORE INSERT ON "bioinformatics"."edna_assignments" FOR EACH ROW EXECUTE FUNCTION "lab".populate_date_from_root_sample();
+
+-- CREATE TRIGGER trg_set_default_status_edna_assignments BEFORE INSERT ON "bioinformatics"."edna_assignments" FOR EACH ROW EXECUTE FUNCTION set_default_status_on_insert();
+CREATE TRIGGER trg_set_pcr_date BEFORE INSERT ON "lab"."pcr" FOR EACH ROW EXECUTE FUNCTION "lab".populate_pcr_date();
+CREATE TRIGGER trg_set_qpcr_date BEFORE INSERT ON "lab"."qpcr" FOR EACH ROW EXECUTE FUNCTION "lab".populate_qpcr_date();
+CREATE TRIGGER trg_set_seq_dataset_date BEFORE INSERT ON "lab"."seq_dataset" FOR EACH ROW EXECUTE FUNCTION "lab".populate_seq_dataset_date();
+CREATE TRIGGER trg_set_run_date BEFORE INSERT ON "bioinformatics"."analysis_runs" FOR EACH ROW EXECUTE FUNCTION "bioinformatics".populate_run_date();
+CREATE TRIGGER trg_set_edna_assignment_date BEFORE INSERT ON "bioinformatics"."edna_assignments" FOR EACH ROW EXECUTE FUNCTION "bioinformatics".populate_run_date();
+
+-- ##################################################### 
+
 
 -- 12.3. Triggers for other logic
 CREATE OR REPLACE FUNCTION "projects".populate_fishing_geom_4326_trigger()
@@ -2241,7 +2367,7 @@ CREATE INDEX IF NOT EXISTS idx_sampling_cruise_id ON "lab"."sampling" ("cruise_i
 CREATE INDEX IF NOT EXISTS idx_sampling_geom ON "lab"."sampling" USING GIST ("geom");
 CREATE INDEX IF NOT EXISTS idx_fishing_sampling_id_date ON "lab"."fishing" ("sampling_id", "sampling_date");
 CREATE INDEX IF NOT EXISTS idx_fishing_taxon_id ON "lab"."fishing" ("taxon_id");
-CREATE INDEX IF NOT EXISTS idx_individual_catch_fishing_id ON "lab"."individual_catch_catch" ("fishing_id");
+CREATE INDEX IF NOT EXISTS idx_individual_catch_fishing_id ON "lab"."individual_catch_catch" ("sampling_id");
 CREATE INDEX IF NOT EXISTS idx_individual_catch_taxon_id ON "lab"."individual_catch_catch" ("taxon_id");
 CREATE INDEX IF NOT EXISTS idx_sampling_abiotic_sampling_id ON "lab"."sampling_abiotic_data" ("sampling_id", "sampling_date");
 CREATE INDEX IF NOT EXISTS idx_root_samples_sample_id_date ON "lab"."root_samples" ("sample_id", "sample_creation_date");
@@ -2299,8 +2425,6 @@ CREATE INDEX IF NOT EXISTS idx_wander_chatmessage_conversation_id ON "projects".
 
 -- =================================================================================================
 -- 14. VIEWS & MATERIALIZED VIEWS
--- =================================================================================================
--- Views provide simplified and secure access to data for reporting and application logic.
 -- =================================================================================================
 CREATE OR REPLACE VIEW "lims"."project_summary_view" AS
 SELECT
@@ -2643,6 +2767,140 @@ GROUP BY
     stat.notes, e.experiment_date, pers.full_name
 ORDER BY e.experiment_date DESC;
 
+
+CREATE OR REPLACE VIEW "lims"."reagent_status_view" AS
+SELECT
+    r.reagent_id,
+    r.reagent_complete_name,
+    c.category_id,
+    c.notes AS category_notes,
+    r.lot,
+    stat.notes AS current_status,
+    r.reception_date,
+    r.expire_date,
+    CASE
+        WHEN r.expire_date IS NULL THEN NULL
+        ELSE (r.expire_date - CURRENT_DATE)
+    END AS days_until_expiry,
+    r.quantity_available,
+    ru.unit_abbreviation AS quantity_unit,
+    r.order_id,
+    o.order_date,
+    o.price AS order_price,
+    supp.supplier_name
+FROM
+    "lims"."reagents" r
+LEFT JOIN
+    "reference"."status" stat ON r.status_id = stat.status_id
+LEFT JOIN
+    "reference"."units" ru ON r.quantity_unit_id = ru.unit_id
+LEFT JOIN
+    "reference"."category" c ON r.category_id = c.category_id
+LEFT JOIN
+    "lims"."orders" o ON r.order_id = o.fi_order_nr
+LEFT JOIN
+    "lims"."suppliers" supp ON o.supplier_id = supp.supplier_id
+ORDER BY r.expire_date ASC;
+
+CREATE OR REPLACE VIEW "lab"."storage_log_history_view" AS
+SELECT
+    sl.log_id,
+    sl.sample_id,
+    rs.external_name,
+    sl.move_date,
+    sl.person_id AS move_person_id,
+    p.full_name AS move_person_name,
+    sl.storage_id,
+    storage.room_id,
+    storage.freezer,
+    storage.box,
+    sl.storage_position,
+    stat.notes AS move_status,
+    sl.notes AS log_notes
+FROM
+    "lab"."storage_log" sl
+LEFT JOIN
+    "lab"."root_samples" rs ON sl.sample_id = rs.sample_id AND sl.sample_creation_date = rs.sample_creation_date
+LEFT JOIN
+    "lims"."personal" p ON sl.person_id = p.person_id
+LEFT JOIN
+    "lab"."storage" storage ON sl.storage_id = storage.storage_id
+LEFT JOIN
+    "reference"."status" stat ON sl.status_id = stat.status_id
+ORDER BY
+    sl.move_date DESC;
+
+CREATE OR REPLACE VIEW "bioinformatics"."analysis_results_summary_view" AS
+SELECT
+    ar.run_id,
+    ar.person_id,
+    pers.full_name AS analyst_name,
+    ap.pipeline_name,
+    ap.version AS pipeline_version,
+    ar.sequencing_id,
+    sr.experiment_date AS sequencing_date,
+    sr.sequencer,
+    ar.reference_db_id,
+    rdb.db_name AS reference_database_name,
+    rdb.db_version AS bioinfo_database_version,
+    ea.sample_id,
+    rs.external_name AS sample_external_name,
+    ea.taxon_id,
+    t.en_name AS taxon_en_name,
+    ea.read_count,
+    ea.confidence,
+    ar.notes AS run_notes,
+    ea.notes AS assignment_notes
+FROM
+    "bioinformatics"."analysis_runs" ar
+JOIN
+    "bioinformatics"."analysis_pipelines" ap ON ar.pipeline_id = ap.pipeline_id
+LEFT JOIN
+    "lab"."sequencing_run" sr ON ar.sequencing_id = sr.sequencing_run_id AND ar.sequencing_date = sr.experiment_date
+LEFT JOIN
+    "lab"."root_samples" rs ON sr.sample_id = rs.sample_id AND sr.sample_creation_date = rs.sample_creation_date
+LEFT JOIN
+    "lims"."personal" pers ON ar.person_id = pers.person_id
+LEFT JOIN
+    "reference"."reference_databases" rdb ON ar.reference_db_id = rdb.db_id
+LEFT JOIN
+    "bioinformatics"."edna_assignments" ea ON ar.run_id = ea.run_id AND ar.run_date = ea.assignment_date
+LEFT JOIN
+    "reference"."taxon" t ON ea.taxon_id = t.taxon_id
+ORDER BY ar.run_id;
+
+CREATE OR REPLACE VIEW "lab"."full_sequencing_run_view" AS
+SELECT
+    sr.sequencing_run_id,
+    sr.person_id,
+    pers.full_name AS sequencer_person_name,
+    sr.sequencer,
+    sr.flow_cell_id,
+    sr.library_id,
+    lib.library_name,
+    lib.library_prep_kit,
+    sr.sample_id,
+    rs.external_name AS sample_external_name,
+    sr.read_length_bp,
+    sr.total_reads,
+    sr.raw_data_path,
+    sr.genbank_accession_number,
+    sr.project_id,
+    p.title AS project_title,
+    sr.status_id,
+    sr.notes
+FROM
+    "lab"."sequencing_run" sr
+LEFT JOIN
+    "lims"."personal" pers ON sr.person_id = pers.person_id
+LEFT JOIN
+    "lab"."library" lib ON sr.library_id = lib.library_id AND sr.prep_date = lib.experiment_date
+LEFT JOIN
+    "lab"."root_samples" rs ON sr.sample_id = rs.sample_id AND sr.sample_creation_date = rs.sample_creation_date
+LEFT JOIN
+    "lims"."projects" p ON sr.project_id = p.project_id;
+
+
 CREATE OR REPLACE VIEW "lab"."global_lims_view" AS
 SELECT
     rs.sample_id,
@@ -2888,6 +3146,55 @@ ALTER TABLE "bioinformatics"."analysis_runs" ADD CONSTRAINT uc_run_id_date UNIQU
 ALTER TABLE "bioinformatics"."edna_assignments" ADD CONSTRAINT uc_assignment_id_date UNIQUE ("assignment_id", "creation_date");
 
 
+-- ###############################################################
+-- Dummy partition tables for initial setup
+-- ###############################################################
+
+DO $$
+DECLARE
+    parent_table_name text;
+    parent_schema text;
+    default_partition_name text;
+    yearly_partition_name text;
+    start_date date;
+    end_date date;
+    table_list text[] := ARRAY[
+        'lab.experiments', 'lab.sampling', 'lab.fishing', 'lab.individual_catch_catch',
+        'lab.sampling_abiotic_data', 'lab.root_samples', 'lab.fish', 'lab.tissue',
+        'lab.otoliths', 'lab.dna', 'lab.rna', 'lab.sediments', 'lab.water', 'lab.pcr',
+        'lab.dissections', 'lab.nanodrop', 'lab.qubit', 'lab.tapestation',
+        'lab.gelelectrophoresis', 'lab.qpcr', 'lab.library', 'lab.sequencing_run',
+        'lab.seq_dataset', 'lab.datasets', 'bioinformatics.analysis_runs', 'bioinformatics.edna_assignments',
+        'projects.ProjectWanderfische_FishingData'
+    ];
+    rec_table RECORD;
+BEGIN
+    FOR rec_table IN SELECT unnest(table_list) AS full_name LOOP
+        parent_schema := split_part(rec_table.full_name, '.', 1);
+        parent_table_name := split_part(rec_table.full_name, '.', 2);
+
+        -- Corrected syntax for creating the default partition
+        default_partition_name := parent_table_name || '_default';
+        BEGIN
+            EXECUTE format('CREATE TABLE %I.%I PARTITION OF %I.%I DEFAULT', parent_schema, default_partition_name, parent_schema, parent_table_name);
+        EXCEPTION
+            WHEN duplicate_table THEN
+                RAISE NOTICE 'Default partition for table %.% already exists.', parent_schema, parent_table_name;
+        END;
+
+        FOR start_date IN SELECT generate_series(date_trunc('year', now()) - INTERVAL '2 years', date_trunc('year', now()) + INTERVAL '10 years', '1 year') LOOP
+            end_date := start_date + INTERVAL '1 year';
+            yearly_partition_name := parent_table_name || '_y' || EXTRACT(YEAR FROM start_date);
+            BEGIN
+                EXECUTE format('CREATE TABLE %I.%I PARTITION OF %I.%I FOR VALUES FROM (%L) TO (%L)',
+                    parent_schema, yearly_partition_name, parent_schema, parent_table_name, start_date, end_date);
+            EXCEPTION
+                WHEN duplicate_table THEN
+                    RAISE NOTICE 'Partition % for table %.% already exists.', yearly_partition_name, parent_schema, parent_table_name;
+            END;
+        END LOOP;
+    END LOOP;
+END $$;
 
 
 
@@ -3259,9 +3566,9 @@ BEGIN
     (sampling_id_val, '2025-05-01', 'Gadus_morhua', 15.2);
 
     -- 3.15 lab.individual_catch_catch
-    INSERT INTO "lab"."individual_catch_catch" ("fishing_id", "sampling_date", "taxon_id", "SL_mm", "weight_g", "sex") VALUES
-    ((SELECT "fishing_id" FROM "lab"."fishing" WHERE "sampling_id" = sampling_id_val LIMIT 1), '2025-05-01', 'Gadus_morhua', 350, 450, 'Male'),
-    ((SELECT "fishing_id" FROM "lab"."fishing" WHERE "sampling_id" = sampling_id_val LIMIT 1), '2025-05-01', 'Gadus_morhua', 420, 600, 'Female');
+    INSERT INTO "lab"."individual_catch_catch" ("sampling_id", "sampling_date", "taxon_id", "SL_mm", "weight_g", "sex") VALUES
+    (sampling_id_val, '2025-05-01', 'Gadus_morhua', 350, 450, 'Male'),
+    (sampling_id_val, '2025-05-01', 'Gadus_morhua', 420, 600, 'Female');
 
     -- 3.16 lab.sampling_abiotic_data
     INSERT INTO "lab"."sampling_abiotic_data" ("sampling_id", "sampling_date", "temperature_sampling_depth_c", "salinity", "salinity_unit_id", "oxygen", "oxygen_unit_id") VALUES
@@ -3276,15 +3583,15 @@ BEGIN
     ('S25BioM_W_RS001', sample_id_w, '2025-05-01', 'RS25_001', 'MiSeq', 15000000, '/data/raw_seq/S25BioMon001', 'Completed', 'Proj_BioMon', 'eDNA sequencing dataset from water sample', '2025-08-20');
 
     -- 3.19 lab.otoliths
-    INSERT INTO "lab"."otoliths" ("otolith_id", "parent_sample_id", "sample_creation_date", "reader_person_id", "side", "age_reading_years", "project_id", "status_id") VALUES
+   INSERT INTO "lab"."otoliths" ("otolith_id", "sample_id", "sample_creation_date", "reader_person_id", "side", "age_reading_years", "project_id", "status_id") VALUES
     ('F25BioM_Ot1', sample_id_f, '2025-05-01', 'john.smith', 'left', 2.5, 'Proj_BioMon', 'Completed');
 
     -- 3.20 lab.tapestation
-    INSERT INTO "lab"."tapestation" ("tapestation_id", "sample_id", "sample_creation_date", "experiment_id", "experiment_date", "position", "kit", "person_id", "status_id") VALUES
-    ('Tapes-001', sample_id_w, '2025-05-01', 'Exp_eDNA_001', '2025-08-20', '1', 'DNA ScreenTape', 'peter.jones', 'Completed');
+    INSERT INTO "lab"."tapestation" ("tapestation_id", "sample_id", "experiment_id", "experiment_date", "position", "kit", "person_id", "status_id") VALUES
+    ('Tapes-001', sample_id_w, 'Exp_eDNA_001', '2025-08-20', '1', 'DNA ScreenTape', 'peter.jones', 'Completed');
 
     -- 3.21 lab.water
-    INSERT INTO "lab"."water" ("sample_id", "sample_creation_date", "volume_ul", "filter", "depth_m", "sampling_method", "conservation_buffer", "status_id") VALUES
+    INSERT INTO "lab"."water" ("sample_id", "sample_creation_date", "volume_L", "filter", "depth_m", "sampling_method", "conservation_buffer", "status_id") VALUES
     (sample_id_w, '2025-05-01', 500, '0.45 um', 15.5, 'Niskin Bottle', 'Ethanol', 'Received');
 
     -- 3.22 lab.sediments
@@ -3310,14 +3617,14 @@ BEGIN
     INSERT INTO "bioinformatics"."analysis_pipelines" ("pipeline_name", "version", "repository_link", "experiment_id", "experiment_date", "status_id") VALUES
     ('eDNA_Metabarcoding_Pipeline', '1.0', 'https://github.com/my/pipeline', 'Exp_eDNA_001', '2025-08-20', 'Completed');
 
-    INSERT INTO "bioinformatics"."analysis_runs" ("run_id", "run_date", "pipeline_id", "sequencing_id", "sequencing_date", "person_id", "reference_db_id", "final_output_path", "experiment_id", "experiment_date", "status_id") VALUES
-    ('BI25_ar001', '2025-08-21', (SELECT "pipeline_id" FROM "bioinformatics"."analysis_pipelines" WHERE "pipeline_name" = 'eDNA_Metabarcoding_Pipeline'), 'RS25_001', '2025-08-20', 'peter.jones', (SELECT "db_id" FROM "reference"."reference_databases" WHERE "db_name" = 'NCBI RefSeq'), '/data/proj/biomon/analysis/run1', 'Exp_eDNA_001', '2025-08-21', 'Completed');
+--    INSERT INTO "bioinformatics"."analysis_runs" ("run_id", "run_date", "pipeline_id", "sequencing_id", "sequencing_date", "person_id", "reference_db_id", "final_output_path", "experiment_id", "experiment_date", "status_id") VALUES
+--    ('BI25_ar001', '2025-08-21', (SELECT "pipeline_id" FROM "bioinformatics"."analysis_pipelines" WHERE "pipeline_name" = 'eDNA_Metabarcoding_Pipeline'), 'RS25_001', '2025-08-20', 'peter.jones', (SELECT "db_id" FROM "reference"."reference_databases" WHERE "db_name" = 'NCBI RefSeq'), '/data/proj/biomon/analysis/run1', 'Exp_eDNA_001', '2025-08-21', 'Completed');
 
-    SELECT "run_id" INTO run_id_val FROM "bioinformatics"."analysis_runs" WHERE "sequencing_id" = 'RS25_001' AND "run_date" = '2025-08-21' LIMIT 1;
+--    SELECT "run_id" INTO run_id_val FROM "bioinformatics"."analysis_runs" WHERE "sequencing_id" = 'RS25_001' AND "run_date" = '2025-08-21' LIMIT 1;
 
-    INSERT INTO "bioinformatics"."edna_assignments" ("assignment_id", "assignment_date", "run_id", "sample_id", "sample_creation_date", "taxon_id", "read_count", "confidence", "experiment_id", "experiment_date", "status_id") VALUES
-    ('BI25_S25Bio_001', '2025-08-21', run_id_val, sample_id_w, '2025-05-01', 'Gadus_morhua', 1500, 0.95, 'Exp_eDNA_001', '2025-08-21', 'Completed'),
-    ('BI25_S25Bio_002', '2025-08-21', run_id_val, sample_id_s, '2025-05-01', 'Bacteria_Unclassified', 5000, 0.70, 'Exp_eDNA_001', '2025-08-21', 'Completed');
+--    INSERT INTO "bioinformatics"."edna_assignments" ("assignment_id", "assignment_date", "run_id", "sample_id", "sample_creation_date", "taxon_id", "read_count", "confidence", "experiment_id", "experiment_date", "status_id") VALUES
+--    ('BI25_S25Bio_001', '2025-08-21', run_id_val, sample_id_w, '2025-05-01', 'Gadus_morhua', 1500, 0.95, 'Exp_eDNA_001', '2025-08-21', 'Completed'),
+--    ('BI25_S25Bio_002', '2025-08-21', run_id_val, sample_id_s, '2025-05-01', 'Bacteria_Unclassified', 5000, 0.70, 'Exp_eDNA_001', '2025-08-21', 'Completed');
 END $$;
 -- ------------------------------------------------------------------------------------------------------------------
 
