@@ -81,6 +81,43 @@
         .add-person-btn:hover {
             background-color: #4338ca; /* darker indigo */
         }
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 120px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 0;
+            position: absolute;
+            z-index: 10;
+            bottom: 125%; /* Position above the button */
+            left: 50%;
+            margin-left: -60px; /* Center the tooltip */
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -118,15 +155,24 @@
                     <p class="mt-1 text-md text-gray-600">Manage your research projects</p>
                 </div>
                 <div class="flex space-x-3">
-                    <button id="add-single-entry-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all">
-                        <i data-lucide="plus" class="w-5 h-5 mr-2"></i>Add Single Entry
-                    </button>
-                    <button id="bulk-csv-upload-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all">
-                        <i data-lucide="upload" class="w-5 h-5 mr-2"></i>Bulk CSV Upload
-                    </button>
-                    <button id="bulk-modify-btn" class="bg-gray-400 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow transition-all cursor-not-allowed" disabled>
-                        <i data-lucide="file-edit" class="w-5 h-5 mr-2"></i>Bulk Modify
-                    </button>
+                    <div class="tooltip">
+                        <button id="add-single-entry-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all">
+                            <i data-lucide="plus" class="w-5 h-5 mr-2"></i>Add Single Entry
+                        </button>
+                        <span id="add-tooltip" class="tooltiptext">Only available for base tables.</span>
+                    </div>
+                    <div class="tooltip">
+                        <button id="bulk-csv-upload-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all">
+                            <i data-lucide="upload" class="w-5 h-5 mr-2"></i>Bulk CSV Upload
+                        </button>
+                        <span id="upload-tooltip" class="tooltiptext">Only available for base tables.</span>
+                    </div>
+                    <div class="tooltip">
+                        <button id="bulk-modify-btn" class="bg-gray-400 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow transition-all cursor-not-allowed" disabled>
+                            <i data-lucide="file-edit" class="w-5 h-5 mr-2"></i>Bulk Modify
+                        </button>
+                        <span id="modify-tooltip" class="tooltiptext">Only available for base tables.</span>
+                    </div>
                     <button id="download-template-general-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all">
                         <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download Template
                     </button>
@@ -198,7 +244,9 @@
                         return '';
                     }
                     let stringField = String(field);
+                    // Check if field contains delimiter, quote character, or newline
                     if (stringField.includes(delimiter) || stringField.includes(quoteChar) || stringField.includes('\n') || stringField.includes('\r')) {
+                        // Double the internal quote characters and enclose the field in quotes
                         return quoteChar + stringField.replace(new RegExp(quoteChar, 'g'), quoteChar + quoteChar) + quoteChar;
                     }
                     return stringField;
@@ -212,23 +260,25 @@
             window.location.href = './login.html';
         }
         
-        const API_BASE_URL = '/tifi-lims/api'; 
+        const API_BASE_URL = '/api'; 
         let masterCache = {}; 
         let currentTableData = []; 
         let currentTableSchema = []; 
-        let currentTableName = 'lims.projects'; 
+        let currentTableName = 'lims.projects'; // Default to projects table
         let sortColumn = null; 
         let sortDirection = 'asc';
         let columnFilters = {};
         let allProjectTables = []; // To store list of all relevant tables for dropdown
 
         // --- Mapping Views to Primary Underlying Base Tables ---
+        // This mapping is primarily for UI purposes (e.g., enable/disable edit/delete)
+        // The backend handles the actual base table resolution for API calls.
         const VIEW_TO_BASE_TABLE_MAPPING = {
-            'lab.detailed_samples_view': 'lab.samples',
+            'lab.detailed_samples_view': 'lab.parental_samples',
             'lims.project_overview_view': 'lims.projects',
-            'lab.sample_workflow_progress_view': 'lab.samples',
+            'lab.sample_workflow_progress_view': 'lab.parental_samples',
             'lims.reagent_status_view': 'lims.reagents',
-            'lab.sample_full_details_view': 'lab.samples',
+            'lab.sample_full_details_view': 'lab.parental_samples',
             'lims.project_personnel_view': 'lims.project_persons',
             'lims.order_details_view': 'lims.orders',
         };
@@ -263,6 +313,7 @@
         async function apiFetch(endpoint, options = {}) {
             console.log(`API Fetch: Calling ${endpoint} with options:`, options);
             try {
+                // Determine if the body should be sent as JSON or FormData
                 const isFormData = options.body instanceof FormData;
                 if (!isFormData && options.body && typeof options.body === 'object') {
                     options.headers = { ...options.headers, 'Content-Type': 'application/json' };
@@ -281,9 +332,10 @@
                         throw new Error(`API request failed: ${errText} (Status: ${response.status})`); 
                     }
                 }
+                // Handle 204 No Content or empty responses gracefully
                 if (response.status === 204 || response.headers.get('content-length') === '0') {
                     console.log(`API Fetch: Received empty response for ${endpoint}.`);
-                    return { success: true };
+                    return { success: true }; // Indicate success for no-content responses
                 }
                 const jsonResponse = await response.json();
                 console.log(`API Fetch: Successful response for ${endpoint}:`, jsonResponse);
@@ -291,7 +343,8 @@
             }
             catch (error) { 
                 console.error(`API Error on ${endpoint}:`, error); 
-                return { error: error.message }; 
+                // Return an error object for consistent error handling in calling functions
+                return { error: error.message || "An unknown error occurred during API fetch." }; 
             }
         }
 
@@ -337,11 +390,11 @@
             if (tables && !tables.error) {
                 // Filter for tables relevant to projects: lims.projects, lims.project_persons
                 // EXCLUDE any table that starts with 'projects.' schema.
+                // This prevents accidentally allowing direct manipulation of special project-specific tables
+                // like Wanderfische tables, which should have dedicated UIs.
                 allProjectTables = tables.filter(t => 
-                    t === 'lims.projects' || 
-                    t === 'lims.project_persons'
-                    // Add other non-projects. schema tables here if desired, e.g., 'lims.cruises'
-                    // For now, only lims.projects and lims.project_persons are explicitly included.
+                    t.startsWith('lims.') && !t.startsWith('projects.') 
+                    // Add other specific tables if needed, e.g., 'lims.cruises', 'lims.orders'
                 );
                 console.log("Filtered project tables (excluding 'projects' schema tables):", allProjectTables);
                 return allProjectTables;
@@ -349,8 +402,6 @@
             console.error("Failed to fetch all project tables:", tables ? tables.error : 'Unknown error');
             return [];
         }
-
-        // Removed the general getAllTablesAndViews function as it's no longer needed in this specific file.
 
 
         // --- UI RENDERING ---
@@ -376,7 +427,12 @@
             }
 
             // Exclude common binary/hash/search_vector/geometry columns
-            const columnsToDisplay = schemaInfo.filter(col => !col.column_name.includes('attachment') && !col.column_name.includes('password_hash') && !col.column_name.includes('search_vector') && !col.column_name.includes('geom'));
+            const columnsToDisplay = schemaInfo.filter(col => 
+                !col.column_name.includes('attachment') && 
+                !col.column_name.includes('password_hash') && 
+                !col.column_name.includes('search_vector') && 
+                !col.column_name.includes('geom') // Exclude PostGIS geometry columns
+            );
             
             let headerHtml = '';
             columnsToDisplay.forEach(col => {
@@ -485,12 +541,19 @@
             console.log("Adding table action listeners.");
             document.querySelectorAll('.dynamic-table-row').forEach(row => {
                 row.addEventListener('click', (e) => {
-                    if (e.target.closest('button')) return; 
+                    if (e.target.closest('button')) return; // Don't trigger row click if a button was clicked
                     console.log("Row clicked:", row.dataset.pkValues);
                     document.querySelectorAll('.dynamic-table-row').forEach(r => r.classList.remove('table-row-selected'));
                     row.classList.add('table-row-selected');
                     const pkValues = JSON.parse(row.dataset.pkValues);
-                    renderProjectDetails(pkValues);
+                    // Only render project details if the current table is lims.projects
+                    if (currentTableName === 'lims.projects') {
+                        renderProjectDetails(pkValues);
+                    } else {
+                        // If another table is selected, clear project details
+                        document.getElementById('project-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="folder-kanban" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a project to view its details</p></div></div>`;
+                        lucide.createIcons();
+                    }
                 });
             });
 
@@ -531,8 +594,9 @@
 
                     const childTablesToDelete = [
                         { name: 'lims.project_persons', pkCols: ['project_id', 'person_id'] },
-                        // Now explicitly excluding 'projects' schema tables here for cascade delete
                         // Add other specific lims tables that are children of projects and need cascading deletion if desired.
+                        // For example, if lims.cruises needs to be explicitly deleted before lims.projects:
+                        // { name: 'lims.cruises', pkCols: ['cruise_id'] }
                     ];
 
                     let allChildrenDeleted = true;
@@ -546,7 +610,7 @@
                             // Add else if for other child tables here if necessary, linking them to projectId.
                             // e.g., else if (childTable.name === 'lims.cruises') { filterParams = `filter_project_id=${projectId}`; }
                             
-                            console.log(`Attempting to delete children from ${childTable.name} for project ${projectId}`);
+                            console.log(`Attempting to fetch children from ${childTable.name} for project ${projectId}`);
                             const children = await apiFetch(`table/${childSchema}/${childTableName}?${filterParams}`);
                             
                             if (children && children.length > 0) {
@@ -618,10 +682,12 @@
         function addFilterAndSortListeners() {
             console.log("Adding filter and sort listeners.");
             document.querySelectorAll('.sortable-header').forEach(header => {
+                // Ensure existing listeners are removed to prevent duplicates
                 header.removeEventListener('click', handleSortClick);
                 header.addEventListener('click', handleSortClick);
             });
             document.querySelectorAll('.filter-input').forEach(input => {
+                // Ensure existing listeners are removed to prevent duplicates
                 input.removeEventListener('input', handleFilterInput);
                 input.addEventListener('input', handleFilterInput);
             });
@@ -657,16 +723,32 @@
             }
             if (sortColumn) {
                 tempArray.sort((a, b) => {
-                    const valA = String(a[sortColumn] || '').toLowerCase();
-                    const valB = String(b[sortColumn] || '').toLowerCase();
+                    const valA = a[sortColumn]; // Keep original value for type-aware comparison
+                    const valB = b[sortColumn];
+
                     const colSchema = currentTableSchema.find(c => c.column_name === sortColumn);
 
-                    if (colSchema && ['date', 'timestamp with time zone'].includes(colSchema.data_type)) { 
-                        const dateA = new Date(a[sortColumn]), dateB = new Date(b[sortColumn]);
+                    // Handle nulls: nulls usually come last in ASC sort, first in DESC sort
+                    if (valA === null && valB === null) return 0;
+                    if (valA === null) return sortDirection === 'asc' ? 1 : -1;
+                    if (valB === null) return sortDirection === 'asc' ? -1 : 1;
+
+                    // Numeric sort
+                    if (colSchema && ['integer', 'numeric', 'bigint'].includes(colSchema.data_type)) {
+                        return sortDirection === 'asc' ? valA - valB : valB - valA;
+                    }
+                    // Date/Timestamp sort
+                    else if (colSchema && ['date', 'timestamp with time zone', 'timestamp without time zone'].includes(colSchema.data_type)) { 
+                        const dateA = new Date(valA), dateB = new Date(valB);
                         if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) return 0; 
                         return sortDirection === 'asc' ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
                     }
-                    return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                    // String/Locale-aware sort for others
+                    else {
+                        const strA = String(valA).toLowerCase();
+                        const strB = String(valB).toLowerCase();
+                        return sortDirection === 'asc' ? strA.localeCompare(strB) : strB.localeCompare(strA);
+                    }
                 });
             }
             renderTable(tempArray, currentTableSchema);
@@ -711,7 +793,7 @@
 
             const renderDetailRow = (label, value) => {
                 if (value === null || value === undefined || String(value).trim() === '' || value === 'N/A') {
-                    return '';
+                    return ''; // Don't render empty rows
                 }
                 return `<div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100"><dt class="font-medium text-gray-500">${label}</dt><dd class="text-gray-900 break-all">${value}</dd></div>`;
             };
@@ -721,7 +803,7 @@
                 getReferenceData('personal', 'reference')
             ]);
 
-            const personsMap = new Map(allPersons.map(p => [p.person_id, p.full_name || p.person_id]));
+            const personsMap = new Map((allPersons && !allPersons.error) ? allPersons.map(p => [p.person_id, p.full_name || p.person_id]) : []);
 
             let detailsHtml = `<div class="space-y-3 text-sm">`;
             detailsHtml += `
@@ -734,7 +816,7 @@
                         <dl class="space-y-2 py-2">
                             ${renderDetailRow('Project ID', project.project_id)}
                             ${renderDetailRow('Title', project.title)}
-                            ${renderDetailRow('Description', project.description)}
+                            ${renderDetailRow('Description', project.notes)}
                             ${renderDetailRow('Start Date', formatDate(project.start_date))}
                             ${renderDetailRow('End Date', formatDate(project.end_date))}
                             ${renderDetailRow('Status', project.status_id)}
@@ -748,15 +830,16 @@
             `;
 
             // Linked Persons Section
+            const actualProjectPersons = (projectPersons && !projectPersons.error) ? projectPersons : [];
             detailsHtml += `
                 <div class="accordion-item mt-2">
                     <button class="accordion-header" data-accordion="linked-persons">
-                        <span class="flex items-center"><i data-lucide="users" class="w-5 h-5 mr-2"></i> Linked Personnel (${projectPersons ? projectPersons.length : 0})</span>
+                        <span class="flex items-center"><i data-lucide="users" class="w-5 h-5 mr-2"></i> Linked Personnel (${actualProjectPersons.length})</span>
                         <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                     </button>
                     <div class="accordion-content">
                         <div class="space-y-2 py-2" id="linked-persons-list">
-                            ${(projectPersons && projectPersons.length > 0) ? projectPersons.map(pp => `
+                            ${actualProjectPersons.length > 0 ? actualProjectPersons.map(pp => `
                                 <span class="person-tag" data-project-id="${pp.project_id}" data-person-id="${pp.person_id}">
                                     ${personsMap.get(pp.person_id) || pp.person_id}
                                     <i data-lucide="x" class="remove-icon"></i>
@@ -779,7 +862,7 @@
                     const content = header.nextElementSibling;
                     header.classList.toggle('active');
                     content.classList.toggle('open');
-                    lucide.createIcons();
+                    lucide.createIcons(); // Re-create icons for the expanded content
                 });
             });
 
@@ -790,11 +873,11 @@
                     const personId = tag.dataset.personId;
                     if (confirm(`Remove ${personsMap.get(personId) || personId} from this project?`)) {
                         const result = await apiFetch(`table/lims/project_persons?project_id=${projectId}&person_id=${personId}`, { method: 'DELETE' });
-                        if (result.success) {
+                        if (result && result.success) { // Check for explicit success flag
                             alert('Person unlinked successfully!');
                             renderProjectDetails(pkValues); // Re-render details to update list
                         } else {
-                            alert('Failed to unlink person: ' + (result.error || 'Unknown error'));
+                            alert('Failed to unlink person: ' + (result ? result.error : 'Unknown error'));
                         }
                     }
                 });
@@ -802,8 +885,11 @@
 
             document.getElementById('add-person-to-project-btn').addEventListener('click', async (e) => {
                 const projectId = e.currentTarget.dataset.projectId;
-                const availablePersons = allPersons.filter(p => 
-                    !(projectPersons || []).some(pp => pp.person_id === p.person_id)
+                const allFetchedPersons = (allPersons && !allPersons.error) ? allPersons : [];
+                const currentLinkedPersons = (projectPersons && !projectPersons.error) ? projectPersons.map(pp => pp.person_id) : [];
+
+                const availablePersons = allFetchedPersons.filter(p => 
+                    !currentLinkedPersons.includes(p.person_id)
                 );
 
                 if (availablePersons.length === 0) {
@@ -882,7 +968,11 @@
                 setTimeout(() => container.innerHTML = '', 300);
             };
             modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-            container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+            // Add null check for #close-modal-btn, as some modals might not have it if using a different close mechanism
+            const closeBtn = container.querySelector('#close-modal-btn');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', closeModal);
+            }
             return { closeModal };
         }
 
@@ -923,7 +1013,7 @@
                 const shouldSkip = col.column_name.includes('password_hash') ||
                                    col.column_name.includes('search_vector') ||
                                    col.column_name.includes('geom') || // Exclude PostGIS geometry columns
-                                   (isEditing && col.is_primary_key) || // Skip PKs if editing (they are in URL params)
+                                   (isEditing && col.is_primary_key && !col.column_name.endsWith('_date')) || // Skip PKs if editing UNLESS they are part of a composite date PK
                                    (!isEditing && isAutoGenerated); // Skip auto-generated columns for new records
 
                 if (shouldSkip) {
@@ -931,12 +1021,12 @@
                     return;
                 }
 
-
                 let value = isEditing ? (record[col.column_name] || '') : (col.column_default ? col.column_default.replace(/::[a-z_]+/g, '').replace(/'/g, '') : '');
                 let inputType = 'text';
                 let extraAttrs = '';
                 let label = formatColumnName(col.column_name);
                 let optionsHtml = '';
+                let isSelect = false;
 
                 if (col.column_name === 'attachment') {
                     formFieldsHtml += `
@@ -968,8 +1058,10 @@
                         break;
                     case 'boolean':
                         inputType = 'checkbox';
-                        if (isEditing) extraAttrs = value ? 'checked' : '';
-                        value = '';
+                        // For boolean checkboxes, `value` attribute is not used for selection.
+                        // `checked` attribute is used. Default to false if not editing or value is null.
+                        extraAttrs = (isEditing && (value === true || value === 'true')) || (!isEditing && col.column_default && (col.column_default.includes('true'))) ? 'checked' : '';
+                        value = ''; // Value attribute is not relevant for checkboxes
                         break;
                     case 'text':
                     case 'character varying':
@@ -977,7 +1069,7 @@
                             formFieldsHtml += `
                                 <div class="md:col-span-2">
                                     <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
-                                    <textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-24">${value}</textarea>
+                                    <textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-24">${value || ''}</textarea>
                                 </div>
                             `;
                             return;
@@ -994,9 +1086,9 @@
                 }
 
                 // Generic handler for _id fields that link to reference data
-                // Exclude specific _id fields that are part of composite PKs that shouldn't be dropdowns, or handled otherwise
-                const nonDropdownIds = ['experiment_id', 'sample_id', 'sampling_id', 'fishing_record_id', 'conversation_id', 'mail_id', 'message_id', 'run_id']; // Add more as needed
-                if (col.column_name.endsWith('_id') && !nonDropdownIds.includes(col.column_name)) {
+                // --- MODIFIED: Removed specific handling for project_id here ---
+                const nonDropdownIds = ['experiment_id', 'sample_id', 'sampling_id', 'fishing_record_id', 'conversation_id', 'mail_id', 'message_id', 'run_id', 'project_id']; // Added project_id to nonDropdownIds
+                if (col.column_name.endsWith('_id') && !nonDropdownIds.includes(col.column_name) && col.column_name !== 'original_srid') { 
                     let refData = [];
                     let valueKey = col.column_name;
                     let displayKey = col.column_name;
@@ -1004,9 +1096,9 @@
                     // Map specific _id fields to appropriate reference data lists
                     if (col.column_name.includes('person_id') && persons) { refData = persons; displayKey = 'full_name'; }
                     else if (col.column_name.includes('status_id') && statuses) { refData = statuses; displayKey = 'status_id'; }
-                    else if (col.column_name.includes('project_id') && projects) { refData = projects; displayKey = 'title'; }
+                    // Removed project_id else if condition
                     else if (col.column_name.includes('sample_type_id') && samplesTypes) { refData = samplesTypes; displayKey = 'sample_type_abrv'; }
-                    else if (col.column_name.includes('customer_id') && customers) { refData = customers; displayKey = 'customer_name'; valueKey = 'customer_id'; }
+                    else if (col.column_name.includes('customer_id') && customers) { refData = customers; displayKey = 'customer_name'; valueKey = 'customer_id'; } // customer_id is integer
                     else if (col.column_name.includes('cruise_id') && cruises) { refData = cruises; displayKey = 'cruise_id'; }
                     else if (col.column_name.includes('gene_id') && genes) { refData = genes; displayKey = 'gene_id'; }
                     else if (col.column_name.includes('unit_id') && units) { refData = units; displayKey = 'unit_abbreviation'; }
@@ -1021,39 +1113,45 @@
                     else if (col.column_name.includes('primer_id') && primers) { refData = primers; displayKey = 'primer_id'; }
                     else if (col.column_name.includes('taxon_id') && taxon) { refData = taxon; displayKey = 'en_name'; }
                     
-
                     if (refData.length > 0) {
+                        isSelect = true;
                         optionsHtml = `<option value="">-- Select ${label} --</option>`;
                         optionsHtml += refData.map(item => {
-                            const displayValue = item[displayKey] !== undefined && item[displayKey] !== null ? item[displayKey] : item[valueKey];
-                            return `<option value="${item[valueKey]}" ${value == item[valueKey] ? 'selected' : ''}>${displayValue}</option>`;
+                            const currentItemValue = item[valueKey];
+                            const displayValue = item[displayKey] !== undefined && item[displayKey] !== null ? item[displayKey] : currentItemValue;
+                            return `<option value="${currentItemValue}" ${value == currentItemValue ? 'selected' : ''}>${displayValue}</option>`;
                         }).join('');
                         formFieldsHtml += `
                             <div>
                                 <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
-                                <select name="${col.column_name}" class="w-full mt-1 p-2 border rounded"${col.is_nullable === 'NO' ? ' required' : ''}>${optionsHtml}</select>
+                                <select name="${col.column_name}" class="w-full mt-1 p-2 border rounded"${col.is_nullable === 'NO' && !col.column_default ? ' required' : ''}>${optionsHtml}</select>
                             </div>
                         `;
                         return; 
                     }
                 }
 
-                // Default input field for other columns
-                formFieldsHtml += `
-                    <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
-                        <input type="${inputType}" name="${col.column_name}" ${col.is_nullable === 'NO' && !col.column_default ? 'required' : ''} class="w-full mt-1 p-2 border rounded" value="${value}" ${extraAttrs}>
-                    </div>
-                `;
+                // Default input field for other columns not handled above
+                if (!isSelect) {
+                    formFieldsHtml += `
+                        <div>
+                            <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
+                            <input type="${inputType}" name="${col.column_name}" ${col.is_nullable === 'NO' && !col.column_default && !col.is_primary_key ? 'required' : ''} class="w-full mt-1 p-2 border rounded" value="${value}" ${extraAttrs} ${isEditing && col.is_primary_key && col.column_name.endsWith('_date') ? '' : ''}>
+                        </div>
+                    `;
+                }
             });
 
             // Special field for lims.projects to link persons
             if (currentTableName === 'lims.projects') {
+                const existingLinkedPersonIds = isEditing && record.project_id ? 
+                    (await apiFetch(`table/lims/project_persons?filter_project_id=${record.project_id}`)).map(pp => pp.person_id).join(';') : '';
+
                 formFieldsHtml += `
                     <div class="md:col-span-2">
                         <label class="block text-gray-700 text-sm font-bold mb-1">Linked Person IDs (semicolon-separated)</label>
-                        <input type="text" name="linked_person_ids" class="w-full mt-1 p-2 border rounded" placeholder="e.g., P001;P002;P00N" value="${isEditing && record.project_id ? (await apiFetch(`table/lims/project_persons?filter_project_id=${record.project_id}`)).map(pp => pp.person_id).join(';') : ''}">
-                        <p class="text-xs text-gray-500 mt-1">For new projects, enter existing Person IDs separated by semicolons (e.g., P001;P002). These will be linked in 'lims.project_persons'.</p>
+                        <input type="text" name="linked_person_ids" class="w-full mt-1 p-2 border rounded" placeholder="e.g., P001;P002;P00N" value="${existingLinkedPersonIds}">
+                        <p class="text-xs text-gray-500 mt-1">Enter existing Person IDs separated by semicolons (e.g., P001;P002). These will be linked in 'lims.project_persons'.</p>
                     </div>
                 `;
             }
@@ -1088,58 +1186,69 @@
                 const hasFileSelected = attachmentInput && attachmentInput.files && attachmentInput.files.length > 0;
                 
                 let body;
+                let linkedPersonIds = null; 
+
                 if (hasFileSelected) {
                     console.log("File detected. Using FormData for submission.");
                     body = new FormData(formElement);
+                    
+                    // Extract and remove linked_person_ids for special handling if it's projects table
+                    if (currentTableName === 'lims.projects') {
+                        const linkedPersonsValue = body.get('linked_person_ids');
+                        if (linkedPersonsValue) {
+                            linkedPersonIds = linkedPersonsValue.split(';').map(id => id.trim()).filter(id => id !== '');
+                            body.delete('linked_person_ids'); // Remove from FormData as it's special
+                        }
+                    }
+
                 } else {
                     console.log("No file selected. Using JSON for submission.");
                     body = {};
                     const formData = new FormData(formElement);
                     formData.forEach((value, key) => {
-                        const colSchema = targetTableSchema.find(s => s.column_name === key);
-                        if (colSchema && (colSchema.data_type === 'integer' || colSchema.data_type === 'numeric' || colSchema.data_type === 'bigint')) {
-                            body[key] = value === '' ? null : Number(value);
-                        } else if (colSchema && col.data_type === 'boolean') {
-                            body[key] = formElement.querySelector(`[name="${key}"]`).checked; 
-                        } else if (colSchema && col.data_type === 'jsonb') {
-                            try {
-                                body[key] = value === '' ? null : JSON.parse(value);
-                            } catch (jsonError) {
-                                alert(`Invalid JSON for ${formatColumnName(key)}: ${jsonError.message}`);
-                                throw new Error(`Invalid JSON for ${formatColumnName(key)}`);
-                            }
+                        if (key === 'linked_person_ids' && currentTableName === 'lims.projects') {
+                            linkedPersonIds = value.split(';').map(id => id.trim()).filter(id => id !== '');
+                            return; // Skip adding to main JSON body
                         }
-                        else {
+
+                        const colSchema = targetTableSchema.find(s => s.column_name === key);
+                        if (colSchema) {
+                            if (['integer', 'numeric', 'bigint'].includes(colSchema.data_type)) {
+                                body[key] = value === '' ? null : Number(value);
+                            } else if (colSchema.data_type === 'boolean') {
+                                body[key] = formElement.querySelector(`[name="${key}"]`).checked; 
+                            } else if (colSchema.data_type === 'jsonb') {
+                                try {
+                                    body[key] = value === '' ? null : JSON.parse(value);
+                                } catch (jsonError) {
+                                    alert(`Invalid JSON for ${formatColumnName(key)}: ${jsonError.message}`);
+                                    throw new Error(`Invalid JSON for ${formatColumnName(key)}`);
+                                }
+                            } else {
+                                body[key] = value === '' ? null : value;
+                            }
+                        } else {
+                            // Include fields not found in schema (e.g., hidden fields or custom ones)
                             body[key] = value === '' ? null : value;
                         }
                     });
                 }
 
-                // Handle special 'linked_person_ids' field for lims.projects
-                let linkedPersonIds = null;
-                if (currentTableName === 'lims.projects') {
-                    const linkedPersonsField = formElement.querySelector('[name="linked_person_ids"]');
-                    if (linkedPersonsField) {
-                        linkedPersonIds = linkedPersonsField.value.split(';').map(id => id.trim()).filter(id => id !== '');
-                        if (hasFileSelected) {
-                             body.delete('linked_person_ids'); 
-                        } else {
-                            delete body.linked_person_ids; 
-                        }
-                    }
-                }
-
                 const method = isEditing ? 'PUT' : 'POST';
                 
                 let endpoint = `table/${schemaName}/${tableName}`;
-                let currentProjectId = null;
+                let currentProjectId = null; // Used to retain project_id for re-selection if editing
 
                 if (isEditing) {
                     const pkValuesForApi = {};
-                    const originalPkValues = getPkValues(record);
+                    // When editing, getPKValues extracts values from the *original* record, not the form.
+                    // This is crucial because a user might change a value that's part of a composite PK.
+                    // The API needs the original PK to identify the record.
+                    const originalPkValues = getPkValues(record); 
                     for (const key in originalPkValues) {
                         const colSchema = targetTableSchema.find(s => s.column_name === key);
                         if (colSchema && colSchema.data_type === 'date') {
+                            // Ensure date PKs are formatted correctly for the API URL
                             pkValuesForApi[key] = formatDateForInput(originalPkValues[key]);
                         } else {
                             pkValuesForApi[key] = originalPkValues[key];
@@ -1148,11 +1257,11 @@
                     const pkQueryString = new URLSearchParams(pkValuesForApi).toString();
                     endpoint += `?${pkQueryString}`;
                     console.log("Edit endpoint with PKs:", endpoint);
-                    currentProjectId = record.project_id; 
+                    currentProjectId = record.project_id; // Keep original project_id for re-selection
                 }
                 
                 console.log(`Submitting form: Method=${method}, Endpoint=${endpoint}, Body:`, body);
-                const result = await apiFetch(endpoint, { method, body });
+                const result = await apiFetch(endpoint, { method, body }); 
                 if (result && !result.error) { 
                     console.log("API call successful:", result);
                     alert(`${isEditing ? 'Updated' : 'Created'} record successfully!`);
@@ -1197,9 +1306,17 @@
                         const targetPkValues = {
                             project_id: result.project_id || currentProjectId 
                         };
+                        // Use a slight delay to allow table re-render before trying to select row
                         setTimeout(() => {
                             const row = document.querySelector(`.dynamic-table-row[data-pk-values='${JSON.stringify(targetPkValues)}']`);
-                            if (row) { row.classList.add('table-row-selected'); renderProjectDetails(targetPkValues); }
+                            if (row) { 
+                                row.classList.add('table-row-selected'); 
+                                renderProjectDetails(targetPkValues); 
+                            } else {
+                                console.warn("Could not find newly created/updated row to select in table. Manually rendering details.");
+                                // If row not found (e.g., due to sorting/filtering), still render details
+                                renderProjectDetails(targetPkValues);
+                            }
                         }, 100);
                     }
                 } else {
@@ -1281,9 +1398,16 @@
                                 const linkedPersonIds = record.linked_person_ids ? record.linked_person_ids.split(';').map(id => id.trim()).filter(id => id !== '') : [];
                                 delete record.linked_person_ids; 
 
+                                // Special handling for attachment field which might be base64 encoded string in CSV
+                                if (record.attachment && typeof record.attachment === 'string' && record.attachment.startsWith('data:')) {
+                                    // Assuming data URI, extract base64 part
+                                    record.attachment = record.attachment.split(',')[1];
+                                }
+
+
                                 const result = await apiFetch(`table/${schemaName}/${tableName}`, {
                                     method: 'POST',
-                                    body: record
+                                    body: record // Sending as JSON, backend needs to handle base64 if it's there
                                 });
 
                                 if (result && !result.error) {
@@ -1315,7 +1439,7 @@
                             // Standard bulk upload for other tables
                             const result = await apiFetch(`table/${schemaName}/${tableName}/batch_upload`, {
                                 method: 'POST',
-                                body: recordsToUpload
+                                body: recordsToUpload // Assumes backend can handle array of JSON objects
                             });
 
                             if (result && result.success) {
@@ -1355,7 +1479,8 @@
                 !col.column_name.includes('geom') && // Exclude PostGIS geometry columns
                 !(col.column_default && col.column_default.includes('nextval')) && 
                 !col.column_name.includes('created_at') &&
-                !col.column_name.includes('last_modified_at')
+                !col.column_name.includes('last_modified_at') &&
+                !col.column_name.includes('user_id') // Exclude audit user id
             ).map(col => col.column_name);
 
             // Add special 'linked_person_ids' header for lims.projects if downloading its template
@@ -1367,13 +1492,21 @@
             pkCols.forEach(pkCol => {
                 const pkColSchema = schema.find(c => c.column_name === pkCol);
                 // Only prepend if it's a primary key not auto-generated
-                if (pkColSchema && !(pkColSchema.column_default && pkColSchema.column_default.includes('nextval'))) {
-                    if (!headers.includes(pkCol)) {
-                        headers.unshift(pkCol);
-                    }
+                // And not already in headers
+                if (pkColSchema && !(pkColSchema.column_default && pkColSchema.column_default.includes('nextval')) && !headers.includes(pkCol)) {
+                    headers.unshift(pkCol);
                 }
             });
             
+            // Sort headers to ensure PKs are at the beginning
+            headers.sort((a, b) => {
+                const isAPk = pkCols.includes(a);
+                const isBPk = pkCols.includes(b);
+                if (isAPk && !isBPk) return -1;
+                if (!isAPk && isBPk) return 1;
+                return a.localeCompare(b);
+            });
+
             console.log("CSV Template Headers:", headers);
             const csv = unparseCSV([headers]); // Use the custom unparseCSV function
             
@@ -1438,27 +1571,25 @@
                             if (!Array.isArray(recordsToModify)) {
                                 throw new Error("JSON file must contain an array of objects.");
                             }
+                            await processBulkModifyRecords(recordsToModify, statusDiv, closeModal);
+
                         } else if (file.type === 'text/csv') {
-                            const script = document.createElement('script');
-                            script.src = "https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js";
-                            script.onload = () => {
-                                const parseResult = PapaParse.parse(e.target.result, { header: true, skipEmptyLines: true });
-                                if (parseResult.errors.length) {
-                                    throw new Error(`CSV parsing errors: ${parseResult.errors.map(err => err.message).join(', ')}`);
+                            PapaParse.parse(e.target.result, {
+                                header: true,
+                                skipEmptyLines: true,
+                                complete: async (parseResult) => {
+                                    if (parseResult.errors.length) {
+                                        statusDiv.innerHTML = `<p class="text-red-500">CSV parsing errors: ${parseResult.errors.map(err => err.message).join(', ')}</p>`;
+                                        return;
+                                    }
+                                    recordsToModify = parseResult.data;
+                                    await processBulkModifyRecords(recordsToModify, statusDiv, closeModal);
                                 }
-                                recordsToModify = parseResult.data;
-                                processBulkModifyRecords(recordsToModify, statusDiv, closeModal);
-                            };
-                            script.onerror = () => {
-                                statusDiv.innerHTML = `<p class="text-red-500">Error loading PapaParse library for CSV parsing. Please check network connection.</p>`;
-                            };
-                            document.head.appendChild(script);
-                            return; 
+                            });
+                            
                         } else {
                             throw new Error("Unsupported file type. Please upload a CSV or JSON file.");
                         }
-                        processBulkModifyRecords(recordsToModify, statusDiv, closeModal);
-
                     } catch (error) {
                         console.error("Bulk modify file processing error:", error);
                         statusDiv.innerHTML = `<p class="text-red-500">Error processing file: ${error.message}</p>`;
@@ -1529,13 +1660,24 @@
                 !col.column_name.includes('search_vector') &&
                 !col.column_name.includes('geom') && 
                 !col.column_name.includes('created_at') &&
+                !col.column_name.includes('last_modified_at') &&
+                !col.column_name.includes('user_id') && // Exclude audit user id
                 !(col.column_default && col.column_default.includes('nextval'))
             ).map(col => col.column_name);
 
             headers = [...new Set([...headers, ...commonEditableColumns])];
+            
+            // Sort headers to ensure PKs are at the beginning
+            headers.sort((a, b) => {
+                const isAPk = pkColumns.includes(a);
+                const isBPk = pkColumns.includes(b);
+                if (isAPk && !isBPk) return -1;
+                if (!isAPk && isBPk) return 1;
+                return a.localeCompare(b);
+            });
 
             console.log("Bulk Modify Template Headers:", headers);
-            const csv = unparseCSV([headers], { header: false });
+            const csv = unparseCSV([headers]);
             
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
@@ -1549,66 +1691,6 @@
         }
 
 
-        // The showDownloadTemplateModal function is no longer needed since the download functionality is now
-        // directly integrated into the Bulk Upload/Modify modals or a direct call for the current table.
-        // If you still want a general "Download Template" button that opens a selection modal, you can
-        // re-add this function and its associated button in the HTML.
-        /*
-        async function showDownloadTemplateModal() {
-            const allSchemaTableNames = await getAllTablesAndViews(); 
-            let optionsHtml = '<option value="">-- Select Table for Template --</option>';
-            allSchemaTableNames.forEach(name => {
-                optionsHtml += `<option value="${name}">${name}</option>`;
-            });
-
-            const modalHTML = `
-                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
-                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl transform transition-all -translate-y-10 opacity-0">
-                        <div class="flex justify-between items-center mb-6">
-                            <h2 class="text-2xl font-bold">Download CSV Template</h2>
-                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
-                        </div>
-                        <p class="text-gray-700 mb-4">Select a table to download an empty CSV template with its column headers.</p>
-                        <select id="template-table-select" class="w-full p-2 border rounded mb-4">
-                            ${optionsHtml}
-                        </select>
-                        <div class="flex justify-end">
-                            <button id="confirm-download-template-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
-                                <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download
-                            </button>
-                        </div>
-                        <div id="template-download-status" class="mt-4 text-center text-sm"></div>
-                    </div>
-                </div>
-            `;
-            const { closeModal } = showModal(modalHTML);
-
-            document.getElementById('confirm-download-template-btn').addEventListener('click', async () => {
-                const selectedTable = document.getElementById('template-table-select').value;
-                const statusDiv = document.getElementById('template-download-status');
-
-                if (!selectedTable) {
-                    statusDiv.innerHTML = `<p class="text-red-500">Please select a table.</p>`;
-                    return;
-                }
-
-                statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Generating template...</p>`;
-                lucide.createIcons();
-
-                try {
-                    await downloadCsvTemplate(selectedTable); 
-                    statusDiv.innerHTML = `<p class="text-green-600">Template downloaded successfully!</p>`;
-                    setTimeout(closeModal, 1500);
-                } catch (error) {
-                    console.error("Error during template download:", error);
-                    statusDiv.innerHTML = `<p class="text-red-500">Error generating or downloading template: ${error.message}</p>`;
-                }
-                lucide.createIcons();
-            });
-        }
-        */
-
-
         // Function to update the main action buttons' disabled state and tooltips
         function updateMainActionButtons(tableType) {
             const isBaseTable = tableType === 'BASE TABLE';
@@ -1616,21 +1698,12 @@
             document.getElementById('add-single-entry-btn').disabled = !isBaseTable;
             document.getElementById('bulk-csv-upload-btn').disabled = !isBaseTable;
             document.getElementById('bulk-modify-btn').disabled = !isBaseTable;
-            // The general download button should be removed if its functionality is integrated elsewhere.
-            // If you still want a general download button (e.g., to download template for *current* table)
-            // you can re-enable it here and link it to downloadCsvTemplate(currentTableName).
             document.getElementById('download-template-general-btn').disabled = !currentTableName; 
 
-            // For tooltips (assuming they are always present and just show/hide)
-            // You might need to add tooltip elements similar to data_management.html if they don't exist
-            // For now, let's just log a warning if they are not found.
-            const addTooltip = document.getElementById('add-tooltip');
-            const uploadTooltip = document.getElementById('upload-tooltip');
-            const modifyTooltip = document.getElementById('modify-tooltip');
-
-            if (addTooltip) addTooltip.style.display = isBaseTable ? 'none' : 'block'; else console.warn("Add tooltip not found.");
-            if (uploadTooltip) uploadTooltip.style.display = isBaseTable ? 'none' : 'block'; else console.warn("Upload tooltip not found.");
-            if (modifyTooltip) modifyTooltip.style.display = isBaseTable ? 'none' : 'block'; else console.warn("Modify tooltip not found.");
+            // Update tooltips visibility
+            document.getElementById('add-tooltip').style.visibility = isBaseTable ? 'hidden' : 'visible';
+            document.getElementById('upload-tooltip').style.visibility = isBaseTable ? 'hidden' : 'visible';
+            document.getElementById('modify-tooltip').style.visibility = isBaseTable ? 'hidden' : 'visible';
         }
 
 
@@ -1643,7 +1716,6 @@
             document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal());
             document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal);
             document.getElementById('bulk-modify-btn').addEventListener('click', showBulkModifyModal);
-            // This button now directly calls downloadCsvTemplate for the currently active table.
             document.getElementById('download-template-general-btn').addEventListener('click', () => downloadCsvTemplate(currentTableName));
         }
 
@@ -1654,14 +1726,17 @@
             tabProjects.addEventListener('click', () => {
                 tabProjects.classList.add('active');
                 dynamicTableSelect.classList.remove('active');
-                dynamicTableSelect.value = 'lims.projects';
+                dynamicTableSelect.value = 'lims.projects'; // Ensure dropdown reflects active tab
                 currentTableName = 'lims.projects';
                 loadAndRenderTable(currentTableName);
             });
 
             dynamicTableSelect.addEventListener('change', (e) => {
-                tabProjects.classList.remove('active');
-                dynamicTableSelect.classList.add('active');
+                // Remove active class from tab-projects when a dropdown item is selected
+                tabProjects.classList.remove('active'); 
+                // Add active class to the dropdown itself, visually marking it as active
+                // (though the selected option will also be visually active by default)
+                dynamicTableSelect.classList.add('active'); 
                 currentTableName = e.target.value;
                 loadAndRenderTable(currentTableName);
             });
@@ -1671,16 +1746,18 @@
             const select = document.getElementById('dynamic-table-select');
             const projectTables = await getAllProjectTables(); 
             
-            select.innerHTML = '<option value="">-- Select Related Table --</option>';
+            select.innerHTML = ''; // Clear existing options
+            // Always add lims.projects as the primary option
             select.innerHTML += `<option value="lims.projects">lims.projects (Main)</option>`;
 
             if (projectTables && !projectTables.error) {
-                const otherProjectTables = projectTables.filter(t => t !== 'lims.projects');
+                // Filter out lims.projects from the rest to avoid duplication
+                const otherProjectTables = projectTables.filter(t => t !== 'lims.projects').sort(); // Sort alphabetically for consistency
                 otherProjectTables.forEach(table => {
                     select.innerHTML += `<option value="${table}">${table}</option>`;
                 });
             }
-            select.value = currentTableName;
+            select.value = currentTableName; // Set default selected value
         }
 
         async function loadAndRenderTable(fullTableName) {
@@ -1688,6 +1765,7 @@
             currentTableName = fullTableName;
             const [schemaName, tableName] = fullTableName.split('.');
             
+            // Reset sorting and filters
             sortColumn = null;
             sortDirection = 'asc';
             columnFilters = {};
@@ -1698,10 +1776,11 @@
             lucide.createIcons();
 
             let dataFilter = '';
+            // Apply initial filters only for specific tables
             if (tableName === 'projects') { 
                 dataFilter = '?filter_status_id=Active'; 
             } else if (tableName === 'sop') { 
-                 dataFilter = '?filter_status_id!=Archived'; 
+                 dataFilter = '?exclude_status_id=Archived'; // Example filter for SOPs
             }
 
             const [data, schema, pkInfo] = await Promise.all([
@@ -1720,12 +1799,18 @@
                 const tableType = schema.length > 0 ? schema[0].table_type : null;
                 updateMainActionButtons(tableType);
 
-                applyFiltersAndSort();
+                applyFiltersAndSort(); // This also calls renderTable
             } else {
                 console.error(`Failed to load data for ${fullTableName}. Data error: ${data ? data.error : 'N/A'}, Schema error: ${schema ? schema.error : 'N/A'}`);
                 tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-red-500">Error loading data for ${fullTableName}: ${data ? data.error : schema ? schema.error : 'Unknown error'}</td></tr>`;
                 // Ensure buttons are disabled if loading fails
                 updateMainActionButtons(null); // Pass null to disable all
+            }
+            
+            // Clear project details panel if switching away from lims.projects
+            if (currentTableName !== 'lims.projects') {
+                document.getElementById('project-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="folder-kanban" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a project to view its details</p></div></div>`;
+                lucide.createIcons();
             }
         }
 

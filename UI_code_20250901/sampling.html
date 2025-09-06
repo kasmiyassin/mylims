@@ -205,7 +205,7 @@
             window.location.href = './login.html';
         }
         
-        const API_BASE_URL = '/tifi-lims/api'; 
+        const API_BASE_URL = '/api'; 
         let masterCache = {}; 
         let currentTableData = []; 
         let currentTableSchema = []; // Stores column info for the currently displayed table
@@ -460,7 +460,30 @@
                     document.querySelectorAll('.dynamic-table-row').forEach(r => r.classList.remove('table-row-selected'));
                     row.classList.add('table-row-selected');
                     const pkValues = JSON.parse(row.dataset.pkValues);
-                    renderSamplingDetails(pkValues);
+                    
+                    // --- MODIFIED SECTION START ---
+                    const recordToDisplay = currentTableData.find(item => {
+                        return Object.keys(pkValues).every(key => {
+                            const colSchema = currentTableSchema.find(s => s.column_name === key);
+                            // Explicitly format dates for comparison
+                            if (colSchema && colSchema.data_type === 'date') {
+                                return formatDateForInput(item[key]) === pkValues[key];
+                            }
+                            return String(item[key]) === String(pkValues[key]);
+                        });
+                    });
+
+                    if (recordToDisplay) {
+                        // Pass the found record directly to renderSamplingDetails
+                        // This allows renderSamplingDetails to use the exact object without re-searching
+                        renderSamplingDetails(recordToDisplay); 
+                    } else {
+                        console.error("Clicked record not found in currentTableData:", pkValues);
+                        // Fallback to re-loading if record not found (shouldn't happen often)
+                        // This could happen if currentTableData is stale or row data is partial
+                        renderSamplingDetails(pkValues); 
+                    }
+                    // --- MODIFIED SECTION END ---
                 });
             });
 
@@ -499,7 +522,7 @@
                     const samplingDate = pkValues.sampling_date; 
 
                     const childTablesToDelete = [
-                        { name: 'lab.samples', pkCols: ['sample_id', 'sampling_date'] },
+                        { name: 'lab.parental_samples', pkCols: ['sample_id', 'sampling_date'] }, // Corrected to parental_samples
                         { name: 'lab.fishing', pkCols: ['fishing_id', 'sampling_date'] }
                     ];
 
@@ -509,7 +532,7 @@
                             const [childSchema, childTableName] = childTable.name.split('.');
                             let filterParams = `filter_sampling_id=${samplingId}&filter_sampling_date=${samplingDate}`;
                             
-                            console.log(`Attempting to delete children from ${childTable.name} for sampling event ${samplingId} on ${samplingDate}`);
+                            console.log(`Attempting to fetch children from ${childTable.name} for sampling event ${samplingId} on ${samplingDate}`);
                             const children = await apiFetch(`table/${childSchema}/${childTableName}?${filterParams}`);
                             
                             if (children && children.length > 0) {
@@ -645,27 +668,19 @@
             lucide.createIcons(); 
         }
 
-        async function renderSamplingDetails(pkValues) {
-            console.log("Rendering sampling details for PKs:", pkValues);
+        async function renderSamplingDetails(recordToDisplay) { // Now accepts the full record
+            console.log("Rendering sampling details for record:", recordToDisplay);
             const container = document.getElementById('sampling-details-container');
             container.innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="loader-2" class="animate-spin mx-auto h-12 w-12 text-blue-600"></i><p class="mt-2">Loading sampling details...</p></div></div>`;
             lucide.createIcons();
 
-            const samplingEvent = currentTableData.find(se => {
-                return Object.keys(pkValues).every(key => {
-                    const colSchema = currentTableSchema.find(cs => cs.column_name === key);
-                    if (colSchema && colSchema.data_type === 'date') {
-                        return formatDateForInput(se[key]) === pkValues[key];
-                    }
-                    return String(se[key]) === String(pkValues[key]);
-                });
-            });
-
-            if (!samplingEvent) { 
-                console.error("Sampling event record not found in currentTableData for PKs:", pkValues);
+            if (!recordToDisplay) { 
+                console.error("No record provided to renderSamplingDetails.");
                 container.innerHTML = `<div class="card p-6 text-red-500">Error: Sampling event details not found.</div>`; 
                 return; 
             }
+
+            const samplingEvent = recordToDisplay; // Use the provided record directly
 
             const formatDate = (dateString) => {
                 if (!dateString) return 'N/A';
@@ -674,6 +689,19 @@
                     return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString('en-CA');
                 } catch (e) {
                     console.warn("Failed to format date for display:", dateString, e);
+                    return 'N/A';
+                }
+            };
+
+            const formatTime = (timeString) => { // Added for time values
+                if (!timeString) return 'N/A';
+                try {
+                    // Time objects from backend might be just "HH:MM:SS"
+                    // Prepend a dummy date to parse it as a valid Date object
+                    const dt = new Date(`2000-01-01T${timeString}`);
+                    return isNaN(dt.getTime()) ? 'N/A' : dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                } catch (e) {
+                    console.warn("Failed to format time for display:", timeString, e);
                     return 'N/A';
                 }
             };
@@ -694,7 +722,9 @@
                     return '';
                 }
                 let displayValue = value;
-                if (typeof value === 'object' && value !== null) { // Ensure value is not null before stringifying
+                if (typeof value === 'object' && value !== null && value.type === 'Point' && Array.isArray(value.coordinates)) {
+                    displayValue = `Lon: ${value.coordinates[0]}, Lat: ${value.coordinates[1]}`;
+                } else if (typeof value === 'object' && value !== null) { // Ensure value is not null before stringifying
                     displayValue = `<pre class="bg-gray-100 p-2 rounded-md text-xs overflow-auto max-h-24">${JSON.stringify(value, null, 2)}</pre>`; // Pretty print JSONB
                 } else if (label.includes('Attachment Link') && typeof value === 'string') {
                     displayValue = `<a href="${value}" target="_blank" class="text-blue-600 hover:underline">View Attachment</a>`;
@@ -705,10 +735,50 @@
             };
 
             const relatedTables = [
-                { name: 'lab.samples', icon: 'beaker', title: 'Associated Samples' },
-                { name: 'lab.fishing', icon: 'fish', title: 'Fishing Details' },
-                { name: 'lims.cruises', icon: 'ship', title: 'Associated Cruises' }
+                { name: 'lab.parental_samples', icon: 'beaker', title: 'Associated Samples', filterField: 'sampling_id' },
+                { name: 'lab.fishing', icon: 'fish', title: 'Fishing Details', filterField: 'sampling_id' }
+                // lims.cruises needs special handling because it's linked by cruise_id not sampling_id
+                // Adding it directly here might overcomplicate the generic loop unless we generalize filterField logic further.
+                // For now, it's safer to fetch cruises separately if needed or ensure this loop only covers tables related by sampling_id.
             ];
+
+            // Fetch related cruise details if available
+            let cruiseDetailsHtml = '';
+            if (samplingEvent.cruise_id) {
+                const cruiseData = await apiFetch(`table/lims/cruises?filter_cruise_id=${samplingEvent.cruise_id}`);
+                if (cruiseData && cruiseData.length > 0) {
+                    const cruise = cruiseData[0];
+                    const cruiseSchema = await getTableSchema('lims', 'cruises');
+                    if (cruiseSchema && !cruiseSchema.error) {
+                        cruiseDetailsHtml = `
+                            <div class="accordion-item mt-2">
+                                <button class="accordion-header" data-accordion="cruise-details">
+                                    <span class="flex items-center"><i data-lucide="ship" class="w-5 h-5 mr-2"></i> Associated Cruise (${cruise.cruise_id})</span>
+                                    <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                                </button>
+                                <div class="accordion-content">
+                                    <div class="space-y-2 py-2">
+                                        ${cruiseSchema.filter(col => !col.column_name.includes('attachment') && !col.column_name.includes('password_hash') && !col.column_name.includes('search_vector'))
+                                            .map(col => {
+                                            let value = cruise[col.column_name];
+                                            if (value === null || value === undefined) {
+                                                value = 'N/A';
+                                            } else if (col.data_type === 'date') {
+                                                value = formatDate(value);
+                                            } else if (col.data_type === 'timestamp with time zone' || col.data_type === 'timestamp without time zone') {
+                                                value = formatDateTime(value);
+                                            } else if (typeof value === 'object' && value !== null) {
+                                                value = JSON.stringify(value, null, 2);
+                                            }
+                                            return renderDetailRow(formatColumnName(col.column_name), value);
+                                        }).join('')}
+                                    </div>
+                                </div>
+                            </div>`;
+                    }
+                }
+            }
+
 
             let detailsHtml = `<div class="space-y-3 text-sm">`;
             detailsHtml += `
@@ -722,8 +792,11 @@
                             ${renderDetailRow('Sampling ID', samplingEvent.sampling_id)}
                             ${renderDetailRow('Date', formatDate(samplingEvent.sampling_date))}
                             ${renderDetailRow('Location Name', samplingEvent.location_name)}
-                            ${renderDetailRow('Longitude', samplingEvent.geom ? samplingEvent.geom.coordinates[0] : 'N/A')}
-                            ${renderDetailRow('Latitude', samplingEvent.geom ? samplingEvent.geom.coordinates[1] : 'N/A')}
+                            ${renderDetailRow('Start Time', formatTime(samplingEvent.start_at))}
+                            ${renderDetailRow('End Time', formatTime(samplingEvent.end_at))}
+                            ${renderDetailRow('Geometry', samplingEvent.geom)}
+                            ${renderDetailRow('Fishing Start Geometry', samplingEvent.fishing_start_geom)}
+                            ${renderDetailRow('Fishing End Geometry', samplingEvent.fishing_end_geom)}
                             ${renderDetailRow('Depth (m)', samplingEvent.depth_m)}
                             ${renderDetailRow('Temperature (C)', samplingEvent.temperature_atmospheric_c)}
                             ${renderDetailRow('Weather', samplingEvent.weather)}
@@ -743,24 +816,17 @@
                 </div>
             `;
 
+            detailsHtml += cruiseDetailsHtml; // Add cruise details here
+
             for (const tableInfo of relatedTables) {
                 const [schemaName, tableName] = tableInfo.name.split('.');
-                let filterParams = '';
-                if (tableInfo.name === 'lab.samples') {
-                    filterParams = `filter_sampling_id=${samplingEvent.sampling_id}&filter_sampling_date=${formatDateForInput(samplingEvent.sampling_date)}`;
-                } else if (tableInfo.name === 'lab.fishing') {
-                    filterParams = `filter_sampling_id=${samplingEvent.sampling_id}&filter_sampling_date=${formatDateForInput(samplingEvent.sampling_date)}`;
-                } else if (tableInfo.name === 'lims.cruises') {
-                    if (!samplingEvent.cruise_id) continue; // Skip if no cruise ID
-                    filterParams = `filter_cruise_id=${samplingEvent.cruise_id}`;
-                }
-
-                if (!filterParams) continue; // Skip if no valid filters were set
-
+                // Construct filter for composite PK based on sampling_id and sampling_date
+                const filterParams = `filter_sampling_id=${samplingEvent.sampling_id}&filter_sampling_date=${formatDateForInput(samplingEvent.sampling_date)}`;
+                
                 console.log(`Fetching related items for ${tableInfo.name} with filters: ${filterParams}`);
                 const items = await apiFetch(`table/${schemaName}/${tableName}?${filterParams}`);
                 
-                if (items && items.length > 0) {
+                if (items && !items.error && items.length > 0) {
                     const tableSchema = await getTableSchema(schemaName, tableName);
                     if (tableSchema && !tableSchema.error) {
                         detailsHtml += `
@@ -783,8 +849,8 @@
                                                             value = formatDate(value);
                                                         } else if (col.data_type === 'timestamp with time zone' || col.data_type === 'timestamp without time zone') {
                                                             value = formatDateTime(value);
-                                                        } else if (typeof value === 'object' && value !== null) { // Ensure value is not null before stringifying
-                                                            value = JSON.stringify(value, null, 2); // Pretty print JSON
+                                                        } else if (typeof value === 'object' && value !== null) {
+                                                            value = JSON.stringify(value, null, 2);
                                                         }
                                                         return renderDetailRow(formatColumnName(col.column_name), value);
                                                     }).join('')}
@@ -837,7 +903,7 @@
             const schemaName = currentTableName.split('.')[0];
             const tableName = currentTableName.split('.')[1];
 
-            const [persons, statuses, cruises, vessels, regions, ecosystems, customers, units, sample_types] = await Promise.all([ 
+            const [persons, statuses, cruises, vessels, regions, ecosystems, customers, units, sample_types, projects] = await Promise.all([ 
                 getReferenceData('personal', 'reference'), 
                 getReferenceData('status', 'reference'),
                 getReferenceData('cruises', 'lims'),
@@ -846,19 +912,31 @@
                 getReferenceData('ecosystem', 'reference'),
                 getReferenceData('customers', 'lims'),
                 getReferenceData('units', 'reference'),
-                getReferenceData('samples_type', 'reference')
+                getReferenceData('samples_type', 'reference'),
+                getReferenceData('projects', 'lims') // Fetch projects for project_id dropdown
             ]);
 
             let formFieldsHtml = '';
             targetTableSchema.forEach(col => {
                 const isAutoGenerated = col.column_name.includes('_id') && col.column_default && col.column_default.includes('nextval');
                 
-                if (col.column_name.includes('password_hash') || 
+                // --- MODIFIED: Ensure sampling_id is editable if not editing ---
+                // Also, do not skip project_id, customer_id if they are needed for dropdowns
+                if (
+                    col.column_name.includes('password_hash') || 
                     col.column_name.includes('search_vector') ||
-                    (isEditing && col.is_primary_key) ||
-                    (!isEditing && isAutoGenerated)
+                    // For sampling table, sampling_id is auto-generated on INSERT, but part of PK.
+                    // Allow input if creating new, but skip if editing as it's PK.
+                    (!isEditing && isAutoGenerated && col.column_name === 'sampling_id') || 
+                    (isEditing && col.is_primary_key && !col.column_name.endsWith('_date')) // Keep date PKs for editing too.
                 ) {
-                    return;
+                    // Explicitly allow sampling_id for input when creating
+                    if (!isEditing && col.column_name === 'sampling_id') {
+                        // This specific case is handled below, so we don't want to 'return' here.
+                        // Let it fall through to the default input field.
+                    } else {
+                         return; // Skip this column entirely
+                    }
                 }
 
                 let value = isEditing ? (record[col.column_name] || '') : (col.column_default ? col.column_default.replace(/::[a-z_]+/g, '').replace(/'/g, '') : '');
@@ -866,6 +944,7 @@
                 let extraAttrs = '';
                 let label = formatColumnName(col.column_name);
                 let optionsHtml = '';
+                let isSelect = false;
 
                 if (col.column_name === 'attachment') {
                     formFieldsHtml += `
@@ -881,9 +960,9 @@
                 } else if (col.column_name.includes('geom')) { // Handle geometry columns
                     formFieldsHtml += `
                         <div class="md:col-span-2">
-                            <label class="block text-gray-700 text-sm font-bold mb-1">${label} (GeoJSON)</label>
+                            <label class="block text-gray-700 text-sm font-bold mb-1">${label} (GeoJSON Point)</label>
                             <textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-24">${value ? JSON.stringify(value, null, 2) : ''}</textarea>
-                            <p class="text-xs text-gray-500 mt-1">Enter GeoJSON for Point type (e.g., {"type": "Point", "coordinates": [lon, lat]})</p>
+                            <p class="text-xs text-gray-500 mt-1">Example: {"type": "Point", "coordinates": [longitude, latitude]}</p>
                         </div>
                     `;
                     return;
@@ -914,7 +993,7 @@
                         break;
                     case 'text':
                     case 'character varying':
-                        if (col.column_name.includes('notes') || col.column_name.includes('description') || col.column_name.includes('weather') || col.column_name.includes('location_name') || col.column_name.includes('fishing_method') || col.column_name.includes('gear_type') || col.column_name.includes('sea_state') || col.column_name.includes('preservative') || col.column_name.includes('instrument_id')) {
+                        if (col.column_name.includes('notes') || col.column_name.includes('description') || col.column_name.includes('weather') || col.column_name.includes('location_name') || col.column_name.includes('fishing_method') || col.column_name.includes('gear_type') || col.column_name.includes('sea_state') || col.column_name.includes('preservative') || col.column_name.includes('instrument_id') || col.column_name.includes('address')) {
                             formFieldsHtml += `
                                 <div class="${['notes', 'description', 'weather', 'location_name', 'fishing_method'].includes(col.column_name) ? 'md:col-span-2' : ''}">
                                     <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
@@ -934,41 +1013,36 @@
                         return;
                 }
 
-                if (col.column_name.endsWith('_id') && col.column_name !== 'sampling_id') {
+                // Handling for _id fields that should be dropdowns
+                if (col.column_name.endsWith('_id') && col.column_name !== 'sampling_id' && col.column_name !== 'original_srid') {
                     let refData = [];
                     let valueKey = col.column_name;
                     let displayKey = col.column_name;
 
                     if (col.column_name.includes('person_id') && persons) {
-                        refData = persons;
-                        displayKey = 'full_name';
+                        refData = persons; displayKey = 'full_name';
                     } else if (col.column_name.includes('status_id') && statuses) {
-                        refData = statuses;
-                        displayKey = 'status_id';
+                        refData = statuses; displayKey = 'status_id';
                     } else if (col.column_name.includes('cruise_id') && cruises) {
-                        refData = cruises;
-                        displayKey = 'cruise_id'; 
+                        refData = cruises; displayKey = 'cruise_id'; 
                     } else if (col.column_name.includes('vessel_id') && vessels) {
-                        refData = vessels;
-                        displayKey = 'vessel_name';
+                        refData = vessels; displayKey = 'vessel_name';
                     } else if (col.column_name.includes('region_id') && regions) {
-                        refData = regions;
-                        displayKey = 'region_abrv';
+                        refData = regions; displayKey = 'region_abrv';
                     } else if (col.column_name.includes('ecosystem_id') && ecosystems) {
-                        refData = ecosystems;
-                        displayKey = 'ecosystem_abrv';
+                        refData = ecosystems; displayKey = 'ecosystem_abrv';
                     } else if (col.column_name.includes('customer_id') && customers) {
-                        refData = customers;
-                        displayKey = 'customer_name';
+                        refData = customers; displayKey = 'customer_name'; valueKey = 'customer_id';
                     } else if (col.column_name.includes('unit_id') && units) {
-                        refData = units;
-                        displayKey = 'unit_abbreviation';
+                        refData = units; displayKey = 'unit_abbreviation';
                     } else if (col.column_name.includes('sample_type_id') && sample_types) {
-                        refData = sample_types;
-                        displayKey = 'sample_type_abrv';
+                        refData = sample_types; displayKey = 'sample_type_abrv';
+                    } else if (col.column_name === 'project_id' && projects) { // Project ID as dropdown
+                        refData = projects; displayKey = 'title';
                     }
                     
                     if (refData.length > 0) {
+                        isSelect = true;
                         optionsHtml = `<option value="">-- Select ${label} --</option>`;
                         optionsHtml += refData.map(item => `<option value="${item[valueKey]}" ${value == item[valueKey] ? 'selected' : ''}>${item[displayKey] || item[valueKey]}</option>`).join('');
                         formFieldsHtml += `
@@ -981,10 +1055,11 @@
                     }
                 }
 
+                // Default input field for all other columns (including sampling_id now)
                 formFieldsHtml += `
                     <div>
                         <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
-                        <input type="${inputType}" name="${col.column_name}" ${col.is_nullable === 'NO' && !col.column_default ? 'required' : ''} class="w-full mt-1 p-2 border rounded" value="${value}" ${extraAttrs}>
+                        <input type="${inputType}" name="${col.column_name}" ${col.is_nullable === 'NO' && !col.column_default && !(isEditing && col.is_primary_key) ? 'required' : ''} class="w-full mt-1 p-2 border rounded" value="${value}" ${extraAttrs} ${isEditing && col.is_primary_key ? 'readonly class="bg-gray-100 cursor-not-allowed"' : ''}>
                     </div>
                 `;
             });
@@ -1037,8 +1112,10 @@
                     } else if (colSchema && (colSchema.data_type === 'integer' || colSchema.data_type === 'numeric' || colSchema.data_type === 'bigint')) {
                         body[key] = value === '' ? null : Number(value);
                     } else if (colSchema && colSchema.data_type === 'boolean') {
+                        // Checkboxes submit 'on' if checked, or nothing if unchecked.
+                        // For unchecked, the key won't be in formData.
                         body[key] = formElement.querySelector(`[name="${key}"]`).checked; 
-                    } else if (colSchema && colSchema.data_type === 'jsonb' || colSchema.column_name.includes('geom')) { // Handle GeoJSON as JSONB
+                    } else if (colSchema && (colSchema.data_type === 'jsonb' || colSchema.column_name.includes('geom'))) { // Handle GeoJSON as JSONB
                         try {
                             body[key] = value === '' ? null : JSON.parse(value);
                         } catch (jsonError) {
@@ -1096,29 +1173,39 @@
                     console.log("API call successful:", result);
                     alert(`${isEditing ? 'Updated' : 'Created'} record successfully!`);
                     closeModal(); 
-                    loadAndRenderTable(currentTableName); 
-                    if (currentTableName === 'lab.sampling' && !isEditing) {
-                        const newSamplingPkValues = {
-                            sampling_id: result.sampling_id, 
-                            sampling_date: result.sampling_date ? formatDateForInput(result.sampling_date) : undefined 
+                    await loadAndRenderTable(currentTableName); // Ensure table is re-rendered before finding the row
+                    
+                    if (currentTableName === 'lab.sampling') {
+                        // For sampling, we need to find the newly created/updated row to re-select it
+                        const targetPkValues = {
+                            sampling_id: result.sampling_id || record.sampling_id, 
+                            sampling_date: result.sampling_date ? formatDateForInput(result.sampling_date) : (record.sampling_date ? formatDateForInput(record.sampling_date) : undefined)
                         };
+
+                        // Use a slight delay to allow table re-render before trying to select row
                         setTimeout(() => {
-                            const row = document.querySelector(`.dynamic-table-row[data-pk-values='${JSON.stringify(newSamplingPkValues)}']`);
-                            if (row) { row.classList.add('table-row-selected'); renderSamplingDetails(newSamplingPkValues); }
-                        }, 100);
-                    } else if (isEditing) {
-                        const updatedRecordPkValues = {};
-                        const originalPkValues = getPkValues(record);
-                        for (const key in originalPkValues) {
-                            const colSchema = targetTableSchema.find(s => s.column_name === key);
-                            if (colSchema && colSchema.data_type === 'date') {
-                                updatedRecordPkValues[key] = formatDateForInput(record[key]);
+                            const rowToSelect = document.querySelector(`.dynamic-table-row[data-pk-values='${JSON.stringify(targetPkValues)}']`);
+                            if (rowToSelect) { 
+                                rowToSelect.classList.add('table-row-selected'); 
+                                renderSamplingDetails(currentTableData.find(item => 
+                                    item.sampling_id === targetPkValues.sampling_id && 
+                                    formatDateForInput(item.sampling_date) === targetPkValues.sampling_date
+                                ));
                             } else {
-                                updatedRecordPkValues[key] = record[key];
+                                console.warn("Could not find newly created/updated row to select in table. Manually rendering details if data is available.");
+                                // Fallback to rendering details if row couldn't be found (e.g., due to sorting/filtering)
+                                const foundRecord = currentTableData.find(item => 
+                                    item.sampling_id === targetPkValues.sampling_id && 
+                                    formatDateForInput(item.sampling_date) === targetPkValues.sampling_date
+                                );
+                                if (foundRecord) renderSamplingDetails(foundRecord);
                             }
-                        }
-                        renderSamplingDetails(updatedRecordPkValues);
+                        }, 100);
+                    } else {
+                        // For other tables, just re-load the table without re-selecting a specific row
+                        // (or implement specific re-selection logic for them if needed)
                     }
+
                 } else {
                     console.error("API call failed:", result);
                     alert(`Failed to ${isEditing ? 'save' : 'create'} record: ` + (result ? result.error : 'Unknown error')); 

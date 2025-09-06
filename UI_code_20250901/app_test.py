@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DB_HOST: str = os.getenv('DB_HOST', '0.0.0.0')
-DB_NAME: str = os.getenv('DB_NAME', 'wanderfische')
+DB_NAME: str = os.getenv('DB_NAME', 'demo_lims')
 DB_USER: str = os.getenv('DB_USER', 'kasmi')
 DB_PASS: str = os.getenv('DB_PASS', 'password')
 SECRET_KEY: str = os.getenv('SECRET_KEY', 'a_very_secret_key_for_session_management_and_security')
@@ -93,21 +93,18 @@ PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     ('projects', 'projectwanderfische_mail'): 'mail_id',
     ('projects', 'projectwanderfische_conversation'): 'conversation_id',
     ('projects', 'projectwanderfische_chatmessage'): 'message_id',
-    # Note: 'log' and 'master_samples' are generally not meant for direct CRUD via generic API,
-    # but if needed, their PKs should be defined:
-    ('lab', 'storage_log'): 'log_id', # Added for completeness as it was mentioned before
-    ('lab', 'master_samples'): 'sample_id', # Added for completeness
+    ('lab', 'storage_log'): 'log_id',
+    ('lab', 'master_samples'): 'sample_id',
 
-    # Views (often read-only or handled by specific functions)
+    # Views
     ('reference', 'complete_species_taxon_view'): 'taxon_id',
-    ('lab', 'detailed_samples_view'): 'sample_id', # Assuming sample_id is main identifier
+    ('lab', 'detailed_samples_view'): 'sample_id',
     ('lims', 'project_overview_view'): 'project_id',
     ('lab', 'sample_workflow_progress_view'): 'sample_id',
     ('lims', 'reagent_status_view'): 'reagent_id',
     ('lab', 'sample_full_details_view'): ['sample_id', 'sampling_date'],
     ('lims', 'project_personnel_view'): ['project_id', 'person_id'],
     ('lims', 'order_details_view'): 'fi_order_nr',
-    ('reference', 'complete_species_taxon_view'): 'taxon_id',
     ('lab', 'storage_inventory_view'): 'storage_id',
     ('lab', 'experiment_summary_view'): 'experiment_id',
     ('bioinformatics', 'analysis_results_summary'): ['run_id', 'run_date'],
@@ -129,17 +126,17 @@ VIEW_TO_BASE_TABLE_MAPPING: Dict[str, str] = {
     'lab.sample_full_details_view': 'lab.parental_samples',
     'lims.project_personnel_view': 'lims.project_persons',
     'lims.order_details_view': 'lims.orders',
-    'reference.complete_species_taxon_view': 'reference.taxon', # Or reference.species
+    'reference.complete_species_taxon_view': 'reference.taxon',
     'lab.storage_inventory_view': 'lab.storage',
     'lab.experiment_summary_view': 'lab.experiments',
     'bioinformatics.analysis_results_summary': 'bioinformatics.analysis_runs',
     'lims.project_financial_summary_view': 'lims.projects',
     'bioinformatics.full_analysis_results_view': 'bioinformatics.edna_assignments',
     'lab.storage_occupancy_view': 'lab.storage',
-    'lims.project_comprehensive_summary_view': 'lims.projects',
+    ('lims', 'project_comprehensive_summary_view'): 'lims.projects',
     'lab.experiment_progress_overview_view': 'lab.experiments',
     'reference.taxon_hierarchy_view': 'reference.taxon',
-    'lab.monthly_sample_reception_mv': 'lab.parental_samples', # MV is writable like a table for inserts if configured, but complex for update/delete directly
+    'lab.monthly_sample_reception_mv': 'lab.parental_samples',
 }
 
 
@@ -147,7 +144,7 @@ def get_db_connection():
     """Establishes and returns a new database connection."""
     try:
         conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
-        conn.autocommit = False # Ensure transactions are managed manually
+        conn.autocommit = False
         return conn
     except psycopg2.OperationalError as e:
         print(f"FATAL: Could not connect to database at {DB_HOST}. Error: {e}")
@@ -159,34 +156,28 @@ def before_request_func():
     Establishes a database connection for the request and sets RLS context.
     """
     g.db_conn = get_db_connection()
-    # Set RLS current_person_id based on session.
-    # Use empty string if not logged in, as NULL might behave differently in set_config.
     person_id_to_set = session.get('user_id', '')
-    if isinstance(person_id_to_set, int): # Convert customer_id (int) to string for RLS
+    if isinstance(person_id_to_set, int):
         person_id_to_set = str(person_id_to_set)
 
     try:
         with g.db_conn.cursor() as cur:
-            # The 'FALSE' argument means the setting is local to the current transaction.
-            # This is generally safer for web applications.
             cur.execute("SELECT set_config('lims.current_person_id', %s, FALSE)", (person_id_to_set,))
-            g.db_conn.commit() # Commit the set_config transaction
+            g.db_conn.commit()
             print(f"RLS: Set lims.current_person_id to '{person_id_to_set}'")
     except Exception as e:
         print(f"ERROR: Could not set lims.current_person_id for RLS: {e}")
-        # Optionally, raise an error or handle it based on your security policy
+
 
 @app.teardown_request
 def teardown_request_func(exception=None):
     """Closes the database connection after each request."""
     if hasattr(g, 'db_conn'):
         if exception and not g.db_conn.closed:
-            g.db_conn.rollback() # Rollback on exception
+            g.db_conn.rollback()
             print("Database transaction rolled back due to an exception.")
         elif not g.db_conn.closed:
-            # If no exception, but not committed yet, commit here.
-            # However, it's better to explicitly commit in routes for DML operations.
-            pass # We rely on explicit commits in routes for DML
+            pass
         g.db_conn.close()
 
 def get_pk_columns(schema: str, table: str) -> List[str]:
@@ -195,7 +186,7 @@ def get_pk_columns(schema: str, table: str) -> List[str]:
     if pk_info is None:
         print(f"WARNING: No primary key mapping found for {schema}.{table}. Returning empty list. "
               "Please ensure PK_MAPPING is correct and matches database column casing.")
-        return [] # Return empty list if no PK found or mapped
+        return []
     if isinstance(pk_info, str):
         return [pk_info]
     return pk_info
@@ -209,20 +200,17 @@ def transform_row_for_json(row: Dict[str, Any]) -> Dict[str, Any]:
     for key, value in new_row.items():
         if isinstance(value, (memoryview, bytes)):
             new_row[key] = base64.b64encode(value).decode('utf-8')
-        elif isinstance(value, time): # Handle datetime.time objects
-            new_row[key] = str(value) # Convert to string for JSON serialization
-        elif isinstance(value, datetime): # Handle datetime.datetime objects (timestamps)
-            new_row[key] = value.isoformat() # Convert to ISO format string
+        elif isinstance(value, time):
+            new_row[key] = str(value)
+        elif isinstance(value, datetime):
+            new_row[key] = value.isoformat()
         elif isinstance(value, dict) and 'type' in value and 'coordinates' in value:
-            # Basic GeoJSON detection for points. Render as dict, frontend can handle.
             new_row[key] = value
         elif isinstance(value, list) and all(isinstance(i, dict) and 'type' in i and 'coordinates' in i for i in value):
-            # Basic GeoJSON detection for collections. Render as list of dicts.
             new_row[key] = value
     return new_row
 
-# Caches for resolved table names and column types to reduce DB queries
-_resolved_names_cache: Dict[Tuple[str, str], Tuple[str, str, str]] = {} # Added table_type to cache
+_resolved_names_cache: Dict[Tuple[str, str], Tuple[str, str, str]] = {}
 _column_types_cache: Dict[Tuple[str, str], Dict[str, str]] = {}
 
 def _resolve_table_casing(conn, requested_schema: str, requested_table: str) -> Optional[Tuple[str, str, str]]:
@@ -231,7 +219,6 @@ def _resolve_table_casing(conn, requested_schema: str, requested_table: str) -> 
     if cache_key in _resolved_names_cache:
         return _resolved_names_cache[cache_key]
 
-    # Check base tables first
     query_tables = """
         SELECT table_schema, table_name, table_type
         FROM information_schema.tables
@@ -247,9 +234,8 @@ def _resolve_table_casing(conn, requested_schema: str, requested_table: str) -> 
                 _resolved_names_cache[cache_key] = (actual_schema, actual_table, table_type)
                 return actual_schema, actual_table, table_type
             
-            # If not found in tables, check views and materialized views
             query_views = """
-                SELECT table_schema, table_name, 'VIEW' AS table_type -- information_schema.views doesn't have table_type, so hardcode for simplicity
+                SELECT table_schema, table_name
                 FROM information_schema.views
                 WHERE lower(table_schema) = lower(%s) AND lower(table_name) = lower(%s)
                 LIMIT 1;
@@ -258,7 +244,7 @@ def _resolve_table_casing(conn, requested_schema: str, requested_table: str) -> 
             result_view = cur.fetchone()
             if result_view:
                 actual_schema, actual_table = result_view[0], result_view[1]
-                table_type = 'VIEW' # Default to 'VIEW' for entries from information_schema.views
+                table_type = 'VIEW'
                 _resolved_names_cache[cache_key] = (actual_schema, actual_table, table_type)
                 return actual_schema, actual_table, table_type
 
@@ -299,7 +285,6 @@ def login_user():
     if not username or not password:
         return jsonify({"error": "Missing username or password"}), 400
 
-    # Handle hardcoded TIFI admin for quick access
     if username == 'TIFI' and password == 'password':
         session['user_id'] = 'TIFI'
         session['user_type'] = 'admin'
@@ -309,7 +294,6 @@ def login_user():
     conn = g.db_conn
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            # Try logging in as 'personal' user
             query_personal = 'SELECT person_id, full_name, password_hash FROM "reference"."personal" WHERE person_id = %s;'
             cur.execute(query_personal, (username,))
             user_personal = cur.fetchone()
@@ -319,10 +303,9 @@ def login_user():
                     session['user_id'] = user_personal['person_id']
                     session['user_type'] = 'personal'
                     session['is_admin'] = False
-                    user_personal.pop('password_hash', None) # Remove hash before sending to frontend
+                    user_personal.pop('password_hash', None)
                     return jsonify({"success": True, "user": user_personal, "user_type": "personal"}), 200
 
-            # Try logging in as 'customers' user (using mail as username)
             query_customers = 'SELECT customer_id, customer_name, mail, password_hash FROM "lims"."customers" WHERE mail = %s;'
             cur.execute(query_customers, (username,))
             user_customer = cur.fetchone()
@@ -335,7 +318,6 @@ def login_user():
                     user_customer.pop('password_hash', None)
                     return jsonify({"success": True, "user": user_customer, "user_type": "customer"}), 200
 
-            # Try logging in as 'external_contacts' user (using mail as username)
             query_external_contacts = 'SELECT contact_id, full_name, mail, password_hash FROM "lims"."external_contacts" WHERE mail = %s;'
             cur.execute(query_external_contacts, (username,))
             user_external = cur.fetchone()
@@ -365,14 +347,11 @@ def logout_user():
 @app.route(f'{API_PREFIX}/global-search/<string:search_term>', methods=['GET'])
 def global_search(search_term: str):
     """Performs a global search across multiple tables using full-text search or ILIKE."""
-    # Ensure lims_english text search configuration exists in your DB
     ts_query_func = f"plainto_tsquery('public.lims_english', %s)"
-    search_pattern = f"%{search_term}%" # For ILIKE searches
+    search_pattern = f"%{search_term}%"
 
     results: Dict[str, List[Dict[str, Any]]] = {}
 
-    # Define queries for different tables/views
-    # Each tuple contains (SQL query string, parameters tuple)
     queries: Dict[str, Tuple[str, Tuple[Any, ...]]] = {
         "projects": (
             f'SELECT project_id, title FROM "lims"."projects" WHERE project_search_vector @@ {ts_query_func} OR project_id ILIKE %s OR title ILIKE %s LIMIT 5',
@@ -445,7 +424,7 @@ def get_dashboard_stats():
     """Fetches key statistics for the dashboard."""
     stats = {}
     try:
-        conn = g.db_conn # Initialize conn
+        conn = g.db_conn
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("SELECT COUNT(*) AS active_projects FROM \"lims\".\"projects\" WHERE \"status_id\" = 'Active';")
             stats['active_projects'] = cur.fetchone()['active_projects']
@@ -481,7 +460,6 @@ def get_dashboard_stats():
             cur.execute("SELECT COUNT(*) AS total_experiments FROM \"lab\".\"experiments\";")
             stats['total_experiments'] = cur.fetchone()['total_experiments']
 
-            # New: Count of Active Personnel
             cur.execute("""
                 SELECT COUNT(*) AS active_personnel
                 FROM "reference"."personal"
@@ -503,16 +481,16 @@ def table_names_for_forms():
     suitable for populating dynamic forms.
     """
     try:
-        conn = g.db_conn # Initialize conn
+        conn = g.db_conn
         with conn.cursor() as cur:
             query = """
             SELECT table_schema || '.' || table_name
             FROM information_schema.tables
             WHERE table_schema IN ('lab', 'lims', 'reference', 'bioinformatics', 'audit', 'projects')
               AND table_type IN ('BASE TABLE', 'VIEW', 'MATERIALIZED VIEW')
-              AND table_name NOT LIKE '%_seq' -- Exclude sequences
-              AND table_name NOT LIKE '%_y%' -- Exclude partitions (e.g., table_y2023)
-              AND table_name NOT IN ('log', 'master_samples') -- Exclude audit log and internal master samples
+              AND table_name NOT LIKE '%_seq'
+              AND table_name NOT LIKE '%_y%'
+              AND table_name NOT IN ('log', 'master_samples')
             ORDER BY table_schema, table_name;
             """
             cur.execute(query)
@@ -528,14 +506,13 @@ def get_table_schema(schema: str, table: str):
     Fetches the schema (column names and data types) for a given table.
     """
     try:
-        conn = g.db_conn # Initialize conn
+        conn = g.db_conn
 
-        # Resolve actual schema and table name casing, and get table type
         resolved = _resolve_table_casing(conn, schema, table)
         if not resolved:
             return jsonify({"error": f"Table or view '{schema}.{table}' not found or inaccessible."}), 404
         
-        actual_schema, actual_table, table_type_info = resolved # Unpack schema, table name, and table_type
+        actual_schema, actual_table, table_type_info = resolved
 
         query = """
             SELECT 
@@ -554,7 +531,7 @@ def get_table_schema(schema: str, table: str):
         pk_columns = get_pk_columns(actual_schema, actual_table)
         for col in columns:
             col['is_primary_key'] = col['column_name'] in pk_columns
-            col['table_type'] = table_type_info # Add table_type to each column for frontend logic
+            col['table_type'] = table_type_info
 
 
         return jsonify(columns), 200
@@ -569,26 +546,29 @@ def get_table_data(schema: str, table: str):
     Fetches data from a specified table or view, with optional filters, ordering, and pagination.
     Supports filtering by specific IDs, dates, and a general 'filter_' prefix for other columns.
     """
-    conn = g.db_conn # Initialize conn at the top of the function
+    conn = g.db_conn
     try:
         resolved = _resolve_table_casing(conn, schema, table)
         if not resolved:
             return jsonify({"error": f"Table or view '{schema}.{table}' not found or inaccessible."}), 404
         
-        actual_schema, actual_table, table_type = resolved # Unpack schema, table name, and table_type
+        actual_schema, actual_table, table_type = resolved
         
         where_clauses: List[str] = []
         params: List[Any] = []
         
-        # Specific filter parameters from request arguments
         filter_project_id_value = request.args.get('filter_project_id')
         filter_experiment_id_value = request.args.get('filter_experiment_id')
         filter_experiment_date_value = request.args.get('filter_experiment_date')
         filter_sample_id_value = request.args.get('filter_sample_id')
-        filter_sampling_date_value = request.args.get('filter_sampling_date') # New: for composite PK filtering
+        filter_sampling_date_value = request.args.get('filter_sampling_date')
         filter_protocol_id_value = request.args.get('filter_protocol_id')
-        exclude_status_id_value = request.args.get('exclude_status_id') # For SOPs
-        filter_status_id_value = request.args.get('filter_status_id') # For Projects
+        exclude_status_id_value = request.args.get('exclude_status_id')
+        filter_status_id_value = request.args.get('filter_status_id')
+        # New filter for associated experiment in detailed_samples_view
+        filter_associated_experiment_id_value = request.args.get('filter_associated_experiment_id')
+        filter_associated_experiment_date_value = request.args.get('filter_associated_experiment_date')
+
 
         base_query_select = f'SELECT "{actual_table}".*'
         base_query_from = f'FROM "{actual_schema}"."{actual_table}"'
@@ -600,7 +580,7 @@ def get_table_data(schema: str, table: str):
             except (ValueError, TypeError):
                 return None
 
-        # Complex filtering for linked tables (e.g., experiments by project, samples by experiment)
+        # --- Filtering by Experiment ID and Date ---
         if filter_experiment_id_value and filter_experiment_date_value:
             filter_exp_date_obj = parse_date_filter(filter_experiment_date_value)
 
@@ -609,14 +589,7 @@ def get_table_data(schema: str, table: str):
                 params.append(f'%{filter_experiment_id_value}%')
                 where_clauses.append(f'"{actual_table}"."experiment_date" = %s')
                 params.append(filter_exp_date_obj)
-            elif actual_schema.lower() == 'lab' and actual_table.lower() in ['experiments_projects', 'experiments_samples', 'protocol_runs', 'dissections', 'extraction', 'nanodrop', 'qubit', 'tapestation', 'pcr', 'gelelectrophoresis', 'qpcr', 'library', 'sequencing', 'datasets', 'tissue', 'otoliths', 'dna', 'rna', 'sediments', 'water']:
-                # For tables with experiment_id and experiment_date as direct columns (often part of PK)
-                where_clauses.append(f'"{actual_table}"."experiment_id" ILIKE %s')
-                params.append(f'%{filter_experiment_id_value}%')
-                where_clauses.append(f'"{actual_table}"."experiment_date" = %s')
-                params.append(filter_exp_date_obj)
             elif actual_schema.lower() == 'bioinformatics' and actual_table.lower() == 'analysis_runs':
-                # Join through sequencing to filter analysis_runs by experiment
                 base_query_from += f"""
                     JOIN "lab"."sequencing" AS S ON "{actual_table}".sequencing_id = S.sequencing_id 
                     AND "{actual_table}".sequencing_date = S.sequencing_date
@@ -626,7 +599,6 @@ def get_table_data(schema: str, table: str):
                 where_clauses.append(f'S.experiment_date = %s')
                 params.append(filter_exp_date_obj)
             elif actual_schema.lower() == 'bioinformatics' and actual_table.lower() == 'edna_assignments':
-                # Join through analysis_runs and sequencing to filter edna_assignments by experiment
                 base_query_from += f"""
                     JOIN "bioinformatics"."analysis_runs" AS AR ON "{actual_table}".run_id = AR.run_id 
                     AND "{actual_table}".run_date = AR.run_date
@@ -637,9 +609,31 @@ def get_table_data(schema: str, table: str):
                 params.append(f'%{filter_experiment_id_value}%')
                 where_clauses.append(f'S.experiment_date = %s')
                 params.append(filter_exp_date_obj)
-        
+            # Other tables that directly have experiment_id and experiment_date
+            elif actual_schema.lower() == 'lab' and actual_table.lower() in [
+                'experiments_projects', 'experiments_samples', 'protocol_runs', 
+                'dissections', 'extraction', 'nanodrop', 'qubit', 'tapestation', 
+                'pcr', 'gelelectrophoresis', 'qpcr', 'library', 'sequencing', 
+                'datasets', 'tissue', 'otoliths', 'dna', 'rna', 'sediments', 'water'
+            ]:
+                where_clauses.append(f'"{actual_table}"."experiment_id" ILIKE %s')
+                params.append(f'%{filter_experiment_id_value}%')
+                where_clauses.append(f'"{actual_table}"."experiment_date" = %s')
+                params.append(filter_exp_date_obj)
+
+        # --- Specific Filtering for detailed_samples_view by associated_experiment_id/date ---
+        # This is the crucial part that was previously causing the error for detailed_samples_view
+        if filter_associated_experiment_id_value and filter_associated_experiment_date_value and \
+           actual_schema.lower() == 'lab' and actual_table.lower() == 'detailed_samples_view':
+            filter_assoc_exp_date_obj = parse_date_filter(filter_associated_experiment_date_value)
+            where_clauses.append(f'"{actual_table}"."associated_experiment_id" ILIKE %s')
+            params.append(f'%{filter_associated_experiment_id_value}%')
+            # CORRECTED: Use '=' for date comparison, not ILIKE
+            where_clauses.append(f'"{actual_table}"."associated_experiment_date" = %s')
+            params.append(filter_assoc_exp_date_obj)
+
+        # --- General Filtering by Sample ID (potentially with sampling_date for composite PKs) ---
         elif filter_sample_id_value:
-            # Handle filtering by sample_id, potentially with sampling_date for composite PKs
             if actual_schema.lower() == 'lab':
                 if actual_table.lower() == 'parental_samples':
                     where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s')
@@ -651,19 +645,18 @@ def get_table_data(schema: str, table: str):
                 elif actual_table.lower() == 'fish':
                     where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s')
                     params.append(f'%{filter_sample_id_value}%')
-                    if filter_sampling_date_value: # fish has sampling_date as part of its PK
+                    if filter_sampling_date_value:
                         filter_samp_date_obj = parse_date_filter(filter_sampling_date_value)
                         where_clauses.append(f'"{actual_table}"."sampling_date" = %s')
                         params.append(filter_samp_date_obj)
                 elif actual_table.lower() == 'storage_log':
                     where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s')
                     params.append(f'%{filter_sample_id_value}%')
-                    if filter_sampling_date_value: # storage_log links via sample_id and sample_sampling_date
+                    if filter_sampling_date_value:
                         filter_samp_date_obj = parse_date_filter(filter_sampling_date_value)
                         where_clauses.append(f'"{actual_table}"."sample_sampling_date" = %s')
                         params.append(filter_samp_date_obj)
                 elif actual_table.lower() == 'fishing':
-                    # Fishing table has sampling_id and sampling_date as part of its PK, but can be filtered by a sample_id that links to it
                     base_query_from += f"""
                         JOIN "lab"."parental_samples" AS S ON "{actual_table}".sampling_id = S.sampling_id
                         AND "{actual_table}".sampling_date = S.sampling_date
@@ -675,7 +668,6 @@ def get_table_data(schema: str, table: str):
                         where_clauses.append(f'S.sampling_date = %s')
                         params.append(filter_samp_date_obj)
                 elif actual_table.lower() == 'sampling':
-                    # Sampling table can be filtered by a sample_id that links to it
                     base_query_from += f"""
                         JOIN "lab"."parental_samples" AS S ON "{actual_table}".sampling_id = S.sampling_id
                         AND "{actual_table}".sampling_date = S.sampling_date
@@ -687,11 +679,9 @@ def get_table_data(schema: str, table: str):
                         where_clauses.append(f'S.sampling_date = %s')
                         params.append(filter_samp_date_obj)
                 elif actual_table.lower() in ['tissue', 'otoliths', 'dna', 'rna', 'sediments', 'water', 'experiments_samples', 'dissections', 'extraction', 'nanodrop', 'qubit', 'tapestation', 'pcr', 'gelelectrophoresis', 'qpcr', 'library', 'sequencing']:
-                    # These tables have sample_id as a direct foreign key
                     where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s')
                     params.append(f'%{filter_sample_id_value}%')
             elif actual_schema.lower() == 'bioinformatics' and actual_table.lower() == 'analysis_runs':
-                # Filter analysis_runs by sample_id via sequencing table
                 base_query_from += f"""
                     JOIN "lab"."sequencing" AS SEQ ON "{actual_table}".sequencing_id = SEQ.sequencing_id
                     AND "{actual_table}".sequencing_date = SEQ.sequencing_date
@@ -699,56 +689,47 @@ def get_table_data(schema: str, table: str):
                 where_clauses.append(f'SEQ.sample_id ILIKE %s')
                 params.append(f'%{filter_sample_id_value}%')
             elif actual_schema.lower() == 'bioinformatics' and actual_table.lower() == 'edna_assignments':
-                # Filter edna_assignments directly by sample_id
                 where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s')
                 params.append(f'%{filter_sample_id_value}%')
         
-        # General filter for project_id (if not covered by experiment or sample specific filters)
         if filter_project_id_value and actual_schema.lower() == 'lims' and actual_table.lower() == 'projects':
-            # This handles direct filtering of the projects table by its own project_id
             where_clauses.append(f'"{actual_table}"."project_id" ILIKE %s')
             params.append(f'%{filter_project_id_value}%')
-        elif filter_project_id_value: # For other tables that have a project_id column
+        elif filter_project_id_value:
             if 'project_id' in _get_column_types(conn, actual_schema, actual_table):
                 where_clauses.append(f'"{actual_table}"."project_id" ILIKE %s')
                 params.append(f'%{filter_project_id_value}%')
 
-        # Filter by protocol_id for protocol_runs
         if filter_protocol_id_value and actual_schema.lower() == 'lab' and actual_table.lower() == 'protocol_runs':
             where_clauses.append(f'"{actual_table}"."protocol_id" = %s')
             params.append(filter_protocol_id_value)
 
-        # Status filters
         if exclude_status_id_value:
-            # Assumes the table has a 'status_id' column
             if 'status_id' in _get_column_types(conn, actual_schema, actual_table):
                 where_clauses.append(f'"{actual_table}"."status_id" != %s')
                 params.append(exclude_status_id_value)
         if filter_status_id_value:
-            # Assumes the table has a 'status_id' column
             if 'status_id' in _get_column_types(conn, actual_schema, actual_table):
                 where_clauses.append(f'"{actual_table}"."status_id" = %s')
                 params.append(filter_status_id_value)
 
-
         order_by_column: Optional[str] = None
         order_direction: str = 'ASC'
 
-        # Process generic filters (e.g., filter_column_name=value) and order_by/limit/offset
         for key, value in request.args.items():
             if not value:
                 continue
             
-            # Skip parameters already handled by specific filters above
             if key in ['filter_project_id', 'filter_experiment_id', 'filter_experiment_date', 
                        'filter_sample_id', 'filter_sampling_date', 'filter_protocol_id',
-                       'exclude_status_id', 'filter_status_id']:
+                       'exclude_status_id', 'filter_status_id',
+                       'filter_associated_experiment_id', 'filter_associated_experiment_date']: # Exclude new associated filters
                 continue
 
             if key == 'limit':
-                pass # Handled after WHERE clause
+                pass
             elif key == 'offset':
-                pass # Handled after WHERE clause
+                pass
             elif key == 'order_by':
                 order_by_column = value
                 continue
@@ -761,7 +742,6 @@ def get_table_data(schema: str, table: str):
                     where_clauses.append(f'"expire_date" BETWEEN CURRENT_DATE AND CURRENT_DATE + interval \'30 day\'')
                 continue
 
-            # Handle filters with 'filter_' prefix or direct column names
             if key.startswith('filter_') and not (key.endswith('_month') or key.endswith('_year')):
                 col_name = key[len('filter_'):]
                 if col_name in _get_column_types(conn, actual_schema, actual_table):
@@ -776,7 +756,6 @@ def get_table_data(schema: str, table: str):
                     if key.endswith('_month'):
                         try:
                             start_date_of_month = datetime.strptime(value, '%Y-%m').date()
-                            # Calculate end of month correctly
                             end_date_of_month = (start_date_of_month.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
                             where_clauses.append(f'"{col_name}" BETWEEN %s AND %s')
                             params.extend([start_date_of_month, end_date_of_month])
@@ -792,9 +771,7 @@ def get_table_data(schema: str, table: str):
                             print(f"Warning: Invalid date format for year filter '{value}'. Skipping filter.")
                 else:
                     print(f"Warning: Date filter by non-existent or non-date column '{col_name}' skipped for {actual_schema}.{actual_table}.")
-            # Direct column name filters (for exact matches, typically used for PKs in specific filters, but could be general)
             elif key in _get_column_types(conn, actual_schema, actual_table):
-                # This catches direct filters like `?column_name=value` which are usually for exact match, not ILIKE
                 where_clauses.append(f'"{key}" = %s')
                 params.append(value)
 
@@ -803,22 +780,20 @@ def get_table_data(schema: str, table: str):
         if where_clauses:
             query += f" WHERE {' AND '.join(where_clauses)}"
             
-        # Handle ordering
         if order_by_column:
-            # Determine which table alias to use for ordering in joins
-            quoted_order_by_column = f'"{actual_table}"."{order_by_column}"' # Default to main table
+            quoted_order_by_column = f'"{actual_table}"."{order_by_column}"'
             if actual_schema.lower() == 'bioinformatics' and actual_table.lower() in ['analysis_runs', 'edna_assignments'] and order_by_column in ['experiment_id', 'experiment_date']:
-                # If these tables are joined via sequencing (S) to get experiment info
-                if 'JOIN "lab"."sequencing" AS S' in base_query_from: # Check if join was added
+                if 'JOIN "lab"."sequencing" AS S' in base_query_from:
                     quoted_order_by_column = f'S."{order_by_column}"'
             elif actual_schema.lower() == 'lab' and actual_table.lower() in ['fishing', 'sampling'] and order_by_column in ['sample_id', 'sampling_date']:
-                 # If these tables are joined via parental_samples (S) to get sample info
-                if 'JOIN "lab"."parental_samples" AS S' in base_query_from: # Check if join was added
+                if 'JOIN "lab"."parental_samples" AS S' in base_query_from:
                     quoted_order_by_column = f'S."{order_by_column}"'
+            elif actual_schema.lower() == 'lab' and actual_table.lower() == 'detailed_samples_view' and order_by_column in ['associated_experiment_id', 'associated_experiment_date']:
+                # For detailed_samples_view, order directly by its columns
+                quoted_order_by_column = f'"{actual_table}"."{order_by_column}"'
             
             query += f' ORDER BY {quoted_order_by_column} {order_direction}'
             
-        # Handle pagination
         limit = request.args.get('limit', type=int)
         offset = request.args.get('offset', type=int)
         if limit is not None:
@@ -848,66 +823,58 @@ def create_record(schema: str, table: str):
     Creates a new record in the specified table.
     Handles file uploads, password hashing, and special linked records (e.g., projects and persons).
     """
-    conn = g.db_conn # Initialize conn at the top of the function
+    conn = g.db_conn
     try:
-        resolved = _resolve_table_casing(conn, schema, table) # Get actual casing and table type
+        resolved = _resolve_table_casing(conn, schema, table)
         if not resolved:
             return jsonify({"error": f"Table '{schema}.{table}' not found or inaccessible."}), 404
-        actual_schema, actual_table, table_type = resolved # Unpack all three
+        actual_schema, actual_table, table_type = resolved
 
         column_types = _get_column_types(conn, actual_schema, actual_table)
 
         data = {}
         files = request.files
 
-        # Determine if content-type is JSON or multipart/form-data
         if request.is_json:
             data = request.get_json()
-        elif request.form: # If it's form data (even without files)
+        elif request.form:
             data = request.form.to_dict()
 
         if not data and not files:
             return jsonify({"error": "No data provided"}), 400
             
-        # Handle attachment file if present in multipart form data
         if 'attachment' in files and files['attachment'].filename != '':
             data['attachment'] = psycopg2.Binary(files['attachment'].read())
         elif 'attachment' in data and (data['attachment'] == '' or (isinstance(data['attachment'], dict) and not data['attachment'])):
-            # If attachment field was sent as empty string or empty dict from JSON/form
             data['attachment'] = None
             
-        # Handle password hashing for user-related tables
         if (actual_schema.lower() == 'reference' and actual_table.lower() == 'personal') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
             if 'password' in data and data['password']:
                 hashed_password = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt())
                 data['password_hash'] = hashed_password.decode('utf-8')
-            data.pop('password', None) # Remove plain password before insertion
+            data.pop('password', None)
             
-        # Extract special fields that are not direct columns but manage relationships
         project_ids_str = None
         sample_ids_str = None
-        linked_person_ids = None # For lims.projects
+        linked_person_ids = None
 
         if actual_schema.lower() == 'lab' and actual_table.lower() == 'experiments':
             project_ids_str = data.pop('project_ids', None)
             sample_ids_str = data.pop('sample_ids', None)
         elif actual_schema.lower() == 'lims' and actual_table.lower() == 'projects':
-            # Handle special 'linked_person_ids' field for lims.projects
             if 'linked_person_ids' in data:
-                # Expects a semicolon-separated string of person_ids
                 linked_person_ids = [p.strip() for p in data.pop('linked_person_ids', '').split(';') if p.strip()]
 
         filtered_data = {}
         for k, v in data.items():
-            if k == 'attachment': # Handle attachment specifically
+            if k == 'attachment':
                 filtered_data[k] = v
-            elif k == 'attachment_link' and v == '': # Explicitly handle empty attachment_link
+            elif k == 'attachment_link' and v == '':
                 filtered_data[k] = None
             elif v == '':
                 filtered_data[k] = None
-            # Explicitly handle 'undefined' string from frontend for nullable FKs
             elif k.endswith('_id') and str(v).lower() == 'undefined':
                 filtered_data[k] = None
             elif column_types.get(k) == 'jsonb' and isinstance(v, str):
@@ -917,13 +884,12 @@ def create_record(schema: str, table: str):
                     print(f"WARNING: Invalid JSON for column '{k}'. Storing as None. Value: {v}")
                     filtered_data[k] = None
             elif column_types.get(k) == 'boolean':
-                # Convert 'true'/'false' strings or 'on'/'' from checkboxes to Python bool
                 filtered_data[k] = str(v).lower() in ['true', 'on']
             else:
                 filtered_data[k] = v
             
         columns = filtered_data.keys()
-        values = [filtered_data[col] for col in columns] # Ensure values order matches columns
+        values = [filtered_data[col] for col in columns]
         
         column_names = ', '.join([f'"{col}"' for col in columns])
         value_placeholders = ', '.join(['%s'] * len(values))
@@ -935,7 +901,6 @@ def create_record(schema: str, table: str):
             cur.execute(query, values)
             new_record = cur.fetchone()
             
-            # Post-insertion linking for specific tables
             if actual_schema.lower() == 'lab' and actual_table.lower() == 'experiments' and new_record:
                 experiment_id = new_record['experiment_id']
                 experiment_date = new_record['experiment_date']
@@ -973,11 +938,11 @@ def create_record(schema: str, table: str):
                     except Exception as e:
                         print(f"  Warning: Could not link person {person_id} to new project {project_id}: {e}")
             
-            conn.commit() # Commit the transaction after all inserts
+            conn.commit()
         return jsonify(transform_row_for_json(new_record)), 201
     except Exception as e:    
         if conn:
-            conn.rollback() # Rollback on any error
+            conn.rollback()
         print(f"Error creating record in {schema}.{table}: {e}")
         return jsonify({"error": str(e)}), 500
             
@@ -985,17 +950,17 @@ def create_record(schema: str, table: str):
 def update_record(schema: str, table: str):
     """
     Updates an existing record in the specified table identified by its primary key(s).
-    Handles file uploads, password hashing, and ignores special linked fields.
+    Handles file uploads, password hashing, and ignores special linked records (e.g., projects and persons).
     """
-    conn = g.db_conn # Initialize conn at the top of the function
+    conn = g.db_conn
     try:
-        resolved = _resolve_table_casing(conn, schema, table) # Get actual casing and table type
+        resolved = _resolve_table_casing(conn, schema, table)
         if not resolved:
             return jsonify({"error": f"Table '{schema}.{table}' not found or inaccessible."}), 404
-        actual_schema, actual_table, table_type = resolved # Unpack all three
+        actual_schema, actual_table, table_type = resolved
 
         pk_columns = get_pk_columns(schema, table)
-        column_types = _get_column_types(conn, actual_schema, actual_table) # Needed for PK type conversion
+        column_types = _get_column_types(conn, actual_schema, actual_table)
 
         pk_values_from_request = {}
         for pk_col in pk_columns:
@@ -1003,12 +968,10 @@ def update_record(schema: str, table: str):
             if pk_val is None:
                 return jsonify({"error": f"Missing primary key component: {pk_col}"}), 400
             
-            # Convert PK date strings to date objects for correct WHERE clause matching
             if column_types.get(pk_col) == 'date' and pk_val is not None:
                 try:
                     pk_values_from_request[pk_col] = datetime.strptime(pk_val, '%Y-%m-%d').date()
                 except ValueError:
-                    # If conversion fails, keep as string or handle error
                     pk_values_from_request[pk_col] = pk_val
             else:
                 pk_values_from_request[pk_col] = pk_val
@@ -1016,41 +979,35 @@ def update_record(schema: str, table: str):
         data = {}
         files = request.files
 
-        # Determine if content-type is JSON or multipart/form-data
         if request.is_json:
             data = request.get_json()
-        elif request.form: # If it's form data (even without files)
+        elif request.form:
             data = request.form.to_dict()
 
         if not data and not files:
             return jsonify({"error": "No data provided"}), 400
 
-        # Handle attachment file if present in multipart form data
         if 'attachment' in files and files['attachment'].filename != '':
             data['attachment'] = psycopg2.Binary(files['attachment'].read())
         elif 'attachment' in data and (data['attachment'] == '' or (isinstance(data['attachment'], dict) and not data['attachment'])):
-            # If attachment field was sent as empty string or empty dict from JSON/form
             data['attachment'] = None
 
         set_clauses: List[str] = []
         values: List[Any] = []
         
-        # Handle password hashing for update
         if (actual_schema.lower() == 'reference' and actual_table.lower() == 'personal') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
             if 'password' in data and data['password']:
                 hashed_password = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt())
                 data['password_hash'] = hashed_password.decode('utf-8')
-            data.pop('password', None) # Remove plain password before update
+            data.pop('password', None)
             
-        # Build SET clauses for the UPDATE query
         for key, val in data.items():
-            # Skip primary key columns and special frontend-only fields
             if key in pk_columns or key in ['project_ids', 'sample_ids', 'linked_person_ids']:
                 continue
             
-            elif key == 'attachment_link' and val == '': # Explicitly handle empty attachment_link
+            elif key == 'attachment_link' and val == '':
                 set_clauses.append(f'"{key}" = %s')
                 values.append(None)
             elif column_types.get(key) == 'jsonb' and isinstance(val, str):
@@ -1063,7 +1020,7 @@ def update_record(schema: str, table: str):
                     values.append(None)
             elif column_types.get(key) == 'boolean':
                 set_clauses.append(f'"{key}" = %s')
-                values.append(str(val).lower() in ['true', 'on']) # Handle 'true'/'false' strings or 'on'/'' from checkboxes
+                values.append(str(val).lower() in ['true', 'on'])
             else:
                 set_clauses.append(f'"{key}" = %s')
                 values.append(None if val == '' else val)
@@ -1071,14 +1028,12 @@ def update_record(schema: str, table: str):
         if not set_clauses:
             return jsonify({"error": "No fields to update"}), 400
 
-        # Build WHERE clause using primary key(s)
-        pk_where_clauses = [] # Initialize pk_where_clauses here
+        pk_where_clauses = []
         pk_where_values: List[Any] = [] 
         for pk_col in pk_columns:
             pk_where_clauses.append(f'"{pk_col}" = %s')
-            pk_where_values.append(pk_values_from_request[pk_col]) # Use the already parsed PK values
+            pk_where_values.append(pk_values_from_request[pk_col])
             
-        # Combine all values for execution: SET values first, then WHERE PK values
         all_values = values + pk_where_values
         
         query = f'UPDATE "{actual_schema}"."{actual_table}" SET {", ".join(set_clauses)} WHERE {" AND ".join(pk_where_clauses)} RETURNING *;'
@@ -1087,14 +1042,14 @@ def update_record(schema: str, table: str):
             print(f"Executing PUT query: {query} with values: {all_values}")
             cur.execute(query, all_values)
             updated_record = cur.fetchone()
-            conn.commit() # Commit the transaction
+            conn.commit()
         if updated_record:
             return jsonify(transform_row_for_json(updated_record)), 200
         else:
             return jsonify({"error": "Record not found or no changes made."}), 404
     except Exception as e:    
         if conn:
-            conn.rollback() # Rollback on any error
+            conn.rollback()
         print(f"Error updating record in {schema}.{table}: {e}")
         return jsonify({"error": str(e)}), 500
 
@@ -1104,28 +1059,28 @@ def delete_record(schema: str, table: str):
     """
     Deletes a record from the specified table using its primary key(s).
     """
-    conn = g.db_conn # Initialize conn at the top of the function
+    conn = g.db_conn
     try:
         resolved = _resolve_table_casing(conn, schema, table)
         if not resolved:
             return jsonify({"error": f"Table '{schema}.{table}' not found or inaccessible."}), 404
-        actual_schema, actual_table, table_type = resolved # Unpack all three
+        actual_schema, actual_table, table_type = resolved
 
         pk_columns = get_pk_columns(schema, table)
-        column_types = _get_column_types(conn, actual_schema, actual_table) # Needed for PK type conversion
+        column_types = _get_column_types(conn, actual_schema, actual_table)
 
         pk_values_for_query = []
-        where_clauses = [] # Initialize where_clauses here
+        where_clauses = []
         for pk_col in pk_columns:
             pk_val = request.args.get(pk_col)
             if pk_val is None:
                 return jsonify({"error": f"Missing primary key component for deletion: {pk_col}"}), 400
             
-            if column_types.get(pk_col) == 'date' and pk_val is not None: # Convert PK date strings to date objects for correct WHERE clause matching
+            if column_types.get(pk_col) == 'date' and pk_val is not None:
                 try:
                     pk_val = datetime.strptime(pk_val, '%Y-%m-%d').date()
                 except ValueError:
-                    pass # Keep as string if conversion fails
+                    pass
 
             where_clauses.append(f'"{pk_col}" = %s')
             pk_values_for_query.append(pk_val)
@@ -1136,7 +1091,7 @@ def delete_record(schema: str, table: str):
             print(f"Executing DELETE query: {query} with params: {pk_values_for_query}")
             cur.execute(query, pk_values_for_query)
             deleted_record = cur.fetchone()
-            conn.commit() # Commit the transaction
+            conn.commit()
         
         if deleted_record:
             return jsonify({"success": True, "message": "Record deleted successfully."}), 200
@@ -1144,7 +1099,7 @@ def delete_record(schema: str, table: str):
             return jsonify({"error": "Record not found or could not be deleted."}), 404
     except Exception as e:
         if conn:
-            conn.rollback() # Rollback on any error
+            conn.rollback()
         print(f"Error deleting record from {schema}.{table}: {e}")
         return jsonify({"error": str(e)}), 500
 
@@ -1154,17 +1109,17 @@ def batch_upload(schema: str, table: str):
     Handles bulk insertion of records from a list of dictionaries (e.g., from CSV/JSON upload).
     Supports special linking logic for experiments/projects/samples and projects/persons.
     """
-    conn = g.db_conn # Initialize conn at the top of the function
+    conn = g.db_conn
     try:
-        resolved = _resolve_table_casing(conn, schema, table) # Get actual casing and table type
+        resolved = _resolve_table_casing(conn, schema, table)
         if not resolved:
             return jsonify({"error": f"Table '{schema}.{table}' not found or inaccessible."}), 404
-        actual_schema, actual_table, table_type = resolved # Unpack all three
+        actual_schema, actual_table, table_type = resolved
 
         column_types = _get_column_types(conn, actual_schema, actual_table)
 
-        records = request.get_json() # Expects a JSON array of objects
-        if not records or not isinstance(records, list):    
+        records = request.get_json()
+        if not records or not isinstance(records, list):
             return jsonify({"error": "Invalid data format. Expected a list of records."}), 400
             
         if not records:
@@ -1172,12 +1127,11 @@ def batch_upload(schema: str, table: str):
 
         inserted_count = 0
         
-        # Special batch handling for 'experiments' and 'projects' due to linked tables
         if actual_schema.lower() == 'lab' and actual_table.lower() == 'experiments':
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 for record_data in records:
-                    project_ids_str = record_data.pop('project_ids', None) # Extract linked project IDs
-                    sample_ids_str = record_data.pop('sample_ids', None) # Extract linked sample IDs
+                    project_ids_str = record_data.pop('project_ids', None)
+                    sample_ids_str = record_data.pop('sample_ids', None)
 
                     filtered_record = {}
                     for k, v in record_data.items():
@@ -1194,7 +1148,6 @@ def batch_upload(schema: str, table: str):
                         else:
                             filtered_record[k] = v
                     
-                    # Handle password hashing (if applicable to this table)
                     if (actual_schema.lower() == 'reference' and actual_table.lower() == 'personal') or \
                        (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
                        (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
@@ -1203,7 +1156,6 @@ def batch_upload(schema: str, table: str):
                             filtered_record['password_hash'] = hashed_password.decode('utf-8')
                         filtered_record.pop('password', None)
                     
-                    # Handle attachment (base64 decoded from CSV, for example)
                     if 'attachment' in filtered_record and filtered_record['attachment'] == '':
                         filtered_record['attachment'] = None
                     elif 'attachment' in filtered_record and isinstance(filtered_record['attachment'], str):
@@ -1215,7 +1167,7 @@ def batch_upload(schema: str, table: str):
                     elif 'attachment' in filtered_record and isinstance(filtered_record['attachment'], dict) and not filtered_record['attachment']:
                         filtered_record['attachment'] = None
 
-                    if 'attachment_link' in filtered_record and filtered_record['attachment_link'] == '': # Explicitly handle empty attachment_link
+                    if 'attachment_link' in filtered_record and filtered_record['attachment_link'] == '':
                         filtered_record['attachment_link'] = None
                             
                     columns = filtered_record.keys()
@@ -1229,13 +1181,12 @@ def batch_upload(schema: str, table: str):
                     try:
                         cur.execute(insert_query, values)
                         new_record = cur.fetchone()
-                        if new_record: # Only increment if insertion was successful
+                        if new_record:
                             inserted_count += 1
 
                             experiment_id = new_record['experiment_id']
                             experiment_date = new_record['experiment_date']
 
-                            # Link projects to the new experiment
                             if project_ids_str:
                                 project_list = [p.strip() for p in project_ids_str.split(';') if p.strip()]
                                 for project_id in project_list:
@@ -1247,7 +1198,6 @@ def batch_upload(schema: str, table: str):
                                     except Exception as e:
                                         print(f"  Warning: Could not link project {project_id} to experiment {experiment_id} during batch upload: {e}")
 
-                            # Link samples to the new experiment
                             if sample_ids_str:
                                 sample_list = [s.strip() for s in sample_ids_str.split(';') if s.strip()]
                                 for sample_id in sample_list:
@@ -1257,10 +1207,10 @@ def batch_upload(schema: str, table: str):
                                             (experiment_id, experiment_date, sample_id)
                                         )
                                     except Exception as e:
-                                        print(f"  Warning: Could not link sample {sample_id} to experiment {experiment_id} during batch upload: {e}")
+                                        print(f"  Warning: Could not link sample {sample_id} to experiment {experiment_id}: {e}")
                     except Exception as e:
                         print(f"Error inserting individual record in batch for {actual_schema}.{actual_table}: {e}")
-                conn.commit() # Commit once after all individual records are processed
+                conn.commit()
         
         elif actual_schema.lower() == 'lims' and actual_table.lower() == 'projects':
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -1291,10 +1241,9 @@ def batch_upload(schema: str, table: str):
                     try:
                         cur.execute(insert_query, values)
                         new_project = cur.fetchone()
-                        if new_project: # Only increment if insertion was successful
+                        if new_project:
                             inserted_count += 1
 
-                            # Link persons to the new project
                             if linked_person_ids_str:
                                 project_id = new_project['project_id']
                                 person_list = [p.strip() for p in linked_person_ids_str.split(';') if p.strip()]
@@ -1308,25 +1257,21 @@ def batch_upload(schema: str, table: str):
                                         print(f"  Warning: Could not link person {person_id} to project {project_id} during batch upload: {e}")
                     except Exception as e:
                         print(f"Error inserting individual project record in batch: {e}")
-                conn.commit() # Commit once after all individual records are processed
+                conn.commit()
         
-        else: # Generic batch upload for other tables
-            if not records: # Double check if records list is empty after filtering
+        else:
+            if not records:
                 return jsonify({"success": True, "inserted_rows": 0}), 200
 
-            # Assuming all records in the batch have the same set of keys (columns)
             first_record_keys = list(records[0].keys())
             processed_records_for_insertion = []
 
             for record in records:
-                # Basic validation: ensure all records in batch have consistent keys
                 if set(record.keys()) != set(first_record_keys):
-                    # It's safer to rollback and fail if data is inconsistent
                     conn.rollback()
                     return jsonify({"error": "All records in batch must have the same set of columns for batch insertion."}), 400
 
                 temp_record = record.copy()
-                # Handle password hashing
                 if (actual_schema.lower() == 'reference' and actual_table.lower() == 'personal') or \
                    (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
                    (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
@@ -1335,7 +1280,6 @@ def batch_upload(schema: str, table: str):
                         temp_record['password_hash'] = hashed_password.decode('utf-8')
                     temp_record.pop('password', None)
                 
-                # Handle attachment (base64 decoded from CSV/JSON input)
                 if 'attachment' in temp_record and temp_record['attachment'] == '':
                     temp_record['attachment'] = None
                 elif 'attachment' in temp_record and isinstance(temp_record['attachment'], str):
@@ -1350,7 +1294,6 @@ def batch_upload(schema: str, table: str):
                 if 'attachment_link' in temp_record and temp_record['attachment_link'] == '':
                     temp_record['attachment_link'] = None
 
-                # Convert JSONB strings to Python dicts if necessary
                 for k, v in temp_record.items():
                     if column_types.get(k) == 'jsonb' and isinstance(v, str):
                         try:
@@ -1368,13 +1311,12 @@ def batch_upload(schema: str, table: str):
             columns = list(processed_records_for_insertion[0].keys())
             column_names = ', '.join([f'"{col}"' for col in columns])
             
-            # Prepare data as a list of tuples for execute_values
             data_tuples: List[Tuple[Any, ...]] = []
             for record_data in processed_records_for_insertion:
                 row = []
                 for col in columns:
                     val = record_data.get(col)
-                    row.append(val) # psycopg2 handles None correctly
+                    row.append(val)
                 data_tuples.append(tuple(row))
 
             query_template = f"INSERT INTO \"{actual_schema}\".\"{actual_table}\" ({column_names}) VALUES %s"
@@ -1382,13 +1324,13 @@ def batch_upload(schema: str, table: str):
             with conn.cursor() as cur:
                 print(f"Executing batch_upload query: {query_template} with {len(data_tuples)} records.")
                 psycopg2.extras.execute_values(cur, query_template, data_tuples)
-                conn.commit() # Commit once for the whole batch
+                conn.commit()
             inserted_count = len(records)
             
         return jsonify({"success": True, "inserted_rows": inserted_count}), 201
     except Exception as e:    
         if conn:
-            conn.rollback() # Rollback on any error
+            conn.rollback()
         print(f"Error during batch upload for {schema}.{table}: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -1399,12 +1341,12 @@ def batch_update(schema: str, table: str):
     Expects a JSON array of objects, where each object contains primary key(s)
     and fields to update.
     """
-    conn = g.db_conn # Initialize conn at the top of the function
+    conn = g.db_conn
     try:
-        resolved = _resolve_table_casing(conn, schema, table) # Get actual casing and table type
+        resolved = _resolve_table_casing(conn, schema, table)
         if not resolved:
             return jsonify({"error": f"Table '{schema}.{table}' not found or inaccessible."}), 404
-        actual_schema, actual_table, table_type = resolved # Unpack all three
+        actual_schema, actual_table, table_type = resolved
 
         column_types = _get_column_types(conn, actual_schema, actual_table)
 
@@ -1421,19 +1363,16 @@ def batch_update(schema: str, table: str):
             for record_data in records_to_update:
                 set_clauses_parts: List[str] = []
                 set_values: List[Any] = []
-                pk_where_clauses_parts: List[str] = [] # Initialize pk_where_clauses_parts here
-                pk_where_values: List[Any] = [] # Values for the PKs in WHERE clause
+                pk_where_clauses_parts: List[str] = []
+                pk_where_values: List[Any] = []
 
-                # Separate update fields from PK fields
                 update_fields = {k: v for k, v in record_data.items() if k not in pk_columns}
                 pk_fields = {k: v for k, v in record_data.items() if k in pk_columns}
 
-                # Validate all PKs are present for the current record
                 if not all(pk_col in pk_fields for pk_col in pk_columns):
                     print(f"  Warning: Skipping record in batch update due to missing primary key(s): {record_data}")
                     continue
                 
-                # Build SET clauses
                 for key, val in update_fields.items():
                     if key == 'attachment_link' and val == '':
                         set_clauses_parts.append(f'"{key}" = %s')
@@ -1448,7 +1387,7 @@ def batch_update(schema: str, table: str):
                             set_values.append(None)
                     elif column_types.get(key) == 'boolean':
                         set_clauses_parts.append(f'"{key}" = %s')
-                        set_values.append(str(val).lower() in ['true', 'on']) # Handle 'true'/'false' strings or 'on'/''
+                        set_values.append(str(val).lower() in ['true', 'on'])
                     else:
                         set_clauses_parts.append(f'"{key}" = %s')
                         set_values.append(None if val == '' else val)
@@ -1457,43 +1396,39 @@ def batch_update(schema: str, table: str):
                     print(f"  Warning: Skipping record in batch update as no update fields provided: {record_data}")
                     continue
 
-                # Prepare PK values for WHERE clause
                 for pk_col in pk_columns:
                     pk_where_clauses_parts.append(f'"{pk_col}" = %s')
                     pk_val = pk_fields[pk_col]
-                    # Convert PK date strings to date objects for correct WHERE clause matching
                     if column_types.get(pk_col) == 'date' and pk_val is not None:
                         try:
                             pk_where_values.append(datetime.strptime(pk_val, '%Y-%m-%d').date())
                         except ValueError:
-                            pk_where_values.append(pk_val) # Keep as string if conversion fails
+                            pk_where_values.append(pk_val)
                     else:
                         pk_where_values.append(pk_val)
                 
-                # Combine all values for execution: SET values first, then WHERE PK values
                 all_values = set_values + pk_where_values
                 
                 update_query = f'UPDATE "{actual_schema}"."{actual_table}" SET {", ".join(set_clauses_parts)} WHERE {" AND ".join(pk_where_clauses_parts)} RETURNING *;'
                 
                 try:
                     cur.execute(update_query, all_values)
-                    if cur.fetchone(): # Check if any row was actually updated
+                    if cur.fetchone():
                         updated_count += 1
                     else:
                         print(f"  Warning: Record not found for update in batch: {record_data}")
                 except Exception as e:
                     print(f"  Error updating record in batch for {actual_schema}.{actual_table} (PK: {pk_fields}): {e}")
-            conn.commit() # Commit once for the whole batch
+            conn.commit()
             return jsonify({"success": True, "updated_rows": updated_count}), 200
 
     except Exception as e:
         if conn:
-            conn.rollback() # Rollback on any error
+            conn.rollback()
         print(f"Error during batch update for {schema}.{table}: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-# --- Static File Serving ---
 @app.route('/')
 def root():    
     """Redirects the root URL to the login page."""
@@ -1504,7 +1439,6 @@ def serve_static(filename: str):
     """Serves static files from the STATIC_FOLDER."""
     return send_from_directory(app.static_folder, filename)
 
-# --- Server Run ---
 if __name__ == '__main__':
     host: str = '0.0.0.0'
     port: int = 5300
@@ -1516,8 +1450,6 @@ if __name__ == '__main__':
     print("="*60)
 
     if FLASK_ENV == "development":
-        # In development, Flask's reloader and debugger are useful
         app.run(host=host, port=port, debug=True)
     else:
-        # In production, use Waitress for a more robust WSGI server
         serve(app, host=host, port=port)

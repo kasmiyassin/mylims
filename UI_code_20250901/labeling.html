@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Label Printing - TIFI</title>
+    <title>All Labels Printing - TIFI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -86,7 +86,8 @@
                  <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
                  <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="box" class="w-5 h-5 mr-3"></i><span>Storage Box</span></a>
                  <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
-                 <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="Printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                 <a href="all_labels.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="Printer" class="w-5 h-5 mr-3"></i><span>All Labels</span></a>
+                 <a href="samples_labels.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="tag" class="w-5 h-5 mr-3"></i><span>Samples Labels</span></a>
                  <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
                  <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
             </nav>
@@ -94,7 +95,7 @@
 
         <main id="main-content" class="ml-64 p-8 w-full">
             <div class="print:hidden">
-                <h1 class="text-3xl font-bold text-gray-800 mb-6">Advanced Label Printing</h1>
+                <h1 class="text-3xl font-bold text-gray-800 mb-6">Generic Label Printing</h1>
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
                     <div class="lg:col-span-4 print:hidden">
                         <div class="card p-6 space-y-4 relative">
@@ -286,14 +287,16 @@
     document.addEventListener('DOMContentLoaded', () => {
         lucide.createIcons();
         initializePrintingPage();
+        handleLabelSizeChange();
     });
 
-    const API_BASE_URL = '/tifi-lims/api';
+    const API_BASE_URL = '/api';
     let masterDataCache = {
         allExperiments: null,
-        allExtraInfoKeys: null,
-        schemas: {} // Cache for table schemas
+        allExtraInfoKeys: null, // This is now updated by generateExtraInfoCheckboxes
+        schemas: {}
     };
+    let selectedExtraInfoKeys = []; // Global variable to store selected keys for CSV export
 
     const LABEL_SPECS = {
         'herma-4389':   { w: 66,   h: 33.8, cols: 3, p: '2px', f: '9px', codeSize: 30, marginTop: 11.8, marginLeft: 7.2, gapH: 0,   gapV: 0 },
@@ -304,54 +307,52 @@
         'custom':       {}
     };
 
-    // Mapping of item types to their API endpoints, primary key fields, and display fields
-    // Ensure table names and field names match your PostgreSQL schema casing
+    // ITEM_TYPE_CONFIGS with filterableByExperiment flag
     const ITEM_TYPE_CONFIGS = {
-        // Core LIMS Items (Schema.Table, idField, displayField)
-        'projects': { schema: 'lims', table: 'projects', idField: 'project_id', displayField: 'title' },
-        'samples': { schema: 'lab', table: 'samples', idField: 'sample_id', displayField: 'external_name' },
-        'storage': { schema: 'lab', table: 'storage', idField: 'storage_id', displayField: 'storage_id' },
-        'reagents': { schema: 'lims', table: 'reagents', idField: 'reagent_id', displayField: 'reagent_complete_name' },
-        'equipment': { schema: 'lims', table: 'equipment', idField: 'equipment_id', displayField: 'equipment_name' },
-        'sop': { schema: 'lims', table: 'sop', idField: 'sop_id', displayField: 'title' },
-        'customers': { schema: 'lims', table: 'customers', idField: 'customer_id', displayField: 'customer_name' },
-        'orders': { schema: 'lims', table: 'orders', idField: 'fi_order_nr', displayField: 'item_id' }, // Assuming item_id is a good display
-        'cruises': { schema: 'lims', table: 'cruises', idField: 'cruise_id', displayField: 'cruise_id' },
-        'workflows': { schema: 'lims', table: 'workflows', idField: 'workflow_id', displayField: 'workflow_name' },
-        'permits': { schema: 'lims', table: 'permits', idField: 'permit_id', displayField: 'permit_number' },
-        'personal': { schema: 'reference', table: 'personal', idField: 'person_id', displayField: 'full_name' },
-        'category': { schema: 'reference', table: 'category', idField: 'category_id', displayField: 'category_id' },
-        'status': { schema: 'reference', table: 'status', idField: 'status_id', displayField: 'status_id' },
-        'room': { schema: 'reference', table: 'room', idField: 'room_id', displayField: 'room_id' },
-        'vessel': { schema: 'reference', table: 'vessel', idField: 'vessel_id', displayField: 'vessel_name' },
-        'region': { schema: 'reference', table: 'region', idField: 'region_id', displayField: 'region_abrv' },
-        'ecosystem': { schema: 'reference', table: 'ecosystem', idField: 'ecosystem_id', displayField: 'ecosystem_abrv' },
-        'taxon': { schema: 'reference', table: 'taxon', idField: 'taxon_id', displayField: 'en_name' },
-        'species': { schema: 'reference', table: 'species', idField: 'species_id', displayField: 'en_name' },
+        'projects': { schema: 'lims', table: 'projects', idField: 'project_id', displayField: 'title', filterableByExperiment: false },
+        'samples': { schema: 'lab', table: 'detailed_samples_view', idField: 'sample_id', displayField: 'sample_id', filterableByExperiment: true },
+        'storage': { schema: 'lab', table: 'storage', idField: 'storage_id', displayField: 'storage_id', filterableByExperiment: false },
+        'reagents': { schema: 'lims', table: 'reagents', idField: 'reagent_id', displayField: 'reagent_complete_name', filterableByExperiment: false },
+        'equipment': { schema: 'lims', table: 'equipment', idField: 'equipment_id', displayField: 'equipment_name', filterableByExperiment: false },
+        'sop': { schema: 'lims', table: 'sop', idField: 'sop_id', displayField: 'title', filterableByExperiment: false },
+        'customers': { schema: 'lims', table: 'customers', idField: 'customer_id', displayField: 'customer_name', filterableByExperiment: false },
+        'orders': { schema: 'lims', table: 'orders', idField: 'fi_order_nr', displayField: 'item_id', filterableByExperiment: false },
+        'cruises': { schema: 'lims', table: 'cruises', idField: 'cruise_id', displayField: 'cruise_id', filterableByExperiment: false },
+        'workflows': { schema: 'lims', table: 'workflows', idField: 'workflow_id', displayField: 'workflow_name', filterableByExperiment: false },
+        'permits': { schema: 'lims', table: 'permits', idField: 'permit_id', displayField: 'permit_number', filterableByExperiment: false },
+        'personal': { schema: 'reference', table: 'personal', idField: 'person_id', displayField: 'full_name', filterableByExperiment: false },
+        'category': { schema: 'reference', table: 'category', idField: 'category_id', displayField: 'category_id', filterableByExperiment: false },
+        'status': { schema: 'reference', table: 'status', idField: 'status_id', displayField: 'status_id', filterableByExperiment: false },
+        'room': { schema: 'reference', table: 'room', idField: 'room_id', displayField: 'room_id', filterableByExperiment: false },
+        'vessel': { schema: 'reference', table: 'vessel', idField: 'vessel_id', displayField: 'vessel_name', filterableByExperiment: false },
+        'region': { schema: 'reference', table: 'region', idField: 'region_id', displayField: 'region_abrv', filterableByExperiment: false },
+        'ecosystem': { schema: 'reference', table: 'ecosystem', idField: 'ecosystem_id', displayField: 'ecosystem_abrv', filterableByExperiment: false },
+        'taxon': { schema: 'reference', table: 'taxon', idField: 'taxon_id', displayField: 'en_name', filterableByExperiment: false },
+        'species': { schema: 'reference', table: 'species', idField: 'species_id', displayField: 'en_name', filterableByExperiment: false },
 
-        // Lab Processes & Sub-Samples
-        'sampling': { schema: 'lab', table: 'sampling', idField: 'sampling_id', displayField: 'location_name' },
-        'experiments': { schema: 'lab', table: 'experiments', idField: 'experiment_id', displayField: 'experiment_title' },
-        'experiments_samples': { schema: 'lab', table: 'experiments_samples', idField: 'sample_id', displayField: 'sample_id' }, // This table links, so display sample_id
-        'extraction': { schema: 'lab', table: 'extraction', idField: 'extraction_id', displayField: 'sample_id' },
-        'dna': { schema: 'lab', table: 'dna', idField: 'sample_id', displayField: 'sample_id' },
-        'rna': { schema: 'lab', table: 'rna', idField: 'sample_id', displayField: 'sample_id' },
-        'fish': { schema: 'lab', table: 'fish', idField: 'sample_id', displayField: 'species_id' }, // Assuming species_id is good for display
-        'tissue': { schema: 'lab', table: 'tissue', idField: 'sample_id', displayField: 'tissue_type' },
-        'water': { schema: 'lab', table: 'water', idField: 'sample_id', displayField: 'volume_l' },
-        'sediments': { schema: 'lab', table: 'sediments', idField: 'sample_id', displayField: 'volume' },
-        'dissections': { schema: 'lab', table: 'dissections', idField: 'dissection_id', displayField: 'sample_id' },
-        'qubit': { schema: 'lab', table: 'qubit', idField: 'qubit_id', displayField: 'sample_id' },
-        'nanodrop': { schema: 'lab', table: 'nanodrop', idField: 'nanodrop_id', displayField: 'sample_id' },
-        'tapestation': { schema: 'lab', table: 'tapestation', idField: 'tapestation_id', displayField: 'sample_id' },
-        'pcr': { schema: 'lab', table: 'pcr', idField: 'pcr_id', displayField: 'sample_id' },
-        'qpcr': { schema: 'lab', table: 'qpcr', idField: 'qpcr_id', displayField: 'sample_id' },
-        'gelelectrophoresis': { schema: 'lab', table: 'gelelectrophoresis', idField: 'gelelectrophoresis_id', displayField: 'sample_id' },
-        'library': { schema: 'lab', table: 'library', idField: 'library_id', displayField: 'library_name' },
-        'sequencing': { schema: 'lab', table: 'sequencing', idField: 'sequencing_id', displayField: 'sample_id' },
-        'analysis_runs': { schema: 'bioinformatics', table: 'analysis_runs', idField: 'run_id', displayField: 'pipeline_id' }, // Changed from 'bioinformatics'
-        'gene': { schema: 'reference', table: 'gene', idField: 'gene_id', displayField: 'gene_id' },
-        'datasets': { schema: 'lab', table: 'datasets', idField: 'dataset_id', displayField: 'dataset_id' }
+        // Lab Processes & Sub-Samples with filterableByExperiment flag set based on existence of experiment_id
+        'sampling': { schema: 'lab', table: 'sampling', idField: 'sampling_id', displayField: 'location_name', filterableByExperiment: true },
+        'experiments': { schema: 'lab', table: 'experiments', idField: 'experiment_id', displayField: 'experiment_title', filterableByExperiment: false }, // This IS an experiment, not filtered BY one
+        'experiments_samples': { schema: 'lab', table: 'experiments_samples', idField: 'experiment_project_id', displayField: 'sample_id', filterableByExperiment: true }, // Has experiment_id
+        'extraction': { schema: 'lab', table: 'extraction', idField: 'extraction_id', displayField: 'sample_id', filterableByExperiment: true },
+        'dna': { schema: 'lab', table: 'dna', idField: 'sample_id', displayField: 'sample_id', filterableByExperiment: true },
+        'rna': { schema: 'lab', table: 'rna', idField: 'sample_id', displayField: 'sample_id', filterableByExperiment: true },
+        'fish': { schema: 'lab', table: 'fish', idField: 'sample_id', displayField: 'species_id', filterableByExperiment: true },
+        'tissue': { schema: 'lab', table: 'tissue', idField: 'sample_id', displayField: 'tissue_type', filterableByExperiment: true },
+        'water': { schema: 'lab', table: 'water', idField: 'sample_id', displayField: 'volume_l', filterableByExperiment: true },
+        'sediments': { schema: 'lab', table: 'sediments', idField: 'sample_id', displayField: 'volume', filterableByExperiment: true },
+        'dissections': { schema: 'lab', table: 'dissections', idField: 'dissection_id', displayField: 'sample_id', filterableByExperiment: true },
+        'qubit': { schema: 'lab', table: 'qubit', idField: 'qubit_id', displayField: 'sample_id', filterableByExperiment: true },
+        'nanodrop': { schema: 'lab', table: 'nanodrop', idField: 'nanodrop_id', displayField: 'sample_id', filterableByExperiment: true },
+        'tapestation': { schema: 'lab', table: 'tapestation', idField: 'tapestation_id', displayField: 'sample_id', filterableByExperiment: true },
+        'pcr': { schema: 'lab', table: 'pcr', idField: 'pcr_id', displayField: 'sample_id', filterableByExperiment: true },
+        'qpcr': { schema: 'lab', table: 'qpcr', idField: 'qpcr_id', displayField: 'sample_id', filterableByExperiment: true },
+        'gelelectrophoresis': { schema: 'lab', table: 'gelelectrophoresis', idField: 'gelelectrophoresis_id', displayField: 'sample_id', filterableByExperiment: true },
+        'library': { schema: 'lab', table: 'library', idField: 'library_id', displayField: 'library_name', filterableByExperiment: true },
+        'sequencing': { schema: 'lab', table: 'sequencing', idField: 'sequencing_id', displayField: 'sample_id', filterableByExperiment: true },
+        'analysis_runs': { schema: 'bioinformatics', table: 'analysis_runs', idField: 'run_id', displayField: 'pipeline_id', filterableByExperiment: true },
+        'gene': { schema: 'reference', table: 'gene', idField: 'gene_id', displayField: 'gene_id', filterableByExperiment: false },
+        'datasets': { schema: 'lab', table: 'datasets', idField: 'dataset_id', displayField: 'dataset_id', filterableByExperiment: true }
     };
 
     // Helper to format date for URL parameters (YYYY-MM-DD).
@@ -367,17 +368,14 @@
     }
 
     // Helper to build a query string for primary keys.
-    // Handles both single and composite primary keys.
     async function buildPkQueryString(itemConfig, pkValues) {
         const params = new URLSearchParams();
         const schemaInfo = await getTableSchema(itemConfig.schema, itemConfig.table);
         const pkColumns = schemaInfo.filter(col => col.is_primary_key).map(col => col.column_name);
 
         if (Array.isArray(pkColumns) && pkColumns.length > 1) {
-            // Composite primary key
             pkColumns.forEach(key => {
                 let value = pkValues[key];
-                // Special handling for date components in composite PKs
                 const colSchema = schemaInfo.find(c => c.column_name === key);
                 if (colSchema && colSchema.data_type === 'date') {
                     value = formatDateForUrl(value);
@@ -385,7 +383,6 @@
                 params.append(key, value);
             });
         } else if (pkColumns.length === 1) {
-            // Single primary key
             const key = pkColumns[0];
             let value = pkValues[key];
             const colSchema = schemaInfo.find(c => c.column_name === key);
@@ -441,7 +438,7 @@
     function initializePrintingPage() {
         document.getElementById('item-type').addEventListener('change', handleItemTypeChange);
         document.querySelectorAll('input[name="selection-mode"]').forEach(radio => radio.addEventListener('change', handleSelectionModeChange));
-        document.getElementById('experiment-selector').addEventListener('change', e => loadSamplesForExperiment(e.target.value));
+        document.getElementById('experiment-selector').addEventListener('change', e => loadItemsByExperiment(e.target.value)); // Changed function call
         document.getElementById('experiment-search').addEventListener('input', filterExperimentList);
         document.getElementById('generate-btn').addEventListener('click', generateLabels);
         document.getElementById('print-btn').addEventListener('click', triggerPrint);
@@ -468,8 +465,7 @@
             el.addEventListener('change', handleConfigChange);
         });
         
-        handleItemTypeChange();
-        handleLabelSizeChange();
+        handleLabelSizeChange(); // Apply default label size settings on page load
     }
     
     function handleConfigChange(event) {
@@ -484,7 +480,6 @@
             handlePrintTypeChange();
         }
 
-        // Only regenerate labels if there are items selected
         if (document.getElementById('items-to-print').selectedOptions.length > 0) {
             generateLabels();
         }
@@ -498,7 +493,7 @@
         if (['herma-4385', 'topstick-8791', 'micro'].includes(sizeKey)) {
             codeTypeDropdown.value = 'qrcode';
             codeTypeDropdown.disabled = true;
-            document.getElementById('qr-embed-data').checked = true; // Force embed for tiny labels
+            document.getElementById('qr-embed-data').checked = true;
         } else {
             codeTypeDropdown.disabled = document.getElementById('print-type').value === 'ticket-only';
         }
@@ -590,7 +585,6 @@
             return;
         }
 
-        // Get the schema for the current item type to correctly format display fields
         const itemConfig = ITEM_TYPE_CONFIGS[itemType];
         const itemSchema = await getTableSchema(itemConfig.schema, itemConfig.table);
 
@@ -626,13 +620,11 @@
 
         let textContent = `<b>${value}</b>`;
         const embeddedData = { id: value };
-        const selectedExtraInfoCheckboxes = Array.from(document.querySelectorAll('#extra-info-options input[type="checkbox"]:checked'));
-        const selectedExtraInfoKeys = selectedExtraInfoCheckboxes.map(checkbox => checkbox.dataset.key);
+        const selectedExtraInfoCheckboxes_local = Array.from(document.querySelectorAll('#extra-info-options input[type="checkbox"]:checked'));
+        selectedExtraInfoKeys = selectedExtraInfoCheckboxes_local.map(checkbox => checkbox.dataset.key); // Update global variable
 
-        // Define a list of fields that are typically too long or complex for a small label
         const commonLongFields = ['description', 'notes', 'aim', 'method', 'lab_book', 'sop_protocol', 'raw_data_path', 'final_output_path', 'body', 'title'];
         
-        // Add selected extra info fields to the label text and embedded data
         selectedExtraInfoKeys.forEach(key => {
             if (itemData[key] != null && String(itemData[key]).trim() !== '') {
                 const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -642,13 +634,13 @@
                 if (colSchema && (colSchema.data_type === 'date' || colSchema.data_type === 'timestamp with time zone')) {
                     try { val = new Date(val).toLocaleDateString(); } catch (e) { /* keep original */ }
                 } else if (commonLongFields.includes(key) && String(val).length > 50) {
-                    val = String(val).substring(0, 50) + '...'; // Truncate long text
+                    val = String(val).substring(0, 50) + '...';
                 } else if (typeof val === 'object' && val !== null) {
-                    val = JSON.stringify(val); // Stringify JSONB objects
+                    val = JSON.stringify(val);
                 }
                 
                 textContent += `<span><span class="info-key">${formattedKey}:</span> ${val}</span>`;
-                embeddedData[key] = itemData[key]; // Always embed original value
+                embeddedData[key] = itemData[key];
             }
         });
         textContainer.innerHTML = textContent;
@@ -664,7 +656,6 @@
                 JsBarcode(svg, codeValue, { format: "CODE128", width: 1.5, height: 30, displayValue: false, margin: 2 });
                 codeContainer.appendChild(svg);
             } else {
-                // Clear previous QR code if any
                 codeContainer.innerHTML = ''; 
                 new QRCode(codeContainer, { text: codeValue, width: codeSize, height: codeSize, correctLevel: QRCode.CorrectLevel.M });
             }
@@ -697,27 +688,17 @@
         window.print();
     }
 
-    /**
-     * Escapes a field for CSV format. Wraps in quotes if it contains a separator, newline, or quotes.
-     * @param {string | number | null | undefined} field The data to escape.
-     * @returns {string} The CSV-safe string.
-     */
     function escapeCsvField(field) {
         if (field === null || field === undefined) {
             return '';
         }
         const stringField = String(field);
-        // Check if the field contains characters that require quoting (quote, semicolon, newline)
         if (/[",;\n]/.test(stringField)) {
-            // Escape double quotes by doubling them and wrap the whole field in double quotes
             return `"${stringField.replace(/"/g, '""')}"`;
         }
         return stringField;
     }
 
-    /**
-     * Generates and triggers the download of a CSV file for Herma EAO systems.
-     */
     async function generateHermaCsv() {
         if (!masterDataCache.currentItemSet) {
             alert("No data set loaded. Please select an item type first.");
@@ -734,26 +715,24 @@
 
         const selectedIds = new Set(selectedOptions.map(opt => opt.value));
         const itemsToExport = data.filter(item => selectedIds.has(String(item[idField])));
-        const selectedExtraInfoCheckboxes = Array.from(document.querySelectorAll('#extra-info-options input[type="checkbox"]:checked')).map(checkbox => checkbox.dataset.key);
+        const extraInfoKeysForCsv = selectedExtraInfoKeys; // Use the global variable here
 
-        // Get the schema for the current item type to correctly format display fields
         const itemConfig = ITEM_TYPE_CONFIGS[itemType];
         const itemSchema = await getTableSchema(itemConfig.schema, itemConfig.table);
 
-        // Create headers using a user-friendly name for the ID and selected info fields
-        const headers = ['ID', ...selectedExtraInfoKeys.map(key => key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()))];
+        const headers = ['ID', ...extraInfoKeysForCsv.map(key => key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()))];
         let csvContent = headers.join(';') + '\n';
 
         itemsToExport.forEach(item => {
             const row = [];
-            row.push(escapeCsvField(item[idField])); // Main ID
-            selectedExtraInfoKeys.forEach(key => { // Selected extra info fields
+            row.push(escapeCsvField(item[idField]));
+            extraInfoKeysForCsv.forEach(key => {
                 let val = item[key];
                 const colSchema = itemSchema.find(col => col.column_name === key);
 
                 if (colSchema && (colSchema.data_type === 'date' || colSchema.data_type === 'timestamp with time zone')) {
                     try { val = new Date(val).toLocaleDateString(); } catch (e) { /* keep original */ }
-                } else if (typeof val === 'object' && val !== null) { // Handle JSONB fields for CSV
+                } else if (typeof val === 'object' && val !== null) {
                     val = JSON.stringify(val);
                 }
                 row.push(escapeCsvField(val));
@@ -761,7 +740,6 @@
             csvContent += row.join(';') + '\n';
         });
 
-        // Create a BOM (Byte Order Mark) for UTF-8 to ensure Excel compatibility
         const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
@@ -781,44 +759,109 @@
         const itemSelectionPanel = document.getElementById('item-selection-panel');
         const classificationPanel = document.getElementById('classification-panel');
         const startPositionPanel = document.getElementById('start-position-panel');
-        resetSelectionUI(); // Always reset fully on item type change
+        const experimentSelectorContainer = document.getElementById('experiment-selector-container');
 
-        if (type === 'samples') { // Only 'samples' (main sample table) supports "by experiment" mode
-            selectionModePanel.classList.remove('hidden');
-            itemSelectionPanel.classList.add('hidden'); // Hidden until mode is chosen
-            classificationPanel.classList.remove('hidden');
-            startPositionPanel.classList.remove('hidden');
-            document.querySelector('input[name="selection-mode"][value="direct"]').checked = true;
-            handleSelectionModeChange(); // Trigger direct selection for samples by default
-        } else if (type) { // Other types only support direct selection
-            selectionModePanel.classList.add('hidden');
-            itemSelectionPanel.classList.remove('hidden');
-            classificationPanel.classList.add('hidden');
-            startPositionPanel.classList.remove('hidden');
-            document.getElementById('experiment-selector-container').classList.add('hidden');
-            loadItemsForDirectSelection(type);
-        } else { // No type selected
+        resetSelectionUI(); // Full reset on item type change
+
+        const config = ITEM_TYPE_CONFIGS[type];
+        if (!config) { // No type selected, or invalid
             selectionModePanel.classList.add('hidden');
             itemSelectionPanel.classList.add('hidden');
             classificationPanel.classList.add('hidden');
             startPositionPanel.classList.add('hidden');
+            experimentSelectorContainer.classList.add('hidden');
+            return;
         }
+
+        // Show/hide selection mode based on if the type is filterable by experiment
+        if (config.filterableByExperiment) {
+            selectionModePanel.classList.remove('hidden');
+            // Default to 'direct' mode for now
+            document.querySelector('input[name="selection-mode"][value="direct"]').checked = true;
+            // Handle selection mode will then populate items
+            handleSelectionModeChange();
+        } else {
+            selectionModePanel.classList.add('hidden');
+            experimentSelectorContainer.classList.add('hidden'); // Hide experiment filter if not applicable
+            itemSelectionPanel.classList.remove('hidden'); // Show item selection for direct load
+            // Classification and Start Position are still general for all types
+            classificationPanel.classList.remove('hidden'); 
+            startPositionPanel.classList.remove('hidden');
+            loadItemsForDirectSelection(type);
+        }
+        handleLabelSizeChange();
     }
 
     function handleSelectionModeChange() {
         const mode = document.querySelector('input[name="selection-mode"]:checked').value;
         const itemSelectionPanel = document.getElementById('item-selection-panel');
         const experimentSelectorContainer = document.getElementById('experiment-selector-container');
-        resetSelectionUI(true); // Soft reset to clear item list but keep mode selection
-        itemSelectionPanel.classList.remove('hidden'); // Show item selection panel
+        const currentItemType = document.getElementById('item-type').value;
+
+        resetSelectionUI(true); // Soft reset
+
+        itemSelectionPanel.classList.remove('hidden');
+
         if (mode === 'by_experiment') {
             experimentSelectorContainer.classList.remove('hidden');
-            loadExperimentList();
+            loadExperimentList(); // Load all experiments first
+            // After experiment is selected, loadItemsByExperiment will be called
         } else { // direct
             experimentSelectorContainer.classList.add('hidden');
-            loadItemsForDirectSelection(document.getElementById('item-type').value); // Load based on current item type
+            loadItemsForDirectSelection(currentItemType);
         }
     }
+
+    // Renamed from loadSamplesForExperiment to be more generic for any item type filterable by experiment
+    async function loadItemsByExperiment(experimentId) {
+        if (!experimentId) { resetSelectionUI(true); return; }
+
+        const currentItemType = document.getElementById('item-type').value;
+        const config = ITEM_TYPE_CONFIGS[currentItemType];
+
+        if (!config || !config.filterableByExperiment) {
+            console.warn(`Item type ${currentItemType} is not configured to be filtered by experiment.`);
+            return;
+        }
+
+        const selectedExperiment = masterDataCache.allExperiments.find(exp => exp.experiment_id === experimentId);
+        if (!selectedExperiment) {
+            alert("Selected experiment details not found.");
+            populateAndCacheItems(currentItemType, [], config.idField, config.displayField);
+            return;
+        }
+        const experimentDate = formatDateForUrl(selectedExperiment.experiment_date);
+
+        let endpoint = `table/${config.schema}/${config.table}`;
+        let filterParams = new URLSearchParams();
+
+        // Determine correct filter parameters based on the table/view structure
+        if (currentItemType === 'samples') { // lab.detailed_samples_view
+            filterParams.append('filter_associated_experiment_id', experimentId);
+            filterParams.append('filter_associated_experiment_date', experimentDate);
+        } else if (currentItemType === 'experiments_samples') { // lab.experiments_samples
+            filterParams.append('filter_experiment_id', experimentId);
+            filterParams.append('filter_experiment_date', experimentDate);
+        } else if (config.schema === 'lab' || currentItemType === 'analysis_runs' || currentItemType === 'datasets') {
+            // Most other lab tables and bioinformatics analysis_runs/datasets have 'experiment_id' and 'experiment_date'
+            filterParams.append('filter_experiment_id', experimentId);
+            filterParams.append('filter_experiment_date', experimentDate);
+        } else {
+            console.warn(`Filtering by experiment not directly supported for ${currentItemType} via standard filter names.`);
+            populateAndCacheItems(currentItemType, [], config.idField, config.displayField);
+            return;
+        }
+
+        const data = await apiFetch(`${endpoint}?${filterParams.toString()}`);
+
+        if (!data || data.length === 0) {
+            populateAndCacheItems(currentItemType, [], config.idField, config.displayField);
+            alert(`No items found for this experiment in ${currentItemType}.`);
+            return;
+        }
+        populateAndCacheItems(currentItemType, data, config.idField, config.displayField);
+    }
+
 
     async function loadExperimentList() {
         if (!masterDataCache.allExperiments) {
@@ -844,36 +887,11 @@
     }
 
     async function loadItemsForDirectSelection(type) {
-        if (!type) { resetSelectionUI(); return; }
         const config = ITEM_TYPE_CONFIGS[type];
         if (!config) { resetSelectionUI(); return; }
-        const data = await apiFetch(`table/${config.schema}/${config.table}`); 
+
+        const data = await apiFetch(`table/${config.schema}/${config.table}`);
         populateAndCacheItems(type, data, config.idField, config.displayField);
-    }
-
-    async function loadSamplesForExperiment(experimentId) {
-        if (!experimentId) { resetSelectionUI(true); return; }
-
-        // Find the full experiment object from the cache to get its date
-        const selectedExperiment = masterDataCache.allExperiments.find(exp => exp.experiment_id === experimentId);
-        if (!selectedExperiment) {
-            alert("Selected experiment details not found.");
-            populateAndCacheItems('samples', [], 'sample_id', 'external_name');
-            return;
-        }
-        const experimentDate = formatDateForUrl(selectedExperiment.experiment_date);
-
-        // Fetch samples directly from lab.samples, filtered by experiment_id and experiment_date
-        // This leverages the backend's ability to filter samples by associated experiments
-        // via the lab.experiments_samples linking table.
-        const samplesData = await apiFetch(`table/lab/samples?filter_experiment_id=${experimentId}&filter_experiment_date=${experimentDate}`);
-        
-        if (!samplesData || samplesData.length === 0) {
-            populateAndCacheItems('samples', [], 'sample_id', 'external_name'); // Clear list if no samples
-            alert("No samples found for this experiment.");
-            return;
-        }
-        populateAndCacheItems('samples', samplesData, 'sample_id', 'external_name');
     }
 
 
@@ -882,22 +900,36 @@
         masterDataCache.currentItemSet = { type, data, idField, displayField };
         document.getElementById('item-search').disabled = false;
         populateItemList(data);
-        generateExtraInfoCheckboxes(data, type); // Pass type to generateExtraInfoCheckboxes
+        generateExtraInfoCheckboxes(data, type);
         checkControlsState();
     }
 
     function populateItemList(data) {
-        const { idField, displayField } = masterDataCache.currentItemSet;
+        const { idField, displayField, type: currentItemType } = masterDataCache.currentItemSet;
         const sortOrder = document.getElementById('sort-order').value;
         let sortedData = [...data];
-        if (sortOrder !== 'none') { 
+        if (sortOrder !== 'none') {
             sortedData.sort((a, b) => {
                 const valA = String(a[idField] || '').toLowerCase();
                 const valB = String(b[idField] || '').toLowerCase();
                 return (sortOrder === 'asc') ? valA.localeCompare(valB) : valB.localeCompare(valA);
             });
         }
-        document.getElementById('items-to-print').innerHTML = sortedData.map(item => `<option value="${item[idField]}">${item[displayField] || item[idField]}</option>`).join('') || '<option disabled>No items found</option>';
+        document.getElementById('items-to-print').innerHTML = sortedData.map(item => {
+            let displayText = String(item[idField] || 'N/A');
+            if (currentItemType === 'samples') {
+                const externalName = item.external_name ? ` - ${item.external_name}` : '';
+                const originType = item.sample_origin_type ? ` (${item.sample_origin_type})` : '';
+                displayText = `${item.sample_id}${externalName}${originType}`;
+            } else if (currentItemType === 'experiments_samples') {
+                // For experiments_samples, its primary key is composite, so display a combination
+                displayText = `Exp: ${item.experiment_id || 'N/A'} - Sample: ${item.sample_id || 'N/A'}`;
+            }
+            else {
+                displayText = item[displayField] || item[idField];
+            }
+            return `<option value="${item[idField]}">${displayText}</option>`;
+        }).join('') || '<option disabled>No items found</option>';
         document.getElementById('item-count').textContent = sortedData.length;
     }
 
@@ -922,17 +954,31 @@
         }
 
         const uniqueKeysWithValues = new Set();
-        // Use schema to get all potential keys, then check if they have values in data
         schema.forEach(col => {
             const key = col.column_name;
-            // Exclude keys that are typically not useful on a label or are internal
             const excludedKeys = new Set([
-                'attachment', 'password_hash', 'search_vector', 'geom', // Binary/internal fields
-                'created_at', 'created_by', 'last_modified_at', 'last_modified_by', // Audit fields
-                config.idField, config.displayField // Already shown as main ID/title
+                'attachment', 'password_hash', 'search_vector', 'geom',
+                'created_at', 'created_by', 'last_modified_at', 'last_modified_by',
+                config.idField, config.displayField,
+                // General exclusions for samples (detailed_samples_view)
+                'sample_status_notes', 'project_title', 'customer_name', 'storage_freezer', 'storage_box',
+                'room_address', 'room_etage', 'sampling_event_id', 'sampling_event_date',
+                'sampling_lon', 'sampling_lat', 'fishing_start_lon', 'fishing_start_lat',
+                'fishing_end_lon', 'fishing_end_lat', 'sampling_location', 'sampling_depth_m',
+                'temperature_atmospheric_c', 'weather', 'wind_speed', 'wind_unit', 'salinity',
+                'salinity_unit', 'oxygen', 'oxygen_unit', 'species_en_name', 'tissue_type',
+                'dna_volume_ul', 'dna_concentration_ng_ul', 'rna_volume_ul', 'rna_concentration_ng_ul',
+                'sediment_volume', 'sediment_volume_unit', 'water_volume_l', 'water_filter',
+                'extraction_date', 'extraction_kit', 'nanodrop_concentration', 'qubit_original_sample_conc',
+                'pcr_date', 'pcr_primer_id', 'qpcr_date', 'library_id', 'sequencing_id', 'sequencer',
+                'analysis_run_id', 'pipeline_name', 'edna_assigned_taxon_id', 'edna_assigned_taxon_name',
+                'sampler_full_name', 'receiver_full_name',
+                'associated_experiment_id', 'associated_experiment_title', 'associated_experiment_date', 'associated_experiment_aim', 'associated_experiment_method', 'experiment_person_name',
+                'sample_origin_type', 'sample_type_abrv',
+                // Specific exclusions for experiments_samples
+                'link_date', 'experiment_date' // experiment_date is usually part of primary key, not extra info
             ]);
 
-            // Check if the key exists in at least one item and is not null/empty, and not excluded
             if (!excludedKeys.has(key) && data.some(item => item.hasOwnProperty(key) && item[key] !== null && String(item[key]).trim() !== '')) {
                 uniqueKeysWithValues.add(key);
             }
@@ -940,7 +986,7 @@
 
         const availableKeys = Array.from(uniqueKeysWithValues).sort();
         masterDataCache.allExtraInfoKeys = availableKeys;
-        filterExtraInfoCheckboxes(); // This will render the checkboxes
+        filterExtraInfoCheckboxes();
         extraInfoContainer.classList.remove('hidden');
     }
 
@@ -965,13 +1011,46 @@
     function filterItemList() {
         if (!masterDataCache.currentItemSet) return;
         const searchTerm = document.getElementById('item-search').value.toLowerCase();
-        const { data, idField, displayField } = masterDataCache.currentItemSet;
-        const filteredData = data.filter(item => 
-            (String(item[idField] || '').toLowerCase().includes(searchTerm)) || 
-            (String(item[displayField] || '').toLowerCase().includes(searchTerm)) ||
-            (item.notes && String(item.notes).toLowerCase().includes(searchTerm)) || // Search in notes
-            (item.description && String(item.description).toLowerCase().includes(searchTerm)) // Search in description
-        );
+        const { data, idField, displayField, type: currentItemType } = masterDataCache.currentItemSet;
+        const filteredData = data.filter(item => {
+            let match = false;
+            if (String(item[idField] || '').toLowerCase().includes(searchTerm)) {
+                match = true;
+            }
+            if (currentItemType === 'samples') {
+                if (item.external_name && String(item.external_name).toLowerCase().includes(searchTerm)) {
+                    match = true;
+                }
+                if (item.sample_origin_type && String(item.sample_origin_type).toLowerCase().includes(searchTerm)) {
+                    match = true;
+                }
+                if (item.project_title && String(item.project_title).toLowerCase().includes(searchTerm)) {
+                    match = true;
+                }
+                if (item.associated_experiment_id && String(item.associated_experiment_id).toLowerCase().includes(searchTerm)) {
+                    match = true;
+                }
+            } else if (currentItemType === 'experiments_samples') {
+                if (item.sample_id && String(item.sample_id).toLowerCase().includes(searchTerm)) {
+                    match = true;
+                }
+                if (item.experiment_id && String(item.experiment_id).toLowerCase().includes(searchTerm)) {
+                    match = true;
+                }
+            }
+            else {
+                if (item[displayField] && String(item[displayField]).toLowerCase().includes(searchTerm)) {
+                    match = true;
+                }
+            }
+            if (item.notes && String(item.notes).toLowerCase().includes(searchTerm)) {
+                match = true;
+            }
+            if (item.description && String(item.description).toLowerCase().includes(searchTerm)) {
+                match = true;
+            }
+            return match;
+        });
         populateItemList(filteredData);
     }
 
@@ -982,13 +1061,6 @@
     }
 
     function resetSelectionUI(soft = false) {
-        if (!soft) {
-            document.getElementById('item-selection-panel').classList.add('hidden');
-            document.getElementById('selection-mode-panel').classList.add('hidden');
-            document.getElementById('classification-panel').classList.add('hidden');
-            document.getElementById('start-position-panel').classList.add('hidden');
-            document.getElementById('item-type').value = ''; // Reset item type dropdown
-        }
         document.getElementById('items-to-print').innerHTML = '<option disabled>Select an option above</option>';
         document.getElementById('item-count').textContent = '0';
         const searchInput = document.getElementById('item-search');
@@ -1007,14 +1079,13 @@
         const experimentSelector = document.getElementById('experiment-selector');
         if (experimentSelector) experimentSelector.innerHTML = '<option value="">-- Loading --</option>';
         checkControlsState();
-        generateLabels(); // Clear preview
+        generateLabels();
     }
 
     function checkControlsState() {
         const selectedCount = document.getElementById('items-to-print').selectedOptions.length;
         document.getElementById('generate-btn').disabled = selectedCount === 0;
         document.getElementById('csv-btn').disabled = selectedCount === 0;
-        // Only enable print button if labels have actually been generated in the preview area
         document.getElementById('print-btn').disabled = document.getElementById('print-area').querySelector('.label-ticket:not(.blank)') === null;
     }
 
@@ -1027,17 +1098,16 @@
             qrEmbedCheckbox.disabled = true;
         } else {
             const sizeKey = document.getElementById('label-size').value;
-            // Re-enable/disable based on label size presets
             codeTypeDropdown.disabled = ['herma-4385', 'topstick-8791', 'micro'].includes(sizeKey);
             qrEmbedCheckbox.disabled = false;
         }
-        generateLabels(); // Regenerate labels to reflect print type change
+        generateLabels();
     }
 
     function handleSortOrderChange() {
         if (masterDataCache.currentItemSet) {
-            populateItemList(masterDataCache.currentItemSet.data);
-            generateLabels(); // Regenerate labels with new sort order
+            populateItemList(masterDataCache.currentItemSet.data); 
+            generateLabels();
         }
     }
 </script>

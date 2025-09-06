@@ -53,7 +53,8 @@
                 <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
                 <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="box" class="w-5 h-5 mr-3"></i><span>Storage Box</span></a>
                 <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
-                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="Printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="all_labels.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="Printer" class="w-5 h-5 mr-3"></i><span>All Labels</span></a>
+                <a href="samples_labels.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="tag" class="w-5 h-5 mr-3"></i><span>Samples Labels</span></a>
                 <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
                 <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
             </nav>
@@ -108,12 +109,12 @@
     if (sessionStorage.getItem('isLoggedIn') !== 'true') window.location.href = './login.html';
     
     // --- YOUR ORIGINAL VARIABLES AND MAPS (PRESERVED) ---
-    const API_BASE_URL = '/tifi-lims/api';
+    const API_BASE_URL = '/api'; // Changed to '/api' for consistency
     let masterSampleList = []; // This will now hold data from lab.detailed_samples_view
-    let allWorkflows = []; // All workflows from lims.workflows
-    let allWorkflowSteps = []; // All steps from lims.workflow_steps
-    let allProjects = []; // All projects from lims.projects
-    let allSampleTypes = []; // All sample types from reference.samples_type
+    let allWorkflows = [];
+    let allWorkflowSteps = [];
+    let allProjects = [];
+    let allSampleTypes = [];
 
     // This ordered list defines our Kanban columns
     // This should ideally come from lims.workflow_steps, dynamically.
@@ -147,9 +148,9 @@
     // This map links a workflow status to the *primary* table where new data for that step is logged.
     // It also specifies the primary key fields for that table, which are needed to construct API calls.
     const statusToTableMap = {
-        'Received': { schema: 'lab', table: 'samples', // Primary samples table
+        'Received': { schema: 'lab', table: 'parental_samples', // This is where the status is updated
             pk_fields: ['sample_id', 'sampling_date'], // PK of the samples table
-            fields: [ // Fields to show in the modal for logging this step
+            fields: [
                 { name: 'reception_date', label: 'Reception Date', type: 'date', required: true },
                 { name: 'receiver_person_id', label: 'Receiver Person ID', type: 'text', required: true },
                 { name: 'transport', label: 'Transport Method', type: 'text' }
@@ -173,9 +174,9 @@
                 { name: 'extraction_date', label: 'Extraction Date', type: 'date', required: true },
                 { name: 'person_id', label: 'Person', type: 'text', required: true },
                 { name: 'kit', label: 'Kit', type: 'text' },
-                { name: 'elution_volume_ul', label: 'Elution Volume (µl)', type: 'number' },
-                { name: 'yield_qubit_ng_ul', label: 'Yield Qubit (ng/µl)', type: 'number' },
-                { name: 'yield_nanodrop_ng_ul', label: 'Yield Nanodrop (ng/µl)', type: 'number' },
+                { name: 'elution_volume_ul', label: 'Elution Volume (?)', type: 'number' },
+                { name: 'yield_qubit_ng_ul', label: 'Yield Qubit (ng/?)', type: 'number' },
+                { name: 'yield_nanodrop_ng_ul', label: 'Yield Nanodrop (ng/?)', type: 'number' },
                 { name: 'extracted_dna_sample_id', label: 'Extracted DNA Sample ID', type: 'text' },
                 { name: 'extracted_rna_sample_id', label: 'Extracted RNA Sample ID', type: 'text' }
             ]
@@ -186,7 +187,7 @@
             fields: [
                 { name: 'measurement_date', label: 'Date', type: 'date', required: true },
                 { name: 'person_id', label: 'Person', type: 'text', required: true },
-                { name: 'nanodrop_concentration', label: 'Concentration (ng/µl)', type: 'number' },
+                { name: 'nanodrop_concentration', label: 'Concentration (ng/?)', type: 'number' },
                 { name: 'a260_280', label: 'A260/280 Ratio', type: 'number' },
                 { name: 'a260_230', label: 'A260/230 Ratio', type: 'number' }
             ]
@@ -197,7 +198,7 @@
             fields: [
                 { name: 'measurement_date', label: 'Date', type: 'date', required: true },
                 { name: 'person_id', label: 'Person', type: 'text', required: true },
-                { name: 'qubit_original_sample_conc', label: 'Concentration (ng/µl)', type: 'number' },
+                { name: 'qubit_original_sample_conc', label: 'Concentration (ng/?)', type: 'number' },
                 { name: 'assay_kit', label: 'Assay Kit', type: 'text' }
             ]
         },
@@ -267,7 +268,7 @@
             ]
         },
         'Completed': { // Mark a sample as fully completed
-            schema: 'lab', table: 'samples', // Updates the sample's main record
+            schema: 'lab', table: 'parental_samples', // Updates the sample's main record
             pk_fields: ['sample_id', 'sampling_date'], // PK of the samples table
             fields: [
                 { name: 'completion_date', label: 'Completion Date', type: 'date', required: true },
@@ -289,7 +290,7 @@
             if (!(options.body instanceof FormData) && options.body !== null && typeof options.body === 'object') {
                 options.headers = { 'Content-Type': 'application/json', ...options.headers };
                 if(options.body) options.body = JSON.stringify(options.body);
-            } else if (options.body === null) { // Ensure body is explicitly null if intended to be empty
+            } else if (options.body === null) {
                 options.body = null;
             }
             const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
@@ -331,23 +332,27 @@
                         const color = sampleTypeColors[sample.sample_type_abrv] || sampleTypeColors.default;
                         const currentIndex = workflowSteps.indexOf(sample.sample_status_id);
                         const nextStepIndex = currentIndex + 1;
-                        const canProceed = nextStepIndex < workflowSteps.length; // Can proceed if not the last step
+                        const canProceed = nextStepIndex < workflowSteps.length;
                         
-                        // Extract PKs for lab.samples as per database for drag-drop and update
-                        // These are the PKs for the `lab.samples` record that is being tracked/updated.
+                        // Pass the primary sample's ID and sampling_date for status updates
+                        // These fields are directly available from detailed_samples_view
                         const samplePKsForLabSamples = {
                             sample_id: sample.sample_id,
-                            sampling_date: formatDateForUrl(sample.sampling_date) // Ensure date is formatted for URL
+                            sampling_date: formatDateForUrl(sample.sampling_date)
                         };
+
+                        // Use a display name that combines the sample ID and origin type for clarity
+                        const displayName = `${sample.sample_id} (${sample.sample_origin_type || 'N/A'})`;
 
                         return `
                         <div class="kanban-card p-3 border-l-${color}" draggable="${canProceed ? 'true' : 'false'}" 
                              data-sample-pks-for-lab-samples='${JSON.stringify(samplePKsForLabSamples)}' 
                              data-current-status="${sample.sample_status_id}"
-                             data-sample-id-for-modal="${sample.sample_id}"> <div class="flex justify-between items-start">
+                             data-sample-id-for-modal="${sample.sample_id}">
+                            <div class="flex justify-between items-start">
                                 <div>
-                                    <p class="font-semibold text-gray-900">${sample.sample_id}</p>
-                                    <p class="text-sm text-gray-600">${sample.external_name || sample.sample_origin_type || 'N/A'}</p>
+                                    <p class="font-semibold text-gray-900">${displayName}</p>
+                                    <p class="text-sm text-gray-600">${sample.external_name || 'No external name'}</p>
                                     <p class="text-xs text-gray-500">${sample.sample_type_abrv || 'N/A'} - ${sample.project_id || 'N/A'}</p>
                                 </div>
                                 ${canProceed ? `<button class="proceed-btn text-gray-400 hover:text-blue-600" data-next-step="${workflowSteps[nextStepIndex]}" title="Proceed to ${workflowSteps[nextStepIndex]}">
@@ -370,7 +375,7 @@
             card.addEventListener('dragend', handleDragEnd);
             card.addEventListener('click', (e) => {
                 if (!e.target.closest('.proceed-btn')) {
-                    const sampleIdForModal = card.dataset.sampleIdForModal; // Use the simple sample_id for modal
+                    const sampleIdForModal = card.dataset.sampleIdForModal;
                     showSampleDetailsModal(sampleIdForModal); 
                 }
             });
@@ -436,9 +441,10 @@
             return;
         }
 
-        // Get the full sample object from masterSampleList for access to other properties (e.g., experiment_id, original sample_id)
+        // Find the full detailed sample object from masterSampleList
         const sample = masterSampleList.find(s => 
-            Object.keys(samplePKsForLabSamples).every(key => String(s[key]) === String(samplePKsForLabSamples[key]))
+            String(s.sample_id) === String(samplePKsForLabSamples.sample_id) && 
+            formatDateForUrl(s.sampling_date) === formatDateForUrl(samplePKsForLabSamples.sampling_date)
         );
         if (!sample) {
             alert('Sample not found in current list. Please refresh the page.');
@@ -452,8 +458,6 @@
             let inputType = field.type;
             let value = '';
 
-            // Pre-fill default values or existing values from sample object
-            // Prioritize values from the current detailed sample view if available
             if (field.name === 'sample_id') {
                 value = sample.sample_id; // The sample_id being moved
             } else if (field.name === 'parent_sample_id') {
@@ -470,12 +474,11 @@
                 value = sample.workflow_id;
             } else if (field.name === 'step_id' && sample.step_id) {
                 value = sample.step_id;
-            } else if (sample[field.name] !== undefined && sample[field.name] !== null) { // Try to pre-fill from sample if property exists
+            } else if (sample[field.name] !== undefined && sample[field.name] !== null) {
                 value = sample[field.name];
                 if (inputType === 'date') value = formatDateForUrl(value);
             }
             
-            // Render specific input types
             if (inputType === 'textarea') {
                 formFieldsHtml += `
                     <div>
@@ -503,38 +506,35 @@
             for (let [key, value] of formData.entries()) {
                 if (value === '') {
                     dataToLog[key] = null;
-                } else if (targetTableSchema.find(col => col.column_name === key && col.data_type === 'jsonb')) { // Handle JSONB fields explicitly
+                } else if (targetTableSchema.find(col => col.column_name === key && col.data_type === 'jsonb')) {
                     try { dataToLog[key] = JSON.parse(value); } catch { dataToLog[key] = value; }
-                } else if (targetTableSchema.find(col => col.column_name === key && ['integer', 'numeric', 'bigint'].includes(col.data_type))) { // Handle numeric types
+                } else if (targetTableSchema.find(col => col.column_name === key && ['integer', 'numeric', 'bigint'].includes(col.data_type))) {
                     dataToLog[key] = Number(value);
                 } else {
                     dataToLog[key] = value;
                 }
             }
             
-            // Link the new log entry to the current sample_id.
-            // Some tables (e.g., 'lab.samples' itself, or new product tables like 'lab.dna')
-            // will use the current sample_id as their own new sample_id.
-            // Other tables (e.g., 'lab.extraction', 'lab.nanodrop') will use the current sample_id as a foreign key.
-            if (actionInfo.table === 'samples' || actionInfo.table === 'dna' || actionInfo.table === 'rna' ||
-                actionInfo.table === 'tissue' || actionInfo.table === 'fish' || actionInfo.table === 'sediments' || actionInfo.table === 'water' ||
-                actionInfo.table === 'otoliths' || actionInfo.table === 'library' ) { // Tables where the sample_id IS the primary key of the new entry
-                dataToLog.sample_id = sample.sample_id; // The main ID of the current sample becomes the ID of the new entry
-                if (actionInfo.table !== 'samples' && actionInfo.table !== 'otoliths') { // For derived products, set parent_sample_id
-                    dataToLog.parent_sample_id = sample.sample_id; 
-                }
-            } else { // Tables where sample_id is a foreign key
-                dataToLog.sample_id = sample.sample_id; 
+            // Crucially, the sample_id being passed to the new record creation table
+            // should be the ID of the *current card/item* being moved.
+            // Its parent_sample_id should be the main sample's ID if this is a derived product.
+            if (actionInfo.table !== 'parental_samples') { // If logging to a child table (not just updating parent status)
+                // Set the sample_id of the new record to the ID of the current card
+                // The detailed_samples_view has this as sample.sample_id
+                dataToLog.sample_id = sample.sample_id;
             }
-            
-            // Special handling for composite PKs like (experiment_id, experiment_date) or (sampling_id, sampling_date)
-            // if they are part of the target table's primary key
+            // For tables that accept a parent_sample_id (like dna, rna, tissue, fish, etc.)
+            // The sample.sample_id from detailed_samples_view acts as the parent here.
+            if (['dna', 'rna', 'tissue', 'fish', 'sediments', 'water', 'otoliths'].includes(actionInfo.table)) {
+                dataToLog.parent_sample_id = sample.sample_id;
+            }
+
+            // Handle composite PKs for the target table (e.g., experiment_id, experiment_date; sampling_id, sampling_date)
             const pkColumnsForTargetTable = targetTableSchema.filter(col => col.is_primary_key).map(col => col.column_name);
 
             if (pkColumnsForTargetTable.includes('experiment_id') && sample.associated_experiment_id) {
                 dataToLog.experiment_id = sample.associated_experiment_id;
             } else if (pkColumnsForTargetTable.includes('experiment_id') && !dataToLog.experiment_id) {
-                 // If experiment_id is a NON-NULL PK but not set, and there's no associated one, prompt user
                 if (targetTableSchema.some(col => col.column_name === 'experiment_id' && col.is_primary_key && col.is_nullable === 'NO')) {
                     alert(`Error: '${actionInfo.table}' requires an 'experiment_id' for new entries, but it's not associated with this sample. Please ensure the sample is linked to an experiment.`);
                     return;
@@ -544,8 +544,6 @@
             if (pkColumnsForTargetTable.includes('experiment_date') && sample.associated_experiment_date) {
                 dataToLog.experiment_date = formatDateForUrl(sample.associated_experiment_date);
             } else if (pkColumnsForTargetTable.includes('experiment_date') && !dataToLog.experiment_date) {
-                // If the target table's PK includes experiment_date and it's not set
-                // Try to use a relevant date from the form (e.g., extraction_date) or default to today
                 const dateFieldForLogTable = actionInfo.fields.find(f => f.name.includes('_date'));
                 if (dateFieldForLogTable && dataToLog[dateFieldForLogTable.name]) {
                     dataToLog.experiment_date = formatDateForUrl(dataToLog[dateFieldForLogTable.name]);
@@ -561,7 +559,6 @@
                 dataToLog.sampling_date = formatDateForUrl(sample.sampling_date);
             }
 
-
             console.log("Data to log in target table:", dataToLog);
 
             let actionLogResult;
@@ -573,8 +570,8 @@
             }
             
             if (actionLogResult && !actionLogResult.error) {
-                // Update sample's status in lab.samples table (which is what the Kanban reads)
-                const updateSampleStatusResult = await apiFetch(`table/lab/samples?sample_id=${sample.sample_id}&sampling_date=${formatDateForUrl(sample.sampling_date)}`, {
+                // ALWAYS update the status in lab.parental_samples using the original sample's PKs
+                const updateSampleStatusResult = await apiFetch(`table/lab/parental_samples?sample_id=${sample.sample_id}&sampling_date=${formatDateForUrl(sample.sampling_date)}`, {
                     method: 'PUT',
                     body: { sample_status_id: targetStatus }
                 });
@@ -614,7 +611,6 @@
         return { closeModal };
     }
 
-    // MODIFIED: initializeWorkflowPage now fetches ALL samples from detailed_samples_view
     async function initializeWorkflowPage() {
         const boardContainer = document.getElementById('kanban-board-container');
         boardContainer.innerHTML = `<div class="w-full flex items-center justify-center h-full">
@@ -625,7 +621,7 @@
 
         // Fetch ALL records from detailed_samples_view
         const [samplesResult, workflowsResult, projectsResult, sampleTypesResult] = await Promise.all([
-            apiFetch('table/lab/detailed_samples_view'),
+            apiFetch('table/lab/detailed_samples_view'), // ***CHANGED FROM parental_samples to detailed_samples_view***
             apiFetch('table/lims/workflows'),
             apiFetch('table/lims/projects'),
             apiFetch('table/reference/samples_type')
@@ -662,12 +658,13 @@
         });
 
         typeFilter.innerHTML = '<option value="">All Sample Types</option>';
-        allSampleTypes.forEach(t => {
-            typeFilter.innerHTML += `<option value="${t.sample_type_abrv}">${t.sample_type_abrv}</option>`;
+        // Populate sample type filter based on unique sample_type_abrv from detailed_samples_view
+        const uniqueSampleTypes = [...new Set(masterSampleList.map(s => s.sample_type_abrv).filter(Boolean))];
+        uniqueSampleTypes.sort().forEach(typeAbrv => {
+             typeFilter.innerHTML += `<option value="${typeAbrv}">${typeAbrv}</option>`;
         });
     }
 
-    // MODIFIED: applyFilters now excludes samples with "Closed" status
     function applyFilters() {
         const workflowId = document.getElementById('filter-workflow').value;
         const projectId = document.getElementById('filter-project').value;
@@ -677,8 +674,8 @@
 
         let filteredSamples = masterSampleList;
 
-        // --- EXCLUDE "Closed" status samples first ---
-        filteredSamples = filteredSamples.filter(s => s.sample_status_id !== 'Closed');
+        // --- EXCLUDE "Completed" and "Closed" status samples first ---
+        filteredSamples = filteredSamples.filter(s => s.sample_status_id !== 'Completed' && s.sample_status_id !== 'Closed');
 
         if (workflowOnly) {
             filteredSamples = filteredSamples.filter(s => s.workflow_id != null);
@@ -702,18 +699,18 @@
             filteredSamples = filteredSamples.filter(s => 
                 String(s.sample_id).toLowerCase().includes(searchTerm) ||
                 String(s.external_name || '').toLowerCase().includes(searchTerm) ||
-                String(s.sample_origin_type || '').toLowerCase().includes(searchTerm) // Also search origin type
+                String(s.sample_origin_type || '').toLowerCase().includes(searchTerm) || // Search in origin type
+                String(s.project_id || '').toLowerCase().includes(searchTerm) // Search project ID as well
             );
         }
         
         renderKanbanBoard(filteredSamples);
     }
     
-    // MODIFIED: This now uses `sample_full_details_view` for comprehensive details
     async function showSampleDetailsModal(sampleId) {
-        // Fetch the full detailed sample view record to ensure all joined fields are available
-        // Note: sample_full_full_details_view has sample_id as its conceptual PK.
-        const sampleDetails = await apiFetch(`table/lab/sample_full_details_view?filter_sample_id=${sampleId}`);
+        // Fetch the full detailed sample view record.
+        // For detailed_samples_view, sample_id itself is unique, so filtering by it should be enough.
+        const sampleDetails = await apiFetch(`table/lab/detailed_samples_view?sample_id=${sampleId}`); // Use direct equality for sample_id
         const sample = sampleDetails && sampleDetails.length > 0 ? sampleDetails[0] : null;
 
         if (!sample) { alert('Sample not found or details could not be loaded.'); return; }
@@ -748,55 +745,61 @@
         </div>`;
         showModal(modalHTML);
         
-        // This calls the new function to show steps for the associated workflow
-        loadWorkflowStepsIntoModal(sample.workflow_id, sample.sample_status_id); // Use sample_status_id for highlight
+        loadWorkflowStepsIntoModal(sample.workflow_id, sample.sample_status_id);
         
-        // This is your original code for showing history, preserved and called here.
         const historyContainer = document.getElementById('history-timeline');
         historyContainer.innerHTML = '';
-        // These are the tables that have a direct sample_id and a date field for history
-        // They are listed in your provided schema and `lab.detailed_samples_view` already joins them.
-        const analysisTables = [
-            { name: 'extraction', dateField: 'extraction_date' },
-            { name: 'qubit', dateField: 'measurement_date' },
-            { name: 'nanodrop', dateField: 'measurement_date' },
-            { name: 'tapestation', dateField: 'measurement_date' },
-            { name: 'pcr', dateField: 'pcr_date' },
-            { name: 'qpcr', dateField: 'qpcr_date' },
-            { name: 'gelelectrophoresis', dateField: 'run_date' },
-            { name: 'library', dateField: 'prep_date' },
-            { name: 'sequencing', dateField: 'sequencing_date' },
-            { name: 'dissections', dateField: 'dissection_date' },
-            { name: 'storage_log', dateField: 'move_date' }
-        ];
+        
         let events = [];
+        // Add events based on available fields in the detailed_samples_view
         if (sample.reception_date) {
             events.push({ step: 'Received', date: new Date(sample.reception_date) });
         }
-        for (const tableInfo of analysisTables) {
-            // Check if the specific property exists and has a value in the sample object
-            // This is more efficient than re-fetching for every table, as detailed_samples_view already has it.
-            const dateValue = sample[`${tableInfo.name}_${tableInfo.dateField}`]; // e.g., sample.extraction_extraction_date
-            if (dateValue) {
-                events.push({ step: tableInfo.name, date: new Date(dateValue) });
-            }
+        if (sample.dissection_date) {
+            events.push({ step: 'Dissection', date: new Date(sample.dissection_date) });
         }
-        // Also include bioinformatics analysis runs related to this sample
-        // This might need a separate lookup if analysis_runs are not fully denormalized with dates to sample_full_details_view
-        if (sample.analysis_run_id && sample.run_date) { // Check for run_id and run_date directly on sample
+        if (sample.extraction_date) { // For extraction events
+            events.push({ step: 'Extraction', date: new Date(sample.extraction_date) });
+        }
+        // QC steps (Nanodrop, Qubit, Tapestation) often share 'measurement_date' field names
+        // You'll need to check the presence of the specific ID or a relevant field for that type of QC.
+        if (sample.nanodrop_id && sample.nanodrop_measurement_date) {
+            events.push({ step: 'Nanodrop QC', date: new Date(sample.nanodrop_measurement_date) });
+        }
+        if (sample.qubit_id && sample.qubit_measurement_date) {
+            events.push({ step: 'Qubit QC', date: new Date(sample.qubit_measurement_date) });
+        }
+        if (sample.tapestation_id && sample.tapestation_measurement_date) {
+            events.push({ step: 'Tapestation QC', date: new Date(sample.tapestation_measurement_date) });
+        }
+        // PCR, qPCR, Gel (each has its own date field)
+        if (sample.pcr_id && sample.pcr_date) {
+            events.push({ step: 'PCR Done', date: new Date(sample.pcr_date) });
+        }
+        if (sample.qpcr_id && sample.qpcr_date) {
+            events.push({ step: 'qPCR Done', date: new Date(sample.qpcr_date) });
+        }
+        if (sample.gel_gelelectrophoresis_id && sample.gel_run_date) {
+             events.push({ step: 'Gel Electrophoresis', date: new Date(sample.gel_run_date) });
+        }
+        // Library Prep and Sequencing
+        if (sample.library_id && sample.library_prep_date) {
+            events.push({ step: 'Library Prep', date: new Date(sample.library_prep_date) });
+        }
+        if (sample.sequencing_id && sample.sequencing_date) {
+            events.push({ step: 'Sequencing Done', date: new Date(sample.sequencing_date) });
+        }
+        // Bioinformatics Analysis
+        if (sample.analysis_run_id && sample.run_date) {
              events.push({ step: 'Bioinformatics Analysis', date: new Date(sample.run_date) });
-        } else { // Fallback if not directly on sample view
-            const bioinfoRuns = await apiFetch(`table/bioinformatics/analysis_runs?filter_sample_id=${sampleId}`);
-            if (bioinfoRuns && !bioinfoRuns.error) {
-                bioinfoRuns.forEach(run => {
-                    if (run.run_date) {
-                        events.push({ step: 'Bioinformatics Analysis', date: new Date(run.run_date) });
-                    }
-                });
-            }
         }
+        // Otoliths
+        if (sample.otolith_id && sample.otolith_experiment_date) { // Using experiment_date from otoliths
+            events.push({ step: 'Otolith Reading', date: new Date(sample.otolith_experiment_date) });
+        }
+        // Add any other relevant dates from detailed_samples_view here
 
-        events.sort((a,b) => a.date.getTime() - b.date.getTime()); // Sort by timestamp
+        events.sort((a,b) => a.date.getTime() - b.date.getTime());
         if (events.length > 0) {
             historyContainer.innerHTML = events.map(event => `
                 <div class="mb-4 relative">
@@ -810,32 +813,6 @@
         }
     }
 
-    async function loadWorkflowStepsIntoModal(workflowId, currentSampleStatus) {
-        const stepsContainer = document.getElementById('workflow-steps-container');
-        if (!workflowId) {
-            stepsContainer.innerHTML = '<h3 class="font-bold text-lg mb-3">Workflow Steps</h3><p class="text-sm text-gray-500">No workflow assigned to this sample.</p>';
-            return;
-        }
-
-        // Use the cached allWorkflowSteps, filtered by the relevant workflowId
-        const steps = allWorkflowSteps.filter(step => step.workflow_id === workflowId)
-                                    .sort((a, b) => a.step_number - b.step_number);
-        
-        if (steps.length > 0) {
-            let stepsHtml = '<h3 class="font-bold text-lg mb-3">Workflow Steps</h3><ol class="list-decimal list-inside space-y-1">';
-            steps.forEach(step => {
-                // Highlight based on the sample's current `sample_status_id` matching a `workflow_step`'s `step_id`
-                const isCurrent = step.step_id === currentSampleStatus;
-                stepsHtml += `<li class="${isCurrent ? 'font-bold text-indigo-600' : ''}">${step.step_number}. ${step.step_name}</li>`;
-            });
-            stepsHtml += '</ol>';
-            stepsContainer.innerHTML = stepsHtml;
-        } else {
-            stepsContainer.innerHTML = '<h3 class="font-bold text-lg mb-3">Workflow Steps</h3><p class="text-sm text-gray-500">Could not load steps for this workflow.</p>';
-        }
-    }
-
-    // Helper to format date for URL parameters (YYYY-MM-DD).
     function formatDateForUrl(dateString) {
         if (!dateString) return '';
         try {
@@ -845,6 +822,28 @@
             console.warn("Failed to format date for URL:", dateString, e);
             return '';
         }
+    }
+
+    function timeSince(dateString) {
+        if (!dateString) return 'N/A';
+        const seconds = Math.floor((new Date() - new Date(dateString)) / 1000);
+        const interval = seconds / 86400;
+        if (interval > 1) return Math.floor(interval) + " days";
+        if (interval * 24 > 1) return Math.floor(interval * 24) + " hours";
+        if (interval * 24 * 60 > 1) return Math.floor(interval * 24 * 60) + " minutes";
+        return "Just now";
+    }
+
+    function showModal(content) {
+        const container = document.getElementById('modal-container');
+        container.innerHTML = content;
+        const modal = container.querySelector('.modal-overlay');
+        const modalContent = container.querySelector('.modal-content');
+        setTimeout(() => modalContent.classList.remove('opacity-0', '-translate-y-10'), 10);
+        const closeModal = () => { modalContent.classList.add('opacity-0', '-translate-y-10'); setTimeout(() => container.innerHTML = '', 300); };
+        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+        container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+        return { closeModal };
     }
 </script>
 </body>
