@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - TIFI MG</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="flex items-center justify-center h-screen">
+        <div class="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-md">
+            <div class="text-center">
+                <img src="./photo/logo.png" alt="TIFI MG Logo" class="w-24 h-24 mx-auto mb-4" onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
+                <div style="display:none;" class="w-24 h-24 mx-auto mb-4 bg-gray-200 flex items-center justify-center rounded-full text-gray-500">Logo</div>
+                <h1 class="text-3xl font-bold text-gray-900">TIFI MG</h1>
+                <p class="mt-2 text-sm text-gray-600">Please log in.</p>
+            </div>
+            <form id="login-form" class="mt-8 space-y-6">
+                <div id="login-error" class="hidden p-3 text-sm text-red-700 bg-red-100 rounded-lg">Invalid credentials.</div>
+                <div class="rounded-md shadow-sm -space-y-px">
+                    <div>
+                        <input id="username" name="username" type="text" required class="relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border border-gray-300 rounded-none appearance-none rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="Person ID" value="TIFI">
+                    </div>
+                    <div>
+                        <input id="password" name="password" type="password" required class="relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border border-gray-300 rounded-none appearance-none rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="Password" value="password">
+                    </div>
+                </div>
+                <div>
+                    <button type="submit" class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        Sign in
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // **FIX:** Check for redirect URL on initial load as well
+            const redirectUrl = localStorage.getItem('redirectUrl');
+            if (sessionStorage.getItem('isLoggedIn') === 'true') {
+                localStorage.removeItem('redirectUrl');
+                window.location.href = redirectUrl || './dashboard.html';
+            }
+
+            const API_BASE_URL = '/mymglab/api'; // const API_BASE_URL = `http://${window.location.hostname}:5200/api`;
+            const loginForm = document.getElementById('login-form');
+            const loginError = document.getElementById('login-error');
+
+            async function apiLogin(person_id, password) {
+                try {
+                     if (person_id === 'TIFI' && password === 'password') {
+                        return { success: true, user: { person: 'TIFI  User', person_id: 'TIFI' } };
+                     }
+                    const allUsers = await (await fetch(`${API_BASE_URL}/table/Reference/Personal`)).json();
+                    if (!allUsers) return { success: false, message: 'Server connection error.' };
+                    const user = allUsers.find(u => u.person_id === person_id);
+                    if (user && password === 'password') return { success: true, user: user };
+                    return { success: false, message: 'Invalid credentials.' };
+                } catch (error) {
+                    console.error("Login API failed:", error);
+                    return { success: false, message: 'Could not reach HPC server.' };
+                }
+            }
+
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                loginError.classList.add('hidden');
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                const result = await apiLogin(username, password);
+                if (result && result.success) {
+                    sessionStorage.setItem('isLoggedIn', 'true');
+                    sessionStorage.setItem('user', JSON.stringify(result.user));
+                    // **FIX:** Check for a redirect URL after logging in
+                    const redirectUrl = localStorage.getItem('redirectUrl');
+                    if (redirectUrl) {
+                        localStorage.removeItem('redirectUrl');
+                        window.location.href = redirectUrl;
+                    } else {
+                        window.location.href = './dashboard.html';
+                    }
+                } else {
+                    loginError.textContent = result.message;
+                    loginError.classList.remove('hidden');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
