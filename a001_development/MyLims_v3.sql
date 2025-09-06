@@ -3202,13 +3202,14 @@ END $$;
 -- Great booking schema
 -- ####################################
 
+
 -- lims.bookable_resource Table
 CREATE TABLE IF NOT EXISTS "lims"."bookable_resource" (
     "resource_id" text PRIMARY KEY,
     "resource_name" text NOT NULL,
     "resource_type" text NOT NULL, -- e.g., Centrifuge, PCR machine, Bench area
     "room_id" text REFERENCES "reference"."room"("room_id"),
-    "equipment_id" text REFERENCES "lims"."equipment"("equipment_id"),
+    "equipment_id" text,
     "capacity" integer DEFAULT 1, -- The number of people/bookings this resource can handle simultaneously
     "notes" text,
     "attachment" bytea,
