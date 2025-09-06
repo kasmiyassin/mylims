@@ -3198,16 +3198,74 @@ END $$;
 
 
 
+-- ####################################
+-- Great booking schema
+-- ####################################
+
+-- lims.bookable_resource Table
+CREATE TABLE IF NOT EXISTS "lims"."bookable_resource" (
+    "resource_id" text PRIMARY KEY,
+    "resource_name" text NOT NULL,
+    "resource_type" text NOT NULL, -- e.g., Centrifuge, PCR machine, Bench area
+    "room_id" text REFERENCES "reference"."room"("room_id"),
+    "equipment_id" text REFERENCES "lims"."equipment"("equipment_id"),
+    "capacity" integer DEFAULT 1, -- The number of people/bookings this resource can handle simultaneously
+    "notes" text,
+    "attachment" bytea,
+    "attachment_link" text
+);
 
 
+--  lims.booking Table
+CREATE TABLE IF NOT EXISTS "lims"."booking" (
+    "booking_id" bigserial PRIMARY KEY,
+    "resource_id" text NOT NULL REFERENCES "lims"."bookable_resource"("resource_id"),
+    "person_id" text NOT NULL,
+    "start_time" timestamptz NOT NULL,
+    "end_time" timestamptz NOT NULL,
+    "project_id" text REFERENCES "lims"."projects"("project_id"),
+    "notes" text,
+    "attachment" bytea,
+    "attachment_link" text,
+    "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_booking_time CHECK ("start_time" < "end_time")
+);
 
 
+-- Check Constraint for Concurrent Bookings
+-- to prevent overbooking based on the capacity of a resource. 
+-- Function to check for booking conflicts
+CREATE OR REPLACE FUNCTION "lims".check_booking_capacity()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_capacity INTEGER;
+    v_concurrent_bookings INTEGER;
+BEGIN
+    -- Get the capacity of the resource being booked
+    SELECT capacity INTO v_capacity FROM "lims"."bookable_resource" WHERE resource_id = NEW.resource_id;
 
+    -- Count existing, non-conflicting bookings for this resource
+    SELECT COUNT(*) INTO v_concurrent_bookings
+    FROM "lims"."booking"
+    WHERE
+        resource_id = NEW.resource_id
+        AND booking_id != NEW.booking_id -- Exclude the new or updated row itself
+        AND (
+            (NEW.start_time, NEW.end_time) OVERLAPS (start_time, end_time)
+        );
 
+    -- Check if the new booking exceeds the resource's capacity
+    IF v_concurrent_bookings >= v_capacity THEN
+        RAISE EXCEPTION 'This resource is already fully booked for the requested time slot. Capacity: %, Current Bookings: %', v_capacity, v_concurrent_bookings;
+    END IF;
 
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-
-
+-- Trigger to enforce the capacity check before inserting or updating a booking
+CREATE TRIGGER trg_check_booking_capacity BEFORE INSERT OR UPDATE ON "lims"."booking"
+FOR EACH ROW EXECUTE FUNCTION "lims".check_booking_capacity();
 
 
 
