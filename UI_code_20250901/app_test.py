@@ -1,7 +1,3 @@
-git config --global user.name "kasmiyassin"
-git config --global user.email "kasmi.yassin@gmail.com"
-
-
 from flask import Flask, request, jsonify, session, send_from_directory, redirect, url_for, g
 from flask_cors import CORS
 from waitress import serve
