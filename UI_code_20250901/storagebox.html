@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Storage - TIFI LIMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .sidebar { border-right: 1px solid #e2e8f0; }
+        .sidebar-item { color: #475569; }
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        .modal-overlay { z-index: 50; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+        /* Dynamic grid columns will be set by JS */
+        .box-grid { display: grid; gap: 0.25rem; }
+        .box-cell {
+            transition: all 0.2s ease;
+            cursor: pointer;
+            width: 7rem;
+            height: 3.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+            padding: 0.1rem;
+            border-radius: 0.375rem;
+            position: relative; /* For the position number overlay */
+        }
+        .box-cell.occupied { color: white; }
+        .box-cell.empty { background-color: #e5e7eb; color: #4b5563; }
+        .box-cell:hover { transform: scale(1.05); z-index: 10; box-shadow: 0 0 15px rgba(0,0,0,0.2); }
+        .cell-position-label {
+            position: absolute;
+            top: 2px;
+            left: 4px;
+            font-size: 0.5rem;
+            color: rgba(255, 255, 255, 0.7); /* Lighter color for occupied cells */
+            z-index: 2;
+        }
+        .box-cell.empty .cell-position-label {
+             color: #4b5563; /* Darker for empty cells */
+        }
+        .cell-main-info {
+            text-align: center;
+            padding-top: 0.5rem; /* Make space for position label */
+            font-size: 0.65rem;
+            word-break: break-all;
+            line-height: 1;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    </style>
+</head>
+<body>
+    <div id="main-app">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI LIMS</span></div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
+                <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="box" class="w-5 h-5 mr-3"></i><span>Storage Box</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="Printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+           </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t"></div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+
+        <div id="main-content" class="ml-64 p-8">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-3xl font-bold text-gray-800">Storage Management</h1>
+                <button id="new-storage-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all"><i data-lucide="plus" class="w-5 h-5 mr-2"></i>New Storage Unit</button>
+            </div>
+
+            <div class="card p-4 mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div><label class="text-sm font-medium">Room</label><select id="filter-room" class="w-full mt-1 p-2 border rounded-md"></select></div>
+                    <div><label class="text-sm font-medium">Freezer / Unit</label><select id="filter-freezer" class="w-full mt-1 p-2 border rounded-md" disabled></select></div>
+                    <div><label class="text-sm font-medium">Box</label><select id="filter-box" class="w-full mt-1 p-2 border rounded-md" disabled></select></div>
+                </div>
+            </div>
+
+            <div id="storage-contents-container">
+                <div class="card p-6 h-full flex items-center justify-center text-gray-500">
+                    <div class="text-center">
+                        <i data-lucide="archive-search" class="mx-auto h-12 w-12"></i>
+                        <p class="mt-2">Select a Room, Unit, and Box to see its contents</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="modal-container"></div>
+    </div>
+
+    <script>
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') window.location.href = './login.html';
+
+        const API_BASE_URL = '/tifi-lims/api'; // const API_BASE_URL = `http://${window.location.hostname}:5200/api`;
+        let storageCache = [];
+        let samplesCache = []; // This will hold samples from all relevant tables
+
+        const typeColorMap = {
+            'Fish': 'bg-blue-500', 'Tissue': 'bg-green-500', 'DNA': 'bg-purple-500',
+            'RNA': 'bg-pink-500', 'Water': 'bg-cyan-500', 'Sediments': 'bg-amber-500',
+            'Library': 'bg-indigo-500', // Added Library back, as samples can be type Library
+            'default': 'bg-gray-500'
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.person}</p>`;
+            document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href = './login.html'; });
+            initializeStoragePage();
+        });
+
+        async function apiFetch(endpoint, options = {}) {
+            try {
+                if (!(options.body instanceof FormData) && options.body !== undefined) {
+                    options.headers = { 'Content-Type': 'application/json', ...options.headers };
+                    options.body = JSON.stringify(options.body);
+                }
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({error: 'Server error'}));
+                    throw new Error(err.error || 'API request failed');
+                }
+                return response.status === 204 ? { success: true } : response.json();
+            } catch (error) {
+                console.error("API Error:", error);
+                return { error: error.message };
+            }
+        }
+
+        function showModal(content) {
+            const container = document.getElementById('modal-container');
+            container.innerHTML = content;
+            const modal = container.querySelector('.modal-overlay');
+            const modalContent = container.querySelector('.modal-content');
+            setTimeout(() => modalContent.classList.remove('opacity-0', '-translate-y-10'), 10);
+            const closeModal = () => {
+                modalContent.classList.add('opacity-0', '-translate-y-10');
+                setTimeout(() => container.innerHTML = '', 300);
+            };
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+            container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+            return { closeModal };
+        }
+
+        function populateRoomFilter(rooms) {
+            const select = document.getElementById('filter-room');
+            select.innerHTML = '<option value="">Select a Room...</option>';
+            if (rooms) rooms.forEach(room => select.innerHTML += `<option value="${room.room_id}">${room.description ? `${room.room_id} - ${room.description}` : room.room_id}</option>`);
+        }
+
+        function populateFreezerFilter(roomId) {
+            const select = document.getElementById('filter-freezer');
+            select.innerHTML = '<option value="">Select a Unit...</option>';
+            document.getElementById('filter-box').innerHTML = '<option value="">Select a Box...</option>';
+            document.getElementById('filter-box').disabled = true;
+
+            if (roomId && storageCache.length > 0) {
+                const freezersInRoom = [...new Set(storageCache.filter(s => s.room_id === roomId).map(s => s.Freezer))];
+                // Sort freezers alphabetically
+                freezersInRoom.sort().forEach(freezer => select.innerHTML += `<option value="${freezer}">${freezer}</option>`);
+                select.disabled = false;
+            } else {
+                select.disabled = true;
+            }
+        }
+
+        function populateBoxFilter(freezerId) {
+            const select = document.getElementById('filter-box');
+            select.innerHTML = '<option value="">Select a Box...</option>';
+            if (freezerId && storageCache.length > 0) {
+                const boxesInFreezer = storageCache.filter(s => s.Freezer === freezerId);
+                // Sort boxes by their 'Box' name
+                boxesInFreezer.sort((a,b) => a.Box.localeCompare(b.Box)).forEach(box => select.innerHTML += `<option value="${box.storage_id}">${box.Box} (${box.storage_id})</option>`);
+                select.disabled = false;
+            } else {
+                select.disabled = true;
+            }
+        }
+
+        function renderBoxGrid(storageId) {
+            const container = document.getElementById('storage-contents-container');
+            const samplesInBox = samplesCache.filter(s => s.storage_id === storageId);
+            const selectedBox = storageCache.find(s => s.storage_id === storageId);
+
+            // Default to 10x10 if BoxX_ABC or BoxY_123 are not set or invalid
+            const boxX = selectedBox && selectedBox.BoxX_ABC && selectedBox.BoxX_ABC > 0 ? parseInt(selectedBox.BoxX_ABC) : 10;
+            const boxY = selectedBox && selectedBox.BoxY_123 && selectedBox.BoxY_123 > 0 ? parseInt(selectedBox.BoxY_123) : 10;
+
+            const totalCells = boxX * boxY;
+            const gridCells = Array.from({length: totalCells}, (_, i) => i + 1);
+
+            let gridHTML = `<div class="box-grid" style="grid-template-columns: repeat(${boxX}, 1fr);">`;
+            gridHTML += gridCells.map(cellNum => {
+                const sample = samplesInBox.find(s => s.storage_position == cellNum);
+                if(sample) {
+                    const colorClass = typeColorMap[sample.sample_type] || typeColorMap['default'];
+                    let mainInfo = sample.sample_id;
+                    if (sample.External_Name && sample.External_Name !== sample.sample_id) {
+                         mainInfo = sample.External_Name; // Prefer external name if available and different
+                    } else if (sample.Reagent_Name) { // For Lims.Reagents, use Reagent_Name
+                        mainInfo = sample.Reagent_Name;
+                    }
+                    // Consider other potential names like TargetGene for Lab.PCR, etc. if you expand the cache
+
+                    return `<div class="box-cell occupied ${colorClass} rounded-md font-semibold truncate p-1 relative group"
+                                 title="ID: ${sample.sample_id}&#013;Type: ${sample.sample_type}&#013;Status: ${sample.workflow_status_id || 'N/A'}&#013;External Name: ${sample.External_Name || 'N/A'}"
+                                 onclick="showSampleDetailsModal('${sample.sample_id}', '${sample.source_table}', '${sample.nr}', '${storageId}')">
+                                 <span class="cell-position-label">${cellNum}</span>
+                                 <div class="cell-main-info">${mainInfo}</div>
+                            </div>`;
+                } else {
+                    return `<div class="box-cell empty rounded-md flex items-center justify-center text-xs" onclick="showAssignSampleModal('${storageId}', '${cellNum}')">
+                                <span class="cell-position-label">${cellNum}</span>
+                            </div>`;
+                }
+            }).join('');
+            gridHTML += `</div>`;
+
+            container.innerHTML = `
+                <div class="card p-6">
+                    <h2 class="text-2xl font-bold mb-4">Box: ${selectedBox ? selectedBox.Box : storageId} (${storageId})</h2>
+                    <p class="text-gray-600 mb-4">Dimensions: ${boxX} x ${boxY} = ${totalCells} positions</p>
+                    ${gridHTML}
+                </div>`;
+            lucide.createIcons(); // Re-render icons if any were added dynamically
+        }
+
+        // Updated function signature to pass source_table and nr
+        async function updateSampleStorage(sampleId, sourceTable, nr, storageId, position) {
+            const payload = { storage_id: storageId };
+
+            // Only update storage_position for sample types that have it
+            // Using the table name to decide if storage_position is applicable
+            if (['Fish', 'Tissue', 'DNA', 'RNA', 'Sediments', 'Water', 'Extraction', 'Nanodrop', 'Qubit', 'Tapestation', 'PCR', 'qPCR', 'Library', 'Sequencing', 'Bioinformatics'].includes(sourceTable)) {
+                payload.storage_position = position;
+            } else if (sourceTable === 'Reagents') {
+                payload.storage_position = position; // Reagents also have storage_position
+            }
+
+
+            // Update the record in its original table using 'nr' as primary key
+            const result = await apiFetch(`table/Lab/${sourceTable}/${nr}`, {
+                method: 'PUT',
+                body: payload
+            });
+
+            if (result && !result.error) {
+                // Also update the central Lab.Samples table directly to ensure consistency
+                // This is only needed if the original table is one of the root sample types
+                if (['Fish', 'Tissue', 'DNA', 'RNA', 'Sediments', 'Water'].includes(sourceTable)) {
+                    const updateCentralSampleResult = await apiFetch(`table/Lab/Samples/${sampleId}`, {
+                        method: 'PUT',
+                        body: { storage_id: storageId, storage_position: position }
+                    });
+
+                    if (updateCentralSampleResult && !updateCentralSampleResult.error) {
+                        return { success: true };
+                    } else {
+                        console.error("Failed to update central samples table:", updateCentralSampleResult?.error);
+                        alert('Failed to update central sample record: ' + (updateCentralSampleResult ? updateCentralSampleResult.error : 'Unknown error'));
+                        return null;
+                    }
+                }
+                return { success: true }; // Return success if no central sample update was needed or if it succeeded
+            } else {
+                return result; // Return the original error
+            }
+        }
+
+
+        // Updated function signature to pass source_table and nr
+        async function unassignSample(sampleId, sourceTable, nr, currentStorageId) {
+            if (!confirm(`Are you sure you want to remove sample ${sampleId} from this box?`)) return;
+
+            const payload = { storage_id: null, storage_position: null };
+            const result = await apiFetch(`table/Lab/${sourceTable}/${nr}`, {
+                method: 'PUT',
+                body: payload
+            });
+
+            if (result && !result.error) {
+                // Also update the central Lab.Samples table directly if it's a root sample
+                if (['Fish', 'Tissue', 'DNA', 'RNA', 'Sediments', 'Water'].includes(sourceTable)) {
+                    const updateCentralSampleResult = await apiFetch(`table/Lab/Samples/${sampleId}`, {
+                        method: 'PUT',
+                        body: payload
+                    });
+
+                    if (updateCentralSampleResult && !updateCentralSampleResult.error) {
+                        const detailsModal = document.querySelector('.modal-overlay');
+                        if (detailsModal) detailsModal.remove();
+                        await initializeStoragePage(false); // Re-fetch data
+                        renderBoxGrid(currentStorageId); // Re-render the grid
+                    } else {
+                        alert('Failed to update central sample record during unassignment: ' + (updateCentralSampleResult ? updateCentralSampleResult.error : 'Unknown error'));
+                    }
+                } else { // If not a root sample type, just re-render the grid
+                    const detailsModal = document.querySelector('.modal-overlay');
+                    if (detailsModal) detailsModal.remove();
+                    await initializeStoragePage(false); // Re-fetch data
+                    renderBoxGrid(currentStorageId); // Re-render the grid
+                }
+
+            } else {
+                alert('Failed to unassign sample: ' + (result ? result.error : 'Unknown error'));
+            }
+        }
+
+        // Updated function signature to pass source_table and nr
+        function showSampleDetailsModal(sampleId, sourceTable, nr, currentStorageId) {
+            // Find the specific sample from the correct source table
+            const sample = samplesCache.find(s => s.sample_id === sampleId && s.source_table === sourceTable);
+
+            if (!sample) {
+                alert('Sample details not found.');
+                return;
+            }
+
+            let detailsHTMLContent = '';
+            for (const key in sample) {
+                // Exclude internal fields or fields that are redundant
+                if (key === 'nr' || key === 'Attachment' || key === 'password_hash') continue;
+                // Format dates nicely
+                if (key.includes('date') && sample[key]) {
+                    const date = new Date(sample[key]);
+                    detailsHTMLContent += `<p><strong>${key.replace(/_/g, ' ').replace(/(^\w|\s\w)/g, m => m.toUpperCase())}:</strong> ${date.toLocaleDateString()}</p>`;
+                } else if (sample[key] !== null && sample[key] !== undefined && sample[key] !== '') {
+                    detailsHTMLContent += `<p><strong>${key.replace(/_/g, ' ').replace(/(^\w|\s\w)/g, m => m.toUpperCase())}:</strong> ${sample[key]}</p>`;
+                }
+            }
+
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 flex items-center justify-center">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-2xl font-bold">Sample Details: ${sample.sample_id}</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl leading-none">&times;</button>
+                        </div>
+                        <div class="space-y-2 text-gray-700 max-h-96 overflow-y-auto custom-scroll">
+                            ${detailsHTMLContent}
+                        </div>
+                        <div class="pt-6 flex justify-end gap-3">
+                            <button onclick="unassignSample('${sample.sample_id}', '${sample.source_table}', '${sample.nr}', '${currentStorageId}')" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Unassign Sample</button>
+                            <button id="close-modal-btn-bottom" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg">Close</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+            document.getElementById('close-modal-btn-bottom').addEventListener('click', closeModal);
+        }
+
+
+        function showAssignSampleModal(storageId, position) {
+            // Filter samples that are not assigned to any storage location OR are assigned but to a different location
+            const unassignedSamples = samplesCache.filter(s => !s.storage_id || (s.storage_id && s.storage_id !== storageId && s.storage_position !== position));
+
+            // Sort unassigned samples for easier selection
+            unassignedSamples.sort((a, b) => a.sample_id.localeCompare(b.sample_id));
+
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 flex items-center justify-center">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-lg">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-2xl font-bold">Assign Sample to ${storageId} (Pos: ${position})</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl leading-none">&times;</button>
+                        </div>
+                        <form id="assign-sample-form">
+                            <label for="sample-to-assign" class="block text-sm font-medium text-gray-700">Select an unassigned sample:</label>
+                            <select id="sample-to-assign" required class="w-full mt-1 p-2 border rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                <option value="">-- Select a Sample --</option>
+                                ${unassignedSamples.map(s => `<option value="${s.sample_id}" data-sourcetable="${s.source_table}" data-nr="${s.nr}">${s.sample_id} (${s.sample_type}${s.External_Name ? ` - ${s.External_Name}` : ''})</option>`).join('')}
+                            </select>
+                            <div class="pt-4 flex justify-end">
+                                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Assign</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>`;
+            const { closeModal } = showModal(modalHTML);
+
+            document.getElementById('assign-sample-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const selectElement = document.getElementById('sample-to-assign');
+                const selectedOption = selectElement.options[selectElement.selectedIndex];
+                const sampleId = selectedOption.value;
+                const sourceTable = selectedOption.dataset.sourcetable;
+                const nr = selectedOption.dataset.nr; // Get the 'nr' primary key
+
+                if (!sampleId || !sourceTable || !nr) {
+                    alert('Please select a valid sample.');
+                    return;
+                }
+
+                const result = await updateSampleStorage(sampleId, sourceTable, nr, storageId, position.toString());
+                if (result && !result.error) {
+                    closeModal();
+                    await initializeStoragePage(false); // Re-fetch data
+                    renderBoxGrid(storageId); // Re-render the grid
+                } else {
+                    alert('Failed to assign sample: ' + (result ? result.error : 'Record not found.'));
+                }
+            };
+        }
+
+        async function showNewStorageModal() {
+            const rooms = await apiFetch('table/Reference/Room');
+            const roomOptions = rooms && !rooms.error ? rooms.map(r => `<option value="${r.room_id}">${r.description ? `${r.room_id} - ${r.description}` : r.room_id}</option>`).join('') : '';
+
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 flex items-center justify-center">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-md">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-2xl font-bold">Add New Storage Unit</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl leading-none">&times;</button>
+                        </div>
+                        <form id="new-storage-form" class="space-y-4">
+                            <div>
+                                <label for="storage_id" class="block text-sm font-medium text-gray-700">Storage ID (e.g., BOX-001)</label>
+                                <input type="text" id="storage_id" name="storage_id" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label for="room_id" class="block text-sm font-medium text-gray-700">Room</label>
+                                <select id="room_id" name="room_id" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="">Select an existing Room</option>
+                                    ${roomOptions}
+                                    <option value="__NEW_ROOM__">-- Create New Room --</option>
+                                </select>
+                                <div id="new-room-fields" class="space-y-2 mt-2 hidden">
+                                    <input type="text" id="new_room_id" placeholder="New Room ID (e.g., Lab01)" class="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                    <input type="text" id="new_room_description" placeholder="New Room Description (optional)" class="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                            </div>
+                            <div>
+                                <label for="Freezer" class="block text-sm font-medium text-gray-700">Freezer / Unit Name</label>
+                                <input type="text" id="Freezer" name="Freezer" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label for="Etage" class="block text-sm font-medium text-gray-700">Shelf / Etage</label>
+                                <input type="text" id="Etage" name="Etage" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label for="Temperature" class="block text-sm font-medium text-gray-700">Temperature</label>
+                                <input type="number" step="0.1" id="Temperature" name="Temperature" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label for="TemperatureUnit" class="block text-sm font-medium text-gray-700">Temperature Unit</label>
+                                <input type="text" id="TemperatureUnit" name="TemperatureUnit" value="°C" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label for="Box" class="block text-sm font-medium text-gray-700">Box Name</label>
+                                <input type="text" id="Box" name="Box" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label for="BoxX_ABC" class="block text-sm font-medium text-gray-700">Box X Dimension (Columns, default 10)</label>
+                                    <input type="number" id="BoxX_ABC" name="BoxX_ABC" value="10" min="1" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label for="BoxY_123" class="block text-sm font-medium text-gray-700">Box Y Dimension (Rows, default 10)</label>
+                                    <input type="number" id="BoxY_123" name="BoxY_123" value="10" min="1" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                            </div>
+                            <div>
+                                <label for="Notes" class="block text-sm font-medium text-gray-700">Notes</label>
+                                <textarea id="Notes" name="Notes" rows="3" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
+                            </div>
+                            <div class="pt-4 flex justify-end">
+                                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Add Storage Unit</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+
+            const roomSelect = document.getElementById('room_id');
+            const newRoomFieldsDiv = document.getElementById('new-room-fields');
+            const newRoomIdInput = document.getElementById('new_room_id');
+            const newRoomDescriptionInput = document.getElementById('new_room_description');
+
+            roomSelect.addEventListener('change', () => {
+                if (roomSelect.value === '__NEW_ROOM__') {
+                    newRoomFieldsDiv.classList.remove('hidden');
+                    newRoomIdInput.setAttribute('required', 'required');
+                } else {
+                    newRoomFieldsDiv.classList.add('hidden');
+                    newRoomIdInput.removeAttribute('required');
+                    newRoomIdInput.value = ''; // Clear values when hidden
+                    newRoomDescriptionInput.value = '';
+                }
+            });
+
+
+            document.getElementById('new-storage-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const data = Object.fromEntries(formData.entries());
+
+                let roomIdToUse = data.room_id;
+
+                if (roomIdToUse === '__NEW_ROOM__') { // User wants to create a new room
+                    if (!data.new_room_id) {
+                        alert('Please provide a New Room ID.');
+                        return;
+                    }
+                    roomIdToUse = data.new_room_id;
+                    const newRoomData = {
+                        room_id: roomIdToUse,
+                        description: data.new_room_description || null
+                    };
+                    const roomCreateResult = await apiFetch('create_if_not_exists/Reference/Room', {
+                        method: 'POST',
+                        body: newRoomData
+                    });
+
+                    if (roomCreateResult.error) {
+                        alert('Failed to create new room: ' + roomCreateResult.error);
+                        return;
+                    }
+                } else if (!roomIdToUse) { // If no room selected and not creating new
+                    alert('Please select an existing Room or create a New Room.');
+                    return;
+                }
+
+
+                const payload = {
+                    storage_id: data.storage_id,
+                    room_id: roomIdToUse,
+                    Freezer: data.Freezer,
+                    Etage: data.Etage || null,
+                    Temperature: data.Temperature ? parseFloat(data.Temperature) : null,
+                    TemperatureUnit: data.TemperatureUnit || null,
+                    Box: data.Box,
+                    BoxX_ABC: data.BoxX_ABC ? parseInt(data.BoxX_ABC) : 10, // Default to 10
+                    BoxY_123: data.BoxY_123 ? parseInt(data.BoxY_123) : 10, // Default to 10
+                    Notes: data.Notes || null,
+                    Attachment: null // Assuming no attachment for now in this form
+                };
+
+                const result = await apiFetch('table/Lab/Storage', {
+                    method: 'POST',
+                    body: payload
+                });
+
+                if (result && !result.error) {
+                    alert('Storage unit added successfully!');
+                    closeModal();
+                    await initializeStoragePage(false); // Re-fetch all data including the new storage unit
+                    // Re-populate filters to include the new room/freezer/box and select them
+                    document.getElementById('filter-room').value = roomIdToUse;
+                    populateFreezerFilter(roomIdToUse);
+                    // Wait a bit for the next filter to populate, then set
+                    setTimeout(() => {
+                        document.getElementById('filter-freezer').value = data.Freezer;
+                        populateBoxFilter(data.Freezer);
+                        setTimeout(() => {
+                            document.getElementById('filter-box').value = data.storage_id;
+                            renderBoxGrid(data.storage_id);
+                        }, 50); // Small delay
+                    }, 50); // Small delay
+                } else {
+                    alert('Failed to add storage unit: ' + (result ? result.error : 'Unknown error'));
+                }
+            };
+        }
+
+
+        async function initializeStoragePage(setupEventListeners = true) {
+            // Include Lab.Reagents here as they can also be stored
+            const sampleTables = [
+                'Samples', 'Fish', 'Tissue', 'Water', 'Sediments', 'DNA', 'RNA',
+                'Extraction', 'Nanodrop', 'Qubit', 'Tapestation', 'PCR', 'qPCR',
+                'Library', 'Sequencing', 'Bioinformatics', // These can also have storage_id and storage_position
+                // Lims schema tables that can have storage
+                'Reagents'
+            ];
+
+            // 1. Fetch storage and room info first
+            const [storageData, roomData] = await Promise.all([
+                apiFetch('table/Lab/Storage'),
+                apiFetch('table/Reference/Room')
+            ]);
+
+            if (storageData && !storageData.error) storageCache = storageData;
+            else console.error("Failed to load Storage data:", storageData?.error);
+
+            if (roomData && !roomData.error) populateRoomFilter(roomData);
+            else populateRoomFilter([]);
+
+            // 2. Create a list of promises to fetch all individual sample/reagent tables
+            const allSamplePromises = sampleTables.map(table =>
+                apiFetch(`table/${table.includes('Reagents') ? 'Lims' : 'Lab'}/${table}`).then(response => {
+                    if (response.error || !Array.isArray(response)) {
+                        console.error(`Failed to load ${table} data:`, response?.error);
+                        return []; // Return empty array on failure
+                    }
+                    // Add source_table and ensure sample_type is present for consistent display logic
+                    return response.map(item => ({
+                        ...item,
+                        source_table: table,
+                        // Provide a default sample_type if not explicitly present (e.g., for Reagents)
+                        sample_type: item.sample_type || item.Reagent_Name || table
+                    }));
+                })
+            );
+
+            // 3. Run all fetches and combine the results
+            const allSampleArrays = await Promise.all(allSamplePromises);
+            samplesCache = allSampleArrays.flat().filter(item => item.storage_id !== null); // Only cache items that have a storage_id
+
+            console.log(`Total samples/reagents loaded from all tables with storage_id: ${samplesCache.length}`);
+
+            // 4. Set up event listeners only on the first page load
+            if (setupEventListeners) {
+                document.getElementById('filter-room').addEventListener('change', (e) => populateFreezerFilter(e.target.value));
+                document.getElementById('filter-freezer').addEventListener('change', (e) => populateBoxFilter(e.target.value));
+                document.getElementById('filter-box').addEventListener('change', (e) => {
+                    const selectedStorageId = e.target.value;
+                    if (selectedStorageId) {
+                        renderBoxGrid(selectedStorageId);
+                    } else {
+                        // Clear grid if no box is selected
+                        document.getElementById('storage-contents-container').innerHTML = `
+                            <div class="card p-6 h-full flex items-center justify-center text-gray-500">
+                                <div class="text-center">
+                                    <i data-lucide="archive-search" class="mx-auto h-12 w-12"></i>
+                                    <p class="mt-2">Select a Room, Unit, and Box to see its contents</p>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+                document.getElementById('new-storage-btn').addEventListener('click', showNewStorageModal);
+            }
+        }
+    </script>
+</body>
+</html>
