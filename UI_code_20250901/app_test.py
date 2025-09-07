@@ -28,7 +28,6 @@ app.secret_key = SECRET_KEY
 CORS(app, supports_credentials=True)
 
 PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
-    ('reference', 'personal'): 'person_id',
     ('reference', 'status'): 'status_id',
     ('reference', 'room'): 'room_id',
     ('reference', 'vessel'): 'vessel_id',
@@ -38,20 +37,22 @@ PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     ('reference', 'samples_type'): 'sample_type_id',
     ('reference', 'gene'): 'gene_id',
     ('reference', 'taxon'): 'taxon_id',
-    ('reference', 'species'): 'species_id',
     ('reference', 'units'): 'unit_id',
+    ('reference', 'reference_databases'): 'db_id',
+    ('lims', 'personal'): 'person_id',
     ('lims', 'external_contacts'): 'contact_id',
     ('lims', 'customers'): 'customer_id',
     ('lims', 'projects'): 'project_id',
     ('lims', 'project_persons'): ['project_id', 'person_id'],
     ('lab', 'storage'): 'storage_id',
     ('lims', 'cruises'): 'cruise_id',
-    ('lims', 'workflows'): 'workflow_id',
+    ('lims', 'sop'): 'sop_id',
+    ('lims', 'batch'): 'batch_id',
+    ('lims', 'batch_steps'): ['batch_id', 'step_number'],
     ('lims', 'permits'): 'permit_id',
     ('lims', 'primers'): 'primer_id',
-    ('lims', 'sop'): 'sop_id',
-    ('lims', 'workflow_steps'): ['workflow_id', 'step_number'],
     ('lims', 'equipment'): 'equipment_id',
+    ('lims', 'instrument_maintenance'): 'maintenance_id',
     ('lims', 'suppliers'): 'supplier_id',
     ('lims', 'inventory_items'): 'item_id',
     ('lims', 'orders'): 'fi_order_nr',
@@ -59,84 +60,85 @@ PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     ('lims', 'publication_type'): 'publication_type_id',
     ('lims', 'publications'): 'publication_id',
     ('lab', 'experiments'): ['experiment_id', 'experiment_date'],
-    ('lab', 'experiments_projects'): 'experiment_project_id',
+    ('lab', 'experiments_projects'): ['experiment_id', 'project_id', 'experiment_date'],
+    ('lab', 'experiments_samples'): ['experiment_id', 'experiment_date', 'sample_id', 'sample_creation_date'],
     ('lab', 'protocol_runs'): 'protocol_run_id',
     ('lab', 'sampling'): ['sampling_id', 'sampling_date'],
-    ('lab', 'master_samples'): 'sample_id',
-    ('lab', 'parental_samples'): ['sample_id', 'sampling_date'],
-    ('lab', 'fishing'): ['fishing_id', 'sampling_date'],
-    ('lab', 'fish'): ['sample_id', 'sampling_date'],
-    ('lab', 'tissue'): ['sample_id', 'experiment_date'],
-    ('lab', 'otoliths'): ['otolith_id', 'experiment_date'],
-    ('lab', 'dna'): ['sample_id', 'experiment_date'],
-    ('lab', 'rna'): ['sample_id', 'experiment_date'],
-    ('lab', 'sediments'): ['sample_id', 'experiment_date'],
-    ('lab', 'water'): ['sample_id', 'experiment_date'],
-    ('lab', 'experiments_samples'): ['experiment_id', 'sample_id', 'experiment_date'],
-    ('lab', 'dissections'): ['dissection_id', 'dissection_date'],
-    ('lab', 'extraction'): ['extraction_id', 'extraction_date'],
-    ('lab', 'nanodrop'): ['nanodrop_id', 'measurement_date'],
-    ('lab', 'qubit'): ['qubit_id', 'measurement_date'],
-    ('lab', 'tapestation'): ['tapestation_id', 'measurement_date'],
-    ('lab', 'pcr'): ['pcr_id', 'pcr_date'],
-    ('lab', 'gelelectrophoresis'): ['gelelectrophoresis_id', 'run_date'],
-    ('lab', 'qpcr'): ['qpcr_id', 'qpcr_date'],
-    ('lab', 'library'): ['library_id', 'prep_date'],
-    ('lab', 'sequencing'): ['sequencing_id', 'sequencing_date'],
+    ('lab', 'fishing'): ['fishing_id', 'creation_date'],
+    ('lab', 'individual_catch_catch'): ['individual_catch_id', 'creation_date'],
+    ('lab', 'sampling_abiotic_data'): ['sampling_id', 'creation_date'],
+    ('lab', 'root_samples'): ['sample_id', 'sample_creation_date'],
+    ('lab', 'storage_log'): 'log_id',
+    ('lab', 'fish'): ['sample_id', 'creation_date'],
+    ('lab', 'tissue'): ['sample_id', 'creation_date'],
+    ('lab', 'otoliths'): ['sample_id', 'reader_person_id', 'side', 'creation_date'],
+    ('lab', 'dna'): ['sample_id', 'creation_date'],
+    ('lab', 'rna'): ['sample_id', 'creation_date'],
+    ('lab', 'sediments'): ['sample_id', 'creation_date'],
+    ('lab', 'water'): ['sample_id', 'creation_date'],
+    ('lab', 'pcr'): ['pcr_id', 'creation_date'],
+    ('lab', 'dissections'): ['dissection_id', 'creation_date'],
+    ('lab', 'nanodrop'): ['nanodrop_id', 'creation_date'],
+    ('lab', 'qubit'): ['qubit_id', 'creation_date'],
+    ('lab', 'tapestation'): ['tapestation_id', 'creation_date'],
+    ('lab', 'gelelectrophoresis'): ['gelelectrophoresis_id', 'creation_date'],
+    ('lab', 'qpcr'): ['qpcr_id', 'creation_date'],
+    ('lab', 'library'): ['library_id', 'sample_id', 'creation_date'],
+    ('lab', 'sequencing_run'): ['sequencing_run_id', 'creation_date'],
+    ('lab', 'seq_dataset'): ['data_seq_id', 'creation_date'],
     ('lab', 'datasets'): ['dataset_id', 'reception_date'],
-    ('bioinformatics', 'reference_databases'): 'db_id',
     ('bioinformatics', 'analysis_pipelines'): 'pipeline_id',
-    ('bioinformatics', 'analysis_runs'): ['run_id', 'run_date'],
-    ('bioinformatics', 'edna_assignments'): 'assignment_id',
+    ('bioinformatics', 'analysis_runs'): ['run_id', 'creation_date'],
+    ('bioinformatics', 'edna_assignments'): ['assignment_id', 'creation_date'],
     ('projects', 'projectwanderfische_fishingdata'): ['fishing_record_id', 'record_date'],
     ('projects', 'projectwanderfische_fishcatch'): 'fish_catch_id',
     ('projects', 'projectwanderfische_mail'): 'mail_id',
     ('projects', 'projectwanderfische_conversation'): 'conversation_id',
     ('projects', 'projectwanderfische_chatmessage'): 'message_id',
-    ('lab', 'storage_log'): 'log_id',
-    ('lab', 'master_samples'): 'sample_id',
+    ('lims', 'bookable_resource'): 'resource_id',
+    ('lims', 'booking'): 'booking_id',
+    ('audit', 'log'): 'id',
 
     # Views
-    ('reference', 'complete_species_taxon_view'): 'taxon_id',
-    ('lab', 'detailed_samples_view'): 'sample_id',
-    ('lims', 'project_overview_view'): 'project_id',
-    ('lab', 'sample_workflow_progress_view'): 'sample_id',
-    ('lims', 'reagent_status_view'): 'reagent_id',
-    ('lab', 'sample_full_details_view'): ['sample_id', 'sampling_date'],
-    ('lims', 'project_personnel_view'): ['project_id', 'person_id'],
-    ('lims', 'order_details_view'): 'fi_order_nr',
-    ('lab', 'storage_inventory_view'): 'storage_id',
-    ('lab', 'experiment_summary_view'): 'experiment_id',
-    ('bioinformatics', 'analysis_results_summary'): ['run_id', 'run_date'],
-    ('lims', 'project_financial_summary_view'): 'project_id',
-    ('bioinformatics', 'full_analysis_results_view'): 'sample_id',
+    ('lims', 'project_summary_view'): 'project_id',
+    ('lab', 'sample_type_counts_view'): 'sample_type_id',
     ('lab', 'storage_occupancy_view'): 'storage_id',
+    ('lims', 'projects_with_contact_details_view'): 'project_id',
+    ('reference', 'taxon_hierarchy_view'): 'taxon_id',
+    ('lims', 'inventory_reagent_summary_view'): 'reagent_id',
+    ('lab', 'project_pipeline_progress_view'): 'project_id',
+    ('lab', 'full_sampling_data_view'): ['sampling_id', 'sampling_date'],
+    ('bioinformatics', 'analysis_results_view'): 'run_id',
+    ('lims', 'publications_by_project_view'): 'project_id',
     ('lims', 'project_comprehensive_summary_view'): 'project_id',
     ('lab', 'experiment_progress_overview_view'): 'experiment_id',
     ('lims', 'reagent_status_view'): 'reagent_id',
-    ('reference', 'taxon_hierarchy_view'): 'taxon_id',
-    ('lab', 'monthly_sample_reception_mv'): 'reception_month',
+    ('lab', 'storage_log_history_view'): 'log_id',
+    ('bioinformatics', 'analysis_results_summary_view'): 'run_id',
+    ('lab', 'full_sequencing_run_view'): 'sequencing_run_id',
+    ('lab', 'global_lims_view'): ['sample_id', 'sample_creation_date'],
+    ('lab', 'monthly_sample_reception_mv'): ['reception_month', 'sample_type_id'],
 }
 
 VIEW_TO_BASE_TABLE_MAPPING: Dict[str, str] = {
-    'lab.detailed_samples_view': 'lab.parental_samples',
-    'lims.project_overview_view': 'lims.projects',
-    'lab.sample_workflow_progress_view': 'lab.parental_samples',
-    'lims.reagent_status_view': 'lims.reagents',
-    'lab.sample_full_details_view': 'lab.parental_samples',
-    'lims.project_personnel_view': 'lims.project_persons',
-    'lims.order_details_view': 'lims.orders',
-    'reference.complete_species_taxon_view': 'reference.taxon',
-    'lab.storage_inventory_view': 'lab.storage',
-    'lab.experiment_summary_view': 'lab.experiments',
-    'bioinformatics.analysis_results_summary': 'bioinformatics.analysis_runs',
-    'lims.project_financial_summary_view': 'lims.projects',
-    'bioinformatics.full_analysis_results_view': 'bioinformatics.edna_assignments',
+    'lims.project_summary_view': 'lims.projects',
+    'lab.sample_type_counts_view': 'lab.root_samples',
     'lab.storage_occupancy_view': 'lab.storage',
-    ('lims', 'project_comprehensive_summary_view'): 'lims.projects',
-    'lab.experiment_progress_overview_view': 'lab.experiments',
+    'lims.projects_with_contact_details_view': 'lims.projects',
     'reference.taxon_hierarchy_view': 'reference.taxon',
-    'lab.monthly_sample_reception_mv': 'lab.parental_samples',
+    'lims.inventory_reagent_summary_view': 'lims.reagents',
+    'lab.project_pipeline_progress_view': 'lims.projects',
+    'lab.full_sampling_data_view': 'lab.sampling',
+    'bioinformatics.analysis_results_view': 'bioinformatics.analysis_runs',
+    'lims.publications_by_project_view': 'lims.publications',
+    'lims.project_comprehensive_summary_view': 'lims.projects',
+    'lab.experiment_progress_overview_view': 'lab.experiments',
+    'lims.reagent_status_view': 'lims.reagents',
+    'lab.storage_log_history_view': 'lab.storage_log',
+    'bioinformatics.analysis_results_summary_view': 'bioinformatics.analysis_runs',
+    'lab.full_sequencing_run_view': 'lab.sequencing_run',
+    'lab.global_lims_view': 'lab.root_samples',
+    'lab.monthly_sample_reception_mv': 'lab.root_samples',
 }
 
 
@@ -154,14 +156,15 @@ def get_db_connection():
 def before_request_func():
     """
     Establishes a database connection for the request and sets RLS context.
+    The 'kasmi' user is a superuser and bypasses RLS policies.
     """
     g.db_conn = get_db_connection()
     person_id_to_set = session.get('user_id', '')
-    if isinstance(person_id_to_set, int):
-        person_id_to_set = str(person_id_to_set)
 
     try:
         with g.db_conn.cursor() as cur:
+            # Set the RLS context for the current user.
+            # RLS policies will be bypassed automatically for the superuser 'kasmi'.
             cur.execute("SELECT set_config('lims.current_person_id', %s, FALSE)", (person_id_to_set,))
             g.db_conn.commit()
             print(f"RLS: Set lims.current_person_id to '{person_id_to_set}'")
@@ -247,6 +250,20 @@ def _resolve_table_casing(conn, requested_schema: str, requested_table: str) -> 
                 table_type = 'VIEW'
                 _resolved_names_cache[cache_key] = (actual_schema, actual_table, table_type)
                 return actual_schema, actual_table, table_type
+            
+            # Check for partitioned tables
+            query_partitioned = """
+                SELECT parent.relnamespace::regnamespace::text, parent.relname::text, 'PARTITIONED TABLE'
+                FROM pg_class AS parent
+                JOIN pg_namespace AS ns ON parent.relnamespace = ns.oid
+                WHERE ns.nspname = %s AND parent.relname = %s AND parent.relkind = 'p';
+            """
+            cur.execute(query_partitioned, (requested_schema, requested_table))
+            result_partitioned = cur.fetchone()
+            if result_partitioned:
+                actual_schema, actual_table, table_type = result_partitioned[0], result_partitioned[1], result_partitioned[2]
+                _resolved_names_cache[cache_key] = (actual_schema, actual_table, table_type)
+                return actual_schema, actual_table, table_type
 
     except Exception as e:
         print(f"Error resolving table casing for {requested_schema}.{requested_table}: {e}")
@@ -277,7 +294,9 @@ def _get_column_types(conn, schema: str, table: str) -> Dict[str, str]:
 
 @app.route(f'{API_PREFIX}/login', methods=['POST'])
 def login_user():
-    """Handles user login across different user tables."""
+    """
+    Handles user login across different user tables, including special cases for superadmins.
+    """
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
@@ -285,20 +304,29 @@ def login_user():
     if not username or not password:
         return jsonify({"error": "Missing username or password"}), 400
 
+    # Special hardcoded superadmin login for 'TIFI' and 'kasmi'
     if username == 'TIFI' and password == 'password':
         session['user_id'] = 'TIFI'
         session['user_type'] = 'admin'
         session['is_admin'] = True
         return jsonify({"success": True, "user": {"full_name": "TIFI Admin", "person_id": "TIFI"}, "user_type": "admin"}), 200
 
+    if username == 'kasmi' and password == 'password':
+        session['user_id'] = 'kasmi'
+        session['user_type'] = 'superadmin'
+        session['is_admin'] = True
+        return jsonify({"success": True, "user": {"full_name": "Kasmi Superadmin", "person_id": "kasmi"}, "user_type": "superadmin"}), 200
+
     conn = g.db_conn
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            query_personal = 'SELECT person_id, full_name, password_hash FROM "reference"."personal" WHERE person_id = %s;'
+            # First, try to log in as a regular lab member
+            query_personal = 'SELECT person_id, full_name, password_hash FROM "lims"."personal" WHERE person_id = %s;'
             cur.execute(query_personal, (username,))
             user_personal = cur.fetchone()
 
             if user_personal and user_personal.get('password_hash'):
+                # bcrypt.checkpw requires bytes, so we encode the password
                 if bcrypt.checkpw(password.encode('utf-8'), user_personal['password_hash'].encode('utf-8')):
                     session['user_id'] = user_personal['person_id']
                     session['user_type'] = 'personal'
@@ -306,6 +334,7 @@ def login_user():
                     user_personal.pop('password_hash', None)
                     return jsonify({"success": True, "user": user_personal, "user_type": "personal"}), 200
 
+            # Then, try to log in as a customer
             query_customers = 'SELECT customer_id, customer_name, mail, password_hash FROM "lims"."customers" WHERE mail = %s;'
             cur.execute(query_customers, (username,))
             user_customer = cur.fetchone()
@@ -318,6 +347,7 @@ def login_user():
                     user_customer.pop('password_hash', None)
                     return jsonify({"success": True, "user": user_customer, "user_type": "customer"}), 200
 
+            # Finally, try to log in as an external contact
             query_external_contacts = 'SELECT contact_id, full_name, mail, password_hash FROM "lims"."external_contacts" WHERE mail = %s;'
             cur.execute(query_external_contacts, (username,))
             user_external = cur.fetchone()
@@ -351,54 +381,50 @@ def global_search(search_term: str):
     search_pattern = f"%{search_term}%"
 
     results: Dict[str, List[Dict[str, Any]]] = {}
-
+    
     queries: Dict[str, Tuple[str, Tuple[Any, ...]]] = {
         "projects": (
-            f'SELECT project_id, title FROM "lims"."projects" WHERE project_search_vector @@ {ts_query_func} OR project_id ILIKE %s OR title ILIKE %s LIMIT 5',
+            f'SELECT project_id, title FROM "lims"."projects" WHERE project_search_vector @@ {ts_query_func} OR "project_id" ILIKE %s OR "title" ILIKE %s LIMIT 5',
             (search_term, search_pattern, search_pattern)
         ),
         "samples": (
-            f'SELECT sample_id, external_name, sample_status_id FROM "lab"."parental_samples" WHERE sample_search_vector @@ {ts_query_func} OR sample_id ILIKE %s OR external_name ILIKE %s LIMIT 5',
+            f'SELECT sample_id, external_name FROM "lab"."root_samples" WHERE sample_search_vector @@ {ts_query_func} OR "sample_id" ILIKE %s OR "external_name" ILIKE %s LIMIT 5',
             (search_term, search_pattern, search_pattern)
         ),
         "experiments": (
-            f'SELECT experiment_id, experiment_title FROM "lab"."experiments" WHERE experiment_search_vector @@ {ts_query_func} OR experiment_id ILIKE %s OR experiment_title ILIKE %s LIMIT 5',
+            f'SELECT experiment_id, experiment_title FROM "lab"."experiments" WHERE experiment_search_vector @@ {ts_query_func} OR "experiment_id" ILIKE %s OR "experiment_title" ILIKE %s LIMIT 5',
             (search_term, search_pattern, search_pattern)
         ),
         "sop": (
-            f'SELECT sop_id, title FROM "lims"."sop" WHERE sop_search_vector @@ {ts_query_func} OR sop_id ILIKE %s OR title ILIKE %s LIMIT 5',
+            f'SELECT sop_id, title FROM "lims"."sop" WHERE sop_search_vector @@ {ts_query_func} OR "sop_id" ILIKE %s OR "title" ILIKE %s LIMIT 5',
             (search_term, search_pattern, search_pattern)
         ),
         "customers": (
-            f'SELECT customer_id, customer_name FROM "lims"."customers" WHERE customer_search_vector @@ {ts_query_func} OR customer_name ILIKE %s LIMIT 5',
-            (search_pattern, search_pattern)
+            f'SELECT customer_id, customer_name FROM "lims"."customers" WHERE customer_search_vector @@ {ts_query_func} OR "customer_name" ILIKE %s LIMIT 5',
+            (search_term, search_pattern)
         ),
-        "species": (
-            'SELECT species_id, de_name, en_name FROM "reference"."species" WHERE de_name ILIKE %s OR en_name ILIKE %s LIMIT 5',
+        "taxon": (
+            'SELECT taxon_id, de_name, en_name FROM "reference"."taxon" WHERE "de_name" ILIKE %s OR "en_name" ILIKE %s LIMIT 5',
             (search_pattern, search_pattern)
         ),
         "primers": (
-            'SELECT primer_id, primer_sequence_fwd, primer_sequence_rev FROM "lims"."primers" WHERE primer_id ILIKE %s OR primer_sequence_fwd ILIKE %s OR primer_sequence_rev ILIKE %s LIMIT 5',
+            'SELECT primer_id, primer_sequence_fwd, primer_sequence_rev FROM "lims"."primers" WHERE "primer_id" ILIKE %s OR "primer_sequence_fwd" ILIKE %s OR "primer_sequence_rev" ILIKE %s LIMIT 5',
             (search_pattern, search_pattern, search_pattern)
         ),
         "reagents": (
-            'SELECT reagent_id, reagent_complete_name, lot FROM "lims"."reagents" WHERE reagent_id ILIKE %s OR reagent_complete_name ILIKE %s OR lot ILIKE %s LIMIT 5',
+            'SELECT reagent_id, reagent_complete_name, lot FROM "lims"."reagents" WHERE "reagent_id" ILIKE %s OR "reagent_complete_name" ILIKE %s OR "lot" ILIKE %s LIMIT 5',
             (search_pattern, search_pattern, search_pattern)
         ),
         "personal": (
-            'SELECT person_id, full_name FROM "reference"."personal" WHERE person_id ILIKE %s OR full_name ILIKE %s LIMIT 5',
+            'SELECT person_id, full_name FROM "lims"."personal" WHERE "person_id" ILIKE %s OR "full_name" ILIKE %s LIMIT 5',
             (search_pattern, search_pattern)
         ),
-        "detailed_samples_view": (
-            'SELECT sample_id, external_name, sample_type_abrv, project_title FROM "lab"."detailed_samples_view" WHERE sample_id ILIKE %s OR external_name ILIKE %s OR project_title ILIKE %s LIMIT 5',
-            (search_pattern, search_pattern, search_pattern)
-        ),
         "project_overview_view": (
-            'SELECT project_id, title, pi_full_name FROM "lims"."project_overview_view" WHERE project_id ILIKE %s OR title ILIKE %s OR pi_full_name ILIKE %s LIMIT 5',
-            (search_pattern, search_pattern, search_pattern)
+            'SELECT project_id, title AS project_title FROM "lims"."project_comprehensive_summary_view" WHERE "project_id" ILIKE %s OR "title" ILIKE %s LIMIT 5',
+            (search_pattern, search_pattern)
         ),
-        "analysis_results_summary": (
-            'SELECT run_id, sample_id, taxon_en_name FROM "bioinformatics"."analysis_results_summary" WHERE run_id ILIKE %s OR sample_id ILIKE %s OR taxon_en_name ILIKE %s LIMIT 5',
+        "analysis_results_summary_view": (
+            'SELECT run_id, sample_id, taxon_en_name FROM "bioinformatics"."analysis_results_summary_view" WHERE "run_id" ILIKE %s OR "sample_id" ILIKE %s OR "taxon_en_name" ILIKE %s LIMIT 5',
             (search_pattern, search_pattern, search_pattern)
         ),
     }
@@ -426,10 +452,10 @@ def get_dashboard_stats():
     try:
         conn = g.db_conn
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("SELECT COUNT(*) AS active_projects FROM \"lims\".\"projects\" WHERE \"status_id\" = 'Active';")
+            cur.execute("SELECT COUNT(*) AS active_projects FROM \"lims\".\"projects\" WHERE \"status_id\" = 'In Progress';")
             stats['active_projects'] = cur.fetchone()['active_projects']
 
-            cur.execute("SELECT COUNT(*) AS total_samples FROM \"lab\".\"master_samples\";")
+            cur.execute("SELECT COUNT(*) AS total_samples FROM \"lab\".\"root_samples\";")
             stats['total_samples'] = cur.fetchone()['total_samples']
 
             current_month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -443,14 +469,14 @@ def get_dashboard_stats():
             cur.execute("""
                 SELECT COUNT(*) AS active_orders
                 FROM "lims"."orders"
-                WHERE "status_id" = 'Active';
+                WHERE "status_id" = 'In Progress';
             """)
             stats['active_orders'] = cur.fetchone()['active_orders']
 
             cur.execute("""
                 SELECT COUNT(DISTINCT storage_id) AS occupied_storage_units
-                FROM "lab"."parental_samples"
-                WHERE storage_id IS NOT NULL AND storage_position IS NOT NULL;
+                FROM "lab"."root_samples"
+                WHERE storage_id IS NOT NULL;
             """)
             stats['occupied_storage_units'] = cur.fetchone()['occupied_storage_units']
 
@@ -462,8 +488,8 @@ def get_dashboard_stats():
 
             cur.execute("""
                 SELECT COUNT(*) AS active_personnel
-                FROM "reference"."personal"
-                WHERE "status_id" = 'Active';
+                FROM "lims"."personal"
+                WHERE "status_id" != 'Destroyed' AND "status_id" != 'Archived';
             """)
             stats['active_personnel'] = cur.fetchone()['active_personnel']
 
@@ -561,11 +587,12 @@ def get_table_data(schema: str, table: str):
         filter_experiment_id_value = request.args.get('filter_experiment_id')
         filter_experiment_date_value = request.args.get('filter_experiment_date')
         filter_sample_id_value = request.args.get('filter_sample_id')
+        filter_sample_creation_date_value = request.args.get('filter_sample_creation_date')
+        filter_sampling_id_value = request.args.get('filter_sampling_id')
         filter_sampling_date_value = request.args.get('filter_sampling_date')
         filter_protocol_id_value = request.args.get('filter_protocol_id')
         exclude_status_id_value = request.args.get('exclude_status_id')
         filter_status_id_value = request.args.get('filter_status_id')
-        # New filter for associated experiment in detailed_samples_view
         filter_associated_experiment_id_value = request.args.get('filter_associated_experiment_id')
         filter_associated_experiment_date_value = request.args.get('filter_associated_experiment_date')
 
@@ -580,10 +607,8 @@ def get_table_data(schema: str, table: str):
             except (ValueError, TypeError):
                 return None
 
-        # --- Filtering by Experiment ID and Date ---
         if filter_experiment_id_value and filter_experiment_date_value:
             filter_exp_date_obj = parse_date_filter(filter_experiment_date_value)
-
             if actual_schema.lower() == 'lab' and actual_table.lower() == 'experiments':
                 where_clauses.append(f'"{actual_table}"."experiment_id" ILIKE %s')
                 params.append(f'%{filter_experiment_id_value}%')
@@ -591,8 +616,8 @@ def get_table_data(schema: str, table: str):
                 params.append(filter_exp_date_obj)
             elif actual_schema.lower() == 'bioinformatics' and actual_table.lower() == 'analysis_runs':
                 base_query_from += f"""
-                    JOIN "lab"."sequencing" AS S ON "{actual_table}".sequencing_id = S.sequencing_id 
-                    AND "{actual_table}".sequencing_date = S.sequencing_date
+                    JOIN "lab"."sequencing_run" AS S ON "{actual_table}".sequencing_id = S.sequencing_run_id 
+                    AND "{actual_table}".sequencing_date = S.creation_date
                 """
                 where_clauses.append(f'S.experiment_id ILIKE %s')
                 params.append(f'%{filter_experiment_id_value}%')
@@ -601,108 +626,70 @@ def get_table_data(schema: str, table: str):
             elif actual_schema.lower() == 'bioinformatics' and actual_table.lower() == 'edna_assignments':
                 base_query_from += f"""
                     JOIN "bioinformatics"."analysis_runs" AS AR ON "{actual_table}".run_id = AR.run_id 
-                    AND "{actual_table}".run_date = AR.run_date
-                    JOIN "lab"."sequencing" AS S ON AR.sequencing_id = S.sequencing_id 
-                    AND AR.sequencing_date = S.sequencing_date
+                    AND "{actual_table}".run_creation_date = AR.creation_date
+                    JOIN "lab"."sequencing_run" AS S ON AR.sequencing_id = S.sequencing_run_id 
+                    AND AR.sequencing_date = S.creation_date
                 """
                 where_clauses.append(f'S.experiment_id ILIKE %s')
                 params.append(f'%{filter_experiment_id_value}%')
                 where_clauses.append(f'S.experiment_date = %s')
                 params.append(filter_exp_date_obj)
-            # Other tables that directly have experiment_id and experiment_date
             elif actual_schema.lower() == 'lab' and actual_table.lower() in [
                 'experiments_projects', 'experiments_samples', 'protocol_runs', 
-                'dissections', 'extraction', 'nanodrop', 'qubit', 'tapestation', 
-                'pcr', 'gelelectrophoresis', 'qpcr', 'library', 'sequencing', 
-                'datasets', 'tissue', 'otoliths', 'dna', 'rna', 'sediments', 'water'
+                'dissections', 'nanodrop', 'qubit', 'tapestation', 
+                'gelelectrophoresis', 'qpcr', 'library', 'sequencing_run', 
+                'datasets'
             ]:
                 where_clauses.append(f'"{actual_table}"."experiment_id" ILIKE %s')
                 params.append(f'%{filter_experiment_id_value}%')
                 where_clauses.append(f'"{actual_table}"."experiment_date" = %s')
                 params.append(filter_exp_date_obj)
-
-        # --- Specific Filtering for detailed_samples_view by associated_experiment_id/date ---
-        # This is the crucial part that was previously causing the error for detailed_samples_view
-        if filter_associated_experiment_id_value and filter_associated_experiment_date_value and \
-           actual_schema.lower() == 'lab' and actual_table.lower() == 'detailed_samples_view':
-            filter_assoc_exp_date_obj = parse_date_filter(filter_associated_experiment_date_value)
-            where_clauses.append(f'"{actual_table}"."associated_experiment_id" ILIKE %s')
-            params.append(f'%{filter_associated_experiment_id_value}%')
-            # CORRECTED: Use '=' for date comparison, not ILIKE
-            where_clauses.append(f'"{actual_table}"."associated_experiment_date" = %s')
-            params.append(filter_assoc_exp_date_obj)
-
-        # --- General Filtering by Sample ID (potentially with sampling_date for composite PKs) ---
-        elif filter_sample_id_value:
-            if actual_schema.lower() == 'lab':
-                if actual_table.lower() == 'parental_samples':
-                    where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s')
-                    params.append(f'%{filter_sample_id_value}%')
-                    if filter_sampling_date_value:
-                        filter_samp_date_obj = parse_date_filter(filter_sampling_date_value)
-                        where_clauses.append(f'"{actual_table}"."sampling_date" = %s')
-                        params.append(filter_samp_date_obj)
-                elif actual_table.lower() == 'fish':
-                    where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s')
-                    params.append(f'%{filter_sample_id_value}%')
-                    if filter_sampling_date_value:
-                        filter_samp_date_obj = parse_date_filter(filter_sampling_date_value)
-                        where_clauses.append(f'"{actual_table}"."sampling_date" = %s')
-                        params.append(filter_samp_date_obj)
-                elif actual_table.lower() == 'storage_log':
-                    where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s')
-                    params.append(f'%{filter_sample_id_value}%')
-                    if filter_sampling_date_value:
-                        filter_samp_date_obj = parse_date_filter(filter_sampling_date_value)
-                        where_clauses.append(f'"{actual_table}"."sample_sampling_date" = %s')
-                        params.append(filter_samp_date_obj)
-                elif actual_table.lower() == 'fishing':
-                    base_query_from += f"""
-                        JOIN "lab"."parental_samples" AS S ON "{actual_table}".sampling_id = S.sampling_id
-                        AND "{actual_table}".sampling_date = S.sampling_date
-                    """
-                    where_clauses.append(f'S.sample_id ILIKE %s')
-                    params.append(f'%{filter_sample_id_value}%')
-                    if filter_sampling_date_value:
-                        filter_samp_date_obj = parse_date_filter(filter_sampling_date_value)
-                        where_clauses.append(f'S.sampling_date = %s')
-                        params.append(filter_samp_date_obj)
-                elif actual_table.lower() == 'sampling':
-                    base_query_from += f"""
-                        JOIN "lab"."parental_samples" AS S ON "{actual_table}".sampling_id = S.sampling_id
-                        AND "{actual_table}".sampling_date = S.sampling_date
-                    """
-                    where_clauses.append(f'S.sample_id ILIKE %s')
-                    params.append(f'%{filter_sample_id_value}%')
-                    if filter_sampling_date_value:
-                        filter_samp_date_obj = parse_date_filter(filter_sampling_date_value)
-                        where_clauses.append(f'S.sampling_date = %s')
-                        params.append(filter_samp_date_obj)
-                elif actual_table.lower() in ['tissue', 'otoliths', 'dna', 'rna', 'sediments', 'water', 'experiments_samples', 'dissections', 'extraction', 'nanodrop', 'qubit', 'tapestation', 'pcr', 'gelelectrophoresis', 'qpcr', 'library', 'sequencing']:
-                    where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s')
-                    params.append(f'%{filter_sample_id_value}%')
-            elif actual_schema.lower() == 'bioinformatics' and actual_table.lower() == 'analysis_runs':
-                base_query_from += f"""
-                    JOIN "lab"."sequencing" AS SEQ ON "{actual_table}".sequencing_id = SEQ.sequencing_id
-                    AND "{actual_table}".sequencing_date = SEQ.sequencing_date
-                """
-                where_clauses.append(f'SEQ.sample_id ILIKE %s')
+        
+        if filter_sample_id_value:
+            if actual_schema.lower() == 'lab' and actual_table.lower() == 'root_samples':
+                where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s')
                 params.append(f'%{filter_sample_id_value}%')
+                if filter_sample_creation_date_value:
+                    filter_samp_create_date_obj = parse_date_filter(filter_sample_creation_date_value)
+                    where_clauses.append(f'"{actual_table}"."sample_creation_date" = %s')
+                    params.append(filter_samp_create_date_obj)
+            elif actual_schema.lower() == 'lab' and actual_table.lower() in ['fish', 'tissue', 'otoliths', 'dna', 'rna', 'sediments', 'water', 'experiments_samples', 'dissections', 'nanodrop', 'qubit', 'tapestation', 'gelelectrophoresis', 'pcr', 'qpcr', 'library', 'sequencing_run', 'seq_dataset', 'datasets', 'storage_log']:
+                where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s')
+                params.append(f'%{filter_sample_id_value}%')
+                if filter_sample_creation_date_value:
+                    filter_samp_create_date_obj = parse_date_filter(filter_sample_creation_date_value)
+                    where_clauses.append(f'"{actual_table}"."sample_creation_date" = %s')
+                    params.append(filter_samp_create_date_obj)
             elif actual_schema.lower() == 'bioinformatics' and actual_table.lower() == 'edna_assignments':
                 where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s')
                 params.append(f'%{filter_sample_id_value}%')
+                if filter_sample_creation_date_value:
+                    filter_samp_create_date_obj = parse_date_filter(filter_sample_creation_date_value)
+                    where_clauses.append(f'"{actual_table}"."sample_creation_date" = %s')
+                    params.append(filter_samp_create_date_obj)
         
-        if filter_project_id_value and actual_schema.lower() == 'lims' and actual_table.lower() == 'projects':
-            where_clauses.append(f'"{actual_table}"."project_id" ILIKE %s')
-            params.append(f'%{filter_project_id_value}%')
-        elif filter_project_id_value:
+        if filter_sampling_id_value and filter_sampling_date_value:
+            filter_samp_date_obj = parse_date_filter(filter_sampling_date_value)
+            if actual_schema.lower() == 'lab' and actual_table.lower() == 'sampling':
+                where_clauses.append(f'"{actual_table}"."sampling_id" ILIKE %s')
+                params.append(f'%{filter_sampling_id_value}%')
+                where_clauses.append(f'"{actual_table}"."sampling_date" = %s')
+                params.append(filter_samp_date_obj)
+            elif actual_schema.lower() == 'lab' and actual_table.lower() in ['root_samples', 'fishing', 'individual_catch_catch', 'sampling_abiotic_data']:
+                where_clauses.append(f'"{actual_table}"."sampling_id" ILIKE %s')
+                params.append(f'%{filter_sampling_id_value}%')
+                where_clauses.append(f'"{actual_table}"."sampling_date" = %s')
+                params.append(filter_samp_date_obj)
+        
+        if filter_project_id_value:
             if 'project_id' in _get_column_types(conn, actual_schema, actual_table):
                 where_clauses.append(f'"{actual_table}"."project_id" ILIKE %s')
                 params.append(f'%{filter_project_id_value}%')
 
-        if filter_protocol_id_value and actual_schema.lower() == 'lab' and actual_table.lower() == 'protocol_runs':
-            where_clauses.append(f'"{actual_table}"."protocol_id" = %s')
-            params.append(filter_protocol_id_value)
+        if filter_protocol_id_value:
+            if 'protocol_id' in _get_column_types(conn, actual_schema, actual_table):
+                where_clauses.append(f'"{actual_table}"."protocol_id" = %s')
+                params.append(filter_protocol_id_value)
 
         if exclude_status_id_value:
             if 'status_id' in _get_column_types(conn, actual_schema, actual_table):
@@ -715,21 +702,25 @@ def get_table_data(schema: str, table: str):
 
         order_by_column: Optional[str] = None
         order_direction: str = 'ASC'
-
+        limit: Optional[int] = None
+        offset: Optional[int] = None
+        
         for key, value in request.args.items():
             if not value:
                 continue
             
             if key in ['filter_project_id', 'filter_experiment_id', 'filter_experiment_date', 
-                       'filter_sample_id', 'filter_sampling_date', 'filter_protocol_id',
-                       'exclude_status_id', 'filter_status_id',
-                       'filter_associated_experiment_id', 'filter_associated_experiment_date']: # Exclude new associated filters
+                       'filter_sample_id', 'filter_sample_creation_date', 'filter_sampling_id',
+                       'filter_sampling_date', 'filter_protocol_id', 'exclude_status_id', 
+                       'filter_status_id', 'filter_associated_experiment_id', 'filter_associated_experiment_date']:
                 continue
 
             if key == 'limit':
-                pass
+                limit = int(value)
+                continue
             elif key == 'offset':
-                pass
+                offset = int(value)
+                continue
             elif key == 'order_by':
                 order_by_column = value
                 continue
@@ -771,9 +762,10 @@ def get_table_data(schema: str, table: str):
                             print(f"Warning: Invalid date format for year filter '{value}'. Skipping filter.")
                 else:
                     print(f"Warning: Date filter by non-existent or non-date column '{col_name}' skipped for {actual_schema}.{actual_table}.")
-            elif key in _get_column_types(conn, actual_schema, actual_table):
-                where_clauses.append(f'"{key}" = %s')
-                params.append(value)
+            else:
+                if key in _get_column_types(conn, actual_schema, actual_table):
+                    where_clauses.append(f'"{key}" = %s')
+                    params.append(value)
 
 
         query = f"{base_query_select} {base_query_from}"
@@ -782,20 +774,8 @@ def get_table_data(schema: str, table: str):
             
         if order_by_column:
             quoted_order_by_column = f'"{actual_table}"."{order_by_column}"'
-            if actual_schema.lower() == 'bioinformatics' and actual_table.lower() in ['analysis_runs', 'edna_assignments'] and order_by_column in ['experiment_id', 'experiment_date']:
-                if 'JOIN "lab"."sequencing" AS S' in base_query_from:
-                    quoted_order_by_column = f'S."{order_by_column}"'
-            elif actual_schema.lower() == 'lab' and actual_table.lower() in ['fishing', 'sampling'] and order_by_column in ['sample_id', 'sampling_date']:
-                if 'JOIN "lab"."parental_samples" AS S' in base_query_from:
-                    quoted_order_by_column = f'S."{order_by_column}"'
-            elif actual_schema.lower() == 'lab' and actual_table.lower() == 'detailed_samples_view' and order_by_column in ['associated_experiment_id', 'associated_experiment_date']:
-                # For detailed_samples_view, order directly by its columns
-                quoted_order_by_column = f'"{actual_table}"."{order_by_column}"'
-            
             query += f' ORDER BY {quoted_order_by_column} {order_direction}'
             
-        limit = request.args.get('limit', type=int)
-        offset = request.args.get('offset', type=int)
         if limit is not None:
             query += f" LIMIT %s"
             params.append(limit)
@@ -848,7 +828,7 @@ def create_record(schema: str, table: str):
         elif 'attachment' in data and (data['attachment'] == '' or (isinstance(data['attachment'], dict) and not data['attachment'])):
             data['attachment'] = None
             
-        if (actual_schema.lower() == 'reference' and actual_table.lower() == 'personal') or \
+        if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
             if 'password' in data and data['password']:
@@ -885,6 +865,12 @@ def create_record(schema: str, table: str):
                     filtered_data[k] = None
             elif column_types.get(k) == 'boolean':
                 filtered_data[k] = str(v).lower() in ['true', 'on']
+            elif column_types.get(k) == 'date' and isinstance(v, str):
+                try:
+                    filtered_data[k] = datetime.strptime(v, '%Y-%m-%d').date()
+                except ValueError:
+                    print(f"WARNING: Invalid date format for column '{k}'. Storing as None. Value: {v}")
+                    filtered_data[k] = None
             else:
                 filtered_data[k] = v
             
@@ -910,7 +896,7 @@ def create_record(schema: str, table: str):
                     for project_id in project_list:
                         try:
                             cur.execute(
-                                'INSERT INTO "lab"."experiments_projects" ("experiment_id", "experiment_date", "project_id", "link_date") VALUES (%s, %s, %s, CURRENT_DATE);',
+                                'INSERT INTO "lab"."experiments_projects" ("experiment_id", "experiment_date", "project_id") VALUES (%s, %s, %s);',
                                 (experiment_id, experiment_date, project_id)
                             )
                         except Exception as e:
@@ -921,8 +907,12 @@ def create_record(schema: str, table: str):
                     for sample_id in sample_list:
                         try:
                             cur.execute(
-                                'INSERT INTO "lab"."experiments_samples" ("experiment_id", "experiment_date", "sample_id") VALUES (%s, %s, %s);',
-                                (experiment_id, experiment_date, sample_id)
+                                'SELECT "sample_creation_date" FROM "lab"."root_samples" WHERE "sample_id" = %s;', (sample_id,)
+                            )
+                            sample_creation_date = cur.fetchone()['sample_creation_date']
+                            cur.execute(
+                                'INSERT INTO "lab"."experiments_samples" ("experiment_id", "experiment_date", "sample_id", "sample_creation_date") VALUES (%s, %s, %s, %s);',
+                                (experiment_id, experiment_date, sample_id, sample_creation_date)
                             )
                         except Exception as e:
                             print(f"  Warning: Could not link sample {sample_id} to experiment {experiment_id}: {e}")
@@ -931,7 +921,7 @@ def create_record(schema: str, table: str):
                 for person_id in linked_person_ids:
                     try:
                         cur.execute(
-                            'INSERT INTO "lims"."project_persons" ("project_id", "person_id", "link_date") VALUES (%s, %s, CURRENT_DATE);',
+                            'INSERT INTO "lims"."project_persons" ("project_id", "person_id") VALUES (%s, %s);',
                             (project_id, person_id)
                         )
                         print(f"  Linked person {person_id} to new project {project_id}")
@@ -968,10 +958,10 @@ def update_record(schema: str, table: str):
             if pk_val is None:
                 return jsonify({"error": f"Missing primary key component: {pk_col}"}), 400
             
-            if column_types.get(pk_col) == 'date' and pk_val is not None:
+            if column_types.get(pk_col) == 'date':
                 try:
                     pk_values_from_request[pk_col] = datetime.strptime(pk_val, '%Y-%m-%d').date()
-                except ValueError:
+                except (ValueError, TypeError):
                     pk_values_from_request[pk_col] = pk_val
             else:
                 pk_values_from_request[pk_col] = pk_val
@@ -995,7 +985,7 @@ def update_record(schema: str, table: str):
         set_clauses: List[str] = []
         values: List[Any] = []
         
-        if (actual_schema.lower() == 'reference' and actual_table.lower() == 'personal') or \
+        if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
             if 'password' in data and data['password']:
@@ -1021,6 +1011,13 @@ def update_record(schema: str, table: str):
             elif column_types.get(key) == 'boolean':
                 set_clauses.append(f'"{key}" = %s')
                 values.append(str(val).lower() in ['true', 'on'])
+            elif column_types.get(key) == 'date' and isinstance(val, str):
+                try:
+                    set_clauses.append(f'"{key}" = %s')
+                    values.append(datetime.strptime(val, '%Y-%m-%d').date())
+                except ValueError:
+                    print(f"WARNING: Invalid date format for column '{key}'. Skipping update for this field.")
+                    continue
             else:
                 set_clauses.append(f'"{key}" = %s')
                 values.append(None if val == '' else val)
@@ -1032,8 +1029,15 @@ def update_record(schema: str, table: str):
         pk_where_values: List[Any] = [] 
         for pk_col in pk_columns:
             pk_where_clauses.append(f'"{pk_col}" = %s')
-            pk_where_values.append(pk_values_from_request[pk_col])
-            
+            pk_val = pk_values_from_request[pk_col]
+            if column_types.get(pk_col) == 'date' and pk_val is not None:
+                try:
+                    pk_where_values.append(datetime.strptime(str(pk_val), '%Y-%m-%d').date())
+                except ValueError:
+                    pk_where_values.append(pk_val)
+            else:
+                pk_where_values.append(pk_val)
+        
         all_values = values + pk_where_values
         
         query = f'UPDATE "{actual_schema}"."{actual_table}" SET {", ".join(set_clauses)} WHERE {" AND ".join(pk_where_clauses)} RETURNING *;'
@@ -1145,10 +1149,16 @@ def batch_upload(schema: str, table: str):
                                 filtered_record[k] = None
                         elif column_types.get(k) == 'boolean':
                             filtered_record[k] = str(v).lower() in ['true', 'on']
+                        elif column_types.get(k) == 'date' and isinstance(v, str):
+                            try:
+                                filtered_record[k] = datetime.strptime(v, '%Y-%m-%d').date()
+                            except ValueError:
+                                print(f"WARNING: Invalid date format for column '{k}'. Storing as None. Value: {v}")
+                                filtered_record[k] = None
                         else:
                             filtered_record[k] = v
                     
-                    if (actual_schema.lower() == 'reference' and actual_table.lower() == 'personal') or \
+                    if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
                        (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
                        (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
                         if 'password' in filtered_record and filtered_record['password']:
@@ -1192,7 +1202,7 @@ def batch_upload(schema: str, table: str):
                                 for project_id in project_list:
                                     try:
                                         cur.execute(
-                                            'INSERT INTO "lab"."experiments_projects" ("experiment_id", "experiment_date", "project_id", "link_date") VALUES (%s, %s, %s, CURRENT_DATE);',
+                                            'INSERT INTO "lab"."experiments_projects" ("experiment_id", "experiment_date", "project_id") VALUES (%s, %s, %s);',
                                             (experiment_id, experiment_date, project_id)
                                         )
                                     except Exception as e:
@@ -1203,8 +1213,12 @@ def batch_upload(schema: str, table: str):
                                 for sample_id in sample_list:
                                     try:
                                         cur.execute(
-                                            'INSERT INTO "lab"."experiments_samples" ("experiment_id", "experiment_date", "sample_id") VALUES (%s, %s, %s);',
-                                            (experiment_id, experiment_date, sample_id)
+                                            'SELECT "sample_creation_date" FROM "lab"."root_samples" WHERE "sample_id" = %s;', (sample_id,)
+                                        )
+                                        sample_creation_date = cur.fetchone()['sample_creation_date']
+                                        cur.execute(
+                                            'INSERT INTO "lab"."experiments_samples" ("experiment_id", "experiment_date", "sample_id", "sample_creation_date") VALUES (%s, %s, %s, %s);',
+                                            (experiment_id, experiment_date, sample_id, sample_creation_date)
                                         )
                                     except Exception as e:
                                         print(f"  Warning: Could not link sample {sample_id} to experiment {experiment_id}: {e}")
@@ -1229,6 +1243,12 @@ def batch_upload(schema: str, table: str):
                                 filtered_record[k] = None
                         elif column_types.get(k) == 'boolean':
                             filtered_record[k] = str(v).lower() in ['true', 'on']
+                        elif column_types.get(k) == 'date' and isinstance(v, str):
+                            try:
+                                filtered_record[k] = datetime.strptime(v, '%Y-%m-%d').date()
+                            except ValueError:
+                                print(f"WARNING: Invalid date format for column '{k}'. Storing as None. Value: {v}")
+                                filtered_record[k] = None
                         else:
                             filtered_record[k] = v
 
@@ -1250,7 +1270,7 @@ def batch_upload(schema: str, table: str):
                                 for person_id in person_list:
                                     try:
                                         cur.execute(
-                                            'INSERT INTO "lims"."project_persons" ("project_id", "person_id", "link_date") VALUES (%s, %s, CURRENT_DATE);',
+                                            'INSERT INTO "lims"."project_persons" ("project_id", "person_id") VALUES (%s, %s);',
                                             (project_id, person_id)
                                         )
                                     except Exception as e:
@@ -1272,7 +1292,7 @@ def batch_upload(schema: str, table: str):
                     return jsonify({"error": "All records in batch must have the same set of columns for batch insertion."}), 400
 
                 temp_record = record.copy()
-                if (actual_schema.lower() == 'reference' and actual_table.lower() == 'personal') or \
+                if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
                    (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
                    (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
                     if 'password' in temp_record and temp_record['password']:
@@ -1303,6 +1323,12 @@ def batch_upload(schema: str, table: str):
                             temp_record[k] = None
                     elif column_types.get(k) == 'boolean':
                         temp_record[k] = str(v).lower() in ['true', 'on']
+                    elif column_types.get(k) == 'date' and isinstance(v, str):
+                        try:
+                            temp_record[k] = datetime.strptime(v, '%Y-%m-%d').date()
+                        except ValueError:
+                            print(f"WARNING: Invalid date format for column '{k}'. Storing as None. Value: {v}")
+                            temp_record[k] = None
                     else:
                         temp_record[k] = v
 
@@ -1388,6 +1414,13 @@ def batch_update(schema: str, table: str):
                     elif column_types.get(key) == 'boolean':
                         set_clauses_parts.append(f'"{key}" = %s')
                         set_values.append(str(val).lower() in ['true', 'on'])
+                    elif column_types.get(key) == 'date' and isinstance(val, str):
+                        try:
+                            set_clauses_parts.append(f'"{key}" = %s')
+                            set_values.append(datetime.strptime(val, '%Y-%m-%d').date())
+                        except ValueError:
+                            print(f"WARNING: Invalid date format for column '{key}'. Skipping update for this field.")
+                            continue
                     else:
                         set_clauses_parts.append(f'"{key}" = %s')
                         set_values.append(None if val == '' else val)
@@ -1401,7 +1434,7 @@ def batch_update(schema: str, table: str):
                     pk_val = pk_fields[pk_col]
                     if column_types.get(pk_col) == 'date' and pk_val is not None:
                         try:
-                            pk_where_values.append(datetime.strptime(pk_val, '%Y-%m-%d').date())
+                            pk_where_values.append(datetime.strptime(str(pk_val), '%Y-%m-%d').date())
                         except ValueError:
                             pk_where_values.append(pk_val)
                     else:

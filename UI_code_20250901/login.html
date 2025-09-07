@@ -170,7 +170,7 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Base URL for API calls. This is set to match your Apache proxy setup for /tifi-lims/api.
+            // Base URL for API calls. This is set to match your Apache proxy setup for /mylims/api.
             const API_BASE_URL = '/mylims/api'; 
 
             const loginForm = document.getElementById('login-form');
@@ -178,28 +178,31 @@
 
             /**
              * Checks if a user is already logged in and redirects them.
-             * This prevents logged-in users from seeing the login page again.
              */
             const checkLoginStatus = () => {
                 if (sessionStorage.getItem('isLoggedIn') === 'true') {
-                    // Retrieve potential redirect URL from localStorage
+                    const userType = sessionStorage.getItem('user_type');
                     const redirectUrl = localStorage.getItem('redirectUrl');
-                    // Clear the redirect URL from localStorage as it's being used
-                    localStorage.removeItem('redirectUrl'); 
-                    // Redirect to the stored URL or default dashboard
-                    window.location.href = redirectUrl || './dashboard.html';
+                    localStorage.removeItem('redirectUrl');
+                    
+                    if (redirectUrl) {
+                        window.location.href = redirectUrl;
+                    } else if (userType === 'customer') {
+                        window.location.href = './mypage.html';
+                    } else {
+                        window.location.href = './dashboard.html';
+                    }
                 }
             };
 
-            // Execute login status check immediately on page load
             checkLoginStatus();
 
             /**
              * Handles the login form submission.
              */
             loginForm.addEventListener('submit', async (e) => {
-                e.preventDefault(); // Prevent default form submission to handle via JavaScript
-                loginError.classList.add('hidden'); // Hide any previous error message
+                e.preventDefault(); 
+                loginError.classList.add('hidden'); 
 
                 const username = document.getElementById('username').value.trim();
                 const password = document.getElementById('password').value.trim();
@@ -207,12 +210,10 @@
                 if (!username || !password) {
                     loginError.textContent = 'Please enter both Username/ID and Password.';
                     loginError.classList.remove('hidden');
-                    return; // Stop execution if inputs are empty
+                    return; 
                 }
 
                 try {
-                    // Send credentials to the backend's /api/login endpoint
-                    // The backend will handle multi-table lookup and bcrypt validation.
                     const response = await fetch(`${API_BASE_URL}/login`, {
                         method: 'POST',
                         headers: {
@@ -221,29 +222,27 @@
                         body: JSON.stringify({ username, password }),
                     });
 
-                    const result = await response.json(); // Parse the JSON response body
+                    const result = await response.json(); 
 
                     if (response.ok && result.success) {
-                        // Login successful: Store status and user info in sessionStorage
                         sessionStorage.setItem('isLoggedIn', 'true');
                         sessionStorage.setItem('user', JSON.stringify(result.user));
-                        sessionStorage.setItem('user_type', result.user_type); // Store user type, e.g., 'personal', 'customer', 'admin'
+                        sessionStorage.setItem('user_type', result.user_type);
                         
-                        // Check if there's a stored URL to redirect to (e.g., from an unauthorized access attempt)
                         const redirectUrl = localStorage.getItem('redirectUrl');
                         if (redirectUrl) {
-                            localStorage.removeItem('redirectUrl'); // Clear it after use
-                            window.location.href = redirectUrl; // Redirect to the intended page
+                            localStorage.removeItem('redirectUrl'); 
+                            window.location.href = redirectUrl; 
+                        } else if (result.user_type === 'customer') {
+                            window.location.href = './mypage.html';
                         } else {
-                            window.location.href = './dashboard.html'; // Default redirect
+                            window.location.href = './dashboard.html';
                         }
                     } else {
-                        // Login failed: Display error message from the server or a generic one
                         loginError.textContent = result.error || 'Login failed. Please check your credentials.';
                         loginError.classList.remove('hidden');
                     }
                 } catch (error) {
-                    // Handle network errors (e.g., server unreachable, CORS issues, proxy issues)
                     console.error("Network or server error during login:", error);
                     loginError.textContent = 'Could not connect to the server. Please check your network connection, Apache proxy, or the backend server status.';
                     loginError.classList.remove('hidden');
