@@ -86,7 +86,7 @@
                  <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
                  <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="box" class="w-5 h-5 mr-3"></i><span>Storage Box</span></a>
                  <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
-                 <a href="all_labels.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="Printer" class="w-5 h-5 mr-3"></i><span>All Labels</span></a>
+                 <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
                  <a href="samples_labels.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="tag" class="w-5 h-5 mr-3"></i><span>Samples Labels</span></a>
                  <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
                  <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
@@ -99,13 +99,12 @@
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
                     <div class="lg:col-span-4 print:hidden">
                         <div class="card p-6 space-y-4 relative">
-                            <div id="loading-spinner" class="hidden absolute inset-0 bg-white bg-opacity-75 flex items-center justify-content-center rounded-lg"><i data-lucide="loader-2" class="w-10 h-10 animate-spin text-blue-600"></i></div>
+                            <div id="loading-spinner" class="hidden absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center rounded-lg"><i data-lucide="loader-2" class="w-10 h-10 animate-spin text-blue-600"></i></div>
                             <fieldset><legend class="text-lg font-semibold text-gray-800 mb-2">1. Select Item Type</legend>
                                  <select id="item-type" class="block w-full p-2 border-gray-300 rounded-md shadow-sm">
                                      <option value="">-- Choose a type --</option>
                                      <optgroup label="Core LIMS Items">
                                          <option value="projects">Project</option>
-                                         <option value="samples">Sample (Main)</option>
                                          <option value="storage">Storage Box</option>
                                          <option value="reagents">Reagent</option>
                                          <option value="equipment">Equipment</option>
@@ -113,7 +112,6 @@
                                          <option value="customers">Customer</option>
                                          <option value="orders">Order</option>
                                          <option value="cruises">Cruise</option>
-                                         <option value="workflows">Workflow</option>
                                          <option value="permits">Permit</option>
                                          <option value="personal">Personnel</option>
                                          <option value="category">Category</option>
@@ -123,20 +121,22 @@
                                          <option value="region">Region</option>
                                          <option value="ecosystem">Ecosystem</option>
                                          <option value="taxon">Taxon</option>
-                                         <option value="species">Species</option>
+                                         <option value="gene">Gene</option>
                                      </optgroup>
-                                     <optgroup label="Lab Processes & Sub-Samples">
-                                         <option value="sampling">Sampling Event</option>
-                                         <option value="experiments">Experiment (Main)</option>
-                                         <option value="experiments_samples">Experiment Samples Link</option>
-                                         <option value="extraction">Extraction</option>
-                                         <option value="dna">DNA Sample</option>
-                                         <option value="rna">RNA Sample</option>
+                                     <optgroup label="Lab Samples">
+                                         <option value="root_samples">Sample (Root)</option>
                                          <option value="fish">Fish Sample</option>
                                          <option value="tissue">Tissue Sample</option>
                                          <option value="water">Water Sample</option>
                                          <option value="sediments">Sediments Sample</option>
+                                         <option value="otoliths">Otoliths</option>
+                                     </optgroup>
+                                     <optgroup label="Lab Processes & Products">
+                                         <option value="sampling">Sampling Event</option>
+                                         <option value="experiments">Experiment (Main)</option>
                                          <option value="dissections">Dissection</option>
+                                         <option value="dna">DNA Sample</option>
+                                         <option value="rna">RNA Sample</option>
                                          <option value="qubit">Qubit QC</option>
                                          <option value="nanodrop">Nanodrop QC</option>
                                          <option value="tapestation">Tapestation QC</option>
@@ -144,9 +144,8 @@
                                          <option value="qpcr">qPCR</option>
                                          <option value="gelelectrophoresis">Gel Electrophoresis</option>
                                          <option value="library">Library Prep</option>
-                                         <option value="sequencing">Sequencing Run</option>
+                                         <option value="sequencing_run">Sequencing Run</option>
                                          <option value="analysis_runs">Bioinformatics Analysis</option>
-                                         <option value="gene">Gene</option>
                                          <option value="datasets">Dataset</option>
                                      </optgroup>
                                  </select>
@@ -204,7 +203,7 @@
                                                  </optgroup>
                                                  <optgroup label="Tube/Cryo Formats">
                                                      <option value="topstick-8791">TopStick 8791 (22x12mm)</option>
-                                                     <option value="herma-4385">Herma 4385 (Ø 10mm)</option>
+                                                     <option value="herma-4385">Herma 4385 (Ã˜ 10mm)</option>
                                                      <option value="micro">Micro (25x12mm)</option>
                                                  </optgroup>
                                              </select>
@@ -290,13 +289,13 @@
         handleLabelSizeChange();
     });
 
-    const API_BASE_URL = '/api';
+    const API_BASE_URL = '/mylims/api';
     let masterDataCache = {
         allExperiments: null,
-        allExtraInfoKeys: null, // This is now updated by generateExtraInfoCheckboxes
+        allExtraInfoKeys: null,
         schemas: {}
     };
-    let selectedExtraInfoKeys = []; // Global variable to store selected keys for CSV export
+    let selectedExtraInfoKeys = [];
 
     const LABEL_SPECS = {
         'herma-4389':   { w: 66,   h: 33.8, cols: 3, p: '2px', f: '9px', codeSize: 30, marginTop: 11.8, marginLeft: 7.2, gapH: 0,   gapV: 0 },
@@ -307,55 +306,53 @@
         'custom':       {}
     };
 
-    // ITEM_TYPE_CONFIGS with filterableByExperiment flag
     const ITEM_TYPE_CONFIGS = {
-        'projects': { schema: 'lims', table: 'projects', idField: 'project_id', displayField: 'title', filterableByExperiment: false },
-        'samples': { schema: 'lab', table: 'detailed_samples_view', idField: 'sample_id', displayField: 'sample_id', filterableByExperiment: true },
-        'storage': { schema: 'lab', table: 'storage', idField: 'storage_id', displayField: 'storage_id', filterableByExperiment: false },
-        'reagents': { schema: 'lims', table: 'reagents', idField: 'reagent_id', displayField: 'reagent_complete_name', filterableByExperiment: false },
-        'equipment': { schema: 'lims', table: 'equipment', idField: 'equipment_id', displayField: 'equipment_name', filterableByExperiment: false },
-        'sop': { schema: 'lims', table: 'sop', idField: 'sop_id', displayField: 'title', filterableByExperiment: false },
-        'customers': { schema: 'lims', table: 'customers', idField: 'customer_id', displayField: 'customer_name', filterableByExperiment: false },
-        'orders': { schema: 'lims', table: 'orders', idField: 'fi_order_nr', displayField: 'item_id', filterableByExperiment: false },
-        'cruises': { schema: 'lims', table: 'cruises', idField: 'cruise_id', displayField: 'cruise_id', filterableByExperiment: false },
-        'workflows': { schema: 'lims', table: 'workflows', idField: 'workflow_id', displayField: 'workflow_name', filterableByExperiment: false },
-        'permits': { schema: 'lims', table: 'permits', idField: 'permit_id', displayField: 'permit_number', filterableByExperiment: false },
-        'personal': { schema: 'reference', table: 'personal', idField: 'person_id', displayField: 'full_name', filterableByExperiment: false },
-        'category': { schema: 'reference', table: 'category', idField: 'category_id', displayField: 'category_id', filterableByExperiment: false },
-        'status': { schema: 'reference', table: 'status', idField: 'status_id', displayField: 'status_id', filterableByExperiment: false },
-        'room': { schema: 'reference', table: 'room', idField: 'room_id', displayField: 'room_id', filterableByExperiment: false },
-        'vessel': { schema: 'reference', table: 'vessel', idField: 'vessel_id', displayField: 'vessel_name', filterableByExperiment: false },
-        'region': { schema: 'reference', table: 'region', idField: 'region_id', displayField: 'region_abrv', filterableByExperiment: false },
-        'ecosystem': { schema: 'reference', table: 'ecosystem', idField: 'ecosystem_id', displayField: 'ecosystem_abrv', filterableByExperiment: false },
-        'taxon': { schema: 'reference', table: 'taxon', idField: 'taxon_id', displayField: 'en_name', filterableByExperiment: false },
-        'species': { schema: 'reference', table: 'species', idField: 'species_id', displayField: 'en_name', filterableByExperiment: false },
-
-        // Lab Processes & Sub-Samples with filterableByExperiment flag set based on existence of experiment_id
-        'sampling': { schema: 'lab', table: 'sampling', idField: 'sampling_id', displayField: 'location_name', filterableByExperiment: true },
-        'experiments': { schema: 'lab', table: 'experiments', idField: 'experiment_id', displayField: 'experiment_title', filterableByExperiment: false }, // This IS an experiment, not filtered BY one
-        'experiments_samples': { schema: 'lab', table: 'experiments_samples', idField: 'experiment_project_id', displayField: 'sample_id', filterableByExperiment: true }, // Has experiment_id
-        'extraction': { schema: 'lab', table: 'extraction', idField: 'extraction_id', displayField: 'sample_id', filterableByExperiment: true },
-        'dna': { schema: 'lab', table: 'dna', idField: 'sample_id', displayField: 'sample_id', filterableByExperiment: true },
-        'rna': { schema: 'lab', table: 'rna', idField: 'sample_id', displayField: 'sample_id', filterableByExperiment: true },
-        'fish': { schema: 'lab', table: 'fish', idField: 'sample_id', displayField: 'species_id', filterableByExperiment: true },
-        'tissue': { schema: 'lab', table: 'tissue', idField: 'sample_id', displayField: 'tissue_type', filterableByExperiment: true },
-        'water': { schema: 'lab', table: 'water', idField: 'sample_id', displayField: 'volume_l', filterableByExperiment: true },
-        'sediments': { schema: 'lab', table: 'sediments', idField: 'sample_id', displayField: 'volume', filterableByExperiment: true },
-        'dissections': { schema: 'lab', table: 'dissections', idField: 'dissection_id', displayField: 'sample_id', filterableByExperiment: true },
-        'qubit': { schema: 'lab', table: 'qubit', idField: 'qubit_id', displayField: 'sample_id', filterableByExperiment: true },
-        'nanodrop': { schema: 'lab', table: 'nanodrop', idField: 'nanodrop_id', displayField: 'sample_id', filterableByExperiment: true },
-        'tapestation': { schema: 'lab', table: 'tapestation', idField: 'tapestation_id', displayField: 'sample_id', filterableByExperiment: true },
-        'pcr': { schema: 'lab', table: 'pcr', idField: 'pcr_id', displayField: 'sample_id', filterableByExperiment: true },
-        'qpcr': { schema: 'lab', table: 'qpcr', idField: 'qpcr_id', displayField: 'sample_id', filterableByExperiment: true },
-        'gelelectrophoresis': { schema: 'lab', table: 'gelelectrophoresis', idField: 'gelelectrophoresis_id', displayField: 'sample_id', filterableByExperiment: true },
-        'library': { schema: 'lab', table: 'library', idField: 'library_id', displayField: 'library_name', filterableByExperiment: true },
-        'sequencing': { schema: 'lab', table: 'sequencing', idField: 'sequencing_id', displayField: 'sample_id', filterableByExperiment: true },
-        'analysis_runs': { schema: 'bioinformatics', table: 'analysis_runs', idField: 'run_id', displayField: 'pipeline_id', filterableByExperiment: true },
-        'gene': { schema: 'reference', table: 'gene', idField: 'gene_id', displayField: 'gene_id', filterableByExperiment: false },
-        'datasets': { schema: 'lab', table: 'datasets', idField: 'dataset_id', displayField: 'dataset_id', filterableByExperiment: true }
+        // Core LIMS Items
+        'projects': { schema: 'lims', table: 'projects', idField: 'project_id', pkFields: ['project_id'], displayField: 'title', filterableByExperiment: false },
+        'storage': { schema: 'lab', table: 'storage', idField: 'storage_id', pkFields: ['storage_id'], displayField: 'storage_id', filterableByExperiment: false },
+        'reagents': { schema: 'lims', table: 'reagents', idField: 'reagent_id', pkFields: ['reagent_id'], displayField: 'reagent_complete_name', filterableByExperiment: false },
+        'equipment': { schema: 'lims', table: 'equipment', idField: 'equipment_id', pkFields: ['equipment_id'], displayField: 'equipment_name', filterableByExperiment: false },
+        'sop': { schema: 'lims', table: 'sop', idField: 'sop_id', pkFields: ['sop_id'], displayField: 'title', filterableByExperiment: false },
+        'customers': { schema: 'lims', table: 'customers', idField: 'customer_id', pkFields: ['customer_id'], displayField: 'customer_name', filterableByExperiment: false },
+        'orders': { schema: 'lims', table: 'orders', idField: 'fi_order_nr', pkFields: ['fi_order_nr'], displayField: 'fi_order_nr', filterableByExperiment: false },
+        'cruises': { schema: 'lims', table: 'cruises', idField: 'cruise_id', pkFields: ['cruise_id'], displayField: 'cruise_id', filterableByExperiment: false },
+        'permits': { schema: 'lims', table: 'permits', idField: 'permit_id', pkFields: ['permit_id'], displayField: 'permit_number', filterableByExperiment: false },
+        'personal': { schema: 'lims', table: 'personal', idField: 'person_id', pkFields: ['person_id'], displayField: 'full_name', filterableByExperiment: false },
+        'category': { schema: 'reference', table: 'category', idField: 'category_id', pkFields: ['category_id'], displayField: 'category_id', filterableByExperiment: false },
+        'status': { schema: 'reference', table: 'status', idField: 'status_id', pkFields: ['status_id'], displayField: 'status_id', filterableByExperiment: false },
+        'room': { schema: 'reference', table: 'room', idField: 'room_id', pkFields: ['room_id'], displayField: 'room_id', filterableByExperiment: false },
+        'vessel': { schema: 'reference', table: 'vessel', idField: 'vessel_id', pkFields: ['vessel_id'], displayField: 'vessel_name', filterableByExperiment: false },
+        'region': { schema: 'reference', table: 'region', idField: 'region_id', pkFields: ['region_id'], displayField: 'region_abrv', filterableByExperiment: false },
+        'ecosystem': { schema: 'reference', table: 'ecosystem', idField: 'ecosystem_id', pkFields: ['ecosystem_id'], displayField: 'ecosystem_abrv', filterableByExperiment: false },
+        'taxon': { schema: 'reference', table: 'taxon', idField: 'taxon_id', pkFields: ['taxon_id'], displayField: 'en_name', filterableByExperiment: false },
+        'gene': { schema: 'reference', table: 'gene', idField: 'gene_id', pkFields: ['gene_id'], displayField: 'gene_id', filterableByExperiment: false },
+        
+        // Lab Samples (All samples are linked to a root sample)
+        'root_samples': { schema: 'lab', table: 'root_samples', idField: 'sample_id', pkFields: ['sample_id', 'sample_creation_date'], displayField: 'external_name', filterableByExperiment: true},
+        'fish': { schema: 'lab', table: 'fish', idField: 'sample_id', pkFields: ['sample_id', 'creation_date'], displayField: 'species_id', filterableByExperiment: true, isSampleSubTable: true},
+        'tissue': { schema: 'lab', table: 'tissue', idField: 'sample_id', pkFields: ['sample_id', 'creation_date'], displayField: 'tissue_type', filterableByExperiment: true, isSampleSubTable: true},
+        'water': { schema: 'lab', table: 'water', idField: 'sample_id', pkFields: ['sample_id', 'creation_date'], displayField: 'volume_L', filterableByExperiment: true, isSampleSubTable: true},
+        'sediments': { schema: 'lab', table: 'sediments', idField: 'sample_id', pkFields: ['sample_id', 'creation_date'], displayField: 'volume', filterableByExperiment: true, isSampleSubTable: true},
+        'otoliths': { schema: 'lab', table: 'otoliths', idField: 'sample_id', pkFields: ['sample_id', 'reader_person_id', 'side', 'creation_date'], displayField: 'sample_id', filterableByExperiment: true, isSampleSubTable: true},
+        
+        // Lab Processes & Products
+        'sampling': { schema: 'lab', table: 'sampling', idField: 'sampling_id', pkFields: ['sampling_id', 'sampling_date'], displayField: 'location_name', filterableByExperiment: false },
+        'experiments': { schema: 'lab', table: 'experiments', idField: 'experiment_id', pkFields: ['experiment_id', 'experiment_date'], displayField: 'experiment_title', filterableByExperiment: false },
+        'dissections': { schema: 'lab', table: 'dissections', idField: 'dissection_id', pkFields: ['dissection_id', 'creation_date'], displayField: 'sample_id', filterableByExperiment: true },
+        'dna': { schema: 'lab', table: 'dna', idField: 'sample_id', pkFields: ['sample_id', 'creation_date'], displayField: 'volume_ul', filterableByExperiment: true, isSampleSubTable: true },
+        'rna': { schema: 'lab', table: 'rna', idField: 'sample_id', pkFields: ['sample_id', 'creation_date'], displayField: 'volume_ul', filterableByExperiment: true, isSampleSubTable: true },
+        'qubit': { schema: 'lab', table: 'qubit', idField: 'qubit_id', pkFields: ['qubit_id', 'creation_date'], displayField: 'sample_id', filterableByExperiment: true },
+        'nanodrop': { schema: 'lab', table: 'nanodrop', idField: 'nanodrop_id', pkFields: ['nanodrop_id', 'creation_date'], displayField: 'sample_id', filterableByExperiment: true },
+        'tapestation': { schema: 'lab', table: 'tapestation', idField: 'tapestation_id', pkFields: ['tapestation_id', 'creation_date'], displayField: 'sample_id', filterableByExperiment: true },
+        'pcr': { schema: 'lab', table: 'pcr', idField: 'pcr_id', pkFields: ['pcr_id', 'creation_date'], displayField: 'sample_id', filterableByExperiment: true },
+        'qpcr': { schema: 'lab', table: 'qpcr', idField: 'qpcr_id', pkFields: ['qpcr_id', 'creation_date'], displayField: 'sample_id', filterableByExperiment: true },
+        'gelelectrophoresis': { schema: 'lab', table: 'gelelectrophoresis', idField: 'gelelectrophoresis_id', pkFields: ['gelelectrophoresis_id', 'creation_date'], displayField: 'sample_id', filterableByExperiment: true },
+        'library': { schema: 'lab', table: 'library', idField: 'library_id', pkFields: ['library_id', 'sample_id', 'creation_date'], displayField: 'library_name', filterableByExperiment: true, isSampleSubTable: true},
+        'sequencing_run': { schema: 'lab', table: 'sequencing_run', idField: 'sequencing_run_id', pkFields: ['sequencing_run_id', 'creation_date'], displayField: 'sequencing_run_id', filterableByExperiment: true, isSampleSubTable: true},
+        'analysis_runs': { schema: 'bioinformatics', table: 'analysis_runs', idField: 'run_id', pkFields: ['run_id', 'creation_date'], displayField: 'pipeline_id', filterableByExperiment: true },
+        'datasets': { schema: 'lab', table: 'datasets', idField: 'dataset_id', pkFields: ['dataset_id', 'reception_date'], displayField: 'dataset_id', filterableByExperiment: true }
     };
-
-    // Helper to format date for URL parameters (YYYY-MM-DD).
+    
     function formatDateForUrl(dateString) {
         if (!dateString) return '';
         try {
@@ -367,33 +364,21 @@
         }
     }
 
-    // Helper to build a query string for primary keys.
     async function buildPkQueryString(itemConfig, pkValues) {
         const params = new URLSearchParams();
-        const schemaInfo = await getTableSchema(itemConfig.schema, itemConfig.table);
-        const pkColumns = schemaInfo.filter(col => col.is_primary_key).map(col => col.column_name);
-
-        if (Array.isArray(pkColumns) && pkColumns.length > 1) {
-            pkColumns.forEach(key => {
-                let value = pkValues[key];
-                const colSchema = schemaInfo.find(c => c.column_name === key);
-                if (colSchema && colSchema.data_type === 'date') {
-                    value = formatDateForUrl(value);
-                }
-                params.append(key, value);
-            });
-        } else if (pkColumns.length === 1) {
-            const key = pkColumns[0];
+        const pkFields = itemConfig.pkFields || [itemConfig.idField];
+        
+        for (const key of pkFields) {
             let value = pkValues[key];
-            const colSchema = schemaInfo.find(c => c.column_name === key);
-            if (colSchema && colSchema.data_type === 'date') {
-                value = formatDateForUrl(value);
+            if (value instanceof Date) {
+                value = formatDateForUrl(value.toISOString());
+            } else if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}(T.*)?Z?$/)) {
+                 value = formatDateForUrl(value);
             }
             params.append(key, value);
         }
         return params.toString();
     }
-
 
     const setLoading = (isLoading) => {
         document.getElementById('loading-spinner').style.display = isLoading ? 'flex' : 'none';
@@ -438,7 +423,7 @@
     function initializePrintingPage() {
         document.getElementById('item-type').addEventListener('change', handleItemTypeChange);
         document.querySelectorAll('input[name="selection-mode"]').forEach(radio => radio.addEventListener('change', handleSelectionModeChange));
-        document.getElementById('experiment-selector').addEventListener('change', e => loadItemsByExperiment(e.target.value)); // Changed function call
+        document.getElementById('experiment-selector').addEventListener('change', e => loadItemsByExperiment(e.target.value));
         document.getElementById('experiment-search').addEventListener('input', filterExperimentList);
         document.getElementById('generate-btn').addEventListener('click', generateLabels);
         document.getElementById('print-btn').addEventListener('click', triggerPrint);
@@ -465,7 +450,7 @@
             el.addEventListener('change', handleConfigChange);
         });
         
-        handleLabelSizeChange(); // Apply default label size settings on page load
+        handleLabelSizeChange();
     }
     
     function handleConfigChange(event) {
@@ -588,21 +573,48 @@
         const itemConfig = ITEM_TYPE_CONFIGS[itemType];
         const itemSchema = await getTableSchema(itemConfig.schema, itemConfig.table);
 
-        selectedOptions.forEach(opt => {
-            const itemData = data.find(item => String(item[idField]) === opt.value);
-            if (!itemData) return;
-            const ticket = createLabelElement(itemData, opt.value, itemSchema);
-            printArea.appendChild(ticket);
+        const allPromises = selectedOptions.map(opt => {
+            const pkValues = data.find(item => {
+                const mainId = getCompositeId(item, itemConfig);
+                return mainId === opt.value;
+            });
+            if (!pkValues) return Promise.resolve(null);
+            
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    const ticket = createLabelElement(pkValues, itemSchema);
+                    resolve(ticket);
+                }, 0);
+            });
         });
-        checkControlsState();
+
+        Promise.all(allPromises).then(tickets => {
+            tickets.filter(Boolean).forEach(ticket => printArea.appendChild(ticket));
+            checkControlsState();
+        });
+    }
+
+    function getCompositeId(itemData, itemConfig) {
+        const pkFields = itemConfig.pkFields || [itemConfig.idField];
+        return pkFields.map(key => {
+            let value = itemData[key];
+            if (value instanceof Date) {
+                value = formatDateForUrl(value.toISOString());
+            } else if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}(T.*)?Z?$/)) {
+                value = formatDateForUrl(value);
+            }
+            return value;
+        }).join('_');
     }
     
-    function createLabelElement(itemData, value, itemSchema) {
+    function createLabelElement(itemData, itemSchema) {
         const sizeKey = document.getElementById('label-size').value;
         const currentSpec = LABEL_SPECS[sizeKey] || {};
         const printType = document.getElementById('print-type').value;
         const printBorder = document.getElementById('print-label-border').checked;
-
+        const currentItemType = document.getElementById('item-type').value;
+        const itemConfig = ITEM_TYPE_CONFIGS[currentItemType];
+        
         const ticket = document.createElement('div');
         ticket.className = 'label-ticket';
         if (printBorder) {
@@ -618,10 +630,11 @@
         const textContainer = document.createElement('div');
         textContainer.className = 'label-text';
 
-        let textContent = `<b>${value}</b>`;
-        const embeddedData = { id: value };
-        const selectedExtraInfoCheckboxes_local = Array.from(document.querySelectorAll('#extra-info-options input[type="checkbox"]:checked'));
-        selectedExtraInfoKeys = selectedExtraInfoCheckboxes_local.map(checkbox => checkbox.dataset.key); // Update global variable
+        const mainId = getCompositeId(itemData, itemConfig);
+        let textContent = `<b>${mainId}</b>`;
+        const embeddedData = { id: mainId };
+        const selectedExtraInfoCheckboxes = Array.from(document.querySelectorAll('#extra-info-options input[type="checkbox"]:checked'));
+        selectedExtraInfoKeys = selectedExtraInfoCheckboxes.map(checkbox => checkbox.dataset.key);
 
         const commonLongFields = ['description', 'notes', 'aim', 'method', 'lab_book', 'sop_protocol', 'raw_data_path', 'final_output_path', 'body', 'title'];
         
@@ -631,7 +644,7 @@
                 let val = itemData[key];
 
                 const colSchema = itemSchema.find(col => col.column_name === key);
-                if (colSchema && (colSchema.data_type === 'date' || colSchema.data_type === 'timestamp with time zone')) {
+                if (colSchema && (colSchema.data_type === 'date' || colSchema.data_type.includes('timestamp'))) {
                     try { val = new Date(val).toLocaleDateString(); } catch (e) { /* keep original */ }
                 } else if (commonLongFields.includes(key) && String(val).length > 50) {
                     val = String(val).substring(0, 50) + '...';
@@ -648,7 +661,7 @@
         if (printType === 'with-code') {
             const codeType = document.getElementById('code-type').value;
             const qrShouldEmbed = document.getElementById('qr-embed-data').checked;
-            const codeValue = (codeType === 'qrcode' && qrShouldEmbed) ? JSON.stringify(embeddedData) : value;
+            const codeValue = (codeType === 'qrcode' && qrShouldEmbed) ? JSON.stringify(embeddedData) : mainId;
             const codeSize = currentSpec.codeSize || 60;
             
             if (codeType === 'barcode' && !currentSpec.isRound) {
@@ -714,23 +727,24 @@
         }
 
         const selectedIds = new Set(selectedOptions.map(opt => opt.value));
-        const itemsToExport = data.filter(item => selectedIds.has(String(item[idField])));
-        const extraInfoKeysForCsv = selectedExtraInfoKeys; // Use the global variable here
+        const itemsToExport = data.filter(item => selectedIds.has(getCompositeId(item, ITEM_TYPE_CONFIGS[itemType])));
+        const extraInfoKeysForCsv = selectedExtraInfoKeys;
 
         const itemConfig = ITEM_TYPE_CONFIGS[itemType];
         const itemSchema = await getTableSchema(itemConfig.schema, itemConfig.table);
-
-        const headers = ['ID', ...extraInfoKeysForCsv.map(key => key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()))];
+        
+        const mainIdKey = itemConfig.pkFields ? itemConfig.pkFields.join('_') : itemConfig.idField;
+        const headers = [mainIdKey, ...extraInfoKeysForCsv.map(key => key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()))];
         let csvContent = headers.join(';') + '\n';
 
         itemsToExport.forEach(item => {
             const row = [];
-            row.push(escapeCsvField(item[idField]));
+            row.push(escapeCsvField(getCompositeId(item, itemConfig)));
             extraInfoKeysForCsv.forEach(key => {
                 let val = item[key];
                 const colSchema = itemSchema.find(col => col.column_name === key);
 
-                if (colSchema && (colSchema.data_type === 'date' || colSchema.data_type === 'timestamp with time zone')) {
+                if (colSchema && (colSchema.data_type === 'date' || colSchema.data_type.includes('timestamp'))) {
                     try { val = new Date(val).toLocaleDateString(); } catch (e) { /* keep original */ }
                 } else if (typeof val === 'object' && val !== null) {
                     val = JSON.stringify(val);
@@ -761,10 +775,10 @@
         const startPositionPanel = document.getElementById('start-position-panel');
         const experimentSelectorContainer = document.getElementById('experiment-selector-container');
 
-        resetSelectionUI(); // Full reset on item type change
+        resetSelectionUI();
 
         const config = ITEM_TYPE_CONFIGS[type];
-        if (!config) { // No type selected, or invalid
+        if (!config) {
             selectionModePanel.classList.add('hidden');
             itemSelectionPanel.classList.add('hidden');
             classificationPanel.classList.add('hidden');
@@ -773,18 +787,14 @@
             return;
         }
 
-        // Show/hide selection mode based on if the type is filterable by experiment
         if (config.filterableByExperiment) {
             selectionModePanel.classList.remove('hidden');
-            // Default to 'direct' mode for now
             document.querySelector('input[name="selection-mode"][value="direct"]').checked = true;
-            // Handle selection mode will then populate items
             handleSelectionModeChange();
         } else {
-            selectionModePanel.classList.add('hidden');
-            experimentSelectorContainer.classList.add('hidden'); // Hide experiment filter if not applicable
-            itemSelectionPanel.classList.remove('hidden'); // Show item selection for direct load
-            // Classification and Start Position are still general for all types
+            selection-mode-panel.classList.add('hidden');
+            experimentSelectorContainer.classList.add('hidden');
+            itemSelectionPanel.classList.remove('hidden');
             classificationPanel.classList.remove('hidden'); 
             startPositionPanel.classList.remove('hidden');
             loadItemsForDirectSelection(type);
@@ -798,32 +808,28 @@
         const experimentSelectorContainer = document.getElementById('experiment-selector-container');
         const currentItemType = document.getElementById('item-type').value;
 
-        resetSelectionUI(true); // Soft reset
+        resetSelectionUI(true);
 
         itemSelectionPanel.classList.remove('hidden');
 
         if (mode === 'by_experiment') {
             experimentSelectorContainer.classList.remove('hidden');
-            loadExperimentList(); // Load all experiments first
-            // After experiment is selected, loadItemsByExperiment will be called
-        } else { // direct
+            loadExperimentList();
+        } else {
             experimentSelectorContainer.classList.add('hidden');
             loadItemsForDirectSelection(currentItemType);
         }
     }
-
-    // Renamed from loadSamplesForExperiment to be more generic for any item type filterable by experiment
+    
     async function loadItemsByExperiment(experimentId) {
-        if (!experimentId) { resetSelectionUI(true); return; }
-
         const currentItemType = document.getElementById('item-type').value;
         const config = ITEM_TYPE_CONFIGS[currentItemType];
 
-        if (!config || !config.filterableByExperiment) {
-            console.warn(`Item type ${currentItemType} is not configured to be filtered by experiment.`);
+        if (!config || !config.filterableByExperiment || !experimentId) {
+            populateAndCacheItems(currentItemType, [], config.idField, config.displayField);
             return;
         }
-
+        
         const selectedExperiment = masterDataCache.allExperiments.find(exp => exp.experiment_id === experimentId);
         if (!selectedExperiment) {
             alert("Selected experiment details not found.");
@@ -831,37 +837,44 @@
             return;
         }
         const experimentDate = formatDateForUrl(selectedExperiment.experiment_date);
+        
+        // Step 1: Get all samples linked to this experiment.
+        const linkedSamplesData = await apiFetch(`table/lab/experiments_samples?experiment_id=${experimentId}&experiment_date=${experimentDate}`);
 
-        let endpoint = `table/${config.schema}/${config.table}`;
-        let filterParams = new URLSearchParams();
-
-        // Determine correct filter parameters based on the table/view structure
-        if (currentItemType === 'samples') { // lab.detailed_samples_view
-            filterParams.append('filter_associated_experiment_id', experimentId);
-            filterParams.append('filter_associated_experiment_date', experimentDate);
-        } else if (currentItemType === 'experiments_samples') { // lab.experiments_samples
-            filterParams.append('filter_experiment_id', experimentId);
-            filterParams.append('filter_experiment_date', experimentDate);
-        } else if (config.schema === 'lab' || currentItemType === 'analysis_runs' || currentItemType === 'datasets') {
-            // Most other lab tables and bioinformatics analysis_runs/datasets have 'experiment_id' and 'experiment_date'
-            filterParams.append('filter_experiment_id', experimentId);
-            filterParams.append('filter_experiment_date', experimentDate);
-        } else {
-            console.warn(`Filtering by experiment not directly supported for ${currentItemType} via standard filter names.`);
+        if (!linkedSamplesData || linkedSamplesData.length === 0) {
+            alert(`No samples found linked to this experiment.`);
             populateAndCacheItems(currentItemType, [], config.idField, config.displayField);
             return;
         }
 
-        const data = await apiFetch(`${endpoint}?${filterParams.toString()}`);
+        const samplePromises = linkedSamplesData.map(link => {
+            const sampleId = link.sample_id;
+            const sampleCreationDate = formatDateForUrl(link.sample_creation_date);
+            
+            const params = new URLSearchParams();
+            // All sample-related tables use sample_id and creation_date or sample_creation_date
+            params.append('filter_sample_id', sampleId);
+            // This is the key part: we use the sample's creation date to filter the correct partition
+            if (config.pkFields.includes('creation_date')) {
+                params.append('filter_creation_date', sampleCreationDate);
+            } else if (config.pkFields.includes('sample_creation_date')) {
+                params.append('filter_sample_creation_date', sampleCreationDate);
+            } else {
+                params.append('filter_sample_creation_date', sampleCreationDate);
+            }
 
-        if (!data || data.length === 0) {
-            populateAndCacheItems(currentItemType, [], config.idField, config.displayField);
-            alert(`No items found for this experiment in ${currentItemType}.`);
-            return;
+            return apiFetch(`table/${config.schema}/${config.table}?${params.toString()}`);
+        });
+
+        const allSamplesData = await Promise.all(samplePromises);
+        const uniqueSamples = allSamplesData.flat().filter(Boolean);
+
+        if (uniqueSamples.length === 0) {
+            alert(`No ${currentItemType} records found for the samples in this experiment.`);
         }
-        populateAndCacheItems(currentItemType, data, config.idField, config.displayField);
+        
+        populateAndCacheItems(currentItemType, uniqueSamples, config.idField, config.displayField);
     }
-
 
     async function loadExperimentList() {
         if (!masterDataCache.allExperiments) {
@@ -883,7 +896,7 @@
             );
         }
         selector.innerHTML = '<option value="">-- Select an Experiment --</option>' +
-            filteredExperiments.map(exp => `<option value="${exp.experiment_id}">${exp.experiment_id} - ${exp.experiment_title || 'No Title'}</option>`).join('');
+            filteredExperiments.map(exp => `<option value="${exp.experiment_id}" data-date="${formatDateForUrl(exp.experiment_date)}">${exp.experiment_id} - ${exp.experiment_title || 'No Title'}</option>`).join('');
     }
 
     async function loadItemsForDirectSelection(type) {
@@ -916,19 +929,13 @@
             });
         }
         document.getElementById('items-to-print').innerHTML = sortedData.map(item => {
-            let displayText = String(item[idField] || 'N/A');
-            if (currentItemType === 'samples') {
-                const externalName = item.external_name ? ` - ${item.external_name}` : '';
-                const originType = item.sample_origin_type ? ` (${item.sample_origin_type})` : '';
-                displayText = `${item.sample_id}${externalName}${originType}`;
-            } else if (currentItemType === 'experiments_samples') {
-                // For experiments_samples, its primary key is composite, so display a combination
-                displayText = `Exp: ${item.experiment_id || 'N/A'} - Sample: ${item.sample_id || 'N/A'}`;
+            const itemConfig = ITEM_TYPE_CONFIGS[currentItemType];
+            const mainId = getCompositeId(item, itemConfig);
+            let displayText = mainId;
+            if (item[displayField] && item[displayField] !== item[idField]) {
+                displayText += ` - ${item[displayField]}`;
             }
-            else {
-                displayText = item[displayField] || item[idField];
-            }
-            return `<option value="${item[idField]}">${displayText}</option>`;
+            return `<option value="${mainId}">${displayText}</option>`;
         }).join('') || '<option disabled>No items found</option>';
         document.getElementById('item-count').textContent = sortedData.length;
     }
@@ -954,33 +961,19 @@
         }
 
         const uniqueKeysWithValues = new Set();
+        const pkFields = new Set(config.pkFields || [config.idField]);
         schema.forEach(col => {
             const key = col.column_name;
             const excludedKeys = new Set([
                 'attachment', 'password_hash', 'search_vector', 'geom',
                 'created_at', 'created_by', 'last_modified_at', 'last_modified_by',
-                config.idField, config.displayField,
-                // General exclusions for samples (detailed_samples_view)
-                'sample_status_notes', 'project_title', 'customer_name', 'storage_freezer', 'storage_box',
-                'room_address', 'room_etage', 'sampling_event_id', 'sampling_event_date',
-                'sampling_lon', 'sampling_lat', 'fishing_start_lon', 'fishing_start_lat',
-                'fishing_end_lon', 'fishing_end_lat', 'sampling_location', 'sampling_depth_m',
-                'temperature_atmospheric_c', 'weather', 'wind_speed', 'wind_unit', 'salinity',
-                'salinity_unit', 'oxygen', 'oxygen_unit', 'species_en_name', 'tissue_type',
-                'dna_volume_ul', 'dna_concentration_ng_ul', 'rna_volume_ul', 'rna_concentration_ng_ul',
-                'sediment_volume', 'sediment_volume_unit', 'water_volume_l', 'water_filter',
-                'extraction_date', 'extraction_kit', 'nanodrop_concentration', 'qubit_original_sample_conc',
-                'pcr_date', 'pcr_primer_id', 'qpcr_date', 'library_id', 'sequencing_id', 'sequencer',
-                'analysis_run_id', 'pipeline_name', 'edna_assigned_taxon_id', 'edna_assigned_taxon_name',
-                'sampler_full_name', 'receiver_full_name',
-                'associated_experiment_id', 'associated_experiment_title', 'associated_experiment_date', 'associated_experiment_aim', 'associated_experiment_method', 'experiment_person_name',
-                'sample_origin_type', 'sample_type_abrv',
-                // Specific exclusions for experiments_samples
-                'link_date', 'experiment_date' // experiment_date is usually part of primary key, not extra info
+                'query_text', 'original_data', 'new_data', 'salutation', 'sample_id', 'sample_creation_date'
             ]);
-
-            if (!excludedKeys.has(key) && data.some(item => item.hasOwnProperty(key) && item[key] !== null && String(item[key]).trim() !== '')) {
-                uniqueKeysWithValues.add(key);
+            
+            if (!pkFields.has(key) && !excludedKeys.has(key) && key !== config.displayField) {
+                 if (data.some(item => item.hasOwnProperty(key) && item[key] !== null && String(item[key]).trim() !== '')) {
+                     uniqueKeysWithValues.add(key);
+                 }
             }
         });
 
@@ -989,7 +982,6 @@
         filterExtraInfoCheckboxes();
         extraInfoContainer.classList.remove('hidden');
     }
-
 
     function filterExtraInfoCheckboxes() {
         const searchTerm = document.getElementById('extra-info-option-search').value.toLowerCase();
@@ -1013,40 +1005,19 @@
         const searchTerm = document.getElementById('item-search').value.toLowerCase();
         const { data, idField, displayField, type: currentItemType } = masterDataCache.currentItemSet;
         const filteredData = data.filter(item => {
+            const itemConfig = ITEM_TYPE_CONFIGS[currentItemType];
+            const mainId = getCompositeId(item, itemConfig);
             let match = false;
-            if (String(item[idField] || '').toLowerCase().includes(searchTerm)) {
+            if (String(mainId || '').toLowerCase().includes(searchTerm)) {
                 match = true;
             }
-            if (currentItemType === 'samples') {
-                if (item.external_name && String(item.external_name).toLowerCase().includes(searchTerm)) {
-                    match = true;
-                }
-                if (item.sample_origin_type && String(item.sample_origin_type).toLowerCase().includes(searchTerm)) {
-                    match = true;
-                }
-                if (item.project_title && String(item.project_title).toLowerCase().includes(searchTerm)) {
-                    match = true;
-                }
-                if (item.associated_experiment_id && String(item.associated_experiment_id).toLowerCase().includes(searchTerm)) {
-                    match = true;
-                }
-            } else if (currentItemType === 'experiments_samples') {
-                if (item.sample_id && String(item.sample_id).toLowerCase().includes(searchTerm)) {
-                    match = true;
-                }
-                if (item.experiment_id && String(item.experiment_id).toLowerCase().includes(searchTerm)) {
-                    match = true;
-                }
-            }
-            else {
-                if (item[displayField] && String(item[displayField]).toLowerCase().includes(searchTerm)) {
-                    match = true;
-                }
-            }
-            if (item.notes && String(item.notes).toLowerCase().includes(searchTerm)) {
+            if (item[displayField] && String(item[displayField] || '').toLowerCase().includes(searchTerm)) {
                 match = true;
             }
-            if (item.description && String(item.description).toLowerCase().includes(searchTerm)) {
+            if (item.notes && String(item.notes || '').toLowerCase().includes(searchTerm)) {
+                match = true;
+            }
+            if (item.description && String(item.description || '').toLowerCase().includes(searchTerm)) {
                 match = true;
             }
             return match;

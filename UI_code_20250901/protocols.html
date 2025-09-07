@@ -337,7 +337,7 @@
             window.location.href = './login.html';
         }
         
-        const API_BASE_URL = '/api'; // Changed API_BASE_URL to match app_test.py's default
+        const API_BASE_URL = '/mylims/api'; // Corrected API_BASE_URL to match app_test.py
         let quill;
         let allExperiments = [];
         let filteredAndSortedExperiments = [];
@@ -450,25 +450,27 @@
             );
 
             filteredAndSortedExperiments.sort((a, b) => {
-                let valA = String(a[sortColumn] || '').toLowerCase();
-                let valB = String(b[sortColumn] || '').toLowerCase();
-
+                let valA = a[sortColumn];
+                let valB = b[sortColumn];
+                
                 if (sortColumn === 'experiment_date') {
                     const dateA = new Date(valA);
                     const dateB = new Date(valB);
                     if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) return 0;
                     return sortDirection === 'asc' ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
                 } else if (sortColumn === 'experiment_id') {
-                    const numA = parseInt(valA.replace(/\D/g, '') || '0');
-                    const numB = parseInt(valB.replace(/\D/g, '') || '0');
-                    const stringA = valA.replace(/\d/g, '');
-                    const stringB = valB.replace(/\d/g, '');
+                    const numA = parseInt(String(valA).replace(/\D/g, '') || '0');
+                    const numB = parseInt(String(valB).replace(/\D/g, '') || '0');
+                    const stringA = String(valA).replace(/\d/g, '');
+                    const stringB = String(valB).replace(/\d/g, '');
                     if (stringA === stringB) {
                         return sortDirection === 'asc' ? numA - numB : numB - numA;
                     }
                     return sortDirection === 'asc' ? stringA.localeCompare(stringB) : stringB.localeCompare(stringA);
                 } else {
-                    return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                    const stringA = String(valA || '').toLowerCase();
+                    const stringB = String(valB || '').toLowerCase();
+                    return sortDirection === 'asc' ? stringA.localeCompare(stringB) : stringB.localeCompare(stringA);
                 }
             });
 
@@ -484,21 +486,23 @@
                 resetControlButtonsAndInfo();
                 return;
             }
+            
+            // Fetch all projects to build a project title lookup map
+            const projectsData = await apiFetch('table/lims/projects');
+            const projectMap = new Map();
+            if (projectsData && !projectsData.error) {
+                projectsData.forEach(p => projectMap.set(p.project_id, p.title || p.project_abrv));
+            }
 
             for (const exp of filteredAndSortedExperiments) {
                 const option = document.createElement('option');
-                // Fetch linked project titles for display in the dropdown
+                
+                // Fetch linked projects for the selected experiment to display in the dropdown
                 let projectTitles = 'N/A';
-                if (exp.experiment_id && exp.experiment_date) {
-                    const linkedProjects = await apiFetch(`table/lab/experiments_projects?filter_experiment_id=${exp.experiment_id}&filter_experiment_date=${formatDateForInput(exp.experiment_date)}`);
-                    if (linkedProjects && !linkedProjects.error && linkedProjects.length > 0) {
-                        const projectIds = linkedProjects.map(lp => lp.project_id);
-                        const projectsData = await apiFetch('table/lims/projects'); // Fetch all projects to get titles
-                        if (projectsData && !projectsData.error) {
-                            const matchingProjects = projectsData.filter(p => projectIds.includes(p.project_id));
-                            projectTitles = matchingProjects.map(p => p.title || p.project_id).join(', ');
-                        }
-                    }
+                const linkedProjects = await apiFetch(`table/lab/experiments_projects?filter_experiment_id=${exp.experiment_id}&filter_experiment_date=${formatDateForInput(exp.experiment_date)}`);
+                if (linkedProjects && !linkedProjects.error && linkedProjects.length > 0) {
+                    const titles = linkedProjects.map(lp => projectMap.get(lp.project_id) || lp.project_id);
+                    projectTitles = titles.join(', ');
                 }
 
                 option.value = JSON.stringify({ experiment_id: exp.experiment_id, experiment_date: formatDateForInput(exp.experiment_date) });    
@@ -565,11 +569,14 @@
             if (linkedProjects && !linkedProjects.error && linkedProjects.length > 0) {
                 const projectIds = linkedProjects.map(lp => lp.project_id);
                 const projectsData = await apiFetch('table/lims/projects');
+                const projectMap = new Map();
                 if (projectsData && !projectsData.error) {
-                    const matchingProjects = projectsData.filter(p => projectIds.includes(p.project_id));
-                    linkedProjectTitles = matchingProjects.map(p => p.title || p.project_id).join(', ');
+                    projectsData.forEach(p => projectMap.set(p.project_id, p.title || p.project_abrv));
                 }
+                const matchingProjectTitles = projectIds.map(pId => projectMap.get(pId) || pId);
+                linkedProjectTitles = matchingProjectTitles.join(', ');
             }
+
 
             // Update displayed experiment details
             document.getElementById('selected-exp-nr').textContent = selectedExperiment.experiment_id;    
@@ -671,7 +678,8 @@
                 quill.setContents([]);    
                 // Initialize with a default structure for new protocols
                 quill.clipboard.dangerouslyPasteHTML(`
-                    <h2>Samples</h2><p><br></p>
+                    <h2>Introduction</h2><p><br></p>
+                    <h2>Materials</h2><p><br></p>
                     <h2>Procedure</h2><p><br></p>
                     <h2>Notes</h2><p><br></p>
                 `);
@@ -693,7 +701,6 @@
                 "experiment_id": selectedExperiment.experiment_id,    
                 "experiment_date": formatDateForInput(selectedExperiment.experiment_date),    
                 "person_id": JSON.parse(sessionStorage.getItem('user')).person_id || 'system_user', // Use logged-in user's person_id or 'system_user'
-                "run_date": formatDateForInput(new Date().toISOString().split('T')[0]), // Set current date as run_date
                 "notes": `Protocol for ${selectedExperiment.experiment_id} updated by ${JSON.parse(sessionStorage.getItem('user')).full_name || 'Unknown'}`
             };
 
@@ -704,9 +711,9 @@
                 data.protocol_run_details = JSON.stringify({}); // Initialize as empty JSON object string
             }
             // If a sop_id is associated with the selected experiment, include it
-            if (selectedExperiment.sop_id) {
-                data.sop_id = selectedExperiment.sop_id;
-            }
+           // if (selectedExperiment.sop_id) {
+           //     data.sop_id = selectedExperiment.sop_id;
+           // }
 
             let result;
             if (currentProtocolRun && currentProtocolRun.protocol_run_id) {    
@@ -782,7 +789,7 @@
                     <h2 style="font-size: 1.6em; font-weight: bold; color: #1e293b; margin-bottom: 10px; border-bottom: 2px solid #4f46e5; padding-bottom: 5px;">Experiment Protocol</h2>
                     <p style="margin-bottom: 5px;"><strong>Experiment Nr:</strong> <span style="font-weight: 600;">${selectedExperiment.experiment_id || 'N/A'}</span></p>
                     <p style="margin-bottom: 5px;"><strong>Title:</strong> ${selectedExperiment.experiment_title || 'N/A'}</p>
-                    <p style="margin-bottom: 5px;"><strong>Project:</strong> ${selectedExperiment.project_id || 'N/A'}</p>
+                    <p style="margin-bottom: 5px;"><strong>Project:</strong> ${document.getElementById('selected-exp-project').textContent || 'N/A'}</p>
                     <p style="margin-bottom: 5px;"><strong>Aim:</strong> ${selectedExperiment.aim || 'N/A'}</p>
                     <p style="margin-bottom: 5px;"><strong>Method:</strong> ${selectedExperiment.method || 'N/A'}</p>
                     <p style="font-size: 0.85em; text-align: right; color: #666;">Generated on: ${currentDateTime}</p>
@@ -905,7 +912,6 @@
                     .pdf-content p, .pdf-content li, .pdf-content blockquote, img { page-break-inside: avoid; }
                     .pdf-content h2 { font-size: 1.2rem; font-weight: 600; color: #4338ca; border-bottom: 1px solid #9ca3af; padding-bottom: 3px; margin-top: 20px; margin-bottom: 10px; page-break-after: avoid; }
                     .pdf-content .ql-custom-checkbox-item { border: 1px solid #d1d5db; background-color: #f9fafb; border-radius: 6px; padding: 10px; margin-bottom: 8px; page-break-inside: avoid; }
-                    .pdf-content .ql-custom-checkbox { display: inline-block; width: 1.2em; height: 1.2em; border: 1px solid #ccc; text-align: center; line-height: 1.2em; vertical-align: middle; margin-right: 0.5em; flex-shrink: 0; }
                     .pdf-content h1, .pdf-content h3, .pdf-content h4, .pdf-content h5, .pdf-content h6 { page-break-inside: avoid; page-break-after: avoid; }
                 </style>
             `;
@@ -972,14 +978,11 @@
             tempDiv.innerHTML = quill.root.innerHTML; // Get current HTML from Quill editor
             // Get all custom checkbox step elements from the parsed HTML
             const protocolStepElements = Array.from(tempDiv.querySelectorAll('.ql-custom-checkbox-item'));
-            // Generate a hash of the current protocol HTML content to detect changes
-            const currentProtocolHtmlHash = btoa(unescape(encodeURIComponent(quill.root.innerHTML))); // Hash of current editor content
-
+            
             // If no existing runData, or if the protocol HTML has changed, initialize a new run session
             if (!runData || runData.protocolHtml !== quill.root.innerHTML) { // Compare with current editor HTML
                 currentRunDetails = {
                     protocolHtml: quill.root.innerHTML, // Store the clean HTML from current editor for PDF export later
-                    protocolHash: currentProtocolHtmlHash, // Store hash of protocol content
                     runStarted: new Date().toISOString(), // Timestamp when this run session started
                     lastRunUpdated: null, // Last time run status was saved
                     steps: protocolStepElements.map((el, index) => ({ // Map each step to an object

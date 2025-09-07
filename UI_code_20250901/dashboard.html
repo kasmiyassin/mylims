@@ -108,7 +108,6 @@
 </head>
 <body>
     <div id="main-app" class="flex">
-        <!-- Sidebar -->
         <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col z-20">
             <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0">
                 <i data-lucide="flask-conical" class="inline-block mr-2 text-blue-600"></i><span>TIFI MG</span>
@@ -135,7 +134,6 @@
             </div>
         </div>
 
-        <!-- Main Content -->
         <div id="main-content" class="ml-64 p-8 flex-grow">
             <div class="flex justify-between items-center mb-6">
                 <div>
@@ -149,7 +147,6 @@
                 </div>
             </div>
             
-            <!-- Stat Cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 <div class="stat-card card p-4 flex items-center">
                     <div class="p-3 bg-blue-100 rounded-full mr-4"><i data-lucide="folder-kanban" class="w-6 h-6 text-blue-600"></i></div>
@@ -186,7 +183,6 @@
                 </div>
             </div>
             
-            <!-- Track a Sample Section -->
             <div class="card p-6 mb-8">
                 <h2 class="text-xl font-bold text-gray-800 mb-4">Track a Sample</h2>
                 <div class="flex items-center space-x-2">
@@ -197,7 +193,6 @@
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <!-- Quick Actions -->
                 <div class="lg:col-span-1">
                     <div class="card p-6 h-full">
                         <h2 class="text-xl font-bold text-gray-800 mb-4">Quick Actions</h2>
@@ -208,7 +203,6 @@
                         </div>
                     </div>
                 </div>
-                <!-- Data Explorer Chart -->
                 <div class="lg:col-span-2">
                     <div class="card p-6">
                         <h2 class="text-xl font-bold text-gray-800 mb-4">Data Explorer</h2>
@@ -247,7 +241,6 @@
                 </div>
             </div>
 
-            <!-- Recent System Activity -->
             <div class="card p-6 mt-8">
                 <h2 class="text-xl font-bold text-gray-800 mb-4">Recent System Activity <i data-lucide="activity" class="w-6 h-6 inline-block text-gray-500 ml-2"></i></h2>
                 <div id="activity-feed" class="space-y-4 max-h-80 overflow-y-auto pr-2">
@@ -266,7 +259,7 @@
         }
         
         // --- Global Constants and Cache ---
-        const API_BASE_URL = '/api'; 
+        const API_BASE_URL = '/mylims/api'; 
         let dataCache = {}; // Stores raw data fetched from API for charting
         let dynamicChartInstance; // Chart.js instance
 
@@ -275,7 +268,7 @@
         const categoryOptions = {
             samples: [
                 { value: 'sample_type_id', text: 'Sample Type' },
-                { value: 'sample_status_id', text: 'Status' },
+                { value: 'status_id', text: 'Status' },
                 { value: 'project_id', text: 'Project' },
                 { value: 'sampling_id', text: 'Sampling Event' },
                 { value: 'reception_date', text: 'Reception Month', type: 'month' }
@@ -324,11 +317,6 @@
                 const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
                 
                 if (!response.ok) {
-                    // Specific handling for global search when no results found (404)
-                    if (endpoint.startsWith('global-search/') && response.status === 404) {
-                        // Backend returns object with keys, so return empty arrays for each expected key
-                        return { projects: [], samples: [], experiments: [], sop: [], customers: [], species: [], primers: [], reagents: [], personal: [], detailed_samples_view: [], project_overview_view: [], analysis_results_summary: [] };
-                    }
                     const errorBody = await response.json().catch(() => ({error: `Server error or HTTP ${response.status}`}));
                     throw new Error(errorBody.error || `HTTP error! Status: ${response.status}`);
                 }
@@ -557,7 +545,7 @@
             resultsDiv.innerHTML = `<div class="p-4 text-center"><div class="loading-spinner"></div> Loading sample details...</div>`;
             try {
                 // Fetch from the comprehensive view for full details
-                const sampleResponse = await apiFetch(`table/Lab/Sample_Full_Details_View?filter_sample_id=${sampleId}`);
+                const sampleResponse = await apiFetch(`table/lab/global_lims_view?filter_sample_id=${sampleId}`);
                 const sample = sampleResponse && sampleResponse.length > 0 ? sampleResponse[0] : null;
 
                 if (!sample) {
@@ -608,13 +596,13 @@
                             <dl class="space-y-2 py-2">
                                 ${renderDetailRow('External Name', sample.external_name)}
                                 ${renderDetailRow('Type', sample.sample_type_abrv || sample.sample_type_id)}
-                                ${renderDetailRow('Current Status', sample.sample_status_id || sample.sample_status_notes)}
+                                ${renderDetailRow('Current Status', sample.sample_status)}
                                 ${renderDetailRow('Project ID', sample.project_id)}
                                 ${renderDetailRow('Project Title', sample.project_title)}
                                 ${renderDetailRow('Reception Date', formatDate(sample.reception_date))}
                                 ${renderDetailRow('Parent Sample', sample.parent_sample_id)}
-                                ${renderDetailRow('Sampler', sample.sampler_full_name)}
-                                ${renderDetailRow('Receiver', sample.receiver_full_name)}
+                                ${renderDetailRow('Sampler', sample.sampler_person_id)}
+                                ${renderDetailRow('Receiver', sample.receiver_person_id)}
                             </dl>
                         </div>
                     </div>
@@ -630,14 +618,14 @@
                         </button>
                         <div class="accordion-content">
                             <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Date', formatDate(sample.sampling_event_date))}
-                                ${renderDetailRow('Location', sample.sampling_location)}
-                                ${renderDetailRow('Depth (m)', sample.sampling_depth_m)}
+                                ${renderDetailRow('Date', formatDate(sample.sampling_date))}
+                                ${renderDetailRow('Location', sample.location_name)}
+                                ${renderDetailRow('Depth (m)', sample.depth_m)}
                                 ${renderDetailRow('Temperature (?)', sample.temperature_atmospheric_c)}
                                 ${renderDetailRow('Weather', sample.weather)}
                                 ${renderDetailRow('Wind Speed', sample.wind_speed ? `${sample.wind_speed} ${sample.wind_unit || ''}` : 'N/A')}
-                                ${renderDetailRow('Salinity', sample.salinity ? `${sample.salinity} ${sample.salinity_unit || ''}` : 'N/A')}
-                                ${renderDetailRow('Oxygen', sample.oxygen ? `${sample.oxygen} ${sample.oxygen_unit || ''}` : 'N/A')}
+                                ${renderDetailRow('Salinity', sample.salinity ? `${sample.salinity} PSU` : 'N/A')}
+                                ${renderDetailRow('Oxygen', sample.oxygen ? `${sample.oxygen} mg/L` : 'N/A')}
                             </dl>
                         </div>
                     </div>`;
@@ -653,18 +641,16 @@
                         </button>
                         <div class="accordion-content">
                             <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Room', sample.room_id)}
-                                ${renderDetailRow('Address', sample.room_address)}
-                                ${renderDetailRow('Freezer', sample.storage_freezer)}
-                                ${renderDetailRow('Box', sample.storage_box)}
+                                ${renderDetailRow('Freezer', sample.freezer)}
                                 ${renderDetailRow('Position', sample.storage_position)}
+                                ${renderDetailRow('Room Address', sample.storage_room_address)}
                             </dl>
                         </div>
                     </div>`;
                 }
-
+                
                 // Fish Details
-                if (sample.species_en_name) { // Assuming species_en_name indicates a fish sample
+                if (sample.fish_species_name) {
                     html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="fish-details">
@@ -673,45 +659,22 @@
                         </button>
                         <div class="accordion-content">
                             <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Species', sample.species_en_name)}
+                                ${renderDetailRow('Species', sample.fish_species_name)}
                                 ${renderDetailRow('Total Length (mm)', sample.total_length_mm)}
-                                ${renderDetailRow('Fork Length (mm)', sample.fork_length_mm)}
-                                ${renderDetailRow('Standard Length (mm)', sample.standard_length_mm)}
-                                ${renderDetailRow('Weight (g)', sample.weight_g)}
-                                ${renderDetailRow('Sex', sample.sex)}
+                                ${renderDetailRow('Weight (g)', sample.fish_weight_g)}
+                                ${renderDetailRow('Sex', sample.fish_sex)}
                                 ${renderDetailRow('Maturity Stage', sample.maturity_stage)}
-                                ${renderDetailRow('Stomach Contents', sample.stomach_contents)}
-                                ${renderDetailRow('Disease Info', sample.disease_info)}
-                                ${renderDetailRow('Tag ID', sample.tag_id)}
-                            </dl>
-                        </div>
-                    </div>`;
-                }
-
-                // Tissue Details
-                if (sample.tissue_type || sample.tissue_weight_mg) {
-                    html += `
-                    <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="tissue-details">
-                            <span class="flex items-center"><i data-lucide="microscope" class="w-5 h-5 mr-2"></i> Tissue Details</span>
-                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
-                        </button>
-                        <div class="accordion-content">
-                            <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Weight (mg)', sample.tissue_weight_mg)}
-                                ${renderDetailRow('Tissue Type', sample.tissue_type)}
-                                ${renderDetailRow('Preservation Method', sample.tissue_preservation_method)}
                             </dl>
                         </div>
                     </div>`;
                 }
 
                 // Otolith Details
-                if (sample.otolith_id) {
+                if (sample.age_reading_years) {
                     html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="otolith-details">
-                            <span class="flex items-center"><i data-lucide="circle-dot" class="w-5 h-5 mr-2"></i> Otolith Details (${sample.otolith_id})</span>
+                            <span class="flex items-center"><i data-lucide="circle-dot" class="w-5 h-5 mr-2"></i> Otolith Details</span>
                             <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                         </button>
                         <div class="accordion-content">
@@ -720,14 +683,13 @@
                                 ${renderDetailRow('Side', sample.side)}
                                 ${renderDetailRow('Age Reading (years)', sample.age_reading_years)}
                                 ${renderDetailRow('Confidence', sample.confidence)}
-                                ${renderDetailRow('Reading Date', formatDate(sample.reading_date))}
                             </dl>
                         </div>
                     </div>`;
                 }
 
                 // DNA Details
-                if (sample.dna_volume_ul || sample.dna_concentration_ng_ul) {
+                if (sample.dna_concentration) {
                     html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="dna-details">
@@ -736,19 +698,17 @@
                         </button>
                         <div class="accordion-content">
                             <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Volume (?)', sample.dna_volume_ul)}
-                                ${renderDetailRow('Concentration (ng/?)', sample.dna_concentration_ng_ul)}
+                                ${renderDetailRow('Concentration (ng/ul)', sample.dna_concentration)}
                                 ${renderDetailRow('A260/280', sample.dna_a260_280)}
-                                ${renderDetailRow('A260/230', sample.dna_a260_230)}
-                                ${renderDetailRow('Extraction Method', sample.dna_extraction_method)}
                                 ${renderDetailRow('Extraction Date', formatDate(sample.extraction_date))}
+                                ${renderDetailRow('Extraction Method', sample.extraction_method)}
                             </dl>
                         </div>
                     </div>`;
                 }
-                
+
                 // RNA Details
-                if (sample.rna_volume_ul || sample.rna_concentration_ng_ul) {
+                if (sample.rna_concentration) {
                     html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="rna-details">
@@ -757,249 +717,28 @@
                         </button>
                         <div class="accordion-content">
                             <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Volume (?)', sample.rna_volume_ul)}
-                                ${renderDetailRow('Concentration (ng/?)', sample.rna_concentration_ng_ul)}
+                                ${renderDetailRow('Concentration (ng/ul)', sample.rna_concentration)}
                                 ${renderDetailRow('A260/280', sample.rna_a260_280)}
-                                ${renderDetailRow('A260/230', sample.rna_a260_230)}
-                                ${renderDetailRow('Extraction Method', sample.rna_extraction_method)}
                                 ${renderDetailRow('Extraction Date', formatDate(sample.extraction_date))}
+                                ${renderDetailRow('Extraction Method', sample.extraction_method)}
                             </dl>
                         </div>
                     </div>`;
                 }
-
-                // Sediments Details
-                if (sample.sediment_volume || sample.sediment_depth_m) {
-                    html += `
-                    <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="sediments-details">
-                            <span class="flex items-center"><i data-lucide="sand-grain" class="w-5 h-5 mr-2"></i> Sediments Details</span>
-                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
-                        </button>
-                        <div class="accordion-content">
-                            <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Volume', sample.sediment_volume ? `${sample.sediment_volume} ${sample.sediment_volume_unit || ''}` : 'N/A')}
-                                ${renderDetailRow('Depth (m)', sample.sediment_depth_m)}
-                                ${renderDetailRow('Sampling Method', sample.sediment_sampling_method)}
-                            </dl>
-                        </div>
-                    </div>`;
-                }
-
-                // Water Details
-                if (sample.water_volume_l || sample.water_depth_m) {
-                    html += `
-                    <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="water-details">
-                            <span class="flex items-center"><i data-lucide="droplet" class="w-5 h-5 mr-2"></i> Water Details</span>
-                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
-                        </button>
-                        <div class="accordion-content">
-                            <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Volume (L)', sample.water_volume_l)}
-                                ${renderDetailRow('Filter', sample.water_filter)}
-                                ${renderDetailRow('Filter Pore Size (?)', sample.water_filter_pore_size_um)}
-                                ${renderDetailRow('Depth (m)', sample.water_depth_m)}
-                                ${renderDetailRow('Sampling Method', sample.water_sampling_method)}
-                            </dl>
-                        </div>
-                    </div>`;
-                }
-
-                // Dissections (Separate Fetch - Sample_Full_Details_View might not include all dissections)
-                const dissectionsData = await apiFetch(`table/Lab/Dissections?filter_sample_id=${sampleId}`);
-                const dissections = dissectionsData && !dissectionsData.error ? dissectionsData : [];
-
-                if (dissections.length > 0) {
-                    html += `
-                    <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="dissection-history">
-                            <span class="flex items-center"><i data-lucide="scissors" class="w-5 h-5 mr-2"></i> Dissection History (${dissections.length})</span>
-                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
-                        </button>
-                        <div class="accordion-content">`;
-                    dissections.forEach(dis => {
-                        html += `<div class="mb-2 p-2 bg-gray-100 rounded-md">
-                            ${renderDetailRow('Dissection ID', dis.dissection_id)}
-                            ${renderDetailRow('Date', formatDate(dis.dissection_date))}
-                            ${renderDetailRow('Person', dis.person_id)}
-                            ${renderDetailRow('Gonad Weight (g)', dis.gonad_weight_g)}
-                            ${renderDetailRow('Liver Weight (g)', dis.liver_weight_g)}
-                            ${renderDetailRow('Stomach Contents', dis.stomach_contents_jsonb ? JSON.stringify(dis.stomach_contents_jsonb) : 'N/A')}
-                        </div>`;
-                    });
-                    html += `</div></div>`;
-                }
-
-                // Extraction Details (if not covered by DNA/RNA directly)
-                if (sample.extraction_date && !(sample.dna_volume_ul || sample.rna_volume_ul)) { // Avoid duplication if DNA/RNA sections cover this
-                    html += `
-                    <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="extraction-details">
-                            <span class="flex items-center"><i data-lucide="flask-conical" class="w-5 h-5 mr-2"></i> General Extraction Details</span>
-                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
-                        </button>
-                        <div class="accordion-content">
-                            <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Date', formatDate(sample.extraction_date))}
-                                ${renderDetailRow('Kit', sample.extraction_kit)}
-                                ${renderDetailRow('Elution Volume (?)', sample.extraction_elution_volume_ul)}
-                                ${renderDetailRow('Yield Qubit (ng/?)', sample.yield_qubit_ng_ul)}
-                                ${renderDetailRow('Yield Nanodrop (ng/?)', sample.yield_nanodrop_ng_ul)}
-                                ${renderDetailRow('A260/280', sample.extraction_a260_280)}
-                                ${renderDetailRow('A260/230', sample.extraction_a260_230)}
-                            </dl>
-                        </div>
-                    </div>`;
-                }
-
-                // Nanodrop Details
-                if (sample.nanodrop_concentration) {
-                    html += `
-                    <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="nanodrop-details">
-                            <span class="flex items-center"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-2"></i> Nanodrop Details</span>
-                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
-                        </button>
-                        <div class="accordion-content">
-                            <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Concentration', sample.nanodrop_concentration ? `${sample.nanodrop_concentration} ${sample.nanodrop_concentration_unit || ''}` : 'N/A')}
-                                ${renderDetailRow('A260', sample.nanodrop_a260)}
-                                ${renderDetailRow('A260/280', sample.nanodrop_a260_280)}
-                                ${renderDetailRow('A260/230', sample.nanodrop_a260_230)}
-                                ${renderDetailRow('Total DNA (?)', sample.nanodrop_total_dna_ug)}
-                            </dl>
-                        </div>
-                    </div>`;
-                }
-
-                // Qubit Details
-                if (sample.qubit_original_sample_conc) {
-                    html += `
-                    <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="qubit-details">
-                            <span class="flex items-center"><i data-lucide="thermometer" class="w-5 h-5 mr-2"></i> Qubit Details</span>
-                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
-                        </button>
-                        <div class="accordion-content">
-                            <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Original Sample Conc.', sample.qubit_original_sample_conc ? `${sample.qubit_original_sample_conc} ${sample.qubit_original_sample_unit || ''}` : 'N/A')}
-                                ${renderDetailRow('Total DNA (?)', sample.qubit_total_dna_ug)}
-                            </dl>
-                        </div>
-                    </div>`;
-                }
-
-                // Tapestation Details
-                if (sample.tapestation_id) {
-                    html += `
-                    <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="tapestation-details">
-                            <span class="flex items-center"><i data-lucide="waveform" class="w-5 h-5 mr-2"></i> Tapestation Details (${sample.tapestation_id})</span>
-                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
-                        </button>
-                        <div class="accordion-content">
-                            <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Measurement Date', formatDate(sample.measurement_date))}
-                                ${renderDetailRow('Kit', sample.kit)}
-                                ${renderDetailRow('Position', sample.position)}
-                            </dl>
-                        </div>
-                    </div>`;
-                }
-
-                // PCR Details
-                if (sample.pcr_primer_id) {
-                    html += `
-                    <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="pcr-details">
-                            <span class="flex items-center"><i data-lucide="dna" class="w-5 h-5 mr-2"></i> PCR Details</span>
-                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
-                        </button>
-                        <div class="accordion-content">
-                            <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Date', formatDate(sample.pcr_date))}
-                                ${renderDetailRow('Primer ID', sample.pcr_primer_id)}
-                                ${renderDetailRow('Target Gene', sample.pcr_target_gene_id)}
-                                ${renderDetailRow('Reaction Volume (?)', sample.volume_reaction_ul)}
-                            </dl>
-                        </div>
-                    </div>`;
-                }
-
-                // Gel Electrophoresis Details
-                if (sample.gelelectrophoresis_id) {
-                    html += `
-                    <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="gel-electrophoresis-details">
-                            <span class="flex items-center"><i data-lucide="gel-electrophoresis" class="w-5 h-5 mr-2"></i> Gel Electrophoresis Details (${sample.gelelectrophoresis_id})</span>
-                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
-                        </button>
-                        <div class="accordion-content">
-                            <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Run Date', formatDate(sample.run_date))}
-                                ${renderDetailRow('Ladder', sample.ladder)}
-                                ${renderDetailRow('Voltage', sample.voltage)}
-                                ${renderDetailRow('Band Size (bp)', sample.band_size_bp)}
-                                ${renderDetailRow('Gel Type', sample.gel_type)}
-                                ${renderDetailRow('Run Time (minutes)', sample.run_time_minutes)}
-                            </dl>
-                        </div>
-                    </div>`;
-                }
-
-                // qPCR Details
-                if (sample.ct_value) {
-                    html += `
-                    <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="qpcr-details">
-                            <span class="flex items-center"><i data-lucide="activity" class="w-5 h-5 mr-2"></i> qPCR Details</span>
-                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
-                        </button>
-                        <div class="accordion-content">
-                            <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Date', formatDate(sample.qpcr_date))}
-                                ${renderDetailRow('Ct Value', sample.ct_value)}
-                                ${renderDetailRow('Inhibitor Test Result', sample.inhibitor_test_result)}
-                            </dl>
-                        </div>
-                    </div>`;
-                }
-
-                // Library Details
-                if (sample.library_id) {
-                    html += `
-                    <div class="accordion-item">
-                        <button class="accordion-header" data-accordion="library-details">
-                            <span class="flex items-center"><i data-lucide="book" class="w-5 h-5 mr-2"></i> Library Details (${sample.library_id})</span>
-                            <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
-                        </button>
-                        <div class="accordion-content">
-                            <dl class="space-y-2 py-2">
-                                ${renderDetailRow('Library Name', sample.library_name)}
-                                ${renderDetailRow('Prep Date', formatDate(sample.prep_date))}
-                                ${renderDetailRow('Library Prep Kit', sample.library_prep_kit)}
-                                ${renderDetailRow('Index Sequence', sample.index_sequence)}
-                                ${renderDetailRow('Read Length (bp)', sample.library_read_length_bp)}
-                            </dl>
-                        </div>
-                    </div>`;
-                }
-
+                
                 // Sequencing Details
-                if (sample.sequencing_id) {
+                if (sample.sequencing_run_id) {
                     html += `
                     <div class="accordion-item">
                         <button class="accordion-header" data-accordion="sequencing-details">
-                            <span class="flex items-center"><i data-lucide="dna-off" class="w-5 h-5 mr-2"></i> Sequencing Details (${sample.sequencing_id})</span>
+                            <span class="flex items-center"><i data-lucide="dna-off" class="w-5 h-5 mr-2"></i> Sequencing Details (${sample.sequencing_run_id})</span>
                             <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                         </button>
                         <div class="accordion-content">
                             <dl class="space-y-2 py-2">
                                 ${renderDetailRow('Sequencer', sample.sequencer)}
-                                ${renderDetailRow('Flow Cell ID', sample.flow_cell_id)}
                                 ${renderDetailRow('Total Reads', sample.total_reads)}
-                                ${renderDetailRow('Raw Data Path', sample.raw_data_path)}
+                                ${renderDetailRow('Library ID', sample.library_id)}
                                 ${renderDetailRow('Genbank Accession No.', sample.genbank_accession_number)}
                             </dl>
                         </div>
@@ -1018,13 +757,9 @@
                             <dl class="space-y-2 py-2">
                                 ${renderDetailRow('Pipeline Name', sample.pipeline_name)}
                                 ${renderDetailRow('Pipeline Version', sample.pipeline_version)}
-                                ${renderDetailRow('Reference DB', sample.bioinfo_reference_database)}
-                                ${renderDetailRow('DB Version', sample.bioinfo_database_version)}
-                                ${renderDetailRow('Clustering Threshold', sample.clustering_threshold)}
-                                ${renderDetailRow('Final Output Path', sample.final_output_path)}
-                                ${renderDetailRow('Assigned Taxon', sample.edna_assigned_taxon_name)}
-                                ${renderDetailRow('Read Count', sample.edna_read_count)}
-                                ${renderDetailRow('Confidence', sample.edna_confidence)}
+                                ${renderDetailRow('Assigned Taxon', sample.assigned_taxon_name)}
+                                ${renderDetailRow('Read Count', sample.read_count)}
+                                ${renderDetailRow('Confidence', sample.confidence)}
                             </dl>
                         </div>
                     </div>`;
@@ -1056,20 +791,25 @@
 
             // Display logged-in user info in sidebar
             const user = JSON.parse(sessionStorage.getItem('user'));
-            if (user && user.person_id) {
+            if (user && (user.person_id || user.contact_id || user.customer_id)) {
+                let userInitial, userName, userColor;
+                if (user.person_id) {
+                    userInitial = user.person_id.charAt(0).toUpperCase();
+                    userName = user.full_name || user.person_id;
+                    userColor = 'bg-blue-500';
+                } else if (user.customer_id) {
+                    userInitial = String(user.customer_id).charAt(0).toUpperCase();
+                    userName = user.customer_name || `Customer ${user.customer_id}`;
+                    userColor = 'bg-green-500';
+                } else if (user.contact_id) {
+                    userInitial = String(user.contact_id).charAt(0).toUpperCase();
+                    userName = user.full_name || `Contact ${user.contact_id}`;
+                    userColor = 'bg-purple-500';
+                }
+
                 document.getElementById('user-profile').innerHTML = `
-                    <span class="mr-2 p-2 bg-blue-500 text-white rounded-full text-xs font-bold">${user.person_id.charAt(0).toUpperCase()}</span>
-                    <p class="font-semibold text-sm text-gray-800">${user.full_name || user.person_id}</p>
-                `;
-            } else if (user && user.customer_id) { // For customer users
-                 document.getElementById('user-profile').innerHTML = `
-                    <span class="mr-2 p-2 bg-green-500 text-white rounded-full text-xs font-bold">${String(user.customer_id).charAt(0).toUpperCase()}</span>
-                    <p class="font-semibold text-sm text-gray-800">${user.customer_name || `Customer ${user.customer_id}`}</p>
-                `;
-            } else if (user && user.contact_id) { // For external contacts
-                 document.getElementById('user-profile').innerHTML = `
-                    <span class="mr-2 p-2 bg-purple-500 text-white rounded-full text-xs font-bold">${String(user.contact_id).charAt(0).toUpperCase()}</span>
-                    <p class="font-semibold text-sm text-gray-800">${user.full_name || `Contact ${user.contact_id}`}</p>
+                    <span class="mr-2 p-2 ${userColor} text-white rounded-full text-xs font-bold">${userInitial}</span>
+                    <p class="font-semibold text-sm text-gray-800">${userName}</p>
                 `;
             }
 
@@ -1097,17 +837,17 @@
                 document.getElementById('stat-active-orders').textContent = dashboardStats.active_orders || 0; 
                 document.getElementById('stat-occupied-storage').textContent = dashboardStats.occupied_storage_units || 0;
                 document.getElementById('stat-total-sops').textContent = dashboardStats.total_sops || 0;
-                document.getElementById('stat-active-personnel').textContent = dashboardStats.active_personnel || 0; // Updated ID and variable name
+                document.getElementById('stat-active-personnel').textContent = dashboardStats.active_personnel || 0;
                 document.getElementById('stat-total-experiments').textContent = dashboardStats.total_experiments || 0;
             }
 
             // Fetch data for charts. These are the source datasets.
             const [samples, experiments, reagents, projects, personnel, storage, protocols] = await Promise.all([
-                apiFetch('table/lab/parental_samples'),
+                apiFetch('table/lab/root_samples'),
                 apiFetch('table/lab/experiments'),
                 apiFetch('table/lims/reagents'),
                 apiFetch('table/lims/projects'),
-                apiFetch('table/reference/personal'),
+                apiFetch('table/lims/personal'),
                 apiFetch('table/lab/storage'),
                 apiFetch('table/lims/sop')
             ]);
@@ -1165,21 +905,18 @@
                     let html = '';
 
                     if(results) {
-                        // Backend global-search returns simplified keys (e.g., "projects", "samples")
-                        // The app.py global_search endpoint directly returns these keys, not schema.table.
                         const resultCategories = {
                             "projects": "Projects",
                             "samples": "Samples",
                             "experiments": "Experiments",
                             "sop": "SOPs",
                             "customers": "Customers",
-                            "species": "Species",
+                            "taxon": "Taxon",
                             "primers": "Primers",
                             "reagents": "Reagents",
                             "personal": "Personnel",
-                            "detailed_samples_view": "Detailed Samples",
                             "project_overview_view": "Project Overviews",
-                            "analysis_results_summary": "Analysis Results"
+                            "analysis_results_summary_view": "Analysis Results"
                         };
 
                         let foundResults = false;
@@ -1194,7 +931,7 @@
                                     let itemDisplay = '';
                                     if (key === "projects" || key === "project_overview_view") {
                                         itemDisplay = `${item.title || 'No Title'} (<span class="font-mono text-sm">${item.project_id}</span>)`;
-                                    } else if (key === "samples" || key === "detailed_samples_view") {
+                                    } else if (key === "samples") {
                                         itemDisplay = `${item.external_name || 'No Name'} (<span class="font-mono text-sm">${item.sample_id}</span>)`;
                                     } else if (key === "experiments") {
                                         itemDisplay = `${item.experiment_title || 'No Title'} (<span class="font-mono text-sm">${item.experiment_id}</span>)`;
@@ -1202,15 +939,15 @@
                                         itemDisplay = `${item.title || 'No Title'} (<span class="font-mono text-sm">${item.sop_id}</span>)`;
                                     } else if (key === "customers") {
                                         itemDisplay = `${item.customer_name} (<span class="font-mono text-sm">${item.customer_id}</span>)`;
-                                    } else if (key === "species") {
-                                        itemDisplay = `${item.en_name} (${item.de_name})`;
+                                    } else if (key === "taxon") {
+                                        itemDisplay = `${item.en_name || 'N/A'} (${item.de_name || 'N/A'})`;
                                     } else if (key === "primers") {
                                         itemDisplay = `${item.primer_id} (Fwd: ${item.primer_sequence_fwd || 'N/A'})`;
                                     } else if (key === "reagents") {
                                         itemDisplay = `${item.reagent_complete_name || 'No Name'} (Lot: ${item.lot || 'N/A'})`;
                                     } else if (key === "personal") {
                                         itemDisplay = `${item.full_name || 'No Name'} (${item.person_id})`;
-                                    } else if (key === "analysis_results_summary") {
+                                    } else if (key === "analysis_results_summary_view") {
                                         itemDisplay = `Run: ${item.run_id}, Sample: ${item.sample_id}, Taxon: ${item.taxon_en_name}`;
                                     } else {
                                         itemDisplay = JSON.stringify(item); // Fallback for unexpected results
@@ -1264,16 +1001,16 @@
                     const actionMap = { 'I': 'created', 'U': 'updated', 'D': 'deleted' };
                     const actionVerb = actionMap[log.action] || 'performed action on';
                     const timestamp = new Date(log.action_timestamp).toLocaleString();
-                    const userName = log.user_id || 'System';
+                    const userName = log.user_name || 'System';
 
                     let details = '';
                     // Prioritize specific display for key tables based on typical identifiers
-                    if (log.table_name === 'parental_samples' && log.new_data && log.new_data.sample_id) {
+                    if (log.table_name === 'root_samples' && log.new_data && log.new_data.sample_id) {
                         details = `Sample <span class="font-semibold">${log.new_data.sample_id}</span>`;
-                        if (log.action === 'U' && log.new_data.sample_status_id) {
-                            details += ` status changed to <span class="font-semibold text-blue-600">${log.new_data.sample_status_id}</span>`;
+                        if (log.action === 'U' && log.new_data.status_id) {
+                            details += ` status changed to <span class="font-semibold text-blue-600">${log.new_data.status_id}</span>`;
                         } else if (log.new_data.external_name) {
-                            details += ` (${log.new_data.external_name})`;
+                            details += ` ("${log.new_data.external_name}")`;
                         }
                     } else if (log.table_name === 'projects' && log.new_data && log.new_data.project_id) {
                         details = `Project <span class="font-semibold">${log.new_data.project_id}</span>`;

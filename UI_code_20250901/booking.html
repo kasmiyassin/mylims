@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Booking System - TIFI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        .sidebar-item { color: #4b5563; transition: all 0.2s; }
+        .sidebar-item:hover, .sidebar-item.active { background-color: #f3f4f6; color: #1f2937; font-weight: 600; }
+        .sidebar-item.active .lucide { color: #2563eb; }
+        .lucide { color: #6b7280; }
+        
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+        }
+
+        .calendar-day {
+            min-height: 120px;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .calendar-day.active { background-color: #dbeafe; }
+        .calendar-day.inactive { background-color: #f3f4f6; color: #9ca3af; }
+        .calendar-day:not(.inactive):hover { background-color: #e5e7eb; }
+        .calendar-day .day-number { font-weight: 600; }
+
+        .booking-slot {
+            padding: 2px 4px;
+            font-size: 0.75rem;
+            line-height: 1;
+            border-radius: 0.25rem;
+            margin-top: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: block;
+            position: relative;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body class="flex bg-gray-50">
+    <div id="main-app" class="flex w-full">
+        <div id="sidebar" class="print:hidden fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI</span></div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
+                <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="box" class="w-5 h-5 mr-3"></i><span>Storage Box</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
+                <a href="booking.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="calendar" class="w-5 h-5 mr-3"></i><span>Booking</span></a>
+                <a href="all_labels.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>All Labels</span></a>
+                <a href="samples_labels.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="tag" class="w-5 h-5 mr-3"></i><span>Samples Labels</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+            </nav>
+        </div>
+
+        <main id="main-content" class="ml-64 p-8 w-full">
+            <h1 class="text-3xl font-bold text-gray-800 mb-6">Resource Booking</h1>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Resource Selector Card -->
+                <div class="lg:col-span-1 card p-6 space-y-4">
+                    <h2 class="text-xl font-bold text-gray-700">Select a Resource</h2>
+                    <select id="resource-selector" class="block w-full p-2 border-gray-300 rounded-md shadow-sm">
+                        <option value="">-- Choose a resource --</option>
+                        <optgroup id="room-optgroup" label="Rooms"></optgroup>
+                        <optgroup id="equipment-optgroup" label="Equipment"></optgroup>
+                    </select>
+                </div>
+
+                <!-- Calendar and Booking Form Card -->
+                <div class="lg:col-span-2 card p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 id="calendar-header" class="text-xl font-bold text-gray-700"></h2>
+                        <div class="flex space-x-2">
+                            <button id="prev-month-btn" class="p-2 rounded-md text-gray-700 hover:bg-gray-200"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+                            <button id="next-month-btn" class="p-2 rounded-md text-gray-700 hover:bg-gray-200"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+                        </div>
+                    </div>
+                    <div id="calendar-root" class="calendar-grid">
+                        <div class="text-center font-bold text-gray-600">Mon</div>
+                        <div class="text-center font-bold text-gray-600">Tue</div>
+                        <div class="text-center font-bold text-gray-600">Wed</div>
+                        <div class="text-center font-bold text-gray-600">Thu</div>
+                        <div class="text-center font-bold text-gray-600">Fri</div>
+                        <div class="text-center font-bold text-gray-600">Sat</div>
+                        <div class="text-center font-bold text-gray-600">Sun</div>
+                    </div>
+
+                    <!-- Booking Form -->
+                    <div id="booking-form-card" class="card mt-6 p-4 border-t hidden">
+                        <h3 id="form-title" class="text-lg font-semibold text-gray-800 mb-4">New Booking</h3>
+                        <form id="booking-form" class="space-y-4">
+                            <div>
+                                <label for="booking-date" class="block text-sm font-medium text-gray-700">Date</label>
+                                <input type="text" id="booking-date" readonly class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 p-2">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label for="start-time" class="block text-sm font-medium text-gray-700">Start Time</label>
+                                    <input type="time" id="start-time" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                                </div>
+                                <div>
+                                    <label for="end-time" class="block text-sm font-medium text-gray-700">End Time</label>
+                                    <input type="time" id="end-time" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                                </div>
+                            </div>
+                            <div>
+                                <label for="project-selector" class="block text-sm font-medium text-gray-700">Project (Optional)</label>
+                                <select id="project-selector" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                                    <option value="">-- No Project --</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="booking-notes" class="block text-sm font-medium text-gray-700">Notes (Optional)</label>
+                                <textarea id="booking-notes" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"></textarea>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button type="submit" id="save-booking-btn" class="flex-1 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700">Save Booking</button>
+                                <button type="button" id="cancel-form-btn" class="flex-1 px-4 py-2 bg-gray-300 text-gray-800 font-medium rounded-lg hover:bg-gray-400">Cancel</button>
+                                <button type="button" id="delete-booking-btn" class="hidden flex-1 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700">Delete</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal for showing booking details -->
+    <div id="booking-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="card p-6 w-96">
+            <div class="flex justify-between items-center border-b pb-2 mb-4">
+                <h3 id="modal-title" class="text-lg font-semibold text-gray-800">Booking Details</h3>
+                <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="space-y-2">
+                <div id="modal-content"></div>
+            </div>
+            <div class="mt-4 flex space-x-2">
+                <button id="edit-booking-btn" class="flex-1 px-4 py-2 bg-yellow-500 text-white font-medium rounded-lg hover:bg-yellow-600">Edit</button>
+                <button id="delete-modal-btn" class="flex-1 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700">Delete</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="message-modal" class="fixed inset-0 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg p-6 max-w-sm mx-auto shadow-xl">
+            <h3 class="text-lg font-bold" id="message-modal-title"></h3>
+            <p class="mt-2 text-sm text-gray-600" id="message-modal-text"></p>
+            <div class="mt-4 flex justify-end space-x-2">
+                <button id="close-message-modal" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">Close</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+        initializeBookingApp();
+    });
+
+    const API_BASE_URL = '/mylims/api';
+    let currentMonth = new Date();
+    let currentBookings = [];
+    let allResources = [];
+    let allProjects = [];
+    let allPersons = [];
+    let currentUserId = null;
+    let selectedBookingId = null;
+
+    const showMessageModal = (title, message) => {
+        document.getElementById('message-modal-title').textContent = title;
+        document.getElementById('message-modal-text').textContent = message;
+        document.getElementById('message-modal').classList.remove('hidden');
+    };
+
+    const hideMessageModal = () => {
+        document.getElementById('message-modal').classList.add('hidden');
+    };
+
+    const setLoading = (isLoading) => {
+        // Implement a loading spinner if needed
+    };
+
+    async function apiFetch(endpoint, options = {}) {
+        setLoading(true);
+        try {
+            const isJson = !(options.body instanceof FormData);
+            if (isJson && options.body) {
+                options.headers = { ...options.headers, 'Content-Type': 'application/json' };
+                options.body = JSON.stringify(options.body);
+            }
+            const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Server error: ${response.status} ${response.statusText} - ${errorText}`);
+            }
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error(`Failed to fetch from endpoint: ${endpoint}.`, error);
+            showMessageModal('Error', `Failed to fetch data. Error: ${error.message}`);
+            return null;
+        } finally {
+            setLoading(false);
+        }
+    }
+    
+    function formatDateToSQL(date) {
+        return date.toISOString().split('T')[0];
+    }
+    
+    function formatDateTimeToSQL(date, time) {
+        return `${formatDateToSQL(date)}T${time}:00`;
+    }
+
+    async function initializeBookingApp() {
+        // Fetch all resources and populate the dropdown
+        allResources = await apiFetch('table/lims/bookable_resource');
+        const resourceSelector = document.getElementById('resource-selector');
+        const roomOptgroup = document.getElementById('room-optgroup');
+        const equipmentOptgroup = document.getElementById('equipment-optgroup');
+
+        if (allResources) {
+            allResources.forEach(res => {
+                const option = document.createElement('option');
+                option.value = res.resource_id;
+                option.textContent = `${res.resource_name} (${res.resource_type})`;
+                if (res.resource_type === 'Room') {
+                    roomOptgroup.appendChild(option);
+                } else {
+                    equipmentOptgroup.appendChild(option);
+                }
+            });
+        }
+        
+        // Fetch all projects for the booking form
+        allProjects = await apiFetch('table/lims/projects');
+        const projectSelector = document.getElementById('project-selector');
+        if (allProjects) {
+            allProjects.forEach(proj => {
+                const option = document.createElement('option');
+                option.value = proj.project_id;
+                option.textContent = `${proj.project_id} - ${proj.title}`;
+                projectSelector.appendChild(option);
+            });
+        }
+        
+        // Fetch all persons to get names for bookings
+        allPersons = await apiFetch('table/lims/personal');
+        
+        // Fetch current user ID - this is a placeholder
+        currentUserId = 'jane.doe';
+
+        // Add event listeners
+        document.getElementById('resource-selector').addEventListener('change', handleResourceChange);
+        document.getElementById('prev-month-btn').addEventListener('click', () => changeMonth(-1));
+        document.getElementById('next-month-btn').addEventListener('click', () => changeMonth(1));
+        document.getElementById('booking-form').addEventListener('submit', handleFormSubmit);
+        document.getElementById('cancel-form-btn').addEventListener('click', resetForm);
+        document.getElementById('delete-booking-btn').addEventListener('click', handleDelete);
+        document.getElementById('close-modal-btn').addEventListener('click', () => document.getElementById('booking-modal').classList.add('hidden'));
+        document.getElementById('edit-booking-btn').addEventListener('click', handleEditClick);
+        document.getElementById('delete-modal-btn').addEventListener('click', handleDelete);
+        document.getElementById('close-message-modal').addEventListener('click', hideMessageModal);
+        
+        renderCalendar();
+    }
+
+    async function handleResourceChange(event) {
+        const resourceId = event.target.value;
+        if (resourceId) {
+            await fetchBookings(resourceId, currentMonth);
+        } else {
+            currentBookings = [];
+            renderCalendar();
+        }
+        resetForm();
+    }
+    
+    async function fetchBookings(resourceId, date) {
+        const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+        const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+        
+        const bookings = await apiFetch(`table/lims/booking?resource_id=${resourceId}&start_time_gte=${formatDateToSQL(startOfMonth)}&end_time_lte=${formatDateToSQL(endOfMonth)}`);
+        if (bookings) {
+            currentBookings = bookings.map(b => ({
+                ...b,
+                start_time: new Date(b.start_time),
+                end_time: new Date(b.end_time)
+            }));
+            renderCalendar();
+        }
+    }
+
+    function changeMonth(delta) {
+        currentMonth.setMonth(currentMonth.getMonth() + delta);
+        const resourceId = document.getElementById('resource-selector').value;
+        if (resourceId) {
+            fetchBookings(resourceId, currentMonth);
+        } else {
+            renderCalendar();
+        }
+    }
+    
+    function renderCalendar() {
+        const header = document.getElementById('calendar-header');
+        header.textContent = currentMonth.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+        const calendarRoot = document.getElementById('calendar-root');
+        while (calendarRoot.children.length > 7) {
+            calendarRoot.removeChild(calendarRoot.lastChild);
+        }
+
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth();
+        const firstDayOfMonth = new Date(year, month, 1);
+        const lastDayOfMonth = new Date(year, month + 1, 0);
+        
+        let startDayOfWeek = firstDayOfMonth.getDay();
+        if (startDayOfWeek === 0) startDayOfWeek = 6;
+        else startDayOfWeek--;
+
+        for (let i = 0; i < startDayOfWeek; i++) {
+            const emptyDay = document.createElement('div');
+            emptyDay.className = 'calendar-day inactive';
+            calendarRoot.appendChild(emptyDay);
+        }
+
+        for (let i = 1; i <= lastDayOfMonth.getDate(); i++) {
+            const dayElement = document.createElement('div');
+            const currentDate = new Date(year, month, i);
+            dayElement.className = 'calendar-day border border-gray-200 p-2';
+            dayElement.dataset.date = formatDateToSQL(currentDate);
+
+            if (currentDate < new Date().setHours(0,0,0,0)) {
+                 dayElement.classList.add('inactive');
+            } else {
+                 dayElement.classList.add('active');
+                 dayElement.addEventListener('click', () => handleDayClick(dayElement));
+            }
+
+            dayElement.innerHTML = `<span class="day-number">${i}</span>`;
+            
+            const bookingsForDay = currentBookings.filter(b => b.start_time.getFullYear() === year && b.start_time.getMonth() === month && b.start_time.getDate() === i);
+            bookingsForDay.forEach(booking => {
+                const bookingEl = document.createElement('span');
+                const startTime = booking.start_time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                const endTime = booking.end_time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                
+                let bgColor = '#94a3b8'; // gray
+                if (booking.person_id === currentUserId) {
+                    bgColor = '#3b82f6'; // blue for my bookings
+                }
+                
+                bookingEl.className = 'booking-slot text-white font-medium cursor-pointer';
+                bookingEl.style.backgroundColor = bgColor;
+                
+                const person = allPersons.find(p => p.person_id === booking.person_id);
+                const personName = person ? person.full_name.split(' ')[0] : booking.person_id;
+                bookingEl.textContent = `${startTime} - ${endTime} (${personName})`;
+                bookingEl.dataset.bookingId = booking.booking_id;
+                bookingEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    showBookingDetails(booking);
+                });
+                dayElement.appendChild(bookingEl);
+            });
+
+            calendarRoot.appendChild(dayElement);
+        }
+    }
+    
+    function handleDayClick(dayElement) {
+        if (dayElement.classList.contains('inactive')) return;
+        resetForm();
+        const date = dayElement.dataset.date;
+        document.getElementById('booking-form-card').classList.remove('hidden');
+        document.getElementById('form-title').textContent = `New Booking on ${date}`;
+        document.getElementById('booking-date').value = date;
+    }
+
+    async function handleFormSubmit(event) {
+        event.preventDefault();
+        const resourceId = document.getElementById('resource-selector').value;
+        const date = document.getElementById('booking-date').value;
+        const startTime = document.getElementById('start-time').value;
+        const endTime = document.getElementById('end-time').value;
+        const projectId = document.getElementById('project-selector').value || null;
+        const notes = document.getElementById('booking-notes').value;
+
+        if (!resourceId || !date || !startTime || !endTime) {
+            showMessageModal('Validation Error', 'Please fill in all required fields.');
+            return;
+        }
+
+        const startTimestamp = `${date}T${startTime}:00Z`;
+        const endTimestamp = `${date}T${endTime}:00Z`;
+
+        if (new Date(endTimestamp) <= new Date(startTimestamp)) {
+            showMessageModal('Validation Error', 'End time must be after start time.');
+            return;
+        }
+
+        const bookingData = {
+            resource_id: resourceId,
+            person_id: currentUserId,
+            start_time: startTimestamp,
+            end_time: endTimestamp,
+            project_id: projectId,
+            notes: notes
+        };
+        
+        let response;
+        if (selectedBookingId) {
+            const params = new URLSearchParams({ booking_id: selectedBookingId });
+            response = await apiFetch(`table/lims/booking?${params.toString()}`, { method: 'PUT', body: bookingData });
+        } else {
+            response = await apiFetch('table/lims/booking', { method: 'POST', body: bookingData });
+        }
+
+        if (response) {
+            showMessageModal('Success', 'Booking saved successfully!');
+            resetForm();
+            fetchBookings(resourceId, currentMonth);
+        }
+    }
+    
+    async function handleDelete() {
+        if (!selectedBookingId) return;
+
+        const resourceId = document.getElementById('resource-selector').value;
+        const params = new URLSearchParams({ booking_id: selectedBookingId });
+        const response = await apiFetch(`table/lims/booking?${params.toString()}`, { method: 'DELETE' });
+
+        if (response) {
+            document.getElementById('booking-modal').classList.add('hidden');
+            showMessageModal('Success', 'Booking deleted successfully!');
+            resetForm();
+            fetchBookings(resourceId, currentMonth);
+        }
+    }
+    
+    function resetForm() {
+        selectedBookingId = null;
+        document.getElementById('form-title').textContent = 'New Booking';
+        document.getElementById('booking-date').value = '';
+        document.getElementById('start-time').value = '';
+        document.getElementById('end-time').value = '';
+        document.getElementById('project-selector').value = '';
+        document.getElementById('booking-notes').value = '';
+        document.getElementById('delete-booking-btn').classList.add('hidden');
+        document.getElementById('booking-form-card').classList.add('hidden');
+    }
+
+    function showBookingDetails(booking) {
+        selectedBookingId = booking.booking_id;
+        document.getElementById('modal-title').textContent = `Booking #${booking.booking_id}`;
+        
+        const project = allProjects.find(p => p.project_id === booking.project_id);
+        const person = allPersons.find(p => p.person_id === booking.person_id);
+        
+        const modalContent = document.getElementById('modal-content');
+        modalContent.innerHTML = `
+            <p><strong>Date:</strong> ${booking.start_time.toLocaleDateString()}</p>
+            <p><strong>Time:</strong> ${booking.start_time.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})} - ${booking.end_time.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</p>
+            <p><strong>Booked by:</strong> ${person ? person.full_name : booking.person_id}</p>
+            <p><strong>Project:</strong> ${project ? project.title : 'N/A'}</p>
+            <p><strong>Notes:</strong> ${booking.notes || 'N/A'}</p>
+        `;
+        
+        document.getElementById('edit-booking-btn').style.display = (booking.person_id === currentUserId) ? 'block' : 'none';
+        document.getElementById('delete-modal-btn').style.display = (booking.person_id === currentUserId) ? 'block' : 'none';
+        
+        document.getElementById('booking-modal').classList.remove('hidden');
+    }
+    
+    function handleEditClick() {
+        const modal = document.getElementById('booking-modal');
+        const booking = currentBookings.find(b => b.booking_id === selectedBookingId);
+        if (!booking) return;
+        
+        modal.classList.add('hidden');
+        document.getElementById('booking-form-card').classList.remove('hidden');
+        document.getElementById('form-title').textContent = `Edit Booking #${booking.booking_id}`;
+        
+        document.getElementById('booking-date').value = formatDateToSQL(booking.start_time);
+        document.getElementById('start-time').value = booking.start_time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+        document.getElementById('end-time').value = booking.end_time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+        document.getElementById('project-selector').value = booking.project_id || '';
+        document.getElementById('booking-notes').value = booking.notes || '';
+        
+        document.getElementById('delete-booking-btn').classList.remove('hidden');
+    }
+</script>
+
+</body>
+</html>
