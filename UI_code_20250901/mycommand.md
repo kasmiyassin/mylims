@@ -9,6 +9,7 @@ python3 -m venv mylims
 
 # activate
 source mylims/bin/activate
+deactivate
 
 ```
 
