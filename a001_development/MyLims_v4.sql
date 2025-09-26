@@ -599,6 +599,29 @@ CREATE TABLE "lab"."sampling_abiotic_data" (
     FOREIGN KEY ("sampling_id", "sampling_date") REFERENCES "lab"."sampling"("sampling_id", "sampling_date")
 ) PARTITION BY RANGE ("creation_date");
 
+-- #############################
+CREATE TABLE IF NOT EXISTS "lab"."reservation_samples" (
+    "reservation_sample_id" text NOT NULL,
+    "project_id" text REFERENCES "lims"."projects"("project_id"),
+    "sampling_id" text,
+    "sampling_date" date,
+    "sample_type_id" text NOT NULL REFERENCES "reference"."samples_type"("sample_type_id"),
+    "planned_collection_date" date,
+    "notes" text,
+    "attachment" bytea,
+    "attachment_link" text,
+    "creation_date" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    "actual_sample_id" text,
+    "actual_sample_creation_date" date,
+    PRIMARY KEY ("reservation_sample_id"),
+    FOREIGN KEY ("sampling_id", "sampling_date") REFERENCES "lab"."sampling"("sampling_id", "sampling_date")
+);
+
+CREATE INDEX IF NOT EXISTS idx_reservation_samples_project_id ON "lab"."reservation_samples" ("project_id");
+CREATE INDEX IF NOT EXISTS idx_reservation_samples_actual_id ON "lab"."reservation_samples" ("actual_sample_id", "actual_sample_creation_date");
+
+-- #############################
+
 CREATE TABLE "lab"."root_samples" (
     "sample_id" text NOT NULL,
     "sample_type_id" text NOT NULL REFERENCES "reference"."samples_type"("sample_type_id"),
@@ -1738,6 +1761,54 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- F15. RESERVATION ID GENERATION FUNCTION (NEW)
+CREATE OR REPLACE FUNCTION "lab".generate_reservation_sample_id()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_sample_type_abrv text;
+    v_ecosystem_abrv text;
+    v_region_abrv text;
+    id_prefix text;
+    next_serial integer;
+    reservation_year text;
+    sampling_record RECORD;
+BEGIN
+    -- 1. Get abbreviations and year
+    SELECT st."sample_type_abrv" INTO v_sample_type_abrv
+    FROM "reference"."samples_type" st
+    WHERE st."sample_type_id" = NEW.sample_type_id;
+
+    reservation_year := TO_CHAR(COALESCE(NEW.planned_collection_date, CURRENT_DATE), 'YY');
+    
+    -- 2. Get Ecosystem and Region from linked Sampling record
+    SELECT s.ecosystem_id, s.region_id
+    INTO sampling_record
+    FROM "lab"."sampling" s
+    WHERE s.sampling_id = NEW.sampling_id AND s.sampling_date = NEW.sampling_date;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Associated sampling record not found for sampling_id % and sampling_date %.', NEW.sampling_id, NEW.sampling_date;
+    END IF;
+
+    SELECT COALESCE(e.ecosystem_abrv, 'UNK') INTO v_ecosystem_abrv FROM "reference"."ecosystem" e WHERE e.ecosystem_id = sampling_record.ecosystem_id;
+    SELECT COALESCE(r.region_abrv, 'UNK') INTO v_region_abrv FROM "reference"."region" r WHERE r.region_id = sampling_record.region_id;
+
+    -- 3. Construct prefix
+    id_prefix := v_sample_type_abrv || reservation_year || v_ecosystem_abrv || v_region_abrv || '_';
+
+    -- 4. Atomically get the next serial number for this prefix
+    SELECT COALESCE(MAX(SUBSTRING(rs."reservation_sample_id" FROM LENGTH(id_prefix) + 1)::INTEGER), 0)
+    INTO next_serial
+    FROM "lab"."reservation_samples" rs
+    WHERE rs."reservation_sample_id" LIKE id_prefix || '%';
+
+    -- 5. Assign the new ID
+    NEW.reservation_sample_id := id_prefix || LPAD((next_serial + 1)::TEXT, 4, '0');
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- F09. FULL-TEXT SEARCH SETUP AND FUNCTIONS
 -- Create a custom text search configuration
 CREATE TEXT SEARCH DICTIONARY english_stem (TEMPLATE = snowball, LANGUAGE = english);
@@ -1767,6 +1838,9 @@ ALTER TABLE "bioinformatics"."analysis_pipelines" ADD COLUMN IF NOT EXISTS "pipe
 ALTER TABLE "bioinformatics"."analysis_runs" ADD COLUMN IF NOT EXISTS "runs_search_vector" tsvector;
 
 -- Trigger functions to update tsvector columns
+CREATE TRIGGER trg_generate_reservation_sample_id BEFORE INSERT ON "lab"."reservation_samples" FOR EACH ROW EXECUTE FUNCTION "lab".generate_reservation_sample_id();
+CREATE TRIGGER audit_trigger_reservation_samples AFTER INSERT OR UPDATE OR DELETE ON "lab"."reservation_samples" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
+
 CREATE OR REPLACE FUNCTION "lims".update_personal_search_vector_func() RETURNS TRIGGER AS $$ BEGIN NEW.personal_search_vector = TO_TSVECTOR('public.lims_english', COALESCE(NEW.full_name, '')) || TO_TSVECTOR('public.lims_english', COALESCE(NEW.mail, '')) || TO_TSVECTOR('public.lims_english', COALESCE(NEW.notes, '')); RETURN NEW; END; $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION "lims".update_contacts_search_vector_func() RETURNS TRIGGER AS $$ BEGIN NEW.contacts_search_vector = TO_TSVECTOR('public.lims_english', COALESCE(NEW.full_name, '')) || TO_TSVECTOR('public.lims_english', COALESCE(NEW.organization, '')) || TO_TSVECTOR('public.lims_english', COALESCE(NEW.mail, '')) || TO_TSVECTOR('public.lims_english', COALESCE(NEW.notes, '')); RETURN NEW; END; $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION "lims".update_customer_search_vector_func() RETURNS TRIGGER AS $$ BEGIN NEW.customer_search_vector = TO_TSVECTOR('public.lims_english', COALESCE(NEW.customer_name, '')) || TO_TSVECTOR('public.lims_english', COALESCE(NEW.customer_abrv, '')) || TO_TSVECTOR('public.lims_english', COALESCE(NEW.notes, '')); RETURN NEW; END; $$ LANGUAGE plpgsql;
