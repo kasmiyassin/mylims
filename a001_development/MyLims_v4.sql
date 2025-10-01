@@ -639,7 +639,7 @@ CREATE TABLE "lab"."root_samples" (
     "experiment_date" date,
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
     "storage_position" text,
-    "sampler_person_id" text REFERENCES "lims"."personal"("person_id"),
+    "sampler_person_id" text,
     "receiver_person_id" text REFERENCES "lims"."personal"("person_id"),
     "reception_date" date,
     "transport" text,
