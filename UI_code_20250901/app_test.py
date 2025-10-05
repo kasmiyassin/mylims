@@ -6,7 +6,7 @@ import bcrypt
 import base64
 import json
 from typing import Any, Dict, List, Optional, Tuple, Union
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, date # FIX: Explicitly import date
 import psycopg2
 from psycopg2 import sql, extras
 from dotenv import load_dotenv
@@ -196,7 +196,7 @@ def get_pk_columns(schema: str, table: str) -> List[str]:
 def transform_row_for_json(row: Dict[str, Any]) -> Dict[str, Any]:
     """
     Transforms a database row (RealDictRow) into a JSON-serializable dictionary.
-    Handles binary data (bytea) and time objects.
+    Handles binary data (bytea) and time/date objects.
     """
     new_row = dict(row)
     for key, value in new_row.items():
@@ -204,7 +204,7 @@ def transform_row_for_json(row: Dict[str, Any]) -> Dict[str, Any]:
             new_row[key] = base64.b64encode(value).decode('utf-8')
         elif isinstance(value, time):
             new_row[key] = str(value)
-        elif isinstance(value, datetime):
+        elif isinstance(value, datetime) or isinstance(value, date): # FIX: Corrected datetime.date usage
             new_row[key] = value.isoformat()
         elif isinstance(value, dict) and 'type' in value and 'coordinates' in value:
             new_row[key] = value
@@ -321,8 +321,8 @@ def login_user():
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             # First, try to log in as a regular lab member
-            query_personal = 'SELECT person_id, full_name, password_hash FROM "lims"."personal" WHERE person_id = %s;'
-            cur.execute(query_personal, (username,))
+            query_personal = 'SELECT person_id, full_name, password_hash, mail, room, telephone FROM "lims"."personal" WHERE person_id = %s OR mail = %s;'
+            cur.execute(query_personal, (username, username))
             user_personal = cur.fetchone()
 
             if user_personal and user_personal.get('password_hash'):
@@ -335,7 +335,7 @@ def login_user():
                     return jsonify({"success": True, "user": user_personal, "user_type": "personal"}), 200
 
             # Then, try to log in as a customer
-            query_customers = 'SELECT customer_id, customer_name, mail, password_hash FROM "lims"."customers" WHERE mail = %s;'
+            query_customers = 'SELECT customer_id, customer_name, mail, password_hash, phone, address FROM "lims"."customers" WHERE mail = %s;'
             cur.execute(query_customers, (username,))
             user_customer = cur.fetchone()
 
@@ -349,7 +349,7 @@ def login_user():
                     return jsonify({"success": True, "user": user_customer, "user_type": "customer"}), 200
 
             # Finally, try to log in as an external contact
-            query_external_contacts = 'SELECT contact_id, full_name, mail, password_hash FROM "lims"."external_contacts" WHERE mail = %s;'
+            query_external_contacts = 'SELECT contact_id, full_name, mail, password_hash, telephone, organization, address FROM "lims"."external_contacts" WHERE mail = %s;'
             cur.execute(query_external_contacts, (username,))
             user_external = cur.fetchone()
 
@@ -413,12 +413,12 @@ def global_search(search_term: str):
             (search_pattern, search_pattern, search_pattern)
         ),
         "reagents": (
-            'SELECT reagent_id, reagent_complete_name, lot FROM "lims"."reagents" WHERE "reagent_id" ILIKE %s OR "reagent_complete_name" ILIKE %s OR "lot" ILIKE %s LIMIT 5',
-            (search_pattern, search_pattern, search_pattern)
+            'SELECT reagent_id, reagent_complete_name, lot FROM "lims"."reagents" WHERE "reagent_search_vector" @@ {ts_query_func} OR "reagent_id" ILIKE %s OR "reagent_complete_name" ILIKE %s OR "lot" ILIKE %s LIMIT 5',
+            (search_term, search_pattern, search_pattern, search_pattern)
         ),
         "personal": (
-            'SELECT person_id, full_name FROM "lims"."personal" WHERE "person_id" ILIKE %s OR "full_name" ILIKE %s LIMIT 5',
-            (search_pattern, search_pattern)
+            'SELECT person_id, full_name FROM "lims"."personal" WHERE "personal_search_vector" @@ {ts_query_func} OR "person_id" ILIKE %s OR "full_name" ILIKE %s LIMIT 5',
+            (search_term, search_pattern, search_pattern)
         ),
         "project_overview_view": (
             'SELECT project_id, title AS project_title FROM "lims"."project_comprehensive_summary_view" WHERE "project_id" ILIKE %s OR "title" ILIKE %s LIMIT 5',
@@ -768,6 +768,7 @@ def get_table_data(schema: str, table: str):
                 else:
                     print(f"Warning: Date filter by non-existent or non-date column '{col_name}' skipped for {actual_schema}.{actual_table}.")
             else:
+                # Direct match for primary keys (often passed as URL query parameters)
                 if key in _get_column_types(conn, actual_schema, actual_table):
                     where_clauses.append(f'"{key}" = %s')
                     params.append(value)
@@ -950,7 +951,8 @@ def create_record(schema: str, table: str):
 def update_record(schema: str, table: str):
     """
     Updates an existing record in the specified table identified by its primary key(s).
-    Handles file uploads, password hashing, and ignores special linked records (e.g., projects and persons).
+    Handles file uploads, password hashing, and ignores special linked records.
+    FIX: Ensure password hashing is applied correctly during updates for user tables.
     """
     conn = g.db_conn
     try:
@@ -995,13 +997,14 @@ def update_record(schema: str, table: str):
         set_clauses: List[str] = []
         values: List[Any] = []
         
-        if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
-           (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
-           (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
-            if 'password' in data and data['password']:
-                hashed_password = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt())
-                data['password_hash'] = hashed_password.decode('utf-8')
-            data.pop('password', None)
+        # --- FIX: Handle Password Hashing for User Tables on PUT ---
+        is_user_table = (actual_schema.lower() == 'lims' and actual_table.lower() in ['personal', 'customers', 'external_contacts'])
+        
+        if is_user_table and 'password' in data and data['password']:
+            hashed_password = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt())
+            data['password_hash'] = hashed_password.decode('utf-8')
+        data.pop('password', None)
+        # --- END FIX ---
             
         for key, val in data.items():
             if key in pk_columns or key in ['project_ids', 'sample_ids', 'linked_person_ids']:
@@ -1028,6 +1031,15 @@ def update_record(schema: str, table: str):
                 except ValueError:
                     print(f"WARNING: Invalid date format for column '{key}'. Skipping update for this field.")
                     continue
+            elif column_types.get(key) == 'timestamp with time zone' and isinstance(val, str):
+                try:
+                    # Parse local datetime string from HTML and assume it's in the client's timezone, 
+                    # but PostgreSQL will handle the conversion due to the column type.
+                    set_clauses.append(f'"{key}" = %s')
+                    values.append(datetime.strptime(val, '%Y-%m-%dT%H:%M'))
+                except ValueError:
+                    print(f"WARNING: Invalid datetime format for column '{key}'. Skipping update for this field.")
+                    continue
             else:
                 set_clauses.append(f'"{key}" = %s')
                 values.append(None if val == '' else val)
@@ -1040,10 +1052,14 @@ def update_record(schema: str, table: str):
         for pk_col in pk_columns:
             pk_where_clauses.append(f'"{pk_col}" = %s')
             pk_val = pk_values_from_request[pk_col]
-            if column_types.get(pk_col) == 'date' and pk_val is not None:
-                try:
-                    pk_where_values.append(datetime.strptime(str(pk_val), '%Y-%m-%d').date())
-                except ValueError:
+            if column_types.get(pk_col) in ['date', 'timestamp with time zone'] and pk_val is not None:
+                # Need to ensure that PK date strings are converted back to date objects for comparison
+                if isinstance(pk_val, str):
+                    try:
+                        pk_where_values.append(datetime.strptime(pk_val, '%Y-%m-%d').date())
+                    except ValueError:
+                        pk_where_values.append(pk_val) # Fallback to string if date conversion fails
+                else:
                     pk_where_values.append(pk_val)
             else:
                 pk_where_values.append(pk_val)
@@ -1085,25 +1101,55 @@ def delete_record(schema: str, table: str):
 
         pk_values_for_query = []
         where_clauses = []
-        for pk_col in pk_columns:
-            pk_val = request.args.get(pk_col)
-            if pk_val is None:
-                return jsonify({"error": f"Missing primary key component for deletion: {pk_col}"}), 400
+        
+        # Handle query parameters for mass deletion (e.g., /table/lims/project_persons?project_id=P001)
+        mass_delete_params = {k: v for k, v in request.args.items() if k.startswith('filter_')}
+        
+        if mass_delete_params:
+            for key, val in mass_delete_params.items():
+                col_name = key[len('filter_'):]
+                if col_name in column_types:
+                    where_clauses.append(f'"{col_name}" = %s')
+                    if column_types.get(col_name) == 'date':
+                        try:
+                            pk_values_for_query.append(datetime.strptime(val, '%Y-%m-%d').date())
+                        except ValueError:
+                            pk_values_for_query.append(val)
+                    else:
+                        pk_values_for_query.append(val)
+                else:
+                    return jsonify({"error": f"Invalid filter column for deletion: {col_name}"}), 400
             
-            if column_types.get(pk_col) == 'date' and pk_val is not None:
-                try:
-                    pk_val = datetime.strptime(pk_val, '%Y-%m-%d').date()
-                except ValueError:
-                    pass
+            if not where_clauses:
+                 return jsonify({"error": "No valid filter criteria provided for mass deletion."}), 400
 
-            where_clauses.append(f'"{pk_col}" = %s')
-            pk_values_for_query.append(pk_val)
+        else: # Standard PK-based single deletion
+            for pk_col in pk_columns:
+                pk_val = request.args.get(pk_col)
+                if pk_val is None:
+                    return jsonify({"error": f"Missing primary key component for deletion: {pk_col}"}), 400
+                
+                if column_types.get(pk_col) == 'date' and pk_val is not None:
+                    try:
+                        pk_val = datetime.strptime(pk_val, '%Y-%m-%d').date()
+                    except ValueError:
+                        pass
+
+                where_clauses.append(f'"{pk_col}" = %s')
+                pk_values_for_query.append(pk_val)
 
         query = f'DELETE FROM "{actual_schema}"."{actual_table}" WHERE {" AND ".join(where_clauses)} RETURNING *;'
         
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             print(f"Executing DELETE query: {query} with params: {pk_values_for_query}")
             cur.execute(query, pk_values_for_query)
+            
+            # Use cur.rowcount for mass deletion, cur.fetchone() for single deletion check
+            if mass_delete_params:
+                deleted_count = cur.rowcount
+                conn.commit()
+                return jsonify({"success": True, "message": f"Successfully deleted {deleted_count} records.", "deleted_count": deleted_count}), 200
+            
             deleted_record = cur.fetchone()
             conn.commit()
         
@@ -1216,7 +1262,7 @@ def batch_upload(schema: str, table: str):
                                             (experiment_id, experiment_date, project_id)
                                         )
                                     except Exception as e:
-                                        print(f"  Warning: Could not link project {project_id} to experiment {experiment_id} during batch upload: {e}")
+                                        print(f"  Warning: Could not link project {project_id} to experiment {experiment_id}: {e}")
 
                             if sample_ids_str:
                                 sample_list = [s.strip() for s in sample_ids_str.split(';') if s.strip()]
@@ -1329,7 +1375,7 @@ def batch_upload(schema: str, table: str):
                         try:
                             temp_record[k] = json.loads(v)
                         except json.JSONDecodeError:
-                            print(f"WARNING: Invalid JSON for column '{k}' during batch upload. Storing as None. Value: {v}")
+                            print(f"WARNING: Invalid JSON for column '{k}'. Storing as None. Value: {v}")
                             temp_record[k] = None
                     elif column_types.get(k) == 'boolean':
                         temp_record[k] = str(v).lower() in ['true', 'on']

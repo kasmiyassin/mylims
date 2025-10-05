@@ -178,19 +178,19 @@
             to { opacity: 0; transform: translateY(-100%); }
         }
 
-        /* Specific styles for Storage Explorer (storagelager.html) */
+        /* Specific styles for Storage Explorer */
         .item-card { transition: all 0.2s ease-in-out; }
         .item-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); }
         .sample-list-item:hover { background-color: #f1f5f9; }
         .sample-list-item.selected { background-color: #eef2ff; border-left-width: 4px; border-color: #4f46e5;}
 
-        /* Specific styles for Storage Box View (storagebox.html) */
+        /* Specific styles for Storage Box View */
         .box-grid { display: grid; gap: 0.25rem; }
         .box-cell {
             transition: all 0.2s ease;
             cursor: pointer;
-            width: 7rem;
-            height: 3.5rem;
+            min-width: 4rem; /* Adjusted for smaller screens */
+            min-height: 2rem;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -227,13 +227,12 @@
             text-overflow: ellipsis;
         }
 
-        /* Specific styles for Storage Samples (storagesamples.html) */
+        /* Specific styles for Storage Samples (Drag & Drop) */
         .draggable-item { cursor: grab; }
         .draggable-item:hover { background-color: #f1f5f9; }
         .draggable-item.dragging { opacity: 0.5; background-color: #eef2ff; }
         .box-grid-draggable { display: grid; gap: 0.5rem; }
         .box-grid-cell-draggable {
-            aspect-ratio: 1 / 1;
             transition: all 0.2s ease;
             border-radius: 0.5rem;
             display: flex;
@@ -243,18 +242,19 @@
             border: 2px dashed #d1d5db;
             text-align: center;
             padding: 0.25rem;
-            overflow: hidden;
+            min-height: 5rem;
+            min-width: 5rem;
         }
         .box-grid-cell-draggable.occupied { border-style: solid; color: white; cursor: pointer; }
         .box-grid-cell-draggable.empty { background-color: #f9fafb; }
         .box-grid-cell-draggable.drag-over { border-style: solid; border-color: #2563eb; background-color: #dbeafe; }
-        .box-grid-cell-draggable:hover { transform: scale(1.05); z-index: 10; box-shadow: 0 0 15px rgba(0,0,0,0.2); }
+        .box-grid-cell-draggable:hover { transform: scale(1.05); z-index: 10; box-shadow: 0 0 0 4px #3b82f6; }
         .box-grid-cell-draggable.selected { box-shadow: 0 0 0 4px #3b82f6; transform: scale(1.05); z-index: 20; }
 
     </style>
 </head>
 <body>
-    <div id="main-app" class="flex">
+    <div id="main-app">
         <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col z-20">
             <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0">
                 <i data-lucide="flask-conical" class="inline-block mr-2 text-blue-600"></i><span>TIFI LIMS</span>
@@ -265,12 +265,13 @@
                 <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
                 <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
                 <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
-                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (ELN)</span></a>
                 <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
-                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
                 <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
                 <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="booking.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Booking</span></a>
                 <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Tables</span></a>
             </nav>
             <div class="mt-auto shrink-0">
                 <div id="user-profile" class="p-2 mb-2 border-t flex items-center text-gray-800">
@@ -327,7 +328,7 @@
         let currentActiveTab = 'tab-inventory'; // Default active tab
 
         // For 'Storage Inventory' tab
-        let inventorySortState = { column: 'item_id', direction: 'asc' };
+        let inventorySortState = { column: 'storage_id', direction: 'asc' }; // Changed default sort column
         let inventoryColumnFilters = {};
 
         // For 'Storage Box View' tab
@@ -339,17 +340,21 @@
         let dragDropCurrentStorageId = null;
 
         const storableItemTables = [
-            { schema: 'lab', table: 'root_samples', idColumn: 'sample_id', pk: ['sample_id', 'sample_creation_date'] },
-            { schema: 'lab', table: 'fish', idColumn: 'sample_id', pk: ['sample_id', 'creation_date'] },
-            { schema: 'lab', table: 'tissue', idColumn: 'sample_id', pk: ['sample_id', 'creation_date'] },
-            { schema: 'lab', table: 'water', idColumn: 'sample_id', pk: ['sample_id', 'creation_date'] },
-            { schema: 'lab', table: 'sediments', idColumn: 'sample_id', pk: ['sample_id', 'creation_date'] },
-            { schema: 'lab', table: 'dna', idColumn: 'sample_id', pk: ['sample_id', 'creation_date'] },
-            { schema: 'lab', table: 'rna', idColumn: 'sample_id', pk: ['sample_id', 'creation_date'] },
-            { schema: 'lab', table: 'library', idColumn: 'library_id', pk: ['library_id', 'sample_id', 'creation_date'] },
-            { schema: 'lab', table: 'pcr', idColumn: 'pcr_id', pk: ['pcr_id', 'creation_date'] },
-            { schema: 'lims', table: 'reagents', idColumn: 'reagent_id', pk: 'reagent_id' },
-            { schema: 'lims', table: 'inventory_items', idColumn: 'item_id', pk: 'item_id' }
+            // Core Samples (partitioned by date)
+            { schema: 'lab', table: 'root_samples', idColumn: 'sample_id', pk: ['sample_id', 'sample_creation_date'], displayField: 'external_name' },
+            // Sample Sub-Types (partitioned by creation_date)
+            { schema: 'lab', table: 'fish', idColumn: 'sample_id', pk: ['sample_id', 'creation_date'], displayField: 'species_id' },
+            { schema: 'lab', table: 'tissue', idColumn: 'sample_id', pk: ['sample_id', 'creation_date'], displayField: 'tissue_type' },
+            { schema: 'lab', table: 'water', idColumn: 'sample_id', pk: ['sample_id', 'creation_date'], displayField: 'volume_L' },
+            { schema: 'lab', table: 'sediments', idColumn: 'sample_id', pk: ['sample_id', 'creation_date'], displayField: 'volume' },
+            { schema: 'lab', table: 'dna', idColumn: 'sample_id', pk: ['sample_id', 'creation_date'], displayField: 'concentration_ng_ul' },
+            { schema: 'lab', table: 'rna', idColumn: 'sample_id', pk: ['sample_id', 'creation_date'], displayField: 'concentration_ng_ul' },
+            // Process/Product Samples (partitioned by creation_date)
+            { schema: 'lab', table: 'library', idColumn: 'library_id', pk: ['library_id', 'sample_id', 'creation_date'], displayField: 'library_name' },
+            { schema: 'lab', table: 'pcr', idColumn: 'pcr_id', pk: ['pcr_id', 'creation_date'], displayField: 'primer_id' },
+            // LIMS Items
+            { schema: 'lims', table: 'reagents', idColumn: 'reagent_id', pk: 'reagent_id', displayField: 'reagent_complete_name' },
+            { schema: 'lims', table: 'inventory_items', idColumn: 'item_id', pk: 'item_id', displayField: 'item_name' }
         ];
 
         const typeColorMap = {
@@ -383,13 +388,14 @@
 
             setupTabListeners();
             initializeStoragePage();
-            document.getElementById('new-storage-btn').addEventListener('click', showNewStorageModal);
+            document.getElementById('new-storage-btn').addEventListener('click', () => showNewStorageModal(null));
         });
 
         function formatDateForUrl(dateString) {
             if (!dateString) return '';
             try {
                 const date = new Date(dateString);
+                // Ensures date is consistently formatted for DB query parameters
                 return isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0];
             } catch (e) {
                 console.warn("Failed to format date for URL:", dateString, e);
@@ -399,18 +405,17 @@
 
         function buildPkQueryString(itemConfig, pkValues) {
             const params = new URLSearchParams();
-            const pk = itemConfig.pk;
-            if (Array.isArray(pk)) {
-                pk.forEach(key => {
-                    let value = pkValues[key];
-                    if (key.includes('date') || key.includes('Date')) {
-                        value = formatDateForUrl(value);
-                    }
-                    params.append(key, value);
-                });
-            } else {
-                params.append(pk, pkValues);
-            }
+            const pk = Array.isArray(itemConfig.pk) ? itemConfig.pk : [itemConfig.pk];
+            
+            pk.forEach(key => {
+                let value = pkValues[key];
+                if (key.includes('date') || key.includes('Date')) {
+                    value = formatDateForUrl(value);
+                } else if (typeof value === 'object' && value !== null) {
+                    value = JSON.stringify(value);
+                }
+                params.append(key, value);
+            });
             return params.toString();
         }
 
@@ -454,7 +459,8 @@
                 setTimeout(() => container.innerHTML = '', 300);
             };
             modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-            container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+            const closeBtn = container.querySelector('#close-modal-btn');
+            if (closeBtn) closeBtn.addEventListener('click', closeModal);
             return { closeModal };
         }
 
@@ -472,14 +478,17 @@
                         if (response.error || !Array.isArray(response)) {
                             console.error(`Failed to load ${itemType.table} data`); return [];
                         }
-                        return response.map(item => ({
-                            ...item,
-                            type: itemType.table,
-                            id: item[itemType.idColumn],
-                            pk: Array.isArray(itemType.pk) ?
+                        return response.map(item => {
+                            const pk = Array.isArray(itemType.pk) ?
                                 itemType.pk.reduce((obj, key) => { obj[key] = item[key]; return obj; }, {}) :
-                                item[itemType.pk]
-                        }));
+                                item[itemType.pk];
+                            return {
+                                ...item,
+                                type: itemType.table,
+                                id: item[itemType.idColumn] || item.reagent_id || item.item_id || pk, // Better ID fallback
+                                pk: pk
+                            };
+                        });
                     })
                 )
             ];
@@ -515,6 +524,14 @@
             const tabContentDiv = document.getElementById('tab-content');
             tabContentDiv.innerHTML = '';
 
+            // Reset box view selections when switching away from box/dragdrop tabs
+            if (tabId !== 'tab-box-view' && tabId !== 'tab-samples-dragdrop') {
+                boxViewSelectedRoom = null;
+                boxViewSelectedFreezer = null;
+                boxViewSelectedBox = null;
+                dragDropCurrentStorageId = null;
+            }
+
             switch (tabId) {
                 case 'tab-inventory': renderStorageInventory(); break;
                 case 'tab-explorer': renderStorageExplorer(); break;
@@ -523,65 +540,58 @@
             }
             lucide.createIcons();
         }
+        
+        // --- Tab 1: Storage Inventory (List View) ---
 
         function processInventoryDataForTable(allItems, storage, rooms) {
             if (!allItems || !storage || !rooms) return [];
             const storageMap = new Map(storage.map(s => [s.storage_id, s]));
             const roomMap = new Map(rooms.map(r => [r.room_id, r]));
-            return allItems.map(item => {
-                const storageInfo = storageMap.get(item.storage_id);
-                const roomInfo = storageInfo ? roomMap.get(storageInfo.room_id) : null;
-                let classification = item.external_name || item.reagent_complete_name || item.item_name || item.type;
-                
+
+            return storage.map(unit => {
+                const roomInfo = roomMap.get(unit.room_id);
+                const itemsInUnit = allItems.filter(item => item.storage_id === unit.storage_id);
+
                 return {
-                    item_id: item.id,
-                    item_type: item.type,
-                    source_table: item.type,
-                    pk_value: item.pk,
-                    classification: classification,
-                    is_assigned: !!item.storage_id,
-                    room: roomInfo ? roomInfo.room_id : '',
-                    freezer: storageInfo ? storageInfo.freezer : '',
-                    box: storageInfo ? storageInfo.box : '',
-                    position: item.storage_position || ''
+                    storage_id: unit.storage_id,
+                    room: roomInfo ? unit.room_id : '',
+                    freezer: unit.freezer,
+                    box: unit.box,
+                    temperature: unit.temperature_c,
+                    capacity: (unit.box_size_x * unit.box_size_y) || 0,
+                    occupied: itemsInUnit.length,
+                    status: unit.status_id,
+                    unit_pk_values: unit.storage_id
                 };
-            });
+            }).concat(allItems.filter(item => !item.storage_id).map(item => ({
+                storage_id: item.id || JSON.stringify(item.pk), // Display item ID here
+                room: 'Unassigned',
+                freezer: 'N/A',
+                box: item.type, // Display item type here
+                temperature: 'N/A',
+                capacity: 1,
+                occupied: 1,
+                status: 'Unassigned',
+                unit_pk_values: item.pk // Store item PK for actions
+            })));
         }
 
         function renderStorageInventory() {
             const processedInventory = processInventoryDataForTable(allItemsCache, storageCache.storageUnits, storageCache.rooms);
+            
             const inventoryHtml = `
                 <div class="card p-4">
                     <div class="overflow-y-auto h-[75vh]">
                         <table class="min-w-full text-sm">
                             <thead class="bg-gray-50 sticky top-0">
                                 <tr>
-                                    <th data-sort-key="item_id" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
+                                    <th data-sort-key="storage_id" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
                                         <div class="flex items-center justify-between">
-                                            <span class="sortable-header" data-column="item_id">Item ID
-                                                <i data-lucide="${inventorySortState.column === 'item_id' ? (inventorySortState.direction === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon w-4 h-4 text-gray-400"></i>
+                                            <span class="sortable-header" data-column="storage_id">Storage ID
+                                                <i data-lucide="${inventorySortState.column === 'storage_id' ? (inventorySortState.direction === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon w-4 h-4 text-gray-400"></i>
                                             </span>
                                         </div>
-                                        <input type="text" placeholder="Filter..." class="filter-input" data-column="item_id" value="${inventoryColumnFilters['item_id'] || ''}">
-                                    </th>
-                                    <th data-sort-key="item_type" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
-                                        <div class="flex items-center justify-between">
-                                            <span class="sortable-header" data-column="item_type">Item Type
-                                                <i data-lucide="${inventorySortState.column === 'item_type' ? (inventorySortState.direction === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon w-4 h-4 text-gray-400"></i>
-                                            </span>
-                                        </div>
-                                        <select class="filter-select" data-column="item_type" id="filter-item-type-header">
-                                            <option value="">All Types</option>
-                                            ${[...new Set(processedInventory.map(item => item.item_type))].sort().map(type => `<option value="${type}" ${inventoryColumnFilters['item_type'] === type ? 'selected' : ''}>${type}</option>`).join('')}
-                                        </select>
-                                    </th>
-                                    <th data-sort-key="classification" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
-                                        <div class="flex items-center justify-between">
-                                            <span class="sortable-header" data-column="classification">Name/Classification
-                                                <i data-lucide="${inventorySortState.column === 'classification' ? (inventorySortState.direction === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon w-4 h-4 text-gray-400"></i>
-                                            </span>
-                                        </div>
-                                        <input type="text" placeholder="Filter..." class="filter-input" data-column="classification" value="${inventoryColumnFilters['classification'] || ''}">
+                                        <input type="text" placeholder="Filter..." class="filter-input" data-column="storage_id" value="${inventoryColumnFilters['storage_id'] || ''}">
                                     </th>
                                     <th data-sort-key="room" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
                                         <div class="flex items-center justify-between">
@@ -591,23 +601,18 @@
                                         </div>
                                         <input type="text" placeholder="Filter..." class="filter-input" data-column="room" value="${inventoryColumnFilters['room'] || ''}">
                                     </th>
-                                    <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Freezer / Box</th>
-                                    <th data-sort-key="position" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
+                                    <th data-sort-key="freezer" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
                                         <div class="flex items-center justify-between">
-                                            <span class="sortable-header" data-column="position">Position
-                                                <i data-lucide="${inventorySortState.column === 'position' ? (inventorySortState.direction === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon w-4 h-4 text-gray-400"></i>
+                                            <span class="sortable-header" data-column="freezer">Unit/Freezer
+                                                <i data-lucide="${inventorySortState.column === 'freezer' ? (inventorySortState.direction === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon w-4 h-4 text-gray-400"></i>
                                             </span>
                                         </div>
-                                        <input type="text" placeholder="Filter..." class="filter-input" data-column="position" value="${inventoryColumnFilters['position'] || ''}">
+                                        <input type="text" placeholder="Filter..." class="filter-input" data-column="freezer" value="${inventoryColumnFilters['freezer'] || ''}">
                                     </th>
-                                    <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">
-                                        Actions
-                                        <select class="filter-select" data-column="is_assigned" id="filter-status-header">
-                                            <option value="">All Items</option>
-                                            <option value="true" ${inventoryColumnFilters['is_assigned'] === 'true' ? 'selected' : ''}>Assigned</option>
-                                            <option value="false" ${inventoryColumnFilters['is_assigned'] === 'false' ? 'selected' : ''}>Unassigned</option>
-                                        </select>
-                                    </th>
+                                    <th data-sort-key="box" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Box/Temp</th>
+                                    <th data-sort-key="occupied" class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Occupancy</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Status</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="storage-inventory-table-body" class="divide-y divide-gray-200"></tbody>
@@ -632,7 +637,32 @@
         }
 
         function applyInventoryFilters() {
-            let filtered = processInventoryDataForTable(allItemsCache, storageCache.storageUnits, storageCache.rooms);
+            let filtered = storageCache.storageUnits.map(unit => {
+                const roomInfo = storageCache.rooms.find(r => r.room_id === unit.room_id);
+                const itemsInUnit = allItemsCache.filter(item => item.storage_id === unit.storage_id);
+
+                return {
+                    storage_id: unit.storage_id,
+                    room: roomInfo ? unit.room_id : 'N/A',
+                    freezer: unit.freezer,
+                    box: unit.box,
+                    temperature: unit.temperature_c,
+                    capacity: (unit.box_size_x * unit.box_size_y) || 0,
+                    occupied: itemsInUnit.length,
+                    status: unit.status_id,
+                    unit_pk_values: unit.storage_id
+                };
+            }).concat(allItemsCache.filter(item => !item.storage_id).map(item => ({
+                storage_id: item.id || JSON.stringify(item.pk), // Display item ID here
+                room: 'Unassigned',
+                freezer: 'N/A',
+                box: item.type, // Display item type here
+                temperature: 'N/A',
+                capacity: 1,
+                occupied: 1,
+                status: 'Unassigned',
+                unit_pk_values: item.pk // Store item PK for actions
+            })));
 
             document.querySelectorAll('#tab-content .filter-input, #tab-content .filter-select').forEach(filterElement => {
                 const column = filterElement.dataset.column;
@@ -648,12 +678,13 @@
                 const filterValue = inventoryColumnFilters[column];
                 if (filterValue === '') continue;
 
-                if (column === 'is_assigned') {
-                    const boolValue = filterValue === 'true';
-                    filtered = filtered.filter(item => item.is_assigned === boolValue);
-                } else {
-                    filtered = filtered.filter(item => String(item[column] || '').toLowerCase().includes(filterValue.toLowerCase()));
-                }
+                filtered = filtered.filter(item => {
+                    let itemValue = String(item[column] || '').toLowerCase();
+                    if (column === 'storage_id' && item.room === 'Unassigned') {
+                        itemValue = String(item.id || item.box).toLowerCase(); // Search on ID/Box for unassigned
+                    }
+                    return itemValue.includes(filterValue.toLowerCase());
+                });
             }
 
             const sorted = sortInventoryData(filtered, inventorySortState.column, inventorySortState.direction);
@@ -668,6 +699,16 @@
             sortedData.sort((a, b) => {
                 const valA = a[column] === null || a[column] === undefined ? '' : a[column];
                 const valB = b[column] === null || b[column] === undefined ? '' : b[column];
+                
+                // Special handling for numerical/occupancy sorting
+                if (column === 'occupied' || column === 'capacity') {
+                    const numA = Number(valA);
+                    const numB = Number(valB);
+                    if (!isNaN(numA) && !isNaN(numB)) {
+                        return isAsc ? numA - numB : numB - numA;
+                    }
+                }
+                
                 const comparison = String(valA).localeCompare(String(valB), undefined, { numeric: true, sensitivity: 'base' });
                 return isAsc ? comparison : -comparison;
             });
@@ -678,24 +719,93 @@
             const tableBody = document.getElementById('storage-inventory-table-body');
             if (!tableBody) return;
             if (inventory.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-gray-500 py-8">No items match the current filters.</td></tr>`;
+                tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-gray-500 py-8">No units or items match the current filters.</td></tr>`;
                 return;
             }
-            tableBody.innerHTML = inventory.map(item => `
+            
+            tableBody.innerHTML = inventory.map(item => {
+                const isUnit = item.room !== 'Unassigned';
+                const occupancyColor = isUnit ? (item.occupied / item.capacity > 0.8 ? 'bg-red-100 text-red-700' : (item.occupied / item.capacity > 0.5 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700')) : 'bg-gray-200 text-gray-500';
+                
+                // If it's an unassigned item, the PK is different (it's the item's PK, not the storage unit PK)
+                const pkForActions = isUnit ? JSON.stringify({ storage_id: item.storage_id }) : JSON.stringify(item.unit_pk_values);
+                // Use item.type for unassigned items, and 'lab.storage' for the unit itself
+                const sourceTableForActions = isUnit ? 'lab.storage' : item.box; 
+
+                return `
                 <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-3 font-medium">${item.item_id}</td>
-                    <td class="px-4 py-3">${item.item_type}</td>
-                    <td class="px-4 py-3">${item.classification}</td>
+                    <td class="px-4 py-3 font-medium">${item.storage_id}</td>
                     <td class="px-4 py-3">${item.room}</td>
-                    <td class="px-4 py-3">${item.freezer} / ${item.box}</td>
-                    <td class="px-4 py-3">${item.position}</td>
+                    <td class="px-4 py-3">${item.freezer}</td>
+                    <td class="px-4 py-3">${item.box} (${item.temperature}°C)</td>
                     <td class="px-4 py-3">
-                        ${item.is_assigned
-                            ? `<button class="text-red-600 hover:text-red-800 font-semibold" onclick="unassignItemFromInventory('${JSON.stringify(item.pk_value).replace(/"/g, '&quot;')}', '${item.source_table}')">Unassign</button>`
-                            : `<button class="text-green-600 hover:text-green-800 font-semibold" onclick="showAssignStorageModalFromInventory('${JSON.stringify(item.pk_value).replace(/"/g, '&quot;')}', '${item.source_table}')">Assign</button>`
+                        ${isUnit ? `<span class="${occupancyColor} px-2 py-0.5 rounded-full text-xs">${item.occupied} / ${item.capacity}</span>` : 'N/A'}
+                    </td>
+                    <td class="px-4 py-3">${item.status}</td>
+                    <td class="px-4 py-3 space-x-2">
+                        ${isUnit 
+                            ? `<button class="text-blue-600 hover:text-blue-800 font-semibold" onclick="showNewStorageModal('${item.unit_pk_values}')">Edit</button>
+                                <button class="text-red-600 hover:text-red-800 font-semibold" onclick="deleteStorageUnit('${item.storage_id}')">Delete</button>`
+                            : `<button class="text-green-600 hover:text-green-800 font-semibold" onclick="showAssignStorageModalFromInventory('${pkForActions.replace(/"/g, '&quot;')}', '${sourceTableForActions}')">Assign</button>`
                         }
                     </td>
-                </tr>`).join('');
+                </tr>`;
+            }).join('');
+        }
+
+        async function deleteStorageUnit(storageId) {
+            if (!confirm(`WARNING: Are you sure you want to DELETE Storage Unit ${storageId}? This will remove the unit and UNASSIGN all samples/items within it!`)) return;
+            
+            // 1. Find all items currently referencing this storage unit
+            const itemsToUnassign = allItemsCache.filter(item => item.storage_id === storageId);
+            const unassignPromises = [];
+
+            if (itemsToUnassign.length > 0) {
+                showToast(`Unassigning ${itemsToUnassign.length} items from unit ${storageId}...`, 'info');
+
+                for (const item of itemsToUnassign) {
+                    const itemConfig = storableItemTables.find(t => t.table === item.type);
+                    if (!itemConfig) {
+                        console.error(`Skipping unassignment for item type ${item.type}: Config not found.`);
+                        continue;
+                    }
+                    const payload = { storage_id: null, storage_position: null };
+                    
+                    // Create PUT request promise
+                    const unassignPromise = apiFetch(`table/${itemConfig.schema}/${itemConfig.table}?${buildPkQueryString(itemConfig, item.pk)}`, { 
+                        method: 'PUT', 
+                        body: payload 
+                    }).then(result => {
+                        if (result.error) {
+                            console.error(`Failed to unassign item ${item.id}: ${result.error}`);
+                        }
+                        return result;
+                    });
+                    unassignPromises.push(unassignPromise);
+                }
+                
+                await Promise.all(unassignPromises);
+            }
+            
+            // 2. Attempt to delete the storage unit (now that all FK references are nullified)
+            const deleteResult = await apiFetch(`table/lab/storage?storage_id=${storageId}`, { method: 'DELETE' });
+            
+            if (deleteResult && !deleteResult.error) {
+                showToast(`Storage unit ${storageId} deleted successfully.`, 'success');
+                // Re-initialize to refresh the global cache and render the page
+                await initializeStoragePage();
+            } else {
+                showToast('Failed to delete storage unit: ' + (deleteResult?.error || 'Unknown error'), 'error');
+            }
+        }
+
+        async function editStorageUnit(storageUnitId) {
+            const unit = storageCache.storageUnits.find(s => s.storage_id === storageUnitId);
+            if (!unit) {
+                showToast('Storage unit data not found.', 'error');
+                return;
+            }
+            showNewStorageModal(unit);
         }
 
         function handleInventorySortClick(e) {
@@ -724,85 +834,8 @@
             lucide.createIcons();
         }
 
-        async function unassignItemFromInventory(pkValueJson, sourceTable) {
-            const pkValue = JSON.parse(pkValueJson);
-            if (!confirm(`Are you sure you want to remove this item from its storage position?`)) return;
-            const itemConfig = storableItemTables.find(t => t.table === sourceTable);
-            if (!itemConfig) {
-                showToast(`Configuration error: No rules found for table ${sourceTable}`, 'error');
-                return;
-            }
-            const payload = { storage_id: null, storage_position: null };
-            const result = await apiFetch(`table/${itemConfig.schema}/${sourceTable}?${buildPkQueryString(itemConfig, pkValue)}`, { method: 'PUT', body: payload });
-            if (result && !result.error) {
-                showToast('Item unassigned successfully!', 'success');
-                await initializeStoragePage();
-            } else {
-                showToast('Failed to unassign item: ' + (result ? result.error : 'Unknown error'), 'error');
-            }
-        }
-
-        async function showAssignStorageModalFromInventory(pkValueJson, sourceTable) {
-            const pkValue = JSON.parse(pkValueJson);
-            const modalHtml = `<div class="modal-overlay fixed inset-0 flex items-center justify-center p-4"><div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl transform transition-all -translate-y-10 opacity-0"><div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold">Assign Storage</h2><button id="close-modal-btn">&times;</button></div><form id="assign-storage-form" class="space-y-4"><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-700">Room</label><select id="modal-room" class="w-full mt-1 p-2 border border-gray-300 rounded-md"></select></div><div><label class="block text-sm font-medium text-gray-700">Freezer/Unit</label><select id="modal-freezer" class="w-full mt-1 p-2 border border-gray-300 rounded-md" disabled></select></div><div id="position-container" class="md:col-span-2 grid grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-700">Box</label><select name="storage_id" id="modal-box" class="w-full mt-1 p-2 border border-gray-300 rounded-md" disabled></select></div><div id="position-input-wrapper"><label class="block text-sm font-medium text-gray-700">Position (e.g., A_1 to H_8)</label><input type="text" name="storage_position" class="w-full mt-1 p-2 border border-gray-300 rounded-md"></div></div></div><div class="pt-4 flex justify-end"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Assign</button></div></form></div></div>`;
-            const { closeModal } = showModal(modalHtml);
-
-            const roomSelect = document.getElementById('modal-room');
-            const freezerSelect = document.getElementById('modal-freezer');
-            const boxSelect = document.getElementById('modal-box');
-
-            if (storageCache.rooms && storageCache.rooms.length > 0) {
-                roomSelect.innerHTML = `<option value="">Select Room</option>${storageCache.rooms.map(r => `<option value="${r.room_id}">${r.description || r.room_id}</option>`).join('')}`;
-            } else {
-                roomSelect.innerHTML = `<option value="">No Rooms Available</option>`;
-            }
-
-            roomSelect.onchange = () => {
-                const selectedRoom = roomSelect.value;
-                freezerSelect.innerHTML = `<option value="">Select Unit</option>`;
-                boxSelect.innerHTML = `<option value="">Select Box</option>`;
-                freezerSelect.disabled = true;
-                boxSelect.disabled = true;
-                if (!selectedRoom) return;
-                const freezers = [...new Set(storageCache.storageUnits.filter(s => s.room_id === selectedRoom).map(s => s.freezer))];
-                freezers.sort().forEach(f => freezerSelect.innerHTML += `<option value="${f}">${f}</option>`);
-                freezerSelect.disabled = false;
-            };
-
-            freezerSelect.onchange = () => {
-                const selectedRoom = roomSelect.value;
-                const selectedFreezer = freezerSelect.value;
-                boxSelect.innerHTML = `<option value="">Select Box</option>`;
-                boxSelect.disabled = true;
-                if (!selectedFreezer) return;
-                const boxes = storageCache.storageUnits.filter(s => s.room_id === selectedRoom && s.freezer === selectedFreezer);
-                boxes.sort((a, b) => a.box.localeCompare(b.box)).forEach(b => boxSelect.innerHTML += `<option value="${b.storage_id}">${b.box} (${b.storage_id})</option>`);
-                boxSelect.disabled = false;
-            };
-
-            document.getElementById('assign-storage-form').onsubmit = async (e) => {
-                e.preventDefault();
-                const data = Object.fromEntries(new FormData(e.target).entries());
-                const itemConfig = storableItemTables.find(t => t.table === sourceTable);
-
-                if (!data.storage_id) { showToast("Please select a box.", 'error'); return; }
-
-                const payload = {
-                    storage_id: data.storage_id,
-                    storage_position: data.storage_position || null
-                };
-
-                const result = await apiFetch(`table/${itemConfig.schema}/${sourceTable}?${buildPkQueryString(itemConfig, pkValue)}`, { method: 'PUT', body: payload });
-                if (result && !result.error) {
-                    showToast('Item assigned successfully!', 'success');
-                    closeModal();
-                    await initializeStoragePage();
-                } else {
-                    showToast('Failed to assign storage: ' + (result ? result.error : 'Unknown error'), 'error');
-                }
-            };
-        }
-
+        // --- Tab 2/3/4 Helpers (Explorer, Box View, Drag & Drop) ---
+        
         function convertNumberToAlphabet(num) {
             let result = '';
             while (num > 0) {
@@ -812,6 +845,19 @@
             }
             return result;
         }
+        
+        function updateBreadcrumbExplorer(path) {
+            const breadcrumbEl = document.getElementById('breadcrumb');
+            if (!breadcrumbEl) return;
+            let html = `<a href="#" class="hover:text-blue-600" onclick="renderRoomsExplorer()">Rooms</a>`;
+            if (path.room) html += `<i data-lucide="chevron-right" class="w-4 h-4"></i><a href="#" class="hover:text-blue-600" onclick="renderFreezersExplorer('${path.room.room_id}')">${path.room.room_id}</a>`;
+            if (path.freezer) html += `<i data-lucide="chevron-right" class="w-4 h-4"></i><a href="#" class="hover:text-blue-600" onclick="renderBoxesExplorer('${path.room.room_id}', '${path.freezer}')">${path.freezer}</a>`;
+            if (path.box) html += `<i data-lucide="chevron-right" class="w-4 h-4"></i><span class="font-semibold text-gray-700">${path.box.box}</span>`;
+            breadcrumbEl.innerHTML = html;
+            lucide.createIcons();
+        }
+        
+        // --- Tab 2: Storage Explorer (Navigation) ---
 
         function renderStorageExplorer() {
             const explorerHtml = `
@@ -825,20 +871,10 @@
             renderRoomsExplorer();
         }
 
-        function updateBreadcrumbExplorer(path) {
-            const breadcrumbEl = document.getElementById('breadcrumb');
-            let html = `<a href="#" class="hover:text-blue-600" onclick="renderRoomsExplorer()">Rooms</a>`;
-            if (path.room) html += `<i data-lucide="chevron-right" class="w-4 h-4"></i><a href="#" class="hover:text-blue-600" onclick="renderFreezersExplorer('${path.room.room_id}')">${path.room.description || path.room.room_id}</a>`;
-            if (path.freezer) html += `<i data-lucide="chevron-right" class="w-4 h-4"></i><a href="#" class="hover:text-blue-600" onclick="renderBoxesExplorer('${path.room.room_id}', '${path.freezer}')">${path.freezer}</a>`;
-            if (path.box) html += `<i data-lucide="chevron-right" class="w-4 h-4"></i><span class="font-semibold text-gray-700">${path.box.box}</span>`;
-            breadcrumbEl.innerHTML = html;
-            lucide.createIcons();
-        }
-
         function renderRoomsExplorer() {
             const container = document.getElementById('explorer-container-content');
             container.innerHTML = `<h2 class="text-2xl font-bold mb-4">Select a Room</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                ${storageCache.rooms.map(room => `<div class="item-card card p-6 text-center cursor-pointer" onclick="renderFreezersExplorer('${room.room_id}')"><i data-lucide="building-2" class="mx-auto h-12 w-12 text-gray-500"></i><p class="mt-2 font-semibold">${room.description || room.room_id}</p></div>`).join('')}</div>`;
+                ${storageCache.rooms.map(room => `<div class="item-card card p-6 text-center cursor-pointer" onclick="renderFreezersExplorer('${room.room_id}')"><i data-lucide="building-2" class="mx-auto h-12 w-12 text-gray-500"></i><p class="mt-2 font-semibold">${room.room_id} - ${room.address || 'N/A'}</p></div>`).join('')}</div>`;
             lucide.createIcons();
             updateBreadcrumbExplorer({});
         }
@@ -847,7 +883,7 @@
             const room = storageCache.rooms.find(r => r.room_id === roomId);
             const freezers = [...new Set(storageCache.storageUnits.filter(s => s.room_id === roomId).map(s => s.freezer))];
             const container = document.getElementById('explorer-container-content');
-            container.innerHTML = `<h2 class="text-2xl font-bold mb-4">Select a Unit in ${room.description || room.room_id}</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            container.innerHTML = `<h2 class="text-2xl font-bold mb-4">Select a Unit in ${room.room_id}</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 ${freezers.sort().map(freezer => `<div class="item-card card p-6 text-center cursor-pointer" onclick="renderBoxesExplorer('${roomId}', '${freezer}')"><i data-lucide="snowflake" class="mx-auto h-12 w-12 text-blue-500"></i><p class="mt-2 font-semibold">${freezer}</p></div>`).join('')}</div>`;
             lucide.createIcons();
             updateBreadcrumbExplorer({ room });
@@ -907,11 +943,17 @@
 
         async function showItemDetailsModalBoxView(element, itemId, itemType, pkValueJson, sourceTable, currentStorageId) {
              const pkValue = JSON.parse(pkValueJson);
-             const item = allItemsCache.find(i => i.id === itemId && i.type === itemType);
+             const item = allItemsCache.find(i => {
+                 // Complex item lookup based on PK object comparison
+                 const targetItemPk = Array.isArray(i.pk) ? JSON.stringify(i.pk) : i.pk;
+                 const lookupPk = Array.isArray(pkValue) ? JSON.stringify(pkValue) : pkValue;
+                 return lookupPk === targetItemPk && i.type === itemType;
+             });
+
              if (!item) { showToast('Item details not found.', 'error'); return; }
 
              const itemConfig = storableItemTables.find(t => t.table === itemType);
-             const itemDetails = await apiFetch(`table/${itemConfig.schema}/${itemConfig.table}?${buildPkQueryString(itemConfig, pkValue)}`);
+             const itemDetails = await apiFetch(`table/${itemConfig.schema}/${itemConfig.table}?${buildPkQueryString(itemConfig, item.pk)}`);
              if (itemDetails.error) { showToast('Failed to fetch item details.', 'error'); return; }
 
              const fullItemData = itemDetails[0];
@@ -932,21 +974,15 @@
                  }
              }
 
-             const modalHtml = `<div class="modal-overlay fixed inset-0 flex items-center justify-center"><div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl"><div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold">Item Details: ${fullItemData.id}</h2><button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl leading-none">&times;</button></div><div class="space-y-2 text-gray-700 max-h-96 overflow-y-auto custom-scroll"><p><strong>Type:</strong> ${itemType}</p><p><strong>Location:</strong> ${item.storage_id || 'N/A'} / Pos: ${item.storage_position || 'N/A'}</p><hr class="my-3">${detailsHTMLContent}</div><div class="pt-6 flex justify-end gap-3"><button onclick="unassignItemBoxView('${JSON.stringify(item.pk).replace(/"/g, '&quot;')}', '${item.type}', '${currentStorageId}')" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Unassign Item</button><button id="close-modal-btn-bottom" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg">Close</button></div></div></div>`;
+             const modalHtml = `<div class="modal-overlay fixed inset-0 flex items-center justify-center"><div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl"><div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold">Item Details: ${item.id}</h2><button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl leading-none">&times;</button></div><div class="space-y-2 text-gray-700 max-h-96 overflow-y-auto custom-scroll"><p><strong>Type:</strong> ${itemType}</p><p><strong>Location:</strong> ${item.storage_id || 'N/A'} / Pos: ${item.storage_position || 'N/A'}</p><hr class="my-3">${detailsHTMLContent}</div><div class="pt-6 flex justify-end gap-3"><button onclick="unassignItemFromInventory('${JSON.stringify(item.pk).replace(/"/g, '&quot;')}', '${item.type}')" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Unassign Item</button><button id="close-modal-btn-bottom" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg">Close</button></div></div></div>`;
              const { closeModal } = showModal(modalHtml);
              document.getElementById('close-modal-btn-bottom').addEventListener('click', closeModal);
          }
 
-
-        // Simplified functions for the new combined flow
-        function renderStorageBoxView() {
-            // ... (rest of the renderStorageBoxView function)
-        }
-
         // Renamed from showAssignItemModalBoxView to align with new logic
         async function showAssignItemModalBoxView(storageId, position) {
             const unassignedItems = allItemsCache.filter(s => !s.storage_id);
-            unassignedItems.sort((a, b) => a.id.localeCompare(b.id));
+            unassignedItems.sort((a, b) => (a.id || a.type).localeCompare(b.id || b.type));
 
             const modalHtml = `
                 <div class="modal-overlay fixed inset-0 flex items-center justify-center">
@@ -975,7 +1011,7 @@
                 const selectedOption = selectElement.options[selectElement.selectedIndex];
                 const pkValue = JSON.parse(selectedOption.value);
                 const sourceTable = selectedOption.dataset.sourcetable;
-                const itemId = selectedOption.dataset.itemid;
+                const itemId = selectedOption.textContent;
 
                 if (!pkValue || !sourceTable) { showToast('Please select a valid item.', 'error'); return; }
 
@@ -987,7 +1023,6 @@
                     showToast(`Item ${itemId} assigned successfully!`, 'success');
                     closeModal();
                     await initializeStoragePage();
-                    renderBoxGridBoxView(storageId);
                 } else {
                     showToast('Failed to assign storage: ' + (result ? result.error : 'Unknown error'), 'error');
                 }
@@ -995,8 +1030,163 @@
         }
 
 
+        // --- Storage Box View (Tab 3) functions ---
+
+        function renderStorageBoxView() {
+            // Check if initial data is available, if not, set defaults
+            if (!storageCache.rooms.length) {
+                document.getElementById('tab-content').innerHTML = `<div class="card p-6"><p class="text-red-500">No rooms or storage units loaded. Please ensure API is running.</p></div>`;
+                return;
+            }
+            
+            boxViewSelectedRoom = boxViewSelectedRoom || storageCache.rooms[0]?.room_id;
+            boxViewSelectedFreezer = boxViewSelectedFreezer || storageCache.storageUnits.find(u => u.room_id === boxViewSelectedRoom)?.freezer;
+            boxViewSelectedBox = boxViewSelectedBox || storageCache.storageUnits.find(u => u.room_id === boxViewSelectedRoom && u.freezer === boxViewSelectedFreezer)?.storage_id;
+
+
+            const roomOptions = storageCache.rooms.map(r => `<option value="${r.room_id}" ${r.room_id === boxViewSelectedRoom ? 'selected' : ''}>${r.room_id} - ${r.address || 'N/A'}</option>`).join('');
+            
+            let freezerOptions = [];
+            if (boxViewSelectedRoom) {
+                freezerOptions = [...new Set(storageCache.storageUnits.filter(s => s.room_id === boxViewSelectedRoom).map(s => s.freezer))].sort().map(f => `<option value="${f}" ${f === boxViewSelectedFreezer ? 'selected' : ''}>${f}</option>`);
+            }
+            let boxOptions = [];
+            if (boxViewSelectedFreezer) {
+                boxOptions = storageCache.storageUnits.filter(s => s.freezer === boxViewSelectedFreezer).sort((a, b) => a.box.localeCompare(b.box)).map(b => `<option value="${b.storage_id}" ${b.storage_id === boxViewSelectedBox ? 'selected' : ''}>${b.box} (${b.storage_id})</option>`);
+            }
+
+
+            document.getElementById('tab-content').innerHTML = `
+                <div class="card p-4 mb-8">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div><label class="text-sm font-medium">Room</label><select id="filter-room-boxview" class="w-full mt-1 p-2 border rounded-md">${roomOptions}</select></div>
+                        <div><label class="text-sm font-medium">Freezer / Unit</label><select id="filter-freezer-boxview" class="w-full mt-1 p-2 border rounded-md" ${!boxViewSelectedRoom ? 'disabled' : ''}>${freezerOptions.join('')}</select></div>
+                        <div><label class="text-sm font-medium">Box</label><select id="filter-box-boxview" class="w-full mt-1 p-2 border rounded-md" ${!boxViewSelectedFreezer ? 'disabled' : ''}>${boxOptions.join('')}</select></div>
+                    </div>
+                </div>
+
+                <div id="storage-contents-container"></div>`;
+
+            if (boxViewSelectedBox) {
+                renderBoxGrid(boxViewSelectedBox);
+            } else {
+                 document.getElementById('storage-contents-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="archive-search" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a Room, Unit, and Box to see its contents</p></div></div>`;
+            }
+            
+            lucide.createIcons();
+            
+            // Set up listeners for cascading filters
+            document.getElementById('filter-room-boxview').addEventListener('change', (e) => {
+                boxViewSelectedRoom = e.target.value;
+                boxViewSelectedFreezer = null;
+                boxViewSelectedBox = null;
+                populateBoxViewFilters(true);
+            });
+            document.getElementById('filter-freezer-boxview').addEventListener('change', (e) => {
+                boxViewSelectedFreezer = e.target.value;
+                boxViewSelectedBox = null;
+                populateBoxViewFilters(true);
+            });
+            document.getElementById('filter-box-boxview').addEventListener('change', (e) => {
+                boxViewSelectedBox = e.target.value;
+                if (boxViewSelectedBox) renderBoxGrid(boxViewSelectedBox);
+            });
+
+            // Helper to handle filter population changes
+            function populateBoxViewFilters(shouldRenderGrid = false) {
+                const roomSelect = document.getElementById('filter-room-boxview');
+                const freezerSelect = document.getElementById('filter-freezer-boxview');
+                const boxSelect = document.getElementById('filter-box-boxview');
+
+                freezerSelect.disabled = true;
+                boxSelect.disabled = true;
+                
+                // Set default/placeholder options
+                freezerSelect.innerHTML = `<option value="">Select a Unit...</option>`;
+                boxSelect.innerHTML = `<option value="">Select a Box...</option>`;
+
+
+                if (boxViewSelectedRoom) {
+                    const freezers = [...new Set(storageCache.storageUnits.filter(s => s.room_id === boxViewSelectedRoom).map(s => s.freezer))].sort();
+                    freezerSelect.disabled = false;
+                    freezerSelect.innerHTML = `<option value="">Select a Unit...</option>` + freezers.map(f => `<option value="${f}" ${f === boxViewSelectedFreezer ? 'selected' : ''}>${f}</option>`).join('');
+                } 
+
+                if (boxViewSelectedFreezer) {
+                    const boxes = storageCache.storageUnits.filter(s => s.freezer === boxViewSelectedFreezer && s.room_id === boxViewSelectedRoom).sort((a, b) => a.box.localeCompare(b.box));
+                    boxSelect.disabled = false;
+                    boxSelect.innerHTML = `<option value="">Select a Box...</option>` + boxes.map(b => `<option value="${b.storage_id}" ${b.storage_id === boxViewSelectedBox ? 'selected' : ''}>${b.box} (${b.storage_id})</option>`).join('');
+                }
+                
+                // If a box is explicitly selected or we were forced to re-render, call renderBoxGrid
+                if (shouldRenderGrid && boxViewSelectedBox) {
+                    renderBoxGrid(boxViewSelectedBox);
+                } else if (shouldRenderGrid) {
+                    document.getElementById('storage-contents-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="archive-search" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a Box to see its contents</p></div></div>`;
+                }
+            }
+            populateBoxViewFilters(); // Initial state setting
+        }
+        
+        function renderBoxGrid(storageId) {
+            const container = document.getElementById('storage-contents-container');
+            const itemsInBox = allItemsCache.filter(s => s.storage_id === storageId);
+            const selectedBox = storageCache.storageUnits.find(s => s.storage_id === storageId);
+
+            if (!selectedBox) {
+                 container.innerHTML = `<div class="card p-6"><p class="text-red-500">Error: Box not found.</p></div>`;
+                 return;
+            }
+
+            const boxX = selectedBox.box_size_x || 10;
+            const boxY = selectedBox.box_size_y || 10;
+            const gridSize = boxX * boxY;
+
+            let gridHTML = `<div class="box-grid p-4 bg-gray-200 rounded-lg" style="grid-template-columns: repeat(${boxX}, 1fr);">`;
+
+            gridHTML += Array.from({length: gridSize}, (_, i) => i + 1).map(cellNum => {
+                const rowNum = Math.ceil(cellNum / boxX);
+                const colNum = ((cellNum - 1) % boxX) + 1;
+                const colLetter = convertNumberToAlphabet(colNum);
+                const alphanumericPosition = `${colLetter}_${rowNum}`;
+
+                const item = itemsInBox.find(i => i.storage_position === alphanumericPosition);
+                const colorClass = item ? (typeColorMap[item.type] || typeColorMap['default']) : 'empty';
+                let mainInfo = item ? (item.id || item.reagent_complete_name || item.item_name) : '';
+                return `<div class="box-cell ${item ? 'occupied ' + colorClass : 'empty'}"
+                         title="Position: ${alphanumericPosition}${item ? `&#013;ID: ${item.id}&#013;Type: ${item.type}` : ''}"
+                         onclick="${item ? `showItemDetailsModalBoxView(this, '${item.id}', '${item.type}', '${JSON.stringify(item.pk).replace(/"/g, '&quot;')}', '${item.type}', '${storageId}')` : `showAssignItemModalBoxView('${storageId}', '${alphanumericPosition}')`}">
+                         <span class="cell-position-label">${alphanumericPosition}</span>
+                         <div class="cell-main-info">${mainInfo}</div>
+                    </div>`;
+            }).join('');
+            gridHTML += `</div>`;
+
+            container.innerHTML = `<div class="card p-6"><h2 class="text-2xl font-bold mb-4">Box Contents: ${selectedBox.box}</h2>${gridHTML}</div>`;
+            lucide.createIcons();
+        }
+
+        // --- Storage Samples (Drag & Drop) Tab Implementation (Tab 4) ---
+
         function renderStorageSamplesDragDrop() {
-            dragDropCurrentStorageId = null;
+            // Initialize selections if empty
+            if (!boxViewSelectedRoom && storageCache.rooms.length) {
+                boxViewSelectedRoom = storageCache.rooms[0].room_id;
+                boxViewSelectedFreezer = storageCache.storageUnits.find(u => u.room_id === boxViewSelectedRoom)?.freezer;
+                dragDropCurrentStorageId = storageCache.storageUnits.find(u => u.room_id === boxViewSelectedRoom && u.freezer === boxViewSelectedFreezer)?.storage_id;
+            }
+
+            const roomOptions = storageCache.rooms.map(r => `<option value="${r.room_id}" ${r.room_id === boxViewSelectedRoom ? 'selected' : ''}>${r.room_id} - ${r.address || 'N/A'}</option>`).join('');
+            
+            let freezerOptions = [];
+            if (boxViewSelectedRoom) {
+                freezerOptions = [...new Set(storageCache.storageUnits.filter(s => s.room_id === boxViewSelectedRoom).map(s => s.freezer))].sort().map(f => `<option value="${f}" ${f === boxViewSelectedFreezer ? 'selected' : ''}>${f}</option>`);
+            }
+            let boxOptions = [];
+            if (boxViewSelectedFreezer) {
+                boxOptions = storageCache.storageUnits.filter(s => s.freezer === boxViewSelectedFreezer).sort((a, b) => a.box.localeCompare(b.box)).map(b => `<option value="${b.storage_id}" ${b.storage_id === dragDropCurrentStorageId ? 'selected' : ''}>${b.box} (${b.storage_id})</option>`);
+            }
+
             const dragDropHtml = `
                 <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
                     <div class="lg:col-span-1">
@@ -1004,126 +1194,120 @@
                         <div class="card p-4 h-[70vh] overflow-y-auto space-y-2" id="unassigned-items-list-dragdrop"></div>
                     </div>
                     <div class="lg:col-span-3">
-                        <nav id="breadcrumb-dragdrop" class="flex items-center space-x-2 text-sm text-gray-500 mb-6"></nav>
-                        <div id="explorer-container-dragdrop" class="card p-6 h-[70vh]">
-                            <div class="text-center text-gray-500"><i data-lucide="archive-search" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a box to load its contents</p></div>
+                        <h2 class="text-xl font-bold mb-4">Select Destination Box</h2>
+                        <div class="card p-4 space-y-4">
+                            <div class="grid grid-cols-3 gap-4">
+                                <div><label class="text-sm font-medium">Room</label><select id="dragdrop-filter-room" class="w-full mt-1 p-2 border rounded-md">${roomOptions}</select></div>
+                                <div><label class="text-sm font-medium">Freezer</label><select id="dragdrop-filter-freezer" class="w-full mt-1 p-2 border rounded-md">${freezerOptions.join('')}</select></div>
+                                <div><label class="text-sm font-medium">Box</label><select id="dragdrop-filter-box" class="w-full mt-1 p-2 border rounded-md">${boxOptions.join('')}</select></div>
+                            </div>
+                            <div id="box-display-dragdrop" class="p-2 bg-gray-100 rounded-lg h-[50vh] flex items-center justify-center text-gray-500">
+                                Select a box above to see the grid.
+                            </div>
                         </div>
                     </div>
                 </div>
             `;
             document.getElementById('tab-content').innerHTML = dragDropHtml;
             lucide.createIcons();
-            renderUnassignedItemsPanelDragDrop(allItemsCache.filter(s => !s.storage_id));
-            renderRoomsDragDrop();
-        }
-
-        function renderUnassignedItemsPanelDragDrop(unassignedItems) {
-            const panel = document.getElementById('unassigned-items-list-dragdrop');
-            if (!panel) return;
-            panel.innerHTML = unassignedItems.map(item => `
-                <div class="draggable-item p-2 border rounded-md shadow-sm flex justify-between items-center" draggable="true" data-item-info='${JSON.stringify(item.pk)}|${item.type}'>
-                    <div>
-                        <p class="font-semibold text-sm">${item.id}</p>
-                        <p class="text-xs text-gray-500">${item.type}</p>
-                    </div>
-                    <i data-lucide="grip-vertical" class="text-gray-400"></i>
-                </div>
-            `).join('') || '<p class="text-center text-gray-500 p-4">No unassigned items.</p>';
             
-            const newDraggables = panel.querySelectorAll('[draggable="true"]');
-            newDraggables.forEach(el => {
-                el.addEventListener('dragstart', e => {
-                    e.target.classList.add('dragging');
-                    e.dataTransfer.setData('text/plain', e.target.dataset.itemInfo);
-                });
-                el.addEventListener('dragend', e => e.target.classList.remove('dragging'));
+            renderUnassignedItemsPanelDragDrop(allItemsCache.filter(s => !s.storage_id));
+
+            // Initial render of the grid if a box is pre-selected
+            if (dragDropCurrentStorageId) renderBoxGridDragDrop(dragDropCurrentStorageId);
+
+            document.getElementById('dragdrop-filter-room').addEventListener('change', (e) => {
+                boxViewSelectedRoom = e.target.value;
+                boxViewSelectedFreezer = null;
+                dragDropCurrentStorageId = null;
+                populateDragDropFilters(true);
             });
-            lucide.createIcons();
+            document.getElementById('dragdrop-filter-freezer').addEventListener('change', (e) => {
+                boxViewSelectedFreezer = e.target.value;
+                dragDropCurrentStorageId = null;
+                populateDragDropFilters(true);
+            });
+            document.getElementById('dragdrop-filter-box').addEventListener('change', (e) => {
+                dragDropCurrentStorageId = e.target.value;
+                if (dragDropCurrentStorageId) renderBoxGridDragDrop(dragDropCurrentStorageId);
+            });
+            
+            function populateDragDropFilters(resetGrid = false) {
+                const roomSelect = document.getElementById('dragdrop-filter-room');
+                const freezerSelect = document.getElementById('dragdrop-filter-freezer');
+                const boxSelect = document.getElementById('dragdrop-filter-box');
+                
+                const roomId = roomSelect.value;
+                const freezerId = freezerSelect.value;
+                
+                freezerSelect.innerHTML = `<option value="">Select Unit</option>`;
+                boxSelect.innerHTML = `<option value="">Select Box</option>`;
+                freezerSelect.disabled = true;
+                boxSelect.disabled = true;
+
+                if (roomId) {
+                    const freezers = [...new Set(storageCache.storageUnits.filter(s => s.room_id === roomId).map(s => s.freezer))].sort();
+                    freezerSelect.disabled = false;
+                    freezers.forEach(f => freezerSelect.innerHTML += `<option value="${f}" ${f === freezerId ? 'selected' : ''}>${f}</option>`);
+                }
+                
+                if (roomId && freezerSelect.value) {
+                    const boxes = storageCache.storageUnits.filter(s => s.room_id === roomId && s.freezer === freezerSelect.value).sort((a, b) => a.box.localeCompare(b.box));
+                    boxSelect.disabled = false;
+                    boxes.forEach(b => boxSelect.innerHTML += `<option value="${b.storage_id}" ${b.storage_id === dragDropCurrentStorageId ? 'selected' : ''}>${b.box} (${b.storage_id})</option>`);
+                }
+
+                if (resetGrid) {
+                    document.getElementById('box-display-dragdrop').innerHTML = `<div class="text-center text-gray-500">Select a box above to see the grid.</div>`;
+                }
+            }
         }
 
-        function renderRoomsDragDrop() {
-            const container = document.getElementById('explorer-container-dragdrop');
-            container.innerHTML = `<h2 class="text-2xl font-bold mb-4">Select a Room</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                ${storageCache.rooms.map(room => `<div class="item-card card p-6 text-center cursor-pointer" onclick="renderFreezersDragDrop('${room.room_id}')"><i data-lucide="building-2" class="mx-auto h-12 w-12 text-gray-500"></i><p class="mt-2 font-semibold">${room.description || room.room_id}</p></div>`).join('')}</div>`;
-            lucide.createIcons();
-            updateBreadcrumbDragDrop({});
-        }
-
-        function renderFreezersDragDrop(roomId) {
-            const room = storageCache.rooms.find(r => r.room_id === roomId);
-            const freezers = [...new Set(storageCache.storageUnits.filter(s => s.room_id === roomId).map(s => s.freezer))];
-            const container = document.getElementById('explorer-container-dragdrop');
-            container.innerHTML = `<h2 class="text-2xl font-bold mb-4">Select a Unit in ${room.description || room.room_id}</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                ${freezers.sort().map(freezer => `<div class="item-card card p-6 text-center cursor-pointer" onclick="renderBoxesDragDrop('${roomId}', '${freezer}')"><i data-lucide="snowflake" class="mx-auto h-12 w-12 text-blue-500"></i><p class="mt-2 font-semibold">${freezer}</p></div>`).join('')}</div>`;
-            lucide.createIcons();
-            updateBreadcrumbDragDrop({ room });
-        }
-
-        function renderBoxesDragDrop(roomId, freezerId) {
-            const room = storageCache.rooms.find(r => r.room_id === roomId);
-            const boxes = storageCache.storageUnits.filter(s => s.room_id === roomId && s.freezer === freezerId);
-            const container = document.getElementById('explorer-container-dragdrop');
-            container.innerHTML = `<h2 class="text-2xl font-bold mb-4">Select a Box in ${freezerId}</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                ${boxes.sort((a, b) => a.box.localeCompare(b.box)).map(box => `<div class="item-card card p-6 text-center cursor-pointer" onclick="renderBoxContentsDragDrop('${box.storage_id}')"><i data-lucide="archive" class="mx-auto h-12 w-12 text-green-600"></i><p class="mt-2 font-semibold">${box.box}</p><p class="text-sm text-gray-500">${box.storage_id}</p></div>`).join('')}</div>`;
-            lucide.createIcons();
-            updateBreadcrumbDragDrop({ room, freezer: freezerId });
-        }
-
-        function renderBoxContentsDragDrop(storageId) {
+        function renderBoxGridDragDrop(storageId) {
             dragDropCurrentStorageId = storageId;
             const box = storageCache.storageUnits.find(s => s.storage_id === storageId);
-            const room = storageCache.rooms.find(r => r.room_id === box.room_id);
-            const itemsInBox = allItemsCache.filter(s => s.storage_id === storageId);
-            const container = document.getElementById('explorer-container-dragdrop');
+            if (!box) return;
 
+            const itemsInBox = allItemsCache.filter(s => s.storage_id === storageId);
             const boxX = box.box_size_x || 10;
             const boxY = box.box_size_y || 10;
             const gridSize = boxX * boxY;
+            const displayContainer = document.getElementById('box-display-dragdrop');
 
-            container.innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div class="lg:col-span-3">
-                    <h2 class="text-xl font-bold mb-4">Box Layout: ${box.box} (${boxX} x ${boxY})</h2>
-                    <div id="box-grid-dragdrop" class="box-grid-draggable p-2 bg-gray-200 rounded-lg" style="grid-template-columns: repeat(${boxX}, minmax(0, 1fr));">
-                        ${Array.from({ length: gridSize }, (_, i) => i + 1).map(cellNum => {
-                            const rowNum = Math.ceil(cellNum / boxX);
-                            const colNum = ((cellNum - 1) % boxX) + 1;
-                            const colLetter = convertNumberToAlphabet(colNum);
-                            const alphanumericPosition = `${colLetter}_${rowNum}`;
+            let gridHTML = `<div id="box-grid-dragdrop-content" class="box-grid-draggable p-2 bg-gray-200 rounded-lg" style="grid-template-columns: repeat(${boxX}, 1fr);">`;
 
-                            const item = itemsInBox.find(i => i.storage_position === alphanumericPosition);
-                            const colorClass = item ? (typeColorMap[item.type] || typeColorMap['default']) : 'empty';
-                            let mainInfo = item ? (item.id || item.reagent_complete_name || item.item_name) : '';
-                            return `<div class="box-grid-cell-draggable ${item ? 'occupied ' + colorClass : 'empty'}"
-                                     id="dragdrop-pos-${alphanumericPosition}"
-                                     onclick="${item ? `showItemDetailsPanelDragDrop(this, '${item.id}', '${item.type}', '${JSON.stringify(item.pk).replace(/"/g, '&quot;')}', '${item.type}', '${storageId}')` : `showToast('Drag an item here to assign it.', 'info')`}"
-                                     data-position="${alphanumericPosition}"
-                                     draggable="${!!item}"
-                                     data-item-info='${item ? `${JSON.stringify(item.pk)}|${item.type}` : ''}'>
-                                     <span class="font-bold text-sm">${alphanumericPosition}</span>
-                                     ${item ? `<span class="truncate text-xs w-full">${mainInfo}</span><span class="truncate text-xs w-full font-medium">${item.type}</span>` : ''}
-                                 </div>`;
-                        }).join('')}
-                    </div>
-                </div>
-            </div>`;
-            updateBreadcrumbDragDrop({ room, freezer: box.freezer, box });
-            addDragDropListeners(dragDropCurrentStorageId);
-            renderUnassignedItemsPanelDragDrop(allItemsCache.filter(s => !s.storage_id));
-            lucide.createIcons();
+            gridHTML += Array.from({length: gridSize}, (_, i) => i + 1).map(cellNum => {
+                const rowNum = Math.ceil(cellNum / boxX);
+                const colNum = ((cellNum - 1) % boxX) + 1;
+                const colLetter = convertNumberToAlphabet(colNum);
+                const alphanumericPosition = `${colLetter}_${rowNum}`;
+
+                const item = itemsInBox.find(i => i.storage_position === alphanumericPosition);
+                const colorClass = item ? (typeColorMap[item.type] || typeColorMap['default']) : 'empty';
+                let mainInfo = item ? (item.id || item.reagent_complete_name || item.item_name) : '';
+
+                return `<div class="box-grid-cell-draggable ${item ? 'occupied ' + colorClass : 'empty'}"
+                         data-position="${alphanumericPosition}"
+                         data-item-info='${item ? `${JSON.stringify(item.pk).replace(/"/g, '&quot;')}|${item.type}` : ''}'
+                         draggable="${!!item}"
+                         ondragstart="event.dataTransfer.setData('text/plain', event.target.dataset.itemInfo); event.target.classList.add('dragging');"
+                         ondragend="event.target.classList.remove('dragging');">
+                         <span class="font-bold text-sm">${alphanumericPosition}</span>
+                         ${item ? `<span class="truncate text-xs w-full">${mainInfo}</span><span class="truncate text-xs w-full font-medium">${item.type}</span>` : ''}
+                     </div>`;
+            }).join('');
+            gridHTML += `</div>`;
+
+            displayContainer.innerHTML = gridHTML;
+            addDragDropListeners(storageId);
         }
 
         function addDragDropListeners(currentStorageId) {
-            const unassignedPanel = document.getElementById('unassigned-items-list-dragdrop');
-            const dropTargets = document.querySelectorAll('#box-grid-dragdrop .box-grid-cell-draggable');
-            const draggables = unassignedPanel.querySelectorAll('[draggable="true"]');
-
-            draggables.forEach(el => {
-                el.addEventListener('dragstart', e => {
-                    e.target.classList.add('dragging');
-                    e.dataTransfer.setData('text/plain', e.target.dataset.itemInfo);
-                });
-                el.addEventListener('dragend', e => e.target.classList.remove('dragging'));
-            });
+            const dropTargets = document.querySelectorAll('#box-grid-dragdrop-content .box-grid-cell-draggable');
+            const draggablesContainer = document.getElementById('unassigned-items-list-dragdrop');
+            
+            // Re-bind listeners for unassigned items fetched via initialization
+            renderUnassignedItemsPanelDragDrop(allItemsCache.filter(s => !s.storage_id)); 
 
             dropTargets.forEach(el => {
                 el.addEventListener('dragover', e => {
@@ -1141,7 +1325,10 @@
                         return;
                     }
 
-                    const [pkValueJson, table] = e.dataTransfer.getData('text/plain').split('|');
+                    const itemInfo = e.dataTransfer.getData('text/plain');
+                    if (!itemInfo) return;
+                    
+                    const [pkValueJson, table] = itemInfo.split('|');
                     const pkValue = JSON.parse(pkValueJson);
                     const position = el.dataset.position;
 
@@ -1156,155 +1343,52 @@
                     const result = await apiFetch(`table/${itemConfig.schema}/${itemConfig.table}?${buildPkQueryString(itemConfig, pkValue)}`, { method: 'PUT', body: payload });
                     if (result && !result.error) {
                         showToast('Item moved successfully!', 'success');
-                        await initializeStoragePage();
+                        await initializeStoragePage(); // Full re-initialization to refresh all caches and panels
                     } else {
                         showToast('Failed to move item: ' + (result?.error || 'Unknown error'), 'error');
                     }
                 });
             });
-        }
+            
+            // Listeners for items dropped outside the box (unassigning)
+            document.getElementById('main-content').addEventListener('dragover', e => e.preventDefault());
+            document.getElementById('main-content').addEventListener('drop', async e => {
+                const isDroppingOnBox = e.target.closest('#box-grid-dragdrop-content');
+                const isDroppingOnUnassignedPanel = e.target.closest('#unassigned-items-list-dragdrop');
+                if (isDroppingOnBox || isDroppingOnUnassignedPanel) return;
 
-        async function showNewStorageModal() {
-            const rooms = storageCache.rooms;
-            const roomOptions = rooms && rooms.length > 0 ? rooms.map(r => `<option value="${r.room_id}">${r.description ? `${r.room_id} - ${r.description}` : r.room_id}</option>`).join('') : '';
+                const itemInfo = e.dataTransfer.getData('text/plain');
+                if (!itemInfo) return;
 
-            const modalHtml = `
-                <div class="modal-overlay fixed inset-0 flex items-center justify-center">
-                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-md">
-                        <div class="flex justify-between items-center mb-4">
-                            <h2 class="text-2xl font-bold">Add New Storage Unit</h2>
-                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl leading-none">&times;</button>
-                        </div>
-                        <form id="new-storage-form" class="space-y-4">
-                            <div>
-                                <label for="storage_id" class="block text-sm font-medium text-gray-700">Storage ID (e.g., FREEZER-01-BOX-A)</label>
-                                <input type="text" id="storage_id" name="storage_id" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                            </div>
-                            <div>
-                                <label for="room_id" class="block text-sm font-medium text-gray-700">Room</label>
-                                <select id="room_id" name="room_id" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="">Select an existing Room</option>
-                                    ${roomOptions}
-                                    <option value="__NEW_ROOM__">-- Create New Room --</option>
-                                </select>
-                                <div id="new-room-fields" class="space-y-2 mt-2 hidden">
-                                    <input type="text" id="new_room_id" placeholder="New Room ID (e.g., Lab01)" class="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                                    <input type="text" id="new_room_description" placeholder="New Room Description (optional)" class="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                                </div>
-                            </div>
-                            <div>
-                                <label for="freezer" class="block text-sm font-medium text-gray-700">Freezer / Unit Name</label>
-                                <input type="text" id="freezer" name="freezer" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                            </div>
-                            <div>
-                                <label for="etage" class="block text-sm font-medium text-gray-700">Shelf / Etage</label>
-                                <input type="text" id="etage" name="etage" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                            </div>
-                            <div>
-                                <label for="temperature_c" class="block text-sm font-medium text-gray-700">Temperature (°C)</label>
-                                <input type="number" step="0.1" id="temperature_c" name="temperature_c" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                            </div>
-                            <div>
-                                <label for="box" class="block text-sm font-medium text-gray-700">Box Name</label>
-                                <input type="text" id="box" name="box" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                            </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label for="box_size_x" class="block text-sm font-medium text-gray-700">Box X Dimension (Columns, default 10)</label>
-                                    <input type="number" id="box_size_x" name="box_size_x" value="10" min="1" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                                </div>
-                                <div>
-                                    <label for="box_size_y" class="block text-sm font-medium text-gray-700">Box Y Dimension (Rows, default 10)</label>
-                                    <input type="number" id="box_size_y" name="box_size_y" value="10" min="1" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                                </div>
-                            </div>
-                            <div>
-                                <label for="notes" class="block text-sm font-medium text-gray-700">Notes</label>
-                                <textarea id="notes" name="notes" rows="3" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
-                            </div>
-                            <div class="pt-4 flex justify-end">
-                                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Add Storage Unit</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            `;
-            const { closeModal } = showModal(modalHtml);
+                const [pkValueJson, table] = itemInfo.split('|');
+                const pkValue = JSON.parse(pkValueJson);
+                
+                const itemConfig = storableItemTables.find(t => t.table.toLowerCase() === table.toLowerCase());
+                if (!itemConfig) return;
 
-            const roomSelect = document.getElementById('room_id');
-            const newRoomFieldsDiv = document.getElementById('new-room-fields');
-            const newRoomIdInput = document.getElementById('new_room_id');
-            const newRoomDescriptionInput = document.getElementById('new_room_description');
+                // Check if the source item was currently assigned
+                const sourceItem = allItemsCache.find(i => {
+                     const targetItemPk = Array.isArray(i.pk) ? JSON.stringify(i.pk) : i.pk;
+                     const lookupPk = Array.isArray(pkValue) ? JSON.stringify(pkValue) : pkValue;
+                     return lookupPk === targetItemPk && i.type === table && i.storage_id;
+                });
+                
+                if (sourceItem) {
+                    if (!confirm(`Confirm removal from storage? Item ${sourceItem.id} will be unassigned.`)) return;
 
-            roomSelect.addEventListener('change', () => {
-                if (roomSelect.value === '__NEW_ROOM__') {
-                    newRoomFieldsDiv.classList.remove('hidden');
-                    newRoomIdInput.setAttribute('required', 'required');
-                } else {
-                    newRoomFieldsDiv.classList.add('hidden');
-                    newRoomIdInput.removeAttribute('required');
-                    newRoomIdInput.value = '';
-                    newRoomDescriptionInput.value = '';
+                    const payload = { storage_id: null, storage_position: null };
+                    const result = await apiFetch(`table/${itemConfig.schema}/${itemConfig.table}?${buildPkQueryString(itemConfig, pkValue)}`, { method: 'PUT', body: payload });
+                    
+                    if (result && !result.error) {
+                        showToast('Item unassigned successfully!', 'success');
+                        await initializeStoragePage();
+                    } else {
+                        showToast('Failed to unassign item: ' + (result?.error || 'Unknown error'), 'error');
+                    }
                 }
             });
-
-            document.getElementById('new-storage-form').onsubmit = async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                const data = Object.fromEntries(formData.entries());
-
-                let roomIdToUse = data.room_id;
-
-                if (roomIdToUse === '__NEW_ROOM__') {
-                    if (!data.new_room_id) {
-                        showToast('Please provide a New Room ID.', 'error');
-                        return;
-                    }
-                    roomIdToUse = data.new_room_id;
-                    const newRoomData = {
-                        room_id: roomIdToUse,
-                        description: data.new_room_description || null
-                    };
-                    const roomCreateResult = await apiFetch('table/reference/room', {
-                        method: 'POST',
-                        body: newRoomData
-                    });
-
-                    if (roomCreateResult.error) {
-                        showToast('Failed to create new room: ' + roomCreateResult.error, 'error');
-                        return;
-                    }
-                } else if (!roomIdToUse) {
-                    showToast('Please select an existing Room or create a New Room.', 'error');
-                    return;
-                }
-
-                const payload = {
-                    storage_id: data.storage_id,
-                    room_id: roomIdToUse,
-                    freezer: data.freezer,
-                    etage: data.etage || null,
-                    temperature_c: data.temperature_c ? parseFloat(data.temperature_c) : null,
-                    box: data.box,
-                    box_size_x: data.box_size_x ? parseInt(data.box_size_x) : 10,
-                    box_size_y: data.box_size_y ? parseInt(data.box_size_y) : 10,
-                    notes: data.notes || null
-                };
-
-                const result = await apiFetch('table/lab/storage', {
-                    method: 'POST',
-                    body: payload
-                });
-
-                if (result && !result.error) {
-                    showToast('Storage unit added successfully!', 'success');
-                    closeModal();
-                    await initializeStoragePage();
-                } else {
-                    showToast('Failed to add storage unit: ' + (result ? result.error : 'Unknown error'), 'error');
-                }
-            };
         }
+        
     </script>
 </body>
 </html>

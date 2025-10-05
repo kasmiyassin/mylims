@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Profile - TIFI MG LIMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        
+        /* Sidebar Styling (Synchronized Structure) */
+        .sidebar { border-right: 1px solid #e2e8f0; height: 100vh; }
+        .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.5rem; }
+        .sidebar-nav-container::-webkit-scrollbar { width: 6px; }
+        .sidebar-nav-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .sidebar-item { color: #475569; transition: all 0.2s ease; }
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        .user-profile-link { cursor: pointer; text-decoration: none; transition: all 0.2s ease; }
+        .user-profile-link:hover { background-color: #f1f5f9; border-radius: 0.25rem; }
+
+        .card { 
+            background-color: white; 
+            border-radius: 0.75rem; 
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); 
+        }
+
+        /* Toast Notification Styles */
+        .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 100; }
+        .toast {
+            background-color: #fff;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.08);
+            display: flex;
+            align-items: center;
+            opacity: 0;
+            transform: translateY(-100%);
+            animation: fadeInSlideDown 0.3s ease-out forwards, fadeOut 0.3s ease-out 4s forwards;
+            margin-bottom: 0.75rem;
+            border-left: 5px solid;
+        }
+        .toast.success { border-color: #10b981; color: #065f46; }
+        .toast.error { border-color: #ef4444; color: #991b1b; }
+
+        @keyframes fadeInSlideDown { from { opacity: 0; transform: translateY(-100%); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-100%); } }
+        
+        .button-spinner {
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-top-color: #fff;
+            border-radius: 50%;
+            width: 1rem; 
+            height: 1rem; 
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="main-app" class="flex">
+        <!-- Sidebar -->
+        <div id="sidebar" class="sidebar fixed top-0 left-0 bg-white w-64 p-4 flex flex-col z-20">
+            <div class="text-gray-800 text-2xl font-bold mb-4 flex items-center shrink-0">
+                <i data-lucide="flask-conical" class="inline-block mr-2 text-blue-600"></i><span>TIFI MG</span>
+            </div>
+            
+            <div class="sidebar-nav-container space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (SOP)</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="storagesamples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="boxes" class="w-5 h-5 mr-3"></i><span>Storage Samples</span></a>
+                <a href="storagebox.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="box" class="w-5 h-5 mr-3"></i><span>Storage Box</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Laboratory</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="booking.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Booking</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+            </div>
+            
+            <div class="mt-4 shrink-0">
+                <a href="user_profile.html" id="user-profile-link" class="user-profile-link p-2 mb-2 border-t flex items-center text-gray-800 active">
+                    <div id="user-profile" class="flex items-center">
+                        <i data-lucide="user-circle" class="w-6 h-6 mr-3 text-blue-600"></i>
+                        <p class="font-semibold text-sm text-gray-800">My Profile</p>
+                    </div>
+                </a>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div id="main-content" class="ml-64 p-8 flex-grow">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800">User Profile Management</h1>
+                    <p class="mt-1 text-md text-gray-600" id="user-role-info">Loading user data...</p>
+                </div>
+            </div>
+
+            <div id="profile-card-container" class="grid grid-cols-1 lg:grid-cols-3 gap-8 hidden">
+                <!-- Left Column: Avatar and Summary -->
+                <div class="lg:col-span-1">
+                    <div class="card p-6 h-full text-center">
+                        <div id="user-avatar" class="mx-auto w-24 h-24 rounded-full flex items-center justify-center text-4xl font-bold text-white mb-4 bg-gray-500">
+                            <!-- Initial -->
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-800" id="summary-full-name"></h3>
+                        <p class="text-sm text-gray-500" id="summary-id"></p>
+                        <div class="mt-6 space-y-2">
+                            <div id="summary-mail-group" class="flex items-center justify-center text-sm text-gray-700">
+                                <i data-lucide="mail" class="w-4 h-4 mr-2 text-blue-500"></i><span id="summary-mail"></span>
+                            </div>
+                            <div id="summary-phone-group" class="flex items-center justify-center text-sm text-gray-700">
+                                <i data-lucide="phone" class="w-4 h-4 mr-2 text-green-500"></i><span id="summary-phone"></span>
+                            </div>
+                            <div id="summary-room-group" class="flex items-center justify-center text-sm text-gray-700">
+                                <i data-lucide="building-2" class="w-4 h-4 mr-2 text-indigo-500"></i><span id="summary-room"></span>
+                            </div>
+                            <div id="summary-address-group" class="text-sm text-gray-700">
+                                <p class="font-medium text-gray-500 mt-2">Address:</p><span id="summary-address" class="block"></span>
+                            </div>
+                            <p class="text-xs text-gray-400 pt-4">Last modified: <span id="summary-last-modified">N/A</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Profile Form -->
+                <div class="lg:col-span-2">
+                    <div class="card p-6">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center"><i data-lucide="settings-2" class="w-6 h-6 mr-3"></i> Edit Details</h2>
+                        
+                        <form id="profile-form" class="space-y-6">
+                            <!-- Hidden fields for PK/routing -->
+                            <input type="hidden" id="pk-id-field" name="pk_id_field">
+                            <input type="hidden" id="pk-value" name="pk_value">
+
+                            <!-- Editable Fields -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div id="name-field-group" class="col-span-1">
+                                    <label for="name_field" class="block text-sm font-medium text-gray-700">Full Name</label>
+                                    <input type="text" id="name_field" name="name_field" class="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" required>
+                                </div>
+                                <div id="mail-field-group" class="col-span-1">
+                                    <label for="mail" class="block text-sm font-medium text-gray-700">Email (Used for Login)</label>
+                                    <input type="email" id="mail" name="mail" class="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" required>
+                                </div>
+                                <div id="phone-field-group" class="col-span-1 hidden">
+                                    <label for="phone_field" class="block text-sm font-medium text-gray-700">Phone/Telephone</label>
+                                    <input type="text" id="phone_field" name="phone_field" class="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div id="room-field-group" class="col-span-1 hidden">
+                                    <label for="room" class="block text-sm font-medium text-gray-700">Room</label>
+                                    <input type="text" id="room" name="room" class="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div id="address-field-group" class="md:col-span-2 hidden">
+                                    <label for="address" class="block text-sm font-medium text-gray-700">Address</label>
+                                    <textarea id="address" name="address" rows="2" class="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"></textarea>
+                                </div>
+                            </div>
+
+                            <!-- Password Fields -->
+                            <div class="border-t pt-6 mt-6 space-y-4">
+                                <h3 class="text-lg font-semibold text-gray-800 flex items-center"><i data-lucide="key-round" class="w-5 h-5 mr-2"></i>Change Password</h3>
+                                <p class="text-sm text-gray-500">Leave these fields empty if you do not wish to change your password. Note: Changing the password requires re-login.</p>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label for="password" class="block text-sm font-medium text-gray-700">New Password</label>
+                                        <input type="password" id="password" name="password" class="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500" placeholder="••••••••">
+                                    </div>
+                                    <div>
+                                        <label for="password_confirm" class="block text-sm font-medium text-gray-700">Confirm New Password</label>
+                                        <input type="password" id="password_confirm" name="password_confirm" class="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500" placeholder="••••••••">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Submit Button -->
+                            <div class="pt-6 flex justify-end">
+                                <button type="submit" id="save-profile-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg flex items-center transition-all duration-200 shadow-md hover:shadow-lg">
+                                    <span id="button-text"><i data-lucide="save" class="w-5 h-5 mr-2"></i>Save Changes</span>
+                                    <span id="loading-spinner" class="hidden ml-2 button-spinner"></span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Initial Loading Placeholder -->
+            <div id="loading-placeholder" class="card p-12 text-center text-gray-500">
+                <i data-lucide="loader-2" class="animate-spin w-8 h-8 text-blue-600 mx-auto mb-4"></i>
+                <p>Authenticating user and loading profile...</p>
+            </div>
+        </div>
+        <div id="toast-container" class="toast-container"></div>
+    </div>
+
+    <script>
+        // --- Security and Setup ---
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') {
+            localStorage.setItem('redirectUrl', window.location.href);
+            window.location.href = './login.html';
+        }
+        
+        const API_BASE_URL = '/mylims/api'; 
+        let userProfileData = null;
+        
+        // Maps user types to their table and primary key for API calls, and handles custom field names.
+        // NOTE: The 'customer_id' is an INTEGER in the DB but treated as a STRING PK in the API/RLS context.
+        const userTypeMap = {
+            'personal': { schema: 'lims', table: 'personal', idField: 'person_id', nameField: 'full_name', phoneField: 'telephone', roomField: 'room', addressField: null, roleDisplay: 'Lab Personnel' },
+            'customer': { schema: 'lims', table: 'customers', idField: 'customer_id', nameField: 'customer_name', phoneField: 'phone', roomField: null, addressField: 'address', roleDisplay: 'Customer' },
+            'external_contact': { schema: 'lims', table: 'external_contacts', idField: 'contact_id', nameField: 'full_name', phoneField: 'telephone', roomField: null, addressField: 'address', roleDisplay: 'External Contact' },
+        };
+
+        // --- Utility Functions ---
+
+        async function apiFetch(endpoint, options = {}) {
+            try {
+                // For PUT/POST requests, ensure JSON headers unless it's a file upload (which this form doesn't do)
+                if (options.method === 'PUT' || options.method === 'POST') {
+                    options.headers = { ...options.headers, 'Content-Type': 'application/json' };
+                    options.body = JSON.stringify(options.body);
+                }
+                
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                if (!response.ok) {
+                    const errorBody = await response.json().catch(() => ({error: `Server error or HTTP ${response.status}`}));
+                    throw new Error(errorBody.error || `HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            } catch (error) {
+                console.error(`API Error on ${endpoint}:`, error);
+                showToast(`API Error: ${error.message}`, 'error');
+                return null;
+            }
+        }
+        
+        function showToast(message, type = 'info') {
+            const toastContainer = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            const icon = type === 'success' ? 'check-circle' : 'x-circle';
+            toast.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 mr-3"></i><span class="toast-message">${message}</span>`;
+            toastContainer.appendChild(toast);
+            lucide.createIcons();
+            setTimeout(() => { toast.remove(); }, 5000);
+        }
+
+        // --- Core Logic ---
+
+        function getSessionUser() {
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            const userType = sessionStorage.getItem('user_type');
+            const isAdmin = sessionStorage.getItem('is_admin') === 'true';
+
+            if (!user) { return null; }
+
+            let info;
+            
+            // 1. Determine user type and fetch mapping info
+            if (userType in userTypeMap) {
+                info = userTypeMap[userType];
+            } else if (isAdmin && (user.person_id === 'TIFI' || user.person_id === 'kasmi')) {
+                // Special admin/superuser handling (force to 'personal' table path)
+                info = userTypeMap['personal'];
+                info.roleDisplay = user.full_name;
+            } else {
+                 return null; // Unrecognized user type
+            }
+
+            // 2. Extract Primary Key Value (Must be a String for API/URL/RLS consistency)
+            let pkValue;
+            if (info.idField === 'customer_id') {
+                pkValue = String(user.customer_id); // Customer ID is INT in session but STR in DB API/RLS
+            } else {
+                pkValue = String(user[info.idField] || user.person_id || user.contact_id);
+            }
+
+            // 3. Return combined user/mapping object
+            return {
+                ...info,
+                pkValue: pkValue,
+                currentData: user,
+            };
+        }
+
+        async function loadProfile() {
+            const userInfo = getSessionUser();
+            const placeholder = document.getElementById('loading-placeholder');
+            const cardContainer = document.getElementById('profile-card-container');
+            
+            if (!userInfo) {
+                // The issue "Unrecognized user type" is fixed by the improved getSessionUser, 
+                // but we keep the visual error feedback just in case the session is invalid.
+                cardContainer.classList.add('hidden');
+                placeholder.classList.remove('hidden');
+                return;
+            }
+            
+            // 1. Fetch live data using the correctly mapped PK
+            const endpoint = `table/${userInfo.schema}/${userInfo.table}?${userInfo.idField}=${userInfo.pkValue}`;
+            const response = await apiFetch(endpoint);
+
+            if (!response || response.length === 0) {
+                placeholder.innerHTML = `<p class="text-red-500">Failed to load profile for ${userInfo.pkValue}. Data not found in table "${userInfo.schema}.${userInfo.table}". This may indicate a data integrity issue in the database.</p>`;
+                cardContainer.classList.add('hidden');
+                placeholder.classList.remove('hidden');
+                return;
+            }
+
+            userProfileData = response[0];
+            placeholder.classList.add('hidden');
+            cardContainer.classList.remove('hidden');
+            
+            // 2. Populate form and summary
+            populateForm(userProfileData, userInfo);
+            updateSidebarAndSummary(userProfileData, userInfo);
+            
+            // 3. Setup listener for form submission (only needs to be done once)
+            const form = document.getElementById('profile-form');
+            if (form && !form.dataset.listenerAttached) {
+                form.addEventListener('submit', handleFormSubmit);
+                form.dataset.listenerAttached = 'true';
+            }
+            
+            lucide.createIcons();
+        }
+
+        function populateForm(data, userInfo) {
+            const form = document.getElementById('profile-form');
+            
+            // Set PK identification fields
+            document.getElementById('pk-id-field').value = userInfo.idField;
+            document.getElementById('pk-value').value = userInfo.pkValue;
+            document.getElementById('user-role-info').textContent = `Role: ${userInfo.roleDisplay}`;
+
+
+            // Name Field
+            const nameField = form['name_field'];
+            nameField.name = userInfo.nameField; // Use the correct API name (e.g., 'customer_name')
+            nameField.value = data[userInfo.nameField] || '';
+            document.getElementById('name-field-group').querySelector('label').textContent = formatFieldName(userInfo.nameField);
+
+            // Email Field (Mail)
+            form['mail'].value = data.mail || '';
+            
+            // Phone Field
+            const phoneGroup = document.getElementById('phone-field-group');
+            if (userInfo.phoneField) {
+                phoneGroup.classList.remove('hidden');
+                const phoneField = form['phone_field'];
+                phoneField.name = userInfo.phoneField; // Use the correct API name (e.g., 'telephone' or 'phone')
+                phoneField.value = data[userInfo.phoneField] || '';
+                phoneGroup.querySelector('label').textContent = formatFieldName(userInfo.phoneField);
+            } else {
+                phoneGroup.classList.add('hidden');
+            }
+
+            // Room Field (only for lims.personal)
+            const roomGroup = document.getElementById('room-field-group');
+            if (userInfo.roomField) {
+                roomGroup.classList.remove('hidden');
+                form['room'].value = data[userInfo.roomField] || '';
+            } else {
+                roomGroup.classList.add('hidden');
+            }
+
+            // Address Field (for external_contacts and customers)
+            const addressGroup = document.getElementById('address-field-group');
+            if (userInfo.addressField) {
+                addressGroup.classList.remove('hidden');
+                form['address'].value = data[userInfo.addressField] || '';
+            } else {
+                addressGroup.classList.add('hidden');
+            }
+
+            // Clear password fields (security measure)
+            form['password'].value = '';
+            form['password_confirm'].value = '';
+        }
+
+        function updateSidebarAndSummary(data, userInfo) {
+            const fullName = data[userInfo.nameField] || 'N/A';
+            const email = data.mail || 'N/A';
+            const phone = userInfo.phoneField ? (data[userInfo.phoneField] || 'N/A') : 'N/A';
+            const room = userInfo.roomField ? (data[userInfo.roomField] || 'N/A') : 'N/A';
+            const address = userInfo.addressField ? (data[userInfo.addressField] || 'N/A') : 'N/A';
+            const lastModified = data.last_modified_at ? new Date(data.last_modified_at).toLocaleString() : 'N/A';
+
+            // Summary Panel
+            document.getElementById('summary-full-name').textContent = fullName;
+            document.getElementById('summary-id').textContent = `${formatFieldName(userInfo.idField)}: ${userInfo.pkValue}`;
+            document.getElementById('summary-mail').textContent = email;
+            
+            // Phone
+            document.getElementById('summary-phone').textContent = phone;
+            if (userInfo.phoneField) document.getElementById('summary-phone-group').classList.remove('hidden');
+            else document.getElementById('summary-phone-group').classList.add('hidden');
+
+            // Room
+            document.getElementById('summary-room').textContent = room;
+            if (userInfo.roomField) document.getElementById('summary-room-group').classList.remove('hidden');
+            else document.getElementById('summary-room-group').classList.add('hidden');
+
+            // Address
+            document.getElementById('summary-address').textContent = address;
+            if (userInfo.addressField) document.getElementById('summary-address-group').classList.remove('hidden');
+            else document.getElementById('summary-address-group').classList.add('hidden');
+
+            document.getElementById('summary-last-modified').textContent = lastModified;
+
+            // Avatar setup
+            const avatarDiv = document.getElementById('user-avatar');
+            const initial = (fullName.charAt(0) || userInfo.pkValue.charAt(0)).toUpperCase();
+            let avatarColor = 'bg-gray-500';
+            if (userInfo.table === 'personal') avatarColor = 'bg-blue-600';
+            if (userInfo.table === 'customers') avatarColor = 'bg-green-600';
+            if (userInfo.table === 'external_contacts') avatarColor = 'bg-purple-600';
+            if (userInfo.pkValue === 'TIFI' || userInfo.pkValue === 'kasmi') avatarColor = 'bg-red-600';
+
+            avatarDiv.className = `mx-auto w-24 h-24 rounded-full flex items-center justify-center text-4xl font-bold text-white mb-4 ${avatarColor}`;
+            avatarDiv.textContent = initial;
+            
+            // Update sidebar profile content 
+            const sidebarProfileLink = document.getElementById('user-profile-link');
+            sidebarProfileLink.classList.remove('active'); // Remove active from link itself
+            
+            document.getElementById('user-profile').innerHTML = `
+                <span class="mr-2 p-2 ${avatarColor} text-white rounded-full text-xs font-bold">${initial}</span>
+                <p class="font-semibold text-sm text-gray-800">${fullName}</p>
+            `;
+            // Re-apply the active state to the link for the current page
+            sidebarProfileLink.classList.add('active');
+        }
+
+        function formatFieldName(fieldName) {
+            return fieldName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+            const form = e.target;
+            const submitBtn = document.getElementById('save-profile-btn');
+            const btnText = submitBtn.querySelector('#button-text');
+            const spinner = document.getElementById('loading-spinner');
+            
+            submitBtn.disabled = true;
+            btnText.innerHTML = `Saving...`;
+            spinner.classList.remove('hidden');
+            lucide.createIcons();
+
+            const userInfo = getSessionUser();
+            const pkCol = form['pk_id-field'].value;
+            const pkVal = form['pk-value'].value;
+
+            // 1. Password confirmation check
+            const newPassword = form['password'].value;
+            const confirmPassword = form['password_confirm'].value;
+
+            if (newPassword && newPassword !== confirmPassword) {
+                showToast('Passwords do not match. Please verify.', 'error');
+                submitBtn.disabled = false;
+                btnText.innerHTML = `<i data-lucide="save" class="w-5 h-5 mr-2"></i>Save Changes`;
+                spinner.classList.add('hidden');
+                lucide.createIcons();
+                return;
+            }
+
+            // 2. Build the update body
+            const updateBody = {};
+            const formData = new FormData(form);
+
+            formData.forEach((value, key) => {
+                if (key.startsWith('pk_') || key === 'password_confirm') return;
+
+                // Map client side generic names back to API field names
+                if (key === 'name_field') key = userInfo.nameField;
+                if (key === 'phone_field') key = userInfo.phoneField;
+                
+                // Add password field only if a new password was provided
+                if (key === 'password' && newPassword) {
+                    updateBody[key] = value;
+                } else if (key !== 'password' && key in userProfileData) {
+                    updateBody[key] = value === '' ? null : value;
+                }
+            });
+            
+            // 3. Construct API call (PUT)
+            const pkQueryString = `${pkCol}=${encodeURIComponent(pkVal)}`;
+            const endpoint = `table/${userInfo.schema}/${userInfo.table}?${pkQueryString}`;
+            
+            const result = await apiFetch(endpoint, { method: 'PUT', body: updateBody });
+
+            // 4. Handle result
+            submitBtn.disabled = false;
+            btnText.innerHTML = `<i data-lucide="save" class="w-5 h-5 mr-2"></i>Save Changes`;
+            spinner.classList.add('hidden');
+            lucide.createIcons();
+
+            if (result && !result.error) {
+                showToast('Profile updated successfully!', 'success');
+                
+                // If password was changed, force logout/re-login
+                if (newPassword) {
+                    showToast('Password updated. Logging out for security...', 'success');
+                    await apiFetch('logout', { method: 'POST' });
+                    sessionStorage.clear();
+                    setTimeout(() => window.location.href = './login.html', 1500);
+                    return;
+                }
+
+                // Update session storage with new details (excluding password hash)
+                const updatedSessionUser = { ...userProfileData, ...result };
+                updatedSessionUser.password_hash = undefined;
+                sessionStorage.setItem('user', JSON.stringify(updatedSessionUser));
+
+                // Clear password fields on success
+                form['password'].value = '';
+                form['password_confirm'].value = '';
+
+                // Reload the profile to refresh the summary
+                loadProfile();
+
+            } else {
+                showToast(`Update Failed: ${result ? result.error : 'Unknown error'}`, 'error');
+            }
+        }
+
+        // --- Initialize ---
+        document.addEventListener('DOMContentLoaded', loadProfile);
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            // Logout button functionality is attached here
+            document.getElementById('logout-button').addEventListener('click', async () => {
+                try {
+                    await apiFetch('logout', { method: 'POST' });
+                } catch (error) {
+                    console.error("Logout API failed, but proceeding with client-side clear:", error);
+                } finally {
+                    sessionStorage.clear();
+                    localStorage.removeItem('redirectUrl');
+                    window.location.href = './login.html';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
