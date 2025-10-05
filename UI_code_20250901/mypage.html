@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Portal - TIFI MG LIMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Professional, Dynamic Aesthetic */
+        :root { --color-primary: #3b82f6; /* Blue-500 */ --color-success: #10b981; /* Emerald-500 */ }
+        body { font-family: 'Inter', sans-serif; background-color: #f4f7fa; }
+        .card { 
+            background-color: white; 
+            border-radius: 1rem; 
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+        }
+        .loading-spinner { border: 4px solid rgba(0, 0, 0, 0.1); border-left-color: var(--color-primary); border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .data-list-item { cursor: pointer; transition: background-color 0.15s, border-left 0.15s; border-left: 4px solid transparent; }
+        .data-list-item:hover { background-color: #f9fafb; }
+        .data-list-item.selected { background-color: #eff6ff; border-left-color: var(--color-primary); }
+        .tab-link { cursor: pointer; border-bottom: 3px solid transparent; padding-bottom: 0.5rem; transition: all 0.2s; }
+        .tab-link.active { color: var(--color-primary); border-color: var(--color-primary); font-weight: 700; }
+        .btn-primary { background-color: var(--color-primary); }
+        .btn-primary:hover { background-color: #2563eb; }
+        .status-badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+        .status-Received { background-color: #e0f7fa; color: #00bcd4; }
+        .status-In-Progress { background-color: #fff3e0; color: #ff9800; }
+        .status-Qubit-QC { background-color: #e8f5e9; color: #4caf50; }
+        .status-Sequencing-Done { background-color: #f3e8ff; color: #a855f7; }
+        .status-Completed { background-color: #e8f5e9; color: #388e3c; }
+        .status-Archived { background-color: #e2e8f0; color: #475569; }
+    </style>
+</head>
+<body>
+    <div id="main-app" class="p-8 min-h-screen">
+        <div class="flex justify-between items-center mb-8 border-b pb-4">
+            <div>
+                <h1 class="text-4xl font-extrabold text-gray-900 flex items-center">
+                    <i data-lucide="building-2" class="w-8 h-8 mr-3 text-blue-600"></i>
+                    Customer Portal
+                </h1>
+                <p class="mt-2 text-lg text-gray-600">Welcome, <span id="customer-name-display" class="font-bold text-blue-600"></span>. Your dedicated access to LIMS data.</p>
+            </div>
+            <button id="logout-button" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg flex items-center transition-all duration-200 shadow-md">
+                <i data-lucide="log-out" class="w-5 h-5 mr-2"></i>Logout
+            </button>
+        </div>
+
+        <div class="border-b border-gray-200 mb-6">
+            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                <a data-tab="dashboard" class="tab-link active">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5 mr-2 inline-block"></i>Dashboard & Results
+                </a>
+                <a data-tab="submission" class="tab-link text-gray-500 hover:text-gray-700">
+                    <i data-lucide="file-plus" class="w-5 h-5 mr-2 inline-block"></i>New Sample Submission
+                </a>
+                <a data-tab="reporting" class="tab-link text-gray-500 hover:text-gray-700">
+                    <i data-lucide="file-text" class="w-5 h-5 mr-2 inline-block"></i>Reports & Downloads
+                </a>
+            </nav>
+        </div>
+
+        <!-- ####################################################### -->
+        <!-- TAB 1: DASHBOARD & RESULTS -->
+        <!-- ####################################################### -->
+        <div id="tab-content-dashboard">
+            <div id="data-view-filter" class="card p-4 flex flex-wrap gap-4 mb-6">
+                <label class="font-medium text-gray-700 self-center">Filter Samples by:</label>
+                <select id="project-filter-select" class="p-2 border rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-gray-700">
+                    <option value="">-- All Projects --</option>
+                </select>
+                <select id="status-filter-select" class="p-2 border rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-gray-700">
+                    <option value="">-- All Statuses --</option>
+                </select>
+                <button id="clear-filters-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg flex items-center">
+                    <i data-lucide="rotate-ccw" class="w-4 h-4 mr-2"></i>Clear Filters
+                </button>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                <!-- Samples List -->
+                <div class="card p-6 lg:col-span-3">
+                    <h2 class="text-xl font-extrabold text-gray-800 mb-4 flex items-center">
+                        <i data-lucide="beaker" class="w-5 h-5 mr-2 text-green-600"></i>Your Samples (<span id="sample-count-display">0</span>)
+                    </h2>
+                    <div id="samples-list-container" class="overflow-x-auto max-h-[60vh] overflow-y-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50 sticky top-0">
+                                <tr>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">ID</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">External Name</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Project</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Type</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Status</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-100" id="samples-table-body">
+                                <tr><td colspan="6" class="p-8 text-center text-gray-500"><span class="loading-spinner mr-2"></span>Loading samples...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Results/Details Panel -->
+                <div id="results-panel" class="card p-6 lg:col-span-2">
+                    <h2 class="text-xl font-extrabold text-gray-800 mb-4 flex items-center">
+                        <i data-lucide="bar-chart-2" class="w-5 h-5 mr-2 text-blue-600"></i>Selected Sample Details (<span id="selected-sample-id-display">N/A</span>)
+                    </h2>
+                    <div id="results-content" class="space-y-4 min-h-[50vh]">
+                        <p class="text-gray-500 p-4 text-center">Click a sample on the left to view its associated project, QC data, and final analysis results.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ####################################################### -->
+        <!-- TAB 2: SAMPLE SUBMISSION -->
+        <!-- ####################################################### -->
+        <div id="tab-content-submission" class="hidden">
+            <div class="card p-8 max-w-4xl mx-auto">
+                <h2 class="text-2xl font-extrabold text-gray-800 mb-6 flex items-center">
+                    <i data-lucide="flask-conical" class="w-6 h-6 mr-3 text-green-600"></i>New Root Sample Submission
+                </h2>
+                <form id="sample-submission-form" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Project ID -->
+                        <div>
+                            <label for="project_id" class="block text-sm font-medium text-gray-700">Project ID <span class="text-red-500">*</span></label>
+                            <select id="project_id" name="project_id" required class="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm"></select>
+                            <p class="text-xs text-gray-500 mt-1">Samples will be charged to this project (RLS limited).</p>
+                        </div>
+                        <!-- Sample Type (All Types) -->
+                        <div>
+                            <label for="sample_type_id" class="block text-sm font-medium text-gray-700">Sample Type <span class="text-red-500">*</span></label>
+                            <select id="sample_type_id" name="sample_type_id" required class="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm"></select>
+                            <p class="text-xs text-gray-500 mt-1">Select the top-level biological/environmental source type.</p>
+                        </div>
+                    </div>
+
+                    <!-- External Name -->
+                    <div>
+                        <label for="external_name" class="block text-sm font-medium text-gray-700">External Sample Name/ID (Optional)</label>
+                        <input type="text" id="external_name" name="external_name" placeholder="Your internal ID or name (e.g., SiteA_Cod_001)" class="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm">
+                    </div>
+                    
+                    <!-- Dates -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                         <div>
+                            <label for="sample_creation_date" class="block text-sm font-medium text-gray-700">Collection Date <span class="text-red-500">*</span></label>
+                            <input type="date" id="sample_creation_date" name="sample_creation_date" required class="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm" value="${new Date().toISOString().split('T')[0]}">
+                        </div>
+                        <div>
+                            <label for="reception_date" class="block text-sm font-medium text-gray-700">Expected Reception Date <span class="text-red-500">*</span></label>
+                            <input type="date" id="reception_date" name="reception_date" required class="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm" value="${new Date().toISOString().split('T')[0]}">
+                        </div>
+                    </div>
+                    
+                    <!-- Notes & Storage -->
+                    <div>
+                        <label for="notes" class="block text-sm font-medium text-gray-700">Notes on Conservation / Submission</label>
+                        <textarea id="notes" name="notes" rows="3" placeholder="Specify preservation buffer, temperature, or special handling instructions..." class="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm"></textarea>
+                    </div>
+
+                    <button type="submit" id="submit-sample-btn" class="w-full btn-primary text-white py-3 px-4 rounded-lg font-bold text-lg transition-all duration-200 shadow-lg flex items-center justify-center">
+                        <span id="submit-text"><i data-lucide="check-circle" class="w-5 h-5 mr-2 inline-block"></i>Confirm Submission</span>
+                        <span id="submit-spinner" class="hidden loading-spinner w-5 h-5"></span>
+                    </button>
+
+                    <div id="submission-status-message" class="mt-4 text-center text-sm font-medium"></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ####################################################### -->
+        <!-- TAB 3: REPORTS & DOWNLOADS -->
+        <!-- ####################################################### -->
+        <div id="tab-content-reporting" class="hidden">
+            <div class="card p-8 max-w-5xl mx-auto">
+                <h2 class="text-2xl font-extrabold text-gray-800 mb-6 flex items-center">
+                    <i data-lucide="download-cloud" class="w-6 h-6 mr-3 text-purple-600"></i>Generate Reports & Download Data
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+                    <!-- Project Selector -->
+                    <div>
+                        <label for="report-project-id" class="block text-sm font-medium text-gray-700">1. Select Project</label>
+                        <select id="report-project-id" class="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm">
+                            <option value="">-- All Accessible Projects --</option>
+                        </select>
+                    </div>
+
+                    <!-- Report Type -->
+                    <div>
+                        <label for="report-type" class="block text-sm font-medium text-gray-700">2. Report Type</label>
+                        <select id="report-type" class="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm">
+                            <option value="samples_summary">Samples Summary (QC & Bioinfo)</option>
+                            <option value="qc_report">Molecular QC Raw Data</option>
+                            <option value="sequencing_meta">Sequencing Metadata (FastQ Links)</option>
+                            <option value="full_project_data">Full Raw Data Dump</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Date Range -->
+                    <div class="flex space-x-2">
+                        <div>
+                            <label for="report-start-date" class="block text-sm font-medium text-gray-700">Start Date</label>
+                            <input type="date" id="report-start-date" class="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm">
+                        </div>
+                         <div>
+                            <label for="report-end-date" class="block text-sm font-medium text-gray-700">End Date</label>
+                            <input type="date" id="report-end-date" class="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm">
+                        </div>
+                    </div>
+
+                    <!-- Action Button -->
+                    <div>
+                        <button id="generate-report-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-lg font-bold transition-all duration-200 shadow-md flex items-center justify-center">
+                            <i data-lucide="file-down" class="w-5 h-5 mr-2"></i>Generate & Download
+                        </button>
+                    </div>
+                </div>
+
+                <div id="report-status" class="mt-6 text-center text-sm font-medium"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- AUTH & SETUP ---
+        if (sessionStorage.getItem('isLoggedIn') !== 'true' || sessionStorage.getItem('user_type') !== 'customer') {
+            localStorage.setItem('redirectUrl', window.location.href);
+            window.location.href = './login.html';
+        }
+        
+        const API_BASE_URL = '/mylims/api'; 
+        const customer = JSON.parse(sessionStorage.getItem('user'));
+        let allProjects = []; 
+        let allSamples = []; 
+        let allSampleTypes = [];
+        let allStatuses = [];
+
+        // Helper functions
+        const formatDateForInput = (dateString) => {
+            if (!dateString) return '';
+            try {
+                const date = new Date(dateString);
+                return isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0];
+            } catch (e) { return ''; }
+        };
+        const formatNumeric = (value) => value === null || value === undefined || value === '' ? 'N/A' : parseFloat(value).toFixed(2);
+        const formatBigInt = (value) => value === null || value === undefined || value === '' ? 'N/A' : new Intl.NumberFormat().format(value);
+
+        function showStatus(containerId, message, type = 'info') {
+            const container = document.getElementById(containerId);
+            let icon = '';
+            let color = 'text-gray-700';
+
+            if (type === 'loading') {
+                icon = '<span class="loading-spinner w-5 h-5 mr-2"></span>';
+                color = 'text-blue-600';
+            } else if (type === 'success') {
+                icon = '<i data-lucide="check-circle" class="w-5 h-5 mr-2"></i>';
+                color = 'text-green-600';
+            } else if (type === 'error') {
+                icon = '<i data-lucide="alert-triangle" class="w-5 h-5 mr-2"></i>';
+                color = 'text-red-600';
+            }
+
+            container.innerHTML = `<p class="${color} font-semibold flex items-center justify-center">${icon}${message}</p>`;
+            lucide.createIcons();
+        }
+
+        // --- API FETCH HELPERS ---
+        async function apiFetch(endpoint, method = 'GET', data = null) {
+            try {
+                const options = { method };
+                if (data) {
+                    options.headers = { 'Content-Type': 'application/json' };
+                    options.body = JSON.stringify(data);
+                }
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                
+                if (!response.ok) { 
+                    const errText = await response.text();
+                    try { 
+                        const errJson = JSON.parse(errText); 
+                        throw new Error(errJson.error || 'API request failed'); 
+                    } catch (e) { 
+                        throw new Error(errText || 'API request failed with unknown error'); 
+                    }
+                }
+                if (response.status === 204) return { success: true };
+                return response.json();
+            } catch (error) {
+                console.error(`API Error on ${endpoint}:`, error);
+                return { error: error.message };
+            }
+        }
+
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            document.getElementById('customer-name-display').textContent = customer.customer_name || `ID ${customer.customer_id}`;
+            
+            document.getElementById('logout-button').addEventListener('click', () => { 
+                apiFetch('logout', 'POST'); 
+                sessionStorage.clear(); 
+                window.location.href = './login.html'; 
+            });
+
+            setupTabNavigation();
+            await loadCustomerData();
+            setupFiltersAndReporting();
+            setupSubmissionForm();
+            filterAndRenderSamples(); 
+        });
+
+        function setupTabNavigation() {
+            document.querySelectorAll('[data-tab]').forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    const targetTab = e.currentTarget.dataset.tab;
+                    document.querySelectorAll('[data-tab]').forEach(t => {
+                        t.classList.remove('active');
+                        t.classList.add('text-gray-500');
+                    });
+                    e.currentTarget.classList.add('active');
+                    e.currentTarget.classList.remove('text-gray-500');
+
+                    document.getElementById('tab-content-dashboard').classList.add('hidden');
+                    document.getElementById('tab-content-submission').classList.add('hidden');
+                    document.getElementById('tab-content-reporting').classList.add('hidden');
+                    
+                    document.getElementById(`tab-content-${targetTab}`).classList.remove('hidden');
+                    if(targetTab === 'submission') renderSubmissionFormOptions();
+                    if(targetTab === 'reporting') renderReportingOptions();
+                });
+            });
+        }
+
+        async function loadCustomerData() {
+            showStatus('samples-table-body', 'Fetching data...', 'loading');
+            
+            const [projects, samples, sampleTypes, statuses] = await Promise.all([
+                apiFetch('table/lims/projects?order_by=start_date&order_direction=DESC'),
+                apiFetch('table/lab/root_samples?order_by=reception_date&order_direction=DESC'),
+                apiFetch('table/reference/samples_type'),
+                apiFetch('table/reference/status')
+            ]);
+
+            // Handle potential RLS/transaction errors gracefully
+            if (projects.error || samples.error) {
+                 const errorMsg = projects.error || samples.error;
+                 showStatus('samples-table-body', `Data Error: Check RLS/Backend connection. ${errorMsg}`, 'error');
+                 return;
+            }
+            
+            allProjects = projects; 
+            allSamples = samples; 
+            allSampleTypes = sampleTypes;
+            allStatuses = statuses;
+
+            renderFilterOptions(allProjects, allStatuses);
+        }
+
+        function renderFilterOptions(projects, statuses) {
+            const projectSelect = document.getElementById('project-filter-select');
+            const statusSelect = document.getElementById('status-filter-select');
+            
+            // Projects
+            projectSelect.innerHTML = '<option value="">-- All Projects --</option>';
+            projects.forEach(p => {
+                projectSelect.innerHTML += `<option value="${p.project_id}">${p.title || p.project_id} (${p.project_abrv})</option>`;
+            });
+
+            // Statuses 
+            statusSelect.innerHTML = '<option value="">-- All Statuses --</option>';
+            const relevantStatuses = ['Received', 'In Progress', 'Completed', 'Qubit QC', 'Sequencing Done', 'Bioinformatics Done', 'Archived'];
+            statuses.filter(s => relevantStatuses.includes(s.status_id)).forEach(s => {
+                statusSelect.innerHTML += `<option value="${s.status_id}">${s.status_id}</option>`;
+            });
+        }
+
+        // --- DASHBOARD DATA & RENDERING ---
+        function setupFiltersAndReporting() {
+            document.getElementById('project-filter-select').addEventListener('change', filterAndRenderSamples);
+            document.getElementById('status-filter-select').addEventListener('change', filterAndRenderSamples);
+            document.getElementById('clear-filters-btn').addEventListener('click', () => {
+                document.getElementById('project-filter-select').value = '';
+                document.getElementById('status-filter-select').value = '';
+                filterAndRenderSamples();
+            });
+            document.getElementById('generate-report-btn').addEventListener('click', generateReport);
+        }
+
+        function filterAndRenderSamples() {
+            const selectedProjectId = document.getElementById('project-filter-select').value;
+            const selectedStatusId = document.getElementById('status-filter-select').value;
+            
+            let filteredSamples = allSamples;
+
+            if (selectedProjectId) {
+                filteredSamples = filteredSamples.filter(s => s.project_id === selectedProjectId);
+            }
+            if (selectedStatusId) {
+                filteredSamples = filteredSamples.filter(s => s.status_id === selectedStatusId);
+            }
+            
+            const container = document.getElementById('samples-table-body');
+            document.getElementById('sample-count-display').textContent = filteredSamples.length;
+            container.innerHTML = '';
+
+            if (filteredSamples.length === 0) {
+                container.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-gray-500">No samples found matching your criteria.</td></tr>`;
+                return;
+            }
+
+            filteredSamples.forEach(s => {
+                const project = allProjects.find(p => p.project_id === s.project_id);
+                container.innerHTML += `
+                    <tr class="data-list-item" 
+                        data-sample-id="${s.sample_id}" 
+                        data-creation-date="${formatDateForInput(s.sample_creation_date)}">
+                        <td class="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">${s.sample_id}</td>
+                        <td class="px-4 py-2 text-sm text-gray-700 truncate max-w-xs">${s.external_name || 'N/A'}</td>
+                        <td class="px-4 py-2 text-sm text-gray-500">${project ? project.project_abrv : 'N/A'}</td>
+                        <td class="px-4 py-2 text-sm text-gray-500">${s.sample_type_id}</td>
+                        <td class="px-4 py-2 text-sm"><span class="status-badge status-${(s.status_id || 'Received').replace(/\s/g, '-')}">${s.status_id || 'Received'}</span></td>
+                        <td class="px-4 py-2 text-sm text-gray-500">${formatDateForInput(s.reception_date)}</td>
+                    </tr>
+                `;
+            });
+            
+            document.querySelectorAll('#samples-table-body tr').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    document.querySelectorAll('#samples-table-body tr').forEach(r => r.classList.remove('selected'));
+                    e.currentTarget.classList.add('selected');
+                    const sampleId = e.currentTarget.dataset.sampleId;
+                    const creationDate = e.currentTarget.dataset.creationDate;
+                    showSampleResults(sampleId, creationDate);
+                });
+            });
+        }
+
+        async function showSampleResults(sampleId, creationDate) {
+            document.getElementById('selected-sample-id-display').textContent = sampleId;
+            showStatus('results-content', `Loading results for ${sampleId}...`, 'loading');
+            
+            const endpoint = `table/lab/global_lims_view?filter_sample_id=${sampleId}&filter_sample_creation_date=${creationDate}`;
+            const result = await apiFetch(endpoint);
+
+            if (result.error || result.length === 0) {
+                showStatus('results-content', `No detailed results found for ${sampleId}. Error: ${result.error || 'N/A'}`, 'error');
+                return;
+            }
+
+            const data = result[0];
+            
+            document.getElementById('results-content').innerHTML = `
+                <div class="space-y-4">
+                    <!-- Progress Section -->
+                    <div class="space-y-2 border-l-4 border-blue-600 pl-4 py-2 bg-blue-50 rounded-lg">
+                        <p class="text-sm"><strong>External Name:</strong> ${data.external_name || 'N/A'}</p>
+                        <p class="text-sm"><strong>Current Status:</strong> <span class="font-bold text-blue-800">${data.sample_status}</span></p>
+                        <p class="text-sm"><strong>Storage:</strong> ${data.freezer || 'N/A'} (${data.storage_position || 'N/A'})</p>
+                    </div>
+
+                    <!-- QC & Extraction -->
+                    <div class="p-4 border rounded-lg">
+                        <h3 class="font-bold text-lg text-gray-800 mb-2 flex items-center"><i data-lucide="flask-conical" class="w-5 h-5 mr-2 text-purple-600"></i>Molecular QC & Extraction</h3>
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                            <p><strong>DNA Conc (Qubit):</strong> ${formatNumeric(data.qubit_original_sample_conc)} ng/ul</p>
+                            <p><strong>RNA Conc:</strong> ${formatNumeric(data.rna_concentration)} ng/ul</p>
+                            <p><strong>A260/280 (DNA):</strong> ${formatNumeric(data.dna_a260_280)}</p>
+                            <p><strong>Extraction Date:</strong> ${formatDate(data.extraction_date) || 'N/A'}</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Sequencing & Bioinfo Results -->
+                    <div class="p-4 border rounded-lg">
+                        <h3 class="font-bold text-lg text-gray-800 mb-2 flex items-center"><i data-lucide="dna" class="w-5 h-5 mr-2 text-red-600"></i>Sequencing & Bioinformatics</h3>
+                        ${data.sequencing_run_id ? `
+                            <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                                <p><strong>Sequencing Run:</strong> ${data.sequencing_run_id}</p>
+                                <p><strong>Total Reads:</strong> ${formatBigInt(data.total_reads)}</p>
+                                <p><strong>Sequencer:</strong> ${data.sequencer || 'N/A'}</p>
+                                <p><strong>Raw Data Path:</strong> <a href="${data.raw_data_path}" target="_blank" class="text-blue-500 hover:underline">Download Link</a></p>
+                            </div>
+                        ` : '<p class="text-sm text-gray-500">No sequencing data available yet.</p>'}
+                        
+                        ${data.analysis_run_id ? `
+                            <h4 class="font-semibold text-gray-700 mt-3 border-t pt-2">Final Assignment:</h4>
+                            <p class="text-sm"><strong>Assigned Taxon:</strong> <span class="font-bold text-green-700">${data.assigned_taxon_name || 'N/A'}</span></p>
+                            <p class="text-sm"><strong>Confidence:</strong> ${formatNumeric(data.confidence)} (Pipeline: ${data.pipeline_name})</p>
+                        ` : '<p class="text-sm text-gray-500 mt-3">No final analysis results available yet.</p>'}
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        // --- SAMPLE SUBMISSION FUNCTIONS ---
+        function renderSubmissionFormOptions() {
+            const projectSelect = document.getElementById('project_id');
+            const sampleTypeSelect = document.getElementById('sample_type_id');
+
+            projectSelect.innerHTML = '<option value="" disabled selected>-- Select Your Project --</option>';
+            if (allProjects.length === 0) {
+                projectSelect.innerHTML = '<option value="" disabled selected>No linked projects found! Contact LIMS Staff.</option>';
+                document.getElementById('submit-sample-btn').disabled = true;
+            } else {
+                document.getElementById('submit-sample-btn').disabled = false;
+                allProjects.forEach(p => {
+                    projectSelect.innerHTML += `<option value="${p.project_id}">${p.title} (${p.project_abrv})</option>`;
+                });
+            }
+
+            // --- START OF SAMPLE TYPE MODIFICATION ---
+            sampleTypeSelect.innerHTML = '<option value="" disabled selected>-- Select Sample Type --</option>';
+            // REMOVED FILTER: .filter(s => s.rank && s.rank.toLowerCase() === 'primary')
+            allSampleTypes.forEach(s => { 
+                // Display full ID/Name + Abbreviation
+                sampleTypeSelect.innerHTML += `<option value="${s.sample_type_id}">${s.sample_type_id} (${s.sample_type_abrv})</option>`;
+            });
+            // --- END OF SAMPLE TYPE MODIFICATION ---
+            
+            lucide.createIcons();
+        }
+        
+        function setupSubmissionForm() {
+            document.getElementById('sample-submission-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const submitBtn = document.getElementById('submit-sample-btn');
+                submitBtn.disabled = true;
+                showStatus('submission-status-message', 'Processing submission...', 'loading');
+
+                const formData = {
+                    customer_id: customer.customer_id, 
+                    project_id: e.target.project_id.value,
+                    sample_type_id: e.target.sample_type_id.value,
+                    external_name: e.target.external_name.value || null,
+                    sample_creation_date: e.target.sample_creation_date.value,
+                    reception_date: e.target.reception_date.value,
+                    notes: e.target.notes.value || null,
+                    sampler_person_id: 'Customer-Sub', 
+                    receiver_person_id: 'john.smith', 
+                    status_id: 'Received' 
+                };
+                
+                const result = await apiFetch('table/lab/root_samples', 'POST', formData);
+                
+                submitBtn.disabled = false;
+
+                if (result && !result.error) {
+                    showStatus('submission-status-message', `Sample submitted! Generated ID: ${result.sample_id}`, 'success');
+                    e.target.reset();
+                    document.getElementById('sample_creation_date').value = formatDateForInput(new Date().toISOString());
+                    document.getElementById('reception_date').value = formatDateForInput(new Date().toISOString());
+
+                    // Reload data, switch to dashboard, and focus on the new sample
+                    await loadCustomerData();
+                    document.querySelector('[data-tab="dashboard"]').click(); 
+                    filterAndRenderSamples();
+                } else {
+                    showStatus('submission-status-message', `Submission failed. Error: ${result.error || 'Unknown Error'}`, 'error');
+                }
+            });
+        }
+        
+        // --- REPORTING FUNCTIONS ---
+        function renderReportingOptions() {
+            const reportProjectSelect = document.getElementById('report-project-id');
+            reportProjectSelect.innerHTML = '<option value="">-- All Accessible Projects --</option>';
+             allProjects.forEach(p => {
+                reportProjectSelect.innerHTML += `<option value="${p.project_id}">${p.title} (${p.project_abrv})</option>`;
+            });
+            document.getElementById('generate-report-btn').disabled = false;
+            document.getElementById('report-status').innerHTML = 'Select your report options above.';
+        }
+        
+        async function generateReport() {
+            const projectId = document.getElementById('report-project-id').value;
+            const reportType = document.getElementById('report-type').value;
+            const startDate = document.getElementById('report-start-date').value;
+            const endDate = document.getElementById('report-end-date').value;
+            const statusDiv = document.getElementById('report-status');
+            const downloadBtn = document.getElementById('generate-report-btn');
+
+            downloadBtn.disabled = true;
+            showStatus('report-status', 'Generating report...', 'loading');
+
+            let endpoint;
+            let filterParam = projectId ? `filter_project_id=${projectId}` : '';
+            if (startDate) filterParam += `&filter_reception_date_start=${startDate}`;
+            if (endDate) filterParam += `&filter_reception_date_end=${endDate}`;
+            let reportTitle = '';
+
+            switch (reportType) {
+                case 'samples_summary':
+                    endpoint = `table/lab/global_lims_view?${filterParam}`;
+                    reportTitle = `Samples_Summary_${projectId || 'All'}`;
+                    break;
+                case 'qc_report':
+                    endpoint = `table/lab/nanodrop?${filterParam}&filter_nanodrop_id_is_not_null=true`;
+                    reportTitle = `QC_Raw_${projectId || 'All'}`;
+                    break;
+                case 'sequencing_meta':
+                    endpoint = `table/lab/full_sequencing_run_view?${filterParam}`;
+                    reportTitle = `Sequencing_Meta_${projectId || 'All'}`;
+                    break;
+                 case 'full_project_data':
+                    endpoint = `table/lab/root_samples?${filterParam}`; // Base table, linked items can be queried separately if needed.
+                    reportTitle = `Full_Project_Data_${projectId || 'All'}`;
+                    break;
+                default:
+                    showStatus('report-status', 'Invalid report type selected.', 'error');
+                    downloadBtn.disabled = false;
+                    return;
+            }
+
+            const data = await apiFetch(endpoint);
+
+            if (data.error) {
+                showStatus('report-status', `Failed to fetch data for report. Error: ${data.error}`, 'error');
+                downloadBtn.disabled = false;
+                return;
+            }
+
+            if (data.length === 0) {
+                 showStatus('report-status', 'No data found for the selected filter criteria.', 'info');
+                 downloadBtn.disabled = false;
+                 return;
+            }
+            
+            // Clean/filter data for sensitive fields before CSV export
+            let filteredData = data.map(row => {
+                const newRow = {};
+                for (const key in row) {
+                    if (key.includes('password') || key.includes('hash') || key.includes('vector') || key.includes('attachment') || key.includes('geom') || key.includes('private')) continue;
+                    newRow[key] = row[key];
+                }
+                return newRow;
+            });
+            
+            const csv = PapaParse.unparse(filteredData);
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${reportTitle}_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+
+            showStatus('report-status', `Report "${reportTitle}" downloaded successfully!`, 'success');
+            downloadBtn.disabled = false;
+            lucide.createIcons();
+        }
+    </script>
+</body>
+</html>

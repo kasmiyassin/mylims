@@ -159,12 +159,11 @@ def before_request_func():
     The 'kasmi' user is a superuser and bypasses RLS policies.
     """
     g.db_conn = get_db_connection()
-    person_id_to_set = session.get('user_id', '')
+    person_id_to_set = str(session.get('user_id', '')) # Ensure it's a string for consistency
 
     try:
         with g.db_conn.cursor() as cur:
             # Set the RLS context for the current user.
-            # RLS policies will be bypassed automatically for the superuser 'kasmi'.
             cur.execute("SELECT set_config('lims.current_person_id', %s, FALSE)", (person_id_to_set,))
             g.db_conn.commit()
             print(f"RLS: Set lims.current_person_id to '{person_id_to_set}'")
@@ -296,6 +295,7 @@ def _get_column_types(conn, schema: str, table: str) -> Dict[str, str]:
 def login_user():
     """
     Handles user login across different user tables, including special cases for superadmins.
+    FIX: Ensures customer_id is stored as a string in the session for RLS consistency.
     """
     data = request.get_json()
     username = data.get('username')
@@ -341,7 +341,8 @@ def login_user():
 
             if user_customer and user_customer.get('password_hash'):
                 if bcrypt.checkpw(password.encode('utf-8'), user_customer['password_hash'].encode('utf-8')):
-                    session['user_id'] = user_customer['customer_id']
+                    # FIX: Convert customer_id (INT) to STRING for RLS context consistency
+                    session['user_id'] = str(user_customer['customer_id']) 
                     session['user_type'] = 'customer'
                     session['is_admin'] = False
                     user_customer.pop('password_hash', None)
@@ -697,8 +698,12 @@ def get_table_data(schema: str, table: str):
                 params.append(exclude_status_id_value)
         if filter_status_id_value:
             if 'status_id' in _get_column_types(conn, actual_schema, actual_table):
-                where_clauses.append(f'"{actual_table}"."status_id" = %s')
-                params.append(filter_status_id_value)
+                # Handle comma-separated list of statuses
+                status_list = [s.strip() for s in filter_status_id_value.split(',') if s.strip()]
+                if status_list:
+                    placeholders = ', '.join(['%s'] * len(status_list))
+                    where_clauses.append(f'"{actual_table}"."status_id" IN ({placeholders})')
+                    params.extend(status_list)
 
         order_by_column: Optional[str] = None
         order_direction: str = 'ASC'
@@ -855,8 +860,13 @@ def create_record(schema: str, table: str):
                 filtered_data[k] = None
             elif v == '':
                 filtered_data[k] = None
-            elif k.endswith('_id') and str(v).lower() == 'undefined':
+            elif k.endswith('_id') and (str(v).lower() == 'undefined' or str(v).lower() == 'null'):
                 filtered_data[k] = None
+            elif k.endswith('_id') and column_types.get(k) == 'integer' and v is not None:
+                 try:
+                     filtered_data[k] = int(v)
+                 except ValueError:
+                     filtered_data[k] = None # Cast ID strings to int for integer FKs
             elif column_types.get(k) == 'jsonb' and isinstance(v, str):
                 try:
                     filtered_data[k] = json.loads(v)
