@@ -28,6 +28,8 @@ app.secret_key = SECRET_KEY
 CORS(app, supports_credentials=True)
 
 # --- Primary Key Mapping ---
+# IMPORTANT: This list has been updated to include all tables from MyLims_v4.sql, 
+# especially the new booking tables: lims.bookable_resource and lims.booking.
 PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     ('reference', 'status'): 'status_id',
     ('reference', 'room'): 'room_id',
@@ -45,7 +47,6 @@ PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     ('lims', 'customers'): 'customer_id',
     ('lims', 'projects'): 'project_id',
     ('lims', 'project_persons'): ['project_id', 'person_id'],
-    ('lab', 'storage'): 'storage_id',
     ('lims', 'cruises'): 'cruise_id',
     ('lims', 'sop'): 'sop_id',
     ('lims', 'batch'): 'batch_id',
@@ -60,6 +61,10 @@ PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     ('lims', 'reagents'): 'reagent_id',
     ('lims', 'publication_type'): 'publication_type_id',
     ('lims', 'publications'): 'publication_id',
+    ('lims', 'bookable_resource'): 'resource_id',
+    ('lims', 'booking'): 'booking_id',
+    
+    ('lab', 'storage'): 'storage_id',
     ('lab', 'experiments'): ['experiment_id', 'experiment_date'],
     ('lab', 'experiments_projects'): ['experiment_id', 'project_id', 'experiment_date'],
     ('lab', 'experiments_samples'): ['experiment_id', 'experiment_date', 'sample_id', 'sample_creation_date'],
@@ -89,16 +94,17 @@ PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     ('lab', 'sequencing_run'): ['sequencing_run_id', 'creation_date'],
     ('lab', 'seq_dataset'): ['data_seq_id', 'creation_date'],
     ('lab', 'datasets'): ['dataset_id', 'reception_date'],
+    
     ('bioinformatics', 'analysis_pipelines'): 'pipeline_id',
     ('bioinformatics', 'analysis_runs'): ['run_id', 'creation_date'],
     ('bioinformatics', 'edna_assignments'): ['assignment_id', 'creation_date'],
+    
     ('projects', 'projectwanderfische_fishingdata'): ['fishing_record_id', 'record_date'],
     ('projects', 'projectwanderfische_fishcatch'): 'fish_catch_id',
     ('projects', 'projectwanderfische_mail'): 'mail_id',
     ('projects', 'projectwanderfische_conversation'): 'conversation_id',
     ('projects', 'projectwanderfische_chatmessage'): 'message_id',
-    ('lims', 'bookable_resource'): 'resource_id',
-    ('lims', 'booking'): 'booking_id',
+    
     ('audit', 'log'): 'id',
 
     # Views
@@ -112,12 +118,12 @@ PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     ('lab', 'full_sampling_data_view'): ['sampling_id', 'sampling_date'],
     ('bioinformatics', 'analysis_results_view'): 'run_id',
     ('lims', 'publications_by_project_view'): 'project_id',
-    ('lims', 'project_comprehensive_summary_view'): 'lims.projects',
-    ('lab', 'experiment_progress_overview_view'): 'lab.experiments',
-    ('lims', 'reagent_status_view'): 'lims.reagents',
-    ('lab', 'storage_log_history_view'): 'lab.storage_log',
-    ('bioinformatics', 'analysis_results_summary_view'): 'bioinformatics.analysis_runs',
-    ('lab', 'full_sequencing_run_view'): 'lab.sequencing_run',
+    ('lims', 'project_comprehensive_summary_view'): 'project_id',
+    ('lab', 'experiment_progress_overview_view'): 'experiment_id',
+    ('lims', 'reagent_status_view'): 'reagent_id',
+    ('lab', 'storage_log_history_view'): 'log_id',
+    ('bioinformatics', 'analysis_results_summary_view'): 'run_id',
+    ('lab', 'full_sequencing_run_view'): 'sequencing_run_id',
     ('lab', 'global_lims_view'): ['sample_id', 'sample_creation_date'],
     ('lab', 'monthly_sample_reception_mv'): ['reception_month', 'sample_type_id'],
 }
@@ -418,8 +424,8 @@ def global_search(search_term: str):
             (search_pattern, search_pattern, search_pattern)
         ),
         "reagents": (
-            'SELECT reagent_id, reagent_complete_name, lot FROM "lims"."reagents" WHERE "reagent_id" ILIKE %s OR "reagent_complete_name" ILIKE %s OR "lot" ILIKE %s LIMIT 5',
-            (search_pattern, search_pattern, search_pattern)
+            'SELECT reagent_id, reagent_complete_name, lot FROM "lims"."reagents" WHERE "reagent_search_vector" @@ {ts_query_func} OR "reagent_id" ILIKE %s OR "reagent_complete_name" ILIKE %s OR "lot" ILIKE %s LIMIT 5',
+            (search_term, search_pattern, search_pattern, search_pattern)
         ),
         "personal": (
             'SELECT person_id, full_name FROM "lims"."personal" WHERE "person_id" ILIKE %s OR "full_name" ILIKE %s LIMIT 5',
@@ -786,7 +792,7 @@ def get_table_data(schema: str, table: str):
                     filter_samp_create_date_obj = parse_date_filter(filter_sample_creation_date_value)
                     where_clauses.append(f'"{actual_table}"."sample_creation_date" = %s')
                     params.append(filter_samp_create_date_obj)
-            elif actual_schema.lower() == 'lab' and actual_table.lower() in ['fish', 'tissue', 'otoliths', 'dna', 'rna', 'sediments', 'water', 'experiments_samples', 'dissections', 'nanodrop', 'qubit', 'tapestation', 'gelelectrophoresis', 'pcr', 'qpcr', 'library', 'sequencing_run', 'seq_dataset', 'datasets', 'storage_log']:
+            elif actual_schema.lower() == 'lab' and actual_table.lower() in ['fish', 'tissue', 'otoliths', 'dna', 'rna', 'sediments', 'water', 'experiments_samples', 'dissections', 'nanodrop', 'qubit', 'tapestation', 'gelelectrophoresis', 'pcr', 'qpcr', 'library', 'sequencing_run', 'seq_dataset', 'datasets', 'storage_log', 'reservation_samples']:
                 where_clauses.append(f'"{actual_table}"."sample_id" ILIKE %s')
                 params.append(f'%{filter_sample_id_value}%')
                 if filter_sample_creation_date_value:
@@ -808,7 +814,7 @@ def get_table_data(schema: str, table: str):
                 params.append(f'%{filter_sampling_id_value}%')
                 where_clauses.append(f'"{actual_table}"."sampling_date" = %s')
                 params.append(filter_samp_date_obj)
-            elif actual_schema.lower() == 'lab' and actual_table.lower() in ['root_samples', 'fishing', 'individual_catch_catch', 'sampling_abiotic_data']:
+            elif actual_schema.lower() == 'lab' and actual_table.lower() in ['root_samples', 'fishing', 'individual_catch_catch', 'sampling_abiotic_data', 'reservation_samples']:
                 where_clauses.append(f'"{actual_table}"."sampling_id" ILIKE %s')
                 params.append(f'%{filter_sampling_id_value}%')
                 where_clauses.append(f'"{actual_table}"."sampling_date" = %s')
@@ -850,7 +856,7 @@ def get_table_data(schema: str, table: str):
                        'filter_sample_id', 'filter_sample_creation_date', 'filter_sampling_id',
                        'filter_sampling_date', 'filter_protocol_id', 'exclude_status_id', 
                        'filter_status_id', 'filter_associated_experiment_id', 'filter_associated_experiment_date',
-                       'filter_planned_collection_date_ge', 'filter_start_time_start', 'filter_end_time_end']: # ADDED ALL FILTERS
+                       'filter_planned_collection_date_ge', 'filter_start_time_start', 'filter_end_time_end']: # Added all filters
                 continue
 
             if key == 'limit':
