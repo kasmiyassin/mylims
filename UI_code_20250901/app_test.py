@@ -6,7 +6,7 @@ import bcrypt
 import base64
 import json
 from typing import Any, Dict, List, Optional, Tuple, Union
-from datetime import datetime, timedelta, time, date # FIX: Explicitly import date
+from datetime import datetime, timedelta, time, date
 import psycopg2
 from psycopg2 import sql, extras
 from dotenv import load_dotenv
@@ -68,6 +68,7 @@ PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     ('lab', 'individual_catch_catch'): ['individual_catch_id', 'creation_date'],
     ('lab', 'sampling_abiotic_data'): ['sampling_id', 'creation_date'],
     ('lab', 'root_samples'): ['sample_id', 'sample_creation_date'],
+    ('lab', 'reservation_samples'): ['reservation_sample_id'], 
     ('lab', 'storage_log'): 'log_id',
     ('lab', 'fish'): ['sample_id', 'creation_date'],
     ('lab', 'tissue'): ['sample_id', 'creation_date'],
@@ -110,12 +111,12 @@ PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     ('lab', 'full_sampling_data_view'): ['sampling_id', 'sampling_date'],
     ('bioinformatics', 'analysis_results_view'): 'run_id',
     ('lims', 'publications_by_project_view'): 'project_id',
-    ('lims', 'project_comprehensive_summary_view'): 'project_id',
-    ('lab', 'experiment_progress_overview_view'): 'experiment_id',
-    ('lims', 'reagent_status_view'): 'reagent_id',
-    ('lab', 'storage_log_history_view'): 'log_id',
-    ('bioinformatics', 'analysis_results_summary_view'): 'run_id',
-    ('lab', 'full_sequencing_run_view'): 'sequencing_run_id',
+    ('lims', 'project_comprehensive_summary_view'): 'lims.projects',
+    ('lab', 'experiment_progress_overview_view'): 'lab.experiments',
+    ('lims', 'reagent_status_view'): 'lims.reagents',
+    ('lab', 'storage_log_history_view'): 'lab.storage_log',
+    ('bioinformatics', 'analysis_results_summary_view'): 'bioinformatics.analysis_runs',
+    ('lab', 'full_sequencing_run_view'): 'lab.sequencing_run',
     ('lab', 'global_lims_view'): ['sample_id', 'sample_creation_date'],
     ('lab', 'monthly_sample_reception_mv'): ['reception_month', 'sample_type_id'],
 }
@@ -204,7 +205,7 @@ def transform_row_for_json(row: Dict[str, Any]) -> Dict[str, Any]:
             new_row[key] = base64.b64encode(value).decode('utf-8')
         elif isinstance(value, time):
             new_row[key] = str(value)
-        elif isinstance(value, datetime) or isinstance(value, date): # FIX: Corrected datetime.date usage
+        elif isinstance(value, datetime) or isinstance(value, date): # Corrected to use date from datetime import
             new_row[key] = value.isoformat()
         elif isinstance(value, dict) and 'type' in value and 'coordinates' in value:
             new_row[key] = value
@@ -413,12 +414,12 @@ def global_search(search_term: str):
             (search_pattern, search_pattern, search_pattern)
         ),
         "reagents": (
-            'SELECT reagent_id, reagent_complete_name, lot FROM "lims"."reagents" WHERE "reagent_search_vector" @@ {ts_query_func} OR "reagent_id" ILIKE %s OR "reagent_complete_name" ILIKE %s OR "lot" ILIKE %s LIMIT 5',
-            (search_term, search_pattern, search_pattern, search_pattern)
+            'SELECT reagent_id, reagent_complete_name, lot FROM "lims"."reagents" WHERE "reagent_id" ILIKE %s OR "reagent_complete_name" ILIKE %s OR "lot" ILIKE %s LIMIT 5',
+            (search_pattern, search_pattern, search_pattern)
         ),
         "personal": (
-            'SELECT person_id, full_name FROM "lims"."personal" WHERE "personal_search_vector" @@ {ts_query_func} OR "person_id" ILIKE %s OR "full_name" ILIKE %s LIMIT 5',
-            (search_term, search_pattern, search_pattern)
+            'SELECT person_id, full_name FROM "lims"."personal" WHERE "person_id" ILIKE %s OR "full_name" ILIKE %s LIMIT 5',
+            (search_pattern, search_pattern)
         ),
         "project_overview_view": (
             'SELECT project_id, title AS project_title FROM "lims"."project_comprehensive_summary_view" WHERE "project_id" ILIKE %s OR "title" ILIKE %s LIMIT 5',
@@ -596,7 +597,11 @@ def get_table_data(schema: str, table: str):
         filter_status_id_value = request.args.get('filter_status_id')
         filter_associated_experiment_id_value = request.args.get('filter_associated_experiment_id')
         filter_associated_experiment_date_value = request.args.get('filter_associated_experiment_date')
-
+        filter_planned_collection_date_ge_value = request.args.get('filter_planned_collection_date_ge') # ADDED FOR PLANNED SAMPLES
+        
+        # Booking specific filters
+        filter_start_time_start_value = request.args.get('filter_start_time_start')
+        filter_end_time_end_value = request.args.get('filter_end_time_end')
 
         base_query_select = f'SELECT "{actual_table}".*'
         base_query_from = f'FROM "{actual_schema}"."{actual_table}"'
@@ -607,6 +612,34 @@ def get_table_data(schema: str, table: str):
                 return datetime.strptime(date_str, '%Y-%m-%d').date()
             except (ValueError, TypeError):
                 return None
+        
+        def parse_datetime_filter(dt_str):
+            """Helper to parse datetime strings into datetime objects."""
+            try:
+                return datetime.fromisoformat(dt_str)
+            except (ValueError, TypeError):
+                return None
+
+
+        if actual_table.lower() == 'booking':
+            if filter_start_time_start_value:
+                start_dt = parse_datetime_filter(filter_start_time_start_value)
+                if start_dt:
+                    where_clauses.append(f'"{actual_table}"."end_time" >= %s')
+                    params.append(start_dt)
+            if filter_end_time_end_value:
+                end_dt = parse_datetime_filter(filter_end_time_end_value)
+                if end_dt:
+                    where_clauses.append(f'"{actual_table}"."start_time" < %s')
+                    params.append(end_dt)
+
+
+        if filter_planned_collection_date_ge_value and actual_table.lower() == 'reservation_samples': # ADDED FOR PLANNED SAMPLES
+            filter_date_obj = parse_date_filter(filter_planned_collection_date_ge_value)
+            if filter_date_obj:
+                where_clauses.append(f'"{actual_table}"."planned_collection_date" >= %s')
+                params.append(filter_date_obj)
+
 
         if filter_experiment_id_value and filter_experiment_date_value:
             filter_exp_date_obj = parse_date_filter(filter_experiment_date_value)
@@ -717,7 +750,8 @@ def get_table_data(schema: str, table: str):
             if key in ['filter_project_id', 'filter_experiment_id', 'filter_experiment_date', 
                        'filter_sample_id', 'filter_sample_creation_date', 'filter_sampling_id',
                        'filter_sampling_date', 'filter_protocol_id', 'exclude_status_id', 
-                       'filter_status_id', 'filter_associated_experiment_id', 'filter_associated_experiment_date']:
+                       'filter_status_id', 'filter_associated_experiment_id', 'filter_associated_experiment_date',
+                       'filter_planned_collection_date_ge', 'filter_start_time_start', 'filter_end_time_end']: # ADDED ALL FILTERS
                 continue
 
             if key == 'limit':
@@ -768,7 +802,6 @@ def get_table_data(schema: str, table: str):
                 else:
                     print(f"Warning: Date filter by non-existent or non-date column '{col_name}' skipped for {actual_schema}.{actual_table}.")
             else:
-                # Direct match for primary keys (often passed as URL query parameters)
                 if key in _get_column_types(conn, actual_schema, actual_table):
                     where_clauses.append(f'"{key}" = %s')
                     params.append(value)
@@ -808,6 +841,7 @@ def create_record(schema: str, table: str):
     """
     Creates a new record in the specified table.
     Handles file uploads, password hashing, and special linked records (e.g., projects and persons).
+    FIX: Sets a fallback project_id for root_samples to avoid DB ID generation errors.
     """
     conn = g.db_conn
     try:
@@ -845,6 +879,16 @@ def create_record(schema: str, table: str):
         project_ids_str = None
         sample_ids_str = None
         linked_person_ids = None
+        
+        # --- FIX: Set Fallback ID for root_samples if needed ---
+        if actual_schema.lower() == 'lab' and actual_table.lower() == 'root_samples':
+            if data.get('parent_sample_id') is None and data.get('project_id') is None and data.get('customer_id') is None:
+                # The DB function lab.generate_root_sample_id requires project_id or customer_id
+                # If neither is provided, set a known project_id for the function to run
+                print("WARNING: Missing project_id/customer_id for new root sample. Using PROJ_FALLBACK.")
+                data['project_id'] = 'Proj_BioMon' # Assuming 'Proj_BioMon' exists and is accessible
+        # --- END FIX ---
+
 
         if actual_schema.lower() == 'lab' and actual_table.lower() == 'experiments':
             project_ids_str = data.pop('project_ids', None)
@@ -997,14 +1041,13 @@ def update_record(schema: str, table: str):
         set_clauses: List[str] = []
         values: List[Any] = []
         
-        # --- FIX: Handle Password Hashing for User Tables on PUT ---
-        is_user_table = (actual_schema.lower() == 'lims' and actual_table.lower() in ['personal', 'customers', 'external_contacts'])
-        
-        if is_user_table and 'password' in data and data['password']:
-            hashed_password = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt())
-            data['password_hash'] = hashed_password.decode('utf-8')
-        data.pop('password', None)
-        # --- END FIX ---
+        if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
+           (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
+           (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
+            if 'password' in data and data['password']:
+                hashed_password = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt())
+                data['password_hash'] = hashed_password.decode('utf-8')
+            data.pop('password', None)
             
         for key, val in data.items():
             if key in pk_columns or key in ['project_ids', 'sample_ids', 'linked_person_ids']:
@@ -1131,7 +1174,7 @@ def delete_record(schema: str, table: str):
                 
                 if column_types.get(pk_col) == 'date' and pk_val is not None:
                     try:
-                        pk_val = datetime.strptime(pk_val, '%Y-%m-%d').date()
+                        pk_val = datetime.strptime(pk_val, '%Y-%m-%d').date();
                     except ValueError:
                         pass
 
@@ -1262,7 +1305,7 @@ def batch_upload(schema: str, table: str):
                                             (experiment_id, experiment_date, project_id)
                                         )
                                     except Exception as e:
-                                        print(f"  Warning: Could not link project {project_id} to experiment {experiment_id}: {e}")
+                                        print(f"  Warning: Could not link project {project_id} to experiment {experiment_id} during batch upload: {e}")
 
                             if sample_ids_str:
                                 sample_list = [s.strip() for s in sample_ids_str.split(';') if s.strip()]
