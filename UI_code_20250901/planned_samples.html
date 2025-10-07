@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Planned Samples - LIMS</title>
+    <title>Planned Samples - TIFI MG LIMS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparser.min.js"></script>
     <style>
         /* Base styles */
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
@@ -27,6 +27,9 @@
         .accordion-header { background-color: #f1f5f9; padding: 0.75rem 1rem; cursor: pointer; width: 100%; text-align: left; display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: #475569; }
         .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, padding 0.3s ease-out; padding: 0 1rem; background-color: white; border-top: 1px solid #e2e8f0; }
         .accordion-content.open { max-height: 700px; padding: 1rem; }
+
+        .loading-spinner { border: 2px solid rgba(255, 255, 255, 0.5); border-top-color: #fff; border-radius: 50%; width: 1.25rem; height: 1.25rem; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -34,7 +37,7 @@
         <!-- Sidebar -->
         <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col z-20">
             <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0">
-                <i data-lucide="flask-conical" class="inline-block mr-2 text-blue-600"></i><span>TIFI LIMS</span>
+                <i data-lucide="flask-conical" class="inline-block mr-2 text-blue-600"></i><span>TIFI MG</span>
             </div>
             <nav class="flex-grow space-y-2">
                 <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
@@ -79,19 +82,22 @@
             <div class="border-b border-gray-200 mb-6">
                 <nav class="-mb-px flex space-x-8" aria-label="Tabs">
                     <a id="tab-reservations" class="tab-link whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active">
-                        All Reservations
+                        All Reservations (Upcoming)
                     </a>
                 </nav>
             </div>
 
             <div id="content-reservations" class="grid grid-cols-1 lg:grid-cols-5 gap-8 mt-6">
                 <div class="lg:col-span-3">
-                    <div class="card p-4 h-[70vh]"> <div class="overflow-y-auto h-full relative">
-                            <table class="min-w-full table-auto">
+                    <div class="card p-4 h-[70vh]">
+                        <div class="overflow-y-auto h-full relative">
+                            <table class="min-w-full table-auto divide-y divide-gray-200">
                                 <thead class="bg-gray-100 sticky top-0 z-10 shadow-sm">
                                     <tr id="table-headers"></tr>
                                 </thead>
-                                <tbody id="dynamic-table-body" class="divide-y divide-gray-200"></tbody>
+                                <tbody id="dynamic-table-body" class="divide-y divide-gray-200">
+                                    <tr><td colspan="6" class="text-center p-4 text-gray-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Loading data...</td></tr>
+                                </tbody>
                             </table>
                         </div>
                     </div>
@@ -121,6 +127,8 @@
         
         const API_BASE_URL = '/mylims/api'; 
         const TARGET_TABLE = 'lab.reservation_samples';
+        const [TARGET_SCHEMA, TARGET_TABLE_NAME] = TARGET_TABLE.split('.');
+        
         let masterCache = {}; 
         let currentTableData = []; 
         let currentTableSchema = []; 
@@ -133,7 +141,7 @@
             const user = JSON.parse(sessionStorage.getItem('user'));
             if (user) {
                 let userName = user.full_name || user.person_id || 'User';
-                document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${userName}</p>`;
+                document.getElementById('user-profile').innerHTML = `<span class="mr-2 p-2 bg-blue-500 text-white rounded-full text-xs font-bold">${userName.charAt(0).toUpperCase()}</span><p class="font-semibold text-sm text-gray-800">${userName}</p>`;
             }
             
             document.getElementById('logout-button').addEventListener('click', () => { 
@@ -178,11 +186,18 @@
         function showToast(message, type = 'info') {
             const toastContainer = document.getElementById('toast-container');
             const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
+            toast.className = `toast ${type} fixed top-4 right-4 z-50 p-3 rounded-lg shadow-lg text-white font-semibold transition-all duration-300`;
+            if (type === 'success') toast.classList.add('bg-green-500');
+            else if (type === 'error') toast.classList.add('bg-red-500');
+            else toast.classList.add('bg-blue-500');
+
             const icon = type === 'success' ? 'check-circle' : (type === 'error' ? 'x-circle' : 'info');
-            toast.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5"></i><span class="toast-message">${message}</span>`;
+            toast.innerHTML = `<div class="flex items-center"><i data-lucide="${icon}" class="w-5 h-5 mr-2"></i><span>${message}</span></div>`;
             toastContainer.appendChild(toast);
             lucide.createIcons();
+            
+            // Auto-fade out after 3 seconds
+            setTimeout(() => { toast.classList.add('opacity-0'); }, 2700);
             setTimeout(() => { toast.remove(); }, 3000);
         }
 
@@ -217,7 +232,6 @@
         // --- UTILS ---
 
         function formatColumnName(columnName) {
-            // Capitalize first letter of each word and replace underscores with spaces
             return columnName.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
         }
         
@@ -245,25 +259,27 @@
                 getReferenceData('projects', 'lims'),
                 getReferenceData('samples_type', 'reference'),
                 getReferenceData('sampling', 'lab'),
-                getReferenceData('root_samples', 'lab'),
-                loadAndRenderTable(TARGET_TABLE)
             ]);
+            
+            await loadAndRenderTable(TARGET_TABLE);
             
             document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal());
             document.getElementById('download-template-general-btn').addEventListener('click', () => downloadCsvTemplate(TARGET_TABLE));
-            document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal); // Added bulk upload listener
+            document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal);
         }
         
         async function loadAndRenderTable(fullTableName) {
             const [schemaName, tableName] = fullTableName.split('.');
             
             // Initial loading state
-            document.getElementById('dynamic-table-body').innerHTML = `<tr><td colspan="6" class="text-center p-4 text-gray-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Loading data...</td></tr>`;
+            const tableBody = document.getElementById('dynamic-table-body');
+            tableBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-gray-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Loading data...</td></tr>`;
             lucide.createIcons();
 
             // Load data for today and future dates only
             const today = formatDateForInput(new Date());
-            const dataFilter = `?order_by=planned_collection_date&order_direction=ASC&filter_planned_collection_date_ge=${today}`;
+            // Filter is added as a URL query param, ordering is done client-side for simplicity/consistency
+            const dataFilter = `?filter_planned_collection_date_ge=${today}`;
 
             const [data, schema, pkInfo] = await Promise.all([
                 apiFetch(`table/${schemaName}/${tableName}${dataFilter}`),
@@ -278,7 +294,8 @@
                 applyFiltersAndSort();
             } else {
                 console.error(`Failed to load data for ${fullTableName}.`, data?.error || schema?.error);
-                document.getElementById('dynamic-table-body').innerHTML = `<tr><td colspan="6" class="text-center p-4 text-red-500">Error loading data: ${data?.error || 'Unknown error'}</td></tr>`;
+                let errorMessage = data?.error || schema?.error || 'Unknown network error.';
+                tableBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-red-500">Error loading data: ${errorMessage}</td></tr>`;
             }
         }
         
@@ -325,11 +342,11 @@
                 const sampleType = (masterCache['reference.samples_type'] || []).find(st => st.sample_type_id === row.sample_type_id);
                 
                 return `
-                    <tr class="hover:bg-gray-50 cursor-pointer dynamic-table-row ${isFulfilled ? 'bg-green-50/50' : ''}" data-pk-values='${JSON.stringify(pkValues)}'>
+                    <tr class="hover:bg-gray-50 cursor-pointer dynamic-table-row ${isFulfilled ? 'bg-green-50/50' : 'bg-yellow-50/50'}" data-pk-values='${JSON.stringify(pkValues)}'>
                         <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">${row.reservation_sample_id}</td>
-                        <td class="px-4 py-3 whitespace-nowrap text-sm">${project ? project.project_abrv : row.project_id}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm">${project ? project.project_abrv || project.project_id : row.project_id}</td>
                         <td class="px-4 py-3 whitespace-nowrap text-sm">${sampleType ? sampleType.sample_type_abrv : row.sample_type_id}</td>
-                        <td class="px-4 py-3 whitespace-nowrap text-sm">${formatDate(row.planned_collection_date)}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-blue-600">${formatDate(row.planned_collection_date)}</td>
                         <td class="px-4 py-3 whitespace-nowrap text-sm">${isFulfilled ? `<span class="text-green-600 font-semibold">${row.actual_sample_id}</span>` : 'Pending'}</td>
                         <td class="px-4 py-3 flex space-x-2">
                             <button class="view-btn p-1 text-gray-500 hover:text-blue-600" data-pk-values='${JSON.stringify(pkValues)}' data-action="view"><i data-lucide="eye" class="w-4 h-4"></i></button>
@@ -338,29 +355,44 @@
                         </td>
                     </tr>
                 `;
-            }).join('') || `<tr><td colspan="6" class="text-center p-4 text-gray-500">No reservations found.</td></tr>`;
+            }).join('') || `<tr><td colspan="6" class="text-center p-4 text-gray-500">No upcoming reservations found.</td></tr>`;
             
             lucide.createIcons();
+            
+            // Add listeners
             document.querySelectorAll('.sortable-header').forEach(header => header.addEventListener('click', handleSortClick));
             document.querySelectorAll('.dynamic-table-row').forEach(row => row.addEventListener('click', (e) => {
-                 if (e.target.closest('button')) return;
-                 const pk = JSON.parse(row.dataset.pkValues);
-                 const record = currentTableData.find(r => r.reservation_sample_id === pk.reservation_sample_id);
-                 renderReservationDetails(record);
+                if (e.target.closest('button')) return;
+                document.querySelectorAll('.dynamic-table-row').forEach(r => r.classList.remove('table-row-selected'));
+                row.classList.add('table-row-selected');
+                const pk = JSON.parse(row.dataset.pkValues);
+                const record = currentTableData.find(r => r.reservation_sample_id === pk.reservation_sample_id);
+                renderReservationDetails(record);
             }));
             document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', (e) => {
                 const pk = JSON.parse(e.currentTarget.dataset.pkValues);
-                const record = currentTableData.find(r => r.reservation_sample_id === pk.reservation_sample_id);
-                showCreateEditModal(record.reservation_sample_id);
+                showCreateEditModal(pk.reservation_sample_id);
             }));
-             document.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', (e) => {
                 const pk = JSON.parse(e.currentTarget.dataset.pkValues);
                 deleteRecord(pk);
             }));
+            
             // Initial details render if there's data
             if(dataToDisplay.length) renderReservationDetails(dataToDisplay[0]);
         }
         
+        function handleSortClick(e) {
+            const column = e.currentTarget.dataset.column;
+            if (sortColumn === column) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = column;
+                sortDirection = 'asc';
+            }
+            applyFiltersAndSort();
+        }
+
         async function deleteRecord(pkValues) {
             if (!confirm(`Are you sure you want to delete reservation ${pkValues.reservation_sample_id}?`)) return;
             
@@ -371,6 +403,8 @@
             if (result.success) {
                 showToast('Reservation deleted successfully!', 'success');
                 loadAndRenderTable(TARGET_TABLE);
+                document.getElementById('reservation-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="calendar-check" class="mx-auto h-16 w-16 text-blue-400 mb-4 animate-pulse"></i><p class="mt-2 text-lg font-semibold">Reservation Details</p><p class="text-sm mt-1">Select a reservation to view its status and action buttons.</p></div></div>`;
+                lucide.createIcons();
             } else {
                 showToast('Failed to delete reservation: ' + (result.error || 'Unknown error'), 'error');
             }
@@ -393,7 +427,7 @@
                 <div class="card p-6 h-full flex flex-col">
                     <h2 class="text-2xl font-bold text-gray-800 mb-4">${record.reservation_sample_id}</h2>
                     <div class="space-y-4 flex-grow overflow-y-auto pr-2">
-                        <div class="p-3 ${isFulfilled ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'} rounded-lg font-semibold flex items-center">
+                        <div class="p-3 ${isFulfilled ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-yellow-50 text-yellow-700 border border-yellow-200'} rounded-lg font-semibold flex items-center">
                             <i data-lucide="${isFulfilled ? 'check-circle' : 'alert-triangle'}" class="w-5 h-5 mr-2"></i>
                             ${isFulfilled ? 'STATUS: FULFILLED' : 'STATUS: PENDING / PLANNED'}
                         </div>
@@ -419,7 +453,7 @@
                             </button>
                             <div class="accordion-content">
                                 <dl class="space-y-2 py-2">
-                                    ${renderDetailRow('Sampling ID', record.sampling_id)}
+                                    ${renderDetailRow('Sampling ID', record.sampling_id || 'None')}
                                     ${renderDetailRow('Sampling Date', formatDate(record.sampling_date))}
                                     ${renderDetailRow('Location', sampling?.location_name || 'N/A')}
                                     ${renderDetailRow('Cruise ID', sampling?.cruise_id || 'N/A')}
@@ -444,9 +478,11 @@
                     <div class="mt-4 pt-4 border-t space-y-2">
                         ${!isFulfilled ? `<button onclick="showFulfillModal('${record.reservation_sample_id}')" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center">
                             <i data-lucide="check" class="w-5 h-5 mr-2"></i>Mark as Received / Fulfill
-                        </button>` : ''}
-                        <button onclick="showCreateEditModal('${record.reservation_sample_id}', true)" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center">
-                            <i data-lucide="edit" class="w-5 h-5 mr-2"></i>Edit Reservation
+                        </button>` : `<button onclick="showToast('Sample already received: ${record.actual_sample_id}', 'info')" class="w-full bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg flex items-center justify-center cursor-not-allowed">
+                            <i data-lucide="check-check" class="w-5 h-5 mr-2"></i>Sample Already Registered
+                        </button>`}
+                        <button onclick="showCreateEditModal('${record.reservation_sample_id}')" class="w-full bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center">
+                            <i data-lucide="edit" class="w-5 h-5 mr-2"></i>Edit Reservation Details
                         </button>
                     </div>
                 </div>
@@ -484,7 +520,7 @@
             let record = null;
             if (isEditing) {
                 record = currentTableData.find(r => r.reservation_sample_id === recordId);
-                if (!record) { showToast("Record not found.", "error"); return; }
+                if (!record) { showToast("Reservation record not found for editing.", "error"); return; }
             }
 
             // Fetch latest ref data for modals
@@ -493,14 +529,19 @@
                 getReferenceData('samples_type', 'reference'),
                 getReferenceData('sampling', 'lab') 
             ]);
-
-            const projectOptions = projects.map(p => `<option value="${p.project_id}" ${record?.project_id === p.project_id ? 'selected' : ''}>${p.title || p.project_id}</option>`).join('');
-            const sampleTypeOptions = sampleTypes.map(st => `<option value="${st.sample_type_id}" ${record?.sample_type_id === st.sample_type_id ? 'selected' : ''}>${st.sample_type_abrv} - ${st.notes}</option>`).join('');
-            const samplingOptions = samplingEvents.map(s => `<option value="${s.sampling_id}" data-date="${formatDateForInput(s.sampling_date)}" ${record?.sampling_id === s.sampling_id ? 'selected' : ''}>${s.sampling_id} (${s.location_name})</option>`).join('');
+            
+            const projectOptions = `<option value="">-- Select Project --</option>` + projects.map(p => `<option value="${p.project_id}" ${record?.project_id === p.project_id ? 'selected' : ''}>${p.title || p.project_id}</option>`).join('');
+            const sampleTypeOptions = `<option value="">-- Select Type --</option>` + sampleTypes.map(st => `<option value="${st.sample_type_id}" ${record?.sample_type_id === st.sample_type_id ? 'selected' : ''}>${st.sample_type_abrv} - ${st.notes}</option>`).join('');
+            
+            const samplingOptions = `<option value="">-- Optional Sampling Event --</option>` + samplingEvents.map(s => {
+                // Combine sampling ID and date into a single dataset attribute for easy lookup
+                const sDate = formatDateForInput(s.sampling_date);
+                return `<option value="${s.sampling_id}" data-date="${sDate}" ${record?.sampling_id === s.sampling_id && formatDateForInput(record.sampling_date) === sDate ? 'selected' : ''}>${s.sampling_id} (${s.location_name} - ${formatDate(s.sampling_date)})</option>`;
+            }).join('');
 
             const modalHTML = `
                 <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
-                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl max-h-[90vh] overflow-y-auto transform transition-all -translate-y-10 opacity-0">
                         <div class="flex justify-between items-center mb-6">
                             <h2 class="text-2xl font-bold">${isEditing ? 'Edit' : 'Create'} Sample Reservation</h2>
                             <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
@@ -525,12 +566,11 @@
                                 <div>
                                     <label class="block text-gray-700 text-sm font-bold mb-1">Sampling Event (ID)</label>
                                     <select id="sampling-id-select" name="sampling_id" class="w-full mt-1 p-2 border rounded">
-                                        <option value="">-- Optional --</option>
                                         ${samplingOptions}
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="block text-gray-700 text-sm font-bold mb-1">Sampling Date (Auto-filled)</label>
+                                    <label class="block text-gray-700 text-sm font-bold mb-1">Sampling Date (from event)</label>
                                     <input type="date" name="sampling_date" id="sampling-date-input" value="${formatDateForInput(record?.sampling_date)}" readonly class="w-full mt-1 p-2 border rounded bg-gray-100">
                                 </div>
                             </div>
@@ -549,21 +589,18 @@
             `;
             const { closeModal } = showModal(modalHTML);
             
-            // Logic to auto-fill sampling_date when sampling_id is selected
             const samplingIdSelect = document.getElementById('sampling-id-select');
             const samplingDateInput = document.getElementById('sampling-date-input');
             
-            if (isEditing) {
-                 // Ensure the initial correct sampling date is set if editing
-                 const initialOption = Array.from(samplingIdSelect.options).find(opt => opt.value === record.sampling_id);
-                 if (initialOption) samplingDateInput.value = initialOption.dataset.date;
-            }
-
+            // Logic to auto-fill sampling_date when sampling_id is selected
             samplingIdSelect.addEventListener('change', () => {
                 const selectedOption = samplingIdSelect.options[samplingIdSelect.selectedIndex];
-                const date = selectedOption.dataset.date || '';
+                const date = selectedOption.dataset.date || ''; // Reads the data-date attribute
                 samplingDateInput.value = date;
             });
+            // Trigger change event if editing and a sampling event is already selected to ensure date is populated
+            if (isEditing && record.sampling_id) samplingIdSelect.dispatchEvent(new Event('change'));
+
 
             document.getElementById('record-form').onsubmit = async (e) => {
                 e.preventDefault();
@@ -575,18 +612,13 @@
                     sample_type_id: formData.sample_type_id,
                     planned_collection_date: formData.planned_collection_date || null,
                     sampling_id: formData.sampling_id || null,
-                    sampling_date: formData.sampling_date || null,
+                    // Use the readonly sampling_date input's value for the final payload
+                    sampling_date: formData.sampling_id ? formData.sampling_date : null,
                     notes: formData.notes || null
                 };
 
-                // Clear sampling_date if sampling_id is null
-                if (!payload.sampling_id) {
-                    payload.sampling_date = null;
-                }
-
                 const method = isEditing ? 'PUT' : 'POST';
-                const [schemaName, tableName] = TARGET_TABLE.split('.');
-                let endpoint = `${schemaName}/${tableName}`;
+                const endpoint = `${TARGET_SCHEMA}/${TARGET_TABLE_NAME}`;
                 
                 if (isEditing) {
                     endpoint += `?reservation_sample_id=${payload.reservation_sample_id}`;
@@ -616,12 +648,12 @@
 
             const modalHTML = `
                 <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
-                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-md">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-md max-h-[90vh] overflow-y-auto">
                         <div class="flex justify-between items-center mb-6">
                             <h2 class="text-2xl font-bold">Fulfill Reservation: ${reservationId}</h2>
                             <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
                         </div>
-                        <p class="text-gray-700 mb-4">This action registers the physical sample in the main system (lab.root_samples) and links it back to this reservation.</p>
+                        <p class="text-gray-700 mb-4">This action registers the physical sample in the main system (<code class="bg-gray-100 p-1 rounded">lab.root_samples</code>) and links it back to this reservation.</p>
                         <form id="fulfill-form" class="space-y-4">
                             <div>
                                 <label class="block text-gray-700 text-sm font-bold mb-1">Actual Sample Type <span class="text-red-500">*</span></label>
@@ -647,13 +679,13 @@
                 // 1. Create the lab.root_samples record
                 const samplePayload = {
                     sample_type_id: formData.actual_sample_type_id,
-                    external_name: record.reservation_sample_id, // Use reservation ID as external name
+                    external_name: `RES-${record.reservation_sample_id}`, // Use RES- prefix to mark it as fulfilled reservation
                     project_id: record.project_id,
                     sampling_id: record.sampling_id,
                     sampling_date: record.sampling_date,
                     reception_date: formData.reception_date,
+                    // Note: sample_creation_date is handled by the DB trigger upon POST
                     status_id: 'Received' 
-                    // Other fields (sampler, receiver, conservation) can be updated later via the samples page
                 };
 
                 showToast("Creating physical sample in system...", 'info');
@@ -662,12 +694,13 @@
                 if (newSampleResult && !newSampleResult.error && newSampleResult.sample_id) {
                     // 2. Update the reservation_samples record with the actual sample ID
                     const actualSampleId = newSampleResult.sample_id;
-                    const actualCreationDate = formatDateForInput(newSampleResult.sample_creation_date);
+                    // Note: sample_creation_date comes from the DB response
+                    const actualCreationDate = formatDateForInput(newSampleResult.sample_creation_date); 
                     
                     const reservationUpdatePayload = {
                         actual_sample_id: actualSampleId,
                         actual_sample_creation_date: actualCreationDate,
-                        notes: (record.notes || '') + ` | Fulfilled on: ${new Date().toISOString().split('T')[0]}`
+                        notes: (record.notes || '') + ` | Fulfilled from reservation by system on ${new Date().toISOString().split('T')[0]}`
                     };
 
                     const updateResult = await apiFetch(`table/lab/reservation_samples?reservation_sample_id=${reservationId}`, { method: 'PUT', body: reservationUpdatePayload });
@@ -678,22 +711,49 @@
                         loadAndRenderTable(TARGET_TABLE);
                     } else {
                         showToast(`Sample created (${actualSampleId}), but failed to link to reservation: ${updateResult?.error}`, 'error');
+                        closeModal();
+                        loadAndRenderTable(TARGET_TABLE); // Reload data even if linkage failed to get the table state right
                     }
                 } else {
-                    showToast(`Failed to create physical sample: ${newSampleResult?.error}`, 'error');
+                    showToast(`Failed to create physical sample: ${newSampleResult?.error || 'Unknown error'}`, 'error');
                 }
             };
+        }
+
+        async function downloadCsvTemplate(fullTableName) {
+            if (!fullTableName) { showToast("Please select a table to download its template.", "error"); return; }
+
+            const [schemaName, tableName] = fullTableName.split('.');
+            const schema = await getTableSchema(schemaName, tableName);
+            if (!schema || schema.error) {
+                showToast('Failed to fetch table schema for template: ' + (schema ? schema.error : 'Unknown error'), "error");
+                return;
+            }
+
+            // Define the specific columns needed for batch reservation upload
+            const requiredHeaders = ['project_id', 'sample_type_id', 'planned_collection_date', 'sampling_id', 'sampling_date', 'notes'];
+            
+            const csv = unparseCSV([requiredHeaders]);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${tableName}_template.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            showToast("CSV template download initiated.", "success");
         }
 
         async function showBulkUploadModal() {
             const modalHTML = `
                 <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
-                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl max-h-[90vh] overflow-y-auto">
                         <div class="flex justify-between items-center mb-6">
                             <h2 class="text-2xl font-bold">Bulk Upload Reservations</h2>
                             <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
                         </div>
-                        <p class="text-gray-700 mb-4">Upload a CSV file. Columns must include: <code>reservation_sample_id</code>, <code>project_id</code>, <code>sample_type_id</code>, and <code>planned_collection_date</code>.</p>
+                        <p class="text-gray-700 mb-4">Upload a CSV file. The first row should contain columns: <code class="bg-gray-100 p-1 rounded text-xs">project_id</code>, <code class="bg-gray-100 p-1 rounded text-xs">sample_type_id</code>, <code class="bg-gray-100 p-1 rounded text-xs">planned_collection_date</code>.</p>
                         <input type="file" id="csv-file-input" accept=".csv" class="w-full p-2 border rounded mb-4">
                         <div class="pt-4 flex justify-end">
                             <button id="upload-csv-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Upload Reservations</button>
@@ -709,10 +769,7 @@
                 const statusDiv = document.getElementById('upload-status');
                 const file = fileInput.files[0];
 
-                if (!file) {
-                    showToast("Please select a CSV file.", "error");
-                    return;
-                }
+                if (!file) { showToast("Please select a CSV file.", "error"); return; }
 
                 statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Processing CSV...</p>`;
                 lucide.createIcons();
@@ -721,14 +778,8 @@
                     header: true,
                     skipEmptyLines: true,
                     complete: async (results) => {
-                        if (results.errors.length) {
-                            showToast(`CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}`, "error");
-                            return;
-                        }
-                        if (!results.data.length) {
-                            showToast("No data found in CSV.", "error");
-                            return;
-                        }
+                        if (results.errors.length) { showToast(`CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}`, "error"); return; }
+                        if (!results.data.length) { showToast("No data found in CSV.", "error"); return; }
 
                         const recordsToUpload = results.data.map(row => {
                             const newRow = {};
@@ -759,6 +810,25 @@
                     }
                 });
             });
+        }
+
+        function unparseCSV(data) {
+            const delimiter = ',';
+            const newline = '\n';
+            const quoteChar = '"';
+
+            if (!Array.isArray(data) || data.length === 0) return '';
+            
+            return data.map(row => {
+                return row.map(field => {
+                    if (field === null || field === undefined) return '';
+                    let stringField = String(field);
+                    if (stringField.includes(delimiter) || stringField.includes(quoteChar) || stringField.includes('\n') || stringField.includes('\r')) {
+                        return quoteChar + stringField.replace(new RegExp(quoteChar, 'g'), quoteChar + quoteChar) + quoteChar;
+                    }
+                    return stringField;
+                }).join(delimiter);
+            }).join(newline);
         }
     </script>
 </body>

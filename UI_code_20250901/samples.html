@@ -195,6 +195,7 @@
     </div>
 
     <script>
+        // --- CSV Utility ---
         function unparseCSV(data, options) {
             options = options || {};
             const delimiter = options.delimiter || ',';
@@ -221,16 +222,18 @@
             }).join(newline);
         }
 
+        // --- Auth Check ---
         if (sessionStorage.getItem('isLoggedIn') !== 'true') {
             localStorage.setItem('redirectUrl', window.location.href);
             window.location.href = './login.html';
         }
         
+        // --- Global State & Configuration ---
         const API_BASE_URL = '/mylims/api'; 
         let masterCache = {}; 
         let currentTableData = []; 
         let currentTableSchema = [];
-        let currentTableName = 'lab.root_samples'; // Corrected default table name
+        let currentTableName = 'lab.root_samples'; // Default table name
         let sortColumn = null; 
         let sortDirection = 'asc';
         let columnFilters = {};
@@ -262,6 +265,7 @@
             initializePage();
         });
 
+        // --- API & Cache Functions ---
         async function apiFetch(endpoint, options = {}) {
             console.log(`API Fetch: Calling ${endpoint} with options:`, options);
             try {
@@ -396,88 +400,11 @@
             return [];
         }
 
+        // --- Core Helpers ---
         function formatColumnName(columnName) {
             return columnName.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
         }
         
-        function renderTable(dataToDisplay, schemaInfo) {
-            console.log("Rendering table with data:", dataToDisplay, "and schema:", schemaInfo);
-            const tableHeaders = document.getElementById('table-headers');
-            const tableBody = document.getElementById('dynamic-table-body');
-            if (!tableHeaders || !tableBody) {
-                console.error("Table elements not found for rendering.");
-                return;
-            }
-
-            tableHeaders.innerHTML = '';
-            tableBody.innerHTML = '';
-
-            if (!schemaInfo || schemaInfo.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500">No schema information available for this table.</td></tr>`;
-                return;
-            }
-
-            const columnsToDisplay = schemaInfo.filter(col => !col.column_name.includes('attachment') && !col.column_name.includes('password_hash') && !col.column_name.includes('search_vector') && !col.column_name.includes('geom') && col.column_name !== 'notes');
-            
-            let headerHtml = '';
-            columnsToDisplay.forEach(col => {
-                headerHtml += `
-                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        <div class="sortable-header" data-column="${col.column_name}">
-                            <span>${formatColumnName(col.column_name)}</span>
-                            <i data-lucide="chevrons-up-down" class="sort-icon text-gray-400"></i>
-                        </div>
-                        <input type="text" placeholder="Filter ${formatColumnName(col.column_name)}..." class="filter-input" data-column="${col.column_name}">
-                    </th>
-                `;
-            });
-            headerHtml += `<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>`;
-            tableHeaders.innerHTML = headerHtml;
-
-            if (!dataToDisplay || dataToDisplay.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="${columnsToDisplay.length + 1}" class="text-center p-4 text-gray-500">No data available for this table.</td></tr>`;
-            } else {
-                tableBody.innerHTML = dataToDisplay.map(row => {
-                    const pkValues = getPkValues(row);
-                    const formattedPkValues = {};
-                    for (const key in pkValues) {
-                        const colSchema = schemaInfo.find(s => s.column_name === key);
-                        if (colSchema && colSchema.data_type === 'date') {
-                            formattedPkValues[key] = formatDateForInput(pkValues[key]);
-                        } else {
-                            formattedPkValues[key] = pkValues[key];
-                        }
-                    }
-
-                    let rowHtml = `<tr class="hover:bg-gray-50 cursor-pointer dynamic-table-row" data-pk-values='${JSON.stringify(formattedPkValues)}'>`;
-                    columnsToDisplay.forEach(col => {
-                        let value = row[col.column_name];
-                        if (value === null || value === undefined) {
-                            value = 'N/A';
-                        } else if (col.data_type === 'date' && value) {
-                            try { value = new Date(value).toLocaleDateString('en-CA'); } catch (e) { }
-                        } else if (col.data_type === 'timestamp with time zone' && value) {
-                            try { value = new Date(value).toLocaleString(); } catch (e) { }
-                        } else if (typeof value === 'object') { 
-                            value = JSON.stringify(value);
-                        }
-                        rowHtml += `<td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${value}</td>`;
-                    });
-                    rowHtml += `
-                        <td class="px-4 py-3 flex space-x-2">
-                            <button class="edit-btn p-1 text-gray-500 hover:text-blue-600" data-pk-values='${JSON.stringify(formattedPkValues)}'><i data-lucide="edit-2" class="w-4 h-4"></i></button>
-                            <button class="delete-btn p-1 text-gray-500 hover:text-red-600" data-pk-values='${JSON.stringify(formattedPkValues)}'><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                        </td>
-                    </tr>`;
-                    return rowHtml;
-                }).join('');
-            }
-            
-            lucide.createIcons();
-            addTableActionListeners();
-            addFilterAndSortListeners();
-        }
-
         async function getPrimaryKeysForTable(schema, table) {
             const cacheKey = `pk.${schema}.${table}`;
             if (pkMappingCache[cacheKey]) {
@@ -524,6 +451,95 @@
             }
         };
 
+        // --- Table Rendering and Interactivity ---
+        
+        function renderTable(dataToDisplay, schemaInfo) {
+            console.log("Rendering table with data:", dataToDisplay, "and schema:", schemaInfo);
+            const tableHeaders = document.getElementById('table-headers');
+            const tableBody = document.getElementById('dynamic-table-body');
+            if (!tableHeaders || !tableBody) {
+                console.error("Table elements not found for rendering.");
+                return;
+            }
+
+            tableHeaders.innerHTML = '';
+            tableBody.innerHTML = '';
+
+            if (!schemaInfo || schemaInfo.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500">No schema information available for this table.</td></tr>`;
+                return;
+            }
+
+            const columnsToDisplay = schemaInfo.filter(col => !col.column_name.includes('attachment') && !col.column_name.includes('password_hash') && !col.column_name.includes('search_vector') && !col.column_name.includes('geom') && col.column_name !== 'notes');
+            
+            let headerHtml = '';
+            columnsToDisplay.forEach(col => {
+                const filterValue = columnFilters[col.column_name] || '';
+                headerHtml += `
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        <div class="sortable-header" data-column="${col.column_name}">
+                            <span>${formatColumnName(col.column_name)}</span>
+                            <i data-lucide="chevrons-up-down" class="sort-icon text-gray-400"></i>
+                        </div>
+                        <input type="text" placeholder="Filter ${formatColumnName(col.column_name)}..." class="filter-input" data-column="${col.column_name}" value="${filterValue}">
+                    </th>
+                `;
+            });
+            headerHtml += `<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>`;
+            tableHeaders.innerHTML = headerHtml;
+
+            if (!dataToDisplay || dataToDisplay.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="${columnsToDisplay.length + 1}" class="text-center p-4 text-gray-500">No data available for this table.</td></tr>`;
+            } else {
+                tableBody.innerHTML = dataToDisplay.map(row => {
+                    const pkValues = getPkValues(row);
+                    const formattedPkValues = {};
+                    for (const key in pkValues) {
+                        const colSchema = schemaInfo.find(s => s.column_name === key);
+                        if (colSchema && colSchema.data_type === 'date') {
+                            formattedPkValues[key] = formatDateForInput(pkValues[key]);
+                        } else {
+                            formattedPkValues[key] = pkValues[key];
+                        }
+                    }
+
+                    let rowHtml = `<tr class="hover:bg-gray-50 cursor-pointer dynamic-table-row" data-pk-values='${JSON.stringify(formattedPkValues)}'>`;
+                    columnsToDisplay.forEach(col => {
+                        let value = row[col.column_name];
+                        if (value === null || value === undefined) {
+                            value = 'N/A';
+                        } else if (col.data_type === 'date' && value) {
+                            try { value = new Date(value).toLocaleDateString('en-CA'); } catch (e) { }
+                        } else if (col.data_type.includes('timestamp') && value) {
+                            try { value = new Date(value).toLocaleString(); } catch (e) { }
+                        } else if (typeof value === 'object') { 
+                            value = `<pre class="bg-gray-100 p-1 text-xs rounded overflow-x-auto">${JSON.stringify(value, null, 2).substring(0, 50)}...</pre>`;
+                        }
+                        rowHtml += `<td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${value}</td>`;
+                    });
+                    rowHtml += `
+                        <td class="px-4 py-3 flex space-x-2">
+                            <button class="edit-btn p-1 text-gray-500 hover:text-blue-600" data-pk-values='${JSON.stringify(formattedPkValues)}'><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                            <button class="delete-btn p-1 text-gray-500 hover:text-red-600" data-pk-values='${JSON.stringify(formattedPkValues)}'><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </td>
+                    </tr>`;
+                    return rowHtml;
+                }).join('');
+            }
+            
+            lucide.createIcons();
+            addTableActionListeners();
+            addFilterAndSortListeners();
+        }
+
+        function updateSortIcons() {
+            document.querySelectorAll('.sortable-header i').forEach(icon => icon.setAttribute('data-lucide', 'chevrons-up-down'));
+            if (sortColumn) {
+                const currentSortIcon = document.querySelector(`.sortable-header[data-column="${sortColumn}"] i`);
+                if (currentSortIcon) currentSortIcon.setAttribute('data-lucide', sortDirection === 'asc' ? 'chevron-up' : 'chevron-down');
+            }
+            lucide.createIcons(); 
+        }
 
         function addTableActionListeners() {
             console.log("Adding table action listeners.");
@@ -551,8 +567,9 @@
                         return String(r[key]) === String(pkValues[key]);
                     });
                 });
-                let targetTableForEdit = currentTableName;
-                if (record) showCreateEditModal(record, targetTableForEdit);
+                // FIX: Removed the second argument (targetTableForEdit) so specificTable is null,
+                // which correctly sets isEditing=true inside showCreateEditModal.
+                if (record) showCreateEditModal(record); 
                 else showToast("Record not found for editing.", "error");
             }));
 
@@ -562,7 +579,8 @@
                 const pkValues = JSON.parse(e.currentTarget.dataset.pkValues);
                 const recordIdentifier = Object.values(pkValues).join(' / ');
                 
-                if (!confirm(`Are you sure you want to delete this record (${recordIdentifier}) from ${currentTableName}? This action cannot be undone.`)){
+                // Using window.confirm as per guidance to replace alert/confirm
+                if (!window.confirm(`Are you sure you want to delete this record (${recordIdentifier}) from ${currentTableName}? This action cannot be undone.`)){
                     console.log("Delete cancelled by user.");
                     return;
                 }
@@ -632,14 +650,21 @@
                     const valB = b[sortColumn];
                     const colSchema = currentTableSchema.find(c => c.column_name === sortColumn);
 
-                    if (colSchema && ['date', 'timestamp with time zone', 'timestamp without time zone'].includes(colSchema.data_type)) { 
+                    if (valA === null && valB === null) return 0;
+                    if (valA === null) return sortDirection === 'asc' ? 1 : -1;
+                    if (valB === null) return sortDirection === 'asc' ? -1 : 1;
+
+                    if (colSchema && ['integer', 'numeric', 'bigint'].includes(colSchema.data_type)) {
+                         // Numeric sort
+                        return sortDirection === 'asc' ? valA - valB : valB - valA;
+                    } else if (colSchema && ['date', 'timestamp with time zone', 'timestamp without time zone'].includes(colSchema.data_type)) { 
+                        // Date sort
                         const dateA = new Date(valA);
                         const dateB = new Date(valB);
                         if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) return 0; 
                         return sortDirection === 'asc' ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
-                    } else if (typeof valA === 'number' && typeof valB === 'number') {
-                        return sortDirection === 'asc' ? valA - valB : valB - valA;
-                    }
+                    } 
+                    // Lexicographical sort
                     const stringA = String(valA || '').toLowerCase();
                     const stringB = String(valB || '').toLowerCase();
                     return sortDirection === 'asc' ? stringA.localeCompare(stringB) : stringB.localeCompare(stringA);
@@ -649,14 +674,7 @@
             updateSortIcons(); 
         }
 
-        function updateSortIcons() {
-            document.querySelectorAll('.sortable-header i').forEach(icon => icon.setAttribute('data-lucide', 'chevrons-up-down'));
-            if (sortColumn) {
-                const currentSortIcon = document.querySelector(`.sortable-header[data-column="${sortColumn}"] i`);
-                if (currentSortIcon) currentSortIcon.setAttribute('data-lucide', sortDirection === 'asc' ? 'chevron-up' : 'chevron-down');
-            }
-            lucide.createIcons(); 
-        }
+        // --- Sample Details & Nested Actions ---
 
         async function renderSampleDetails(pkValues) { 
             console.log("Rendering sample details for PKs:", pkValues);
@@ -733,7 +751,7 @@
                                 const colSchema = currentTableSchema.find(s => s.column_name === key);
                                 if (colSchema && colSchema.data_type === 'date') {
                                     value = formatDate(value);
-                                } else if (colSchema && (colSchema.data_type === 'timestamp with time zone' || colSchema.data_type === 'timestamp without time zone')) {
+                                } else if (colSchema && (colSchema.data_type.includes('timestamp'))) {
                                     value = formatDateTime(value);
                                 } else if (typeof value === 'object' && value !== null) {
                                     value = JSON.stringify(value, null, 2);
@@ -750,7 +768,7 @@
                 detailsHtml += `<div class="p-4 bg-gray-50 rounded-lg border border-gray-200 mt-4">
                     <h3 class="text-lg font-semibold text-gray-800 mb-2">Add Related Records:</h3>
                     <div class="flex flex-wrap gap-2">
-                        <button class="add-child-btn" data-child-table="lab.root_samples" data-parent-sample-id="${sample.sample_id}" data-parent-sample-creation-date="${formatDateForInput(sample.sample_creation_date)}">
+                        <button class="add-child-btn" data-child-table="lab.root_samples" data-sample-id="${sample.sample_id}" data-sample-creation-date="${formatDateForInput(sample.sample_creation_date)}">
                             <i data-lucide="plus" class="w-4 h-4"></i>Create Child Sample
                         </button>
                         <button class="add-child-btn" data-child-table="lab.fish" data-sample-id="${sample.sample_id}" data-sample-creation-date="${formatDateForInput(sample.sample_creation_date)}">
@@ -921,14 +939,20 @@
                     }
 
                     if (childTable === 'lab.root_samples') {
-                        prefilledData.parent_sample_id = e.currentTarget.dataset.parentSampleId;
-                        prefilledData.parent_sample_creation_date = e.currentTarget.dataset.parentSampleCreationDate;
+                        prefilledData.parent_sample_id = sampleId; // Use current sample ID as parent ID
+                        prefilledData.parent_sample_creation_date = sampleCreationDate;
+                        // Clear the PKs for a new record creation
+                        delete prefilledData.sample_id;
+                        delete prefilledData.sample_creation_date;
+                        prefilledData.sample_type_id = 'Derivative';
                     }
         
                     showCreateEditModal(prefilledData, childTable);
                 });
             });
         }
+
+        // --- Modal Logic ---
 
         function showModal(content) {
             const container = document.getElementById('modal-container');
@@ -947,7 +971,7 @@
 
         async function showCreateEditModal(record = null, specificTable = null) {
             console.log("Showing create/edit modal. Record:", record, "Specific Table:", specificTable);
-            const isEditing = record !== null && !specificTable; 
+            const isEditing = record !== null && !specificTable; // This logic relies on specificTable only being passed for *new* child records/new entries, or for explicitly editing the current table if we fix the caller.
             const targetTableName = specificTable || currentTableName; 
             const [schemaName, tableName] = targetTableName.split('.');
 
@@ -981,7 +1005,6 @@
                 getReferenceData('vessel', 'reference')
             ]);
             
-
             let formFieldsHtml = '';
             targetTableSchema.forEach(col => {
                 const isAutoGenerated = col.column_default && (col.column_default.includes('nextval') || col.column_default.includes('uuid_generate'));
@@ -994,7 +1017,7 @@
                 }
 
                 if (col.column_name.includes('password_hash') || col.column_name.includes('search_vector') || col.column_name.includes('creation_date')) {
-                    return;
+                    if (col.column_name !== 'sample_creation_date' && col.column_name !== 'pcr_date' && col.column_name !== 'qpcr_date') return;
                 }
                 
                 if (col.column_name === 'sample_id' && (record && record.parent_sample_id)) {
@@ -1007,26 +1030,41 @@
                 }
 
 
-                // Add this block to handle default for sample_status_id when creating new.
-                // This is a client-side pre-fill for convenience and to help satisfy NOT NULL.
-                if (!isEditing && col.column_name === 'status_id' && statuses && statuses.length > 0) {
+                // Set default status for new root_samples
+                if (!isEditing && targetTableName === 'lab.root_samples' && col.column_name === 'status_id' && statuses && statuses.length > 0) {
                     const defaultStatus = statuses.find(s => s.status_id === 'Received'); 
                     if (defaultStatus) {
                         value = defaultStatus.status_id;
                     } else {
-                        value = statuses[0].status_id;
+                        value = statuses[0]?.status_id || '';
                     }
                     console.log(`Setting default status_id for new record to: ${value}`);
                 }
                 
-                // Prefill parent_sample_id and parent_sample_creation_date for child samples
-                if (!isEditing && col.column_name === 'parent_sample_id' && record && record.parent_sample_id) {
-                    value = record.parent_sample_id;
-                    isReadOnlyField = true;
-                }
-                if (!isEditing && col.column_name === 'parent_sample_creation_date' && record && record.parent_sample_creation_date) {
-                    value = record.parent_sample_creation_date;
-                    isReadOnlyField = true;
+                // Prefill for child samples (when called from renderSampleDetails)
+                if (!isEditing && record) {
+                    if (col.column_name === 'parent_sample_id' && record.parent_sample_id) {
+                        value = record.parent_sample_id;
+                        isReadOnlyField = true;
+                    }
+                    if (col.column_name === 'parent_sample_creation_date' && record.parent_sample_creation_date) {
+                        value = record.parent_sample_creation_date;
+                        isReadOnlyField = true;
+                    }
+                    if (col.column_name === 'sample_id' && record.sample_id && tableName !== 'root_samples') {
+                        value = record.sample_id;
+                        isReadOnlyField = true;
+                    }
+                    if (col.column_name === 'sample_creation_date' && record.sample_creation_date && tableName !== 'root_samples') {
+                        value = record.sample_creation_date;
+                        isReadOnlyField = true;
+                    }
+                    if (col.column_name === 'project_id' && record.project_id) {
+                         value = record.project_id;
+                    }
+                    if (col.column_name.includes('_date') && !value && record[col.column_name.replace('_date', '_id')] && !col.column_name.includes('sample_creation_date')) {
+                         value = formatDateForInput(new Date().toISOString());
+                    }
                 }
 
                 if (isHiddenField) {
@@ -1042,7 +1080,7 @@
                 if (isReadOnlyField) {
                     extraAttrs += ' readonly';
                     if (col.data_type === 'date') value = formatDateForInput(value);
-                    if (col.data_type === 'timestamp with time zone' || col.data_type === 'timestamp without time zone') value = formatDateTimeForInput(value);
+                    if (col.data_type.includes('timestamp')) value = formatDateTimeForInput(value);
                 }
 
                 if (col.column_name === 'attachment') {
@@ -1099,8 +1137,8 @@
                         `;
                         return;
                     case 'USER-DEFINED':
-                        if (col.data_type === 'geometry') {
-                               formFieldsHtml += `
+                         if (col.data_type === 'geometry') {
+                                formFieldsHtml += `
                                 <div class="md:col-span-2 ${isReadOnlyField ? 'opacity-70' : ''}">
                                     <label class="block text-gray-700 text-sm font-bold mb-1">${label} (WKT/GeoJSON)</label>
                                     <textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-24" ${isReadOnlyField ? 'readonly' : ''}>${value ? (value.wkt || JSON.stringify(value)) : ''}</textarea>
@@ -1108,8 +1146,8 @@
                                 </div>
                             `;
                             return;
-                        }
-                        break;
+                         }
+                         break;
                 }
 
                 if (col.column_name.endsWith('_id')) {
@@ -1126,45 +1164,45 @@
                     } else if (col.column_name.includes('sample_type_id') && samplesTypes) {
                         refData = samplesTypes; displayKey = 'sample_type_id';
                     } else if (col.column_name.includes('sampling_id') && samplingEvents) {
-                           refData = samplingEvents; 
-                           displayKey = 'sampling_id';
-                           optionsHtml = `<option value="">-- Select ${label} --</option>`;
-                           optionsHtml += refData.map(item => `<option value="${item.sampling_id}" ${value == item.sampling_id ? 'selected' : ''}>${item.sampling_id} (${item.location_name || 'N/A'})</option>`).join('');
-                           
-                           formFieldsHtml += `
-                               <div class="${isReadOnlyField ? 'opacity-70' : ''}">
-                                   <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
-                                   <select name="${col.column_name}" class="w-full mt-1 p-2 border rounded" ${isReadOnlyField ? 'disabled' : ''}>${optionsHtml}</select>
-                                   <input type="hidden" name="sampling_date_from_sampling_id" value="${record && record.sampling_date ? formatDateForInput(record.sampling_date) : ''}">
-                               </div>
-                             `;
-                           return;
+                        refData = samplingEvents; 
+                        displayKey = 'sampling_id';
+                        optionsHtml = `<option value="">-- Select ${label} --</option>`;
+                        optionsHtml += refData.map(item => `<option value="${item.sampling_id}" ${value == item.sampling_id ? 'selected' : ''}>${item.sampling_id} (${item.location_name || 'N/A'})</option>`).join('');
+                        
+                        formFieldsHtml += `
+                            <div class="${isReadOnlyField ? 'opacity-70' : ''}">
+                                <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
+                                <select name="${col.column_name}" class="w-full mt-1 p-2 border rounded" ${isReadOnlyField ? 'disabled' : ''}>${optionsHtml}</select>
+                                <input type="hidden" name="sampling_date_from_sampling_id" value="${record && record.sampling_date ? formatDateForInput(record.sampling_date) : ''}">
+                            </div>
+                          `;
+                        return;
                     } else if (col.column_name.includes('cruise_id') && cruises) {
-                           refData = cruises; displayKey = 'cruise_id';
+                        refData = cruises; displayKey = 'cruise_id';
                     } else if (col.column_name.includes('species_id') && taxon) {
-                           refData = taxon; displayKey = 'en_name';
+                        refData = taxon; displayKey = 'en_name';
                     } else if (col.column_name.includes('unit_id') && units) {
-                           refData = units; displayKey = 'unit_abbreviation';
+                        refData = units; displayKey = 'unit_abbreviation';
                     } else if (col.column_name.includes('gene_id') && genes) {
-                           refData = genes; displayKey = 'gene_id';
+                        refData = genes; displayKey = 'gene_id';
                     } else if (col.column_name.includes('equipment_id') && equipment) {
-                           refData = equipment; displayKey = 'equipment_name';
+                        refData = equipment; displayKey = 'equipment_name';
                     } else if (col.column_name.includes('supplier_id') && suppliers) {
-                           refData = suppliers; displayKey = 'supplier_name';
+                        refData = suppliers; displayKey = 'supplier_name';
                     } else if (col.column_name.includes('item_id') && inventoryItems) {
-                           refData = inventoryItems; displayKey = 'item_name';
+                        refData = inventoryItems; displayKey = 'item_name';
                     } else if (col.column_name.includes('publication_type_id') && publicationTypes) {
-                           refData = publicationTypes; displayKey = 'publication_type_id';
+                        refData = publicationTypes; displayKey = 'publication_type_id';
                     } else if (col.column_name.includes('db_id') && referenceDatabases) {
-                           refData = referenceDatabases; displayKey = 'db_name';
+                        refData = referenceDatabases; displayKey = 'db_name';
                     } else if (col.column_name.includes('pipeline_id') && analysisPipelines) {
-                           refData = analysisPipelines; displayKey = 'pipeline_name';
+                        refData = analysisPipelines; displayKey = 'pipeline_name';
                     } else if (col.column_name.includes('contact_id') && externalContacts) {
-                            refData = externalContacts; displayKey = 'full_name';
+                        refData = externalContacts; displayKey = 'full_name';
                     } else if (col.column_name.includes('customer_id') && customers) {
-                            refData = customers; displayKey = 'customer_name';
+                        refData = customers; displayKey = 'customer_name';
                     } else if (col.column_name.includes('vessel_id') && vessels) {
-                            refData = vessels; displayKey = 'vessel_name';
+                        refData = vessels; displayKey = 'vessel_name';
                     }
                     
                     if (refData.length > 0) {
@@ -1228,10 +1266,10 @@
                     const formData = new FormData(formElement);
                     formData.forEach((value, key) => {
                         const colSchema = targetTableSchema.find(s => s.column_name === key);
-                        if (colSchema && (colSchema.data_type === 'integer' || colSchema.data_type === 'numeric' || colSchema.data_type === 'bigint')) {
+                        if (colSchema && (colSchema.data_type.includes('integer') || colSchema.data_type.includes('numeric') || colSchema.data_type.includes('bigint'))) {
                             body[key] = value === '' ? null : Number(value.replace(',', '.'));
                         } else if (colSchema && colSchema.data_type === 'boolean') {
-                            body[key] = formElement.querySelector(`[name="${key}"]`).checked; 
+                            body[key] = formElement.querySelector(`[name="${key}"]`)?.checked || false; 
                         } else if (colSchema && colSchema.data_type === 'jsonb') {
                             try {
                                 body[key] = value === '' ? null : JSON.parse(value);
@@ -1256,7 +1294,7 @@
                                    throw new Error(`Error parsing geometry for ${formatColumnName(key)}`);
                                }
                            } else if (key === 'sampling_date_from_sampling_id') {
-                                return;
+                                 return;
                            }
                         else if (colSchema && colSchema.is_nullable === 'NO' && colSchema.data_type.includes('character') && value === '') {
                             body[key] = ''; 
@@ -1266,11 +1304,15 @@
                         }
                     });
 
+                    // Handle date PK auto-fill when linking to sampling_id
                     const datePkColumn = pkColumnsForTargetTable.find(pk => pk.includes('date'));
                     if (!isEditing && datePkColumn && !body[datePkColumn]) {
                         const associatedDate = formElement.querySelector('[name="sampling_date_from_sampling_id"]');
                         if (associatedDate && associatedDate.value) {
                             body[datePkColumn] = associatedDate.value;
+                        } else if (datePkColumn === 'sample_creation_date') {
+                             // Default to today if nothing else is available
+                            body[datePkColumn] = formatDateForInput(new Date().toISOString());
                         }
                     }
                 }
@@ -1304,21 +1346,26 @@
                     closeModal(); 
                     loadAndRenderTable(currentTableName); 
 
+                    // Determine which PKs to use to refresh the sample details pane
+                    let refreshPkValues = {};
                     if (recordForDetailsUpdate && recordForDetailsUpdate.sample_id) {
-                        const mainSamplePkValues = {
+                         // Case 1: Editing a child record or creating a new child record from a selected parent sample
+                        refreshPkValues = {
                             sample_id: recordForDetailsUpdate.sample_id,
                             sample_creation_date: recordForDetailsUpdate.sample_creation_date ? formatDateForInput(recordForDetailsUpdate.sample_creation_date) : undefined
                         };
-                        setTimeout(() => {
-                            renderSampleDetails(mainSamplePkValues);
-                        }, 100);
                     } else if (result.sample_id && result.sample_creation_date) {
-                        const newSamplePkValues = {
+                         // Case 2: Creating a new root_sample record (result contains the new PKs)
+                        refreshPkValues = {
                             sample_id: result.sample_id,
                             sample_creation_date: formatDateForInput(result.sample_creation_date)
                         };
+                    }
+
+                    if (Object.keys(refreshPkValues).length > 0) {
+                        // Give loadAndRenderTable a moment to update currentTableData
                         setTimeout(() => {
-                            renderSampleDetails(newSamplePkValues);
+                            renderSampleDetails(refreshPkValues);
                         }, 100);
                     }
                 } else {
@@ -1326,6 +1373,163 @@
                     showToast(`Failed to ${isEditing ? 'save' : 'create'} record: ` + (result ? result.error : 'Unknown error'), "error");
                 }
             };
+        }
+
+        // --- BULK ACTION MODALS ---
+
+        async function processBulkModifyRecords(recordsToModify, statusDiv, closeModal) {
+            if (!recordsToModify.length) {
+                statusDiv.innerHTML = `<p class="text-red-500">No records found in the file.</p>`;
+                return;
+            }
+
+            const recordsToModifyCleaned = recordsToModify.map(row => {
+                const newRow = {};
+                for (const key in row) {
+                    newRow[key] = row[key] === '' ? null : row[key];
+                }
+                return newRow;
+            });
+
+            statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Performing bulk update on ${recordsToModifyCleaned.length} records...</p>`;
+            lucide.createIcons();
+
+            const [schemaName, tableName] = currentTableName.split('.');
+            const result = await apiFetch(`table/${schemaName}/${tableName}/batch_update`, {
+                method: 'PUT',
+                body: recordsToModifyCleaned
+            });
+
+            if (result && result.success) {
+                showToast(`Successfully updated ${result.updated_rows} records!`, "success");
+                loadAndRenderTable(currentTableName);
+                setTimeout(closeModal, 2000);
+            } else {
+                showToast(`Bulk modify failed: ${result ? result.error : 'Unknown error'}`, "error");
+            }
+            lucide.createIcons();
+        }
+
+        async function downloadBulkModifyTemplate(fullTableName) {
+            console.log("downloadBulkModifyTemplate called.");
+            if (!fullTableName) {
+                showToast("Please select a table to download its bulk modify template.", "error");
+                return;
+            }
+
+            const [schemaName, tableName] = fullTableName.split('.');
+            const schema = await getTableSchema(schemaName, tableName);
+            const pkColumns = await getPrimaryKeysForTable(schemaName, tableName);
+
+            if (!schema || schema.error) {
+                console.error("Failed to fetch table schema for template:", schema ? schema.error : 'Unknown error');
+                showToast('Failed to fetch table schema for template: ' + (schema ? schema.error : 'Unknown error'), "error");
+                return;
+            }
+
+            let headers = pkColumns;
+            
+            const commonEditableColumns = schema.filter(col => 
+                !pkColumns.includes(col.column_name) && 
+                !col.column_name.includes('attachment') && 
+                !col.column_name.includes('password_hash') && 
+                !col.column_name.includes('search_vector') &&
+                !col.column_name.includes('geom') && 
+                !col.column_name.includes('created_at') &&
+                !(col.column_default && col.column_default.includes('nextval'))
+            ).map(col => col.column_name);
+
+            headers = [...new Set([...headers, ...commonEditableColumns])];
+
+            console.log("Bulk Modify Template Headers:", headers);
+            const csv = unparseCSV([headers], { header: false });
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${tableName}_bulk_modify_template.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            console.log("Bulk modify template download initiated.");
+            showToast("Bulk modify template downloaded successfully!", 'success');
+        }
+
+        async function showBulkModifyModal() {
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl transform transition-all -translate-y-10 opacity-0">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl font-bold">Bulk Modify for ${formatColumnName(currentTableName.split('.')[1])}</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                        </div>
+                        <p class="text-gray-700 mb-4">Upload a CSV or JSON file containing records to update. Each record must include all primary key column(s) for identification, and any fields you wish to modify.</p>
+                        <input type="file" id="bulk-modify-file-input" accept=".csv,.json" class="w-full p-2 border rounded mb-4">
+                        <div class="flex justify-between space-x-2">
+                            <button id="download-bulk-modify-template-btn-modal" class="w-1/2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
+                                <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download Template
+                            </button>
+                            <button id="perform-bulk-modify-btn" class="w-1/2 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
+                                <i data-lucide="file-edit" class="w-5 h-5 mr-2"></i>Perform Bulk Modify
+                            </button>
+                        </div>
+                        <div id="modify-status" class="mt-4 text-center text-sm"></div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+
+            document.getElementById('download-bulk-modify-template-btn-modal').addEventListener('click', () => downloadBulkModifyTemplate(currentTableName));
+
+
+            document.getElementById('perform-bulk-modify-btn').addEventListener('click', () => {
+                const fileInput = document.getElementById('bulk-modify-file-input');
+                const statusDiv = document.getElementById('modify-status');
+                const file = fileInput.files[0];
+
+                if (!file) {
+                    showToast("Please select a file (CSV or JSON).", "error");
+                    return;
+                }
+
+                statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Processing file...</p>`;
+                lucide.createIcons();
+
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    let recordsToModify = [];
+                    try {
+                        if (file.type.includes('json') || file.name.endsWith('.json')) {
+                            recordsToModify = JSON.parse(e.target.result);
+                            if (!Array.isArray(recordsToModify)) {
+                                throw new Error("JSON file must contain an array of objects.");
+                            }
+                        } else if (file.type.includes('csv') || file.name.endsWith('.csv')) {
+                            const parseResult = PapaParse.parse(e.target.result, { header: true, skipEmptyLines: true });
+                            if (parseResult.errors.length) {
+                                throw new Error(`CSV parsing errors: ${parseResult.errors.map(err => err.message).join(', ')}`);
+                            }
+                            recordsToModify = parseResult.data;
+                        } else {
+                            throw new Error("Unsupported file type. Please upload a CSV or JSON file.");
+                        }
+
+                        if (!recordsToModify.length) {
+                            showToast("No records found in the file.", "error");
+                            return;
+                        }
+
+                        await processBulkModifyRecords(recordsToModify, statusDiv, closeModal);
+
+                    } catch (error) {
+                        console.error("Bulk modify file processing error:", error);
+                        statusDiv.innerHTML = `<p class="text-red-500">Error processing file: ${error.message}</p>`;
+                        lucide.createIcons();
+                    }
+                };
+                reader.readAsText(file);
+            });
         }
 
         async function showBulkUploadModal() {
@@ -1352,7 +1556,7 @@
             `;
             const { closeModal } = showModal(modalHTML);
 
-            document.getElementById('download-csv-template-btn-modal').addEventListener('click', downloadCsvTemplate);
+            document.getElementById('download-csv-template-btn-modal').addEventListener('click', () => downloadCsvTemplate(currentTableName));
 
             document.getElementById('upload-csv-btn').addEventListener('click', () => {
                 const fileInput = document.getElementById('csv-file-input');
@@ -1410,14 +1614,14 @@
             });
         }
 
-        async function downloadCsvTemplate() {
+        async function downloadCsvTemplate(fullTableName) {
             console.log("downloadCsvTemplate called.");
-            if (!currentTableName) {
+            if (!fullTableName) {
                 showToast("Please select a table to download its template.", "error");
                 return;
             }
 
-            const [schemaName, tableName] = currentTableName.split('.');
+            const [schemaName, tableName] = fullTableName.split('.');
             const schema = await getTableSchema(schemaName, tableName);
 
             if (!schema || schema.error) {
@@ -1470,161 +1674,19 @@
             showToast("Template downloaded successfully!", "success");
         }
 
-        async function showBulkModifyModal() {
-            const modalHTML = `
-                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
-                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl transform transition-all -translate-y-10 opacity-0">
-                        <div class="flex justify-between items-center mb-6">
-                            <h2 class="text-2xl font-bold">Bulk Modify for ${formatColumnName(currentTableName.split('.')[1])}</h2>
-                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
-                        </div>
-                        <p class="text-gray-700 mb-4">Upload a CSV or JSON file containing records to update. Each record must include all primary key column(s) for identification, and any fields you wish to modify.</p>
-                        <input type="file" id="bulk-modify-file-input" accept=".csv,.json" class="w-full p-2 border rounded mb-4">
-                        <div class="flex justify-between space-x-2">
-                            <button id="download-bulk-modify-template-btn-modal" class="w-1/2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
-                                <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download Template
-                            </button>
-                            <button id="perform-bulk-modify-btn" class="w-1/2 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
-                                <i data-lucide="file-edit" class="w-5 h-5 mr-2"></i>Perform Bulk Modify
-                            </button>
-                        </div>
-                        <div id="modify-status" class="mt-4 text-center text-sm"></div>
-                    </div>
-                </div>
-            `;
-            const { closeModal } = showModal(modalHTML);
 
-            document.getElementById('download-bulk-modify-template-btn-modal').addEventListener('click', downloadBulkModifyTemplate);
-
-
-            document.getElementById('perform-bulk-modify-btn').addEventListener('click', () => {
-                const fileInput = document.getElementById('bulk-modify-file-input');
-                const statusDiv = document.getElementById('modify-status');
-                const file = fileInput.files[0];
-
-                if (!file) {
-                    showToast("Please select a file (CSV or JSON).", "error");
-                    return;
-                }
-
-                statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Processing file...</p>`;
-                lucide.createIcons();
-
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    let recordsToModify = [];
-                    try {
-                        if (file.type === 'application/json') {
-                            recordsToModify = JSON.parse(e.target.result);
-                            if (!Array.isArray(recordsToModify)) {
-                                throw new Error("JSON file must contain an array of objects.");
-                            }
-                        } else if (file.type === 'text/csv') {
-                            const parseResult = PapaParse.parse(e.target.result, { header: true, skipEmptyLines: true });
-                            if (parseResult.errors.length) {
-                                throw new Error(`CSV parsing errors: ${parseResult.errors.map(err => err.message).join(', ')}`);
-                            }
-                            recordsToModify = parseResult.data;
-                        } else {
-                            throw new Error("Unsupported file type. Please upload a CSV or JSON file.");
-                        }
-
-                        if (!recordsToModify.length) {
-                            showToast("No records found in the file.", "error");
-                            return;
-                        }
-
-                        const recordsToModifyCleaned = recordsToModify.map(row => {
-                            const newRow = {};
-                            for (const key in row) {
-                                newRow[key] = row[key] === '' ? null : row[key];
-                            }
-                            return newRow;
-                        });
-
-                        statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Performing bulk update on ${recordsToModifyCleaned.length} records...</p>`;
-                        lucide.createIcons();
-
-                        const [schemaName, tableName] = currentTableName.split('.');
-                        const result = await apiFetch(`table/${schemaName}/${tableName}/batch_update`, {
-                            method: 'PUT',
-                            body: recordsToModifyCleaned
-                        });
-
-                        if (result && result.success) {
-                            showToast(`Successfully updated ${result.updated_rows} records!`, "success");
-                            loadAndRenderTable(currentTableName);
-                            setTimeout(closeModal, 2000);
-                        } else {
-                            showToast(`Bulk modify failed: ${result ? result.error : 'Unknown error'}`, "error");
-                        }
-                        lucide.createIcons();
-
-                    } catch (error) {
-                        console.error("Bulk modify file processing error:", error);
-                        statusDiv.innerHTML = `<p class="text-red-500">Error processing file: ${error.message}</p>`;
-                        lucide.createIcons();
-                    }
-                };
-                reader.readAsText(file);
-            });
-        }
-
-        async function downloadBulkModifyTemplate() {
-            console.log("downloadBulkModifyTemplate called.");
-            if (!currentTableName) {
-                showToast("Please select a table to download its bulk modify template.", "error");
-                return;
-            }
-
-            const [schemaName, tableName] = currentTableName.split('.');
-            const schema = await getTableSchema(schemaName, tableName);
-            const pkColumns = await getPrimaryKeysForTable(schemaName, tableName);
-
-            if (!schema || schema.error) {
-                console.error("Failed to fetch table schema for template:", schema ? schema.error : 'Unknown error');
-                showToast('Failed to fetch table schema for template: ' + (schema ? schema.error : 'Unknown error'), "error");
-                return;
-            }
-
-            let headers = pkColumns;
-            
-            const commonEditableColumns = schema.filter(col => 
-                !pkColumns.includes(col.column_name) && 
-                !col.column_name.includes('attachment') && 
-                !col.column_name.includes('password_hash') && 
-                !col.column_name.includes('search_vector') &&
-                !col.column_name.includes('geom') && 
-                !col.column_name.includes('created_at') &&
-                !(col.column_default && col.column_default.includes('nextval'))
-            ).map(col => col.column_name);
-
-            headers = [...new Set([...headers, ...commonEditableColumns])];
-
-            console.log("Bulk Modify Template Headers:", headers);
-            const csv = unparseCSV([headers], { header: false });
-            
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `${tableName}_bulk_modify_template.csv`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(link.href);
-            console.log("Bulk modify template download initiated.");
-            showToast("Bulk modify template downloaded successfully!", 'success');
-        }
+        // --- Page Loading & Initialization ---
 
         function initializePage() {
             setupTabListeners();
             populateDynamicTableSelect();
             loadAndRenderTable(currentTableName); 
 
+            // Button Listeners
             document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal(null, 'lab.root_samples'));
             document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal);
             document.getElementById('bulk-modify-btn').addEventListener('click', showBulkModifyModal);
-            document.getElementById('download-template-general-btn').addEventListener('click', downloadCsvTemplate);
+            document.getElementById('download-template-general-btn').addEventListener('click', () => downloadCsvTemplate(currentTableName));
         }
 
         function setupTabListeners() {
@@ -1680,29 +1742,17 @@
             let dataPromises = [];
             let schemaPromises = [];
             let pkPromises = [];
-            let tableNamesToFetch = [];
 
-            if (fullTableName === 'lab.root_samples') {
-                const [s, t] = fullTableName.split('.');
-                dataPromises.push(apiFetch(`table/${s}/${t}`));
-                schemaPromises.push(getTableSchema(s, t));
-                pkPromises.push(getPrimaryKeysForTable(s, t));
-            } else {
-                const [s, t] = fullTableName.split('.');
-                dataPromises.push(apiFetch(`table/${s}/${t}`));
-                schemaPromises.push(getTableSchema(s, t));
-                pkPromises.push(getPrimaryKeysForTable(s, t));
-            }
+            const [s, t] = fullTableName.split('.');
+            dataPromises.push(apiFetch(`table/${s}/${t}`));
+            schemaPromises.push(getTableSchema(s, t));
+            pkPromises.push(getPrimaryKeysForTable(s, t));
 
             const [allDataResults, allSchemaResults, allPkResults] = await Promise.all([
                 Promise.all(dataPromises),
                 Promise.all(schemaPromises),
                 Promise.all(pkPromises)
             ]);
-
-            let combinedData = [];
-            let primarySchema = [];
-            let primaryPkInfo = [];
 
             const data = allDataResults[0];
             const schema = allSchemaResults[0];
@@ -1712,22 +1762,23 @@
                 currentTableData = data;
                 currentTableSchema = schema;
                 pkMappingCache[`pk.${fullTableName}`] = pkInfo;
+                
+                const downloadButton = document.getElementById('download-template-general-btn');
+                if (downloadButton) {
+                    downloadButton.disabled = false;
+                }
+
+                applyFiltersAndSort(); 
             } else {
                 console.error(`Failed to load data for ${fullTableName}. Data error: ${data ? data.error : 'N/A'}, Schema error: ${schema ? schema.error : 'N/A'}`);
                 tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-red-500">Error loading data for ${fullTableName}: ${data ? data.error : schema ? schema.error : 'Unknown error'}</td></tr>`;
+                
                 const downloadButton = document.getElementById('download-template-general-btn');
                 if (downloadButton) {
                     downloadButton.disabled = true;
                 }
                 return; 
             }
-
-            const downloadButton = document.getElementById('download-template-general-btn');
-            if (downloadButton) {
-                downloadButton.disabled = false;
-            }
-
-            applyFiltersAndSort(); 
         }
     </script>
 </body>

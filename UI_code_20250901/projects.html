@@ -182,7 +182,7 @@
                         Projects
                     </a>
                     <select id="dynamic-table-select" class="tab-link whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 bg-transparent outline-none">
-                        </select>
+                    </select>
                 </nav>
             </div>
 
@@ -222,6 +222,7 @@
     </div>
 
     <script>
+        // --- CSV Utility ---
         function unparseCSV(data, options) {
             options = options || {};
             const delimiter = options.delimiter || ',';
@@ -248,11 +249,13 @@
             }).join(newline);
         }
 
+        // --- Auth Check ---
         if (sessionStorage.getItem('isLoggedIn') !== 'true') {
             localStorage.setItem('redirectUrl', window.location.href);
             window.location.href = './login.html';
         }
-        
+
+        // --- Global State & Configuration ---
         const API_BASE_URL = '/mylims/api';
         let masterCache = {};
         let currentTableData = [];
@@ -262,7 +265,6 @@
         let sortDirection = 'asc';
         let columnFilters = {};
         let allProjectTables = [];
-        let pkMappingCache = {};
 
         const VIEW_TO_BASE_TABLE_MAPPING = {
             'lims.project_summary_view': 'lims.projects',
@@ -278,31 +280,43 @@
             'projects.projectwanderfische_chatmessage': 'projects.projectwanderfische_chatmessage'
         };
 
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log("DOMContentLoaded: Initializing page.");
-            lucide.createIcons();
-            const user = JSON.parse(sessionStorage.getItem('user'));
-            if (user) {
-                let userName = 'User';
-                if (user.full_name) userName = user.full_name;
-                else if (user.person_id) userName = user.person_id;
-                else if (user.customer_name) userName = user.customer_name;
-                else if (user.contact_id) userName = user.contact_id;
-                document.getElementById('user-profile').innerHTML = `
-                    <span class="mr-2 p-2 bg-blue-500 text-white rounded-full text-xs font-bold">${userName.charAt(0).toUpperCase()}</span>
-                    <p class="font-semibold text-sm text-gray-800">${userName}</p>
-                `;
-            }
-            
-            document.getElementById('logout-button').addEventListener('click', () => {
-                console.log("Logout button clicked.");
-                sessionStorage.clear();
-                window.location.href = './login.html';
-            });
-            
-            initializePage();
-        });
+        // --- Core Helpers ---
+        function formatColumnName(columnName) {
+            return columnName.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+        }
 
+        function getPkValues(row) {
+            const pkColumns = masterCache[`pk.${currentTableName}`] || [];
+            const pkValues = {};
+            pkColumns.forEach(pkCol => {
+                if (row[pkCol] !== undefined) {
+                    pkValues[pkCol] = row[pkCol];
+                }
+            });
+            return pkValues;
+        }
+
+        const formatDateForInput = (dateString) => {
+            if (!dateString) return '';
+            try {
+                const date = new Date(dateString);
+                return isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0];
+            } catch (e) {
+                return '';
+            }
+        };
+
+        const formatDateTimeForInput = (dateTimeString) => {
+            if (!dateTimeString) return '';
+            try {
+                const date = new Date(dateTimeString);
+                return isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 16);
+            } catch (e) {
+                return '';
+            }
+        };
+
+        // --- API & Cache Functions (No Duplication) ---
         async function apiFetch(endpoint, options = {}) {
             console.log(`API Fetch: Calling ${endpoint} with options:`, options);
             try {
@@ -313,7 +327,7 @@
                 }
 
                 const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
-                
+
                 if (!response.ok) {
                     const errText = await response.text();
                     console.error(`API Error Response for ${endpoint} (Status: ${response.status}):`, errText);
@@ -370,32 +384,58 @@
             return schemaData;
         }
 
-        async function getAllProjectTables() {
-            if (allProjectTables.length > 0) {
-                console.log("Returning cached project tables.");
-                return allProjectTables;
+        async function getPrimaryKeysForTable(schema, table) {
+            const cacheKey = `pk.${schema}.${table}`;
+            if (masterCache[cacheKey]) return masterCache[cacheKey];
+
+            const schemaData = await getTableSchema(schema, table);
+            if (schemaData && !schemaData.error) {
+                const pkColumns = schemaData.filter(col => col.is_primary_key).map(col => col.column_name);
+                masterCache[cacheKey] = pkColumns;
+                return pkColumns;
             }
-            console.log("Fetching all tables for projects page.");
-            const tables = await apiFetch('table_names_for_forms');
-            if (tables && !tables.error) {
-                // Filter tables relevant to projects page
-                allProjectTables = tables.filter(t => 
-                    t.startsWith('lims.p') || // lims.projects, lims.project_persons, lims.publications, etc.
-                    t.startsWith('lab.experiments_projects') ||
-                    t.startsWith('projects.') ||
-                    t.startsWith('lims.c') || // lims.customers, lims.cruises
-                    t.startsWith('lims.e') // lims.external_contacts
-                );
-                allProjectTables = [...new Set(allProjectTables)]; // Ensure uniqueness
-                console.log("Filtered project tables:", allProjectTables);
-                return allProjectTables;
-            }
-            console.error("Failed to fetch all project tables:", tables ? tables.error : 'Unknown error');
             return [];
         }
 
-        function formatColumnName(columnName) {
-            return columnName.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+        // --- UI Rendering Functions ---
+
+        function updateMainActionButtons(tableType) {
+            const isBaseTable = tableType === 'BASE TABLE';
+            document.getElementById('add-single-entry-btn').disabled = !isBaseTable;
+            document.getElementById('bulk-csv-upload-btn').disabled = !isBaseTable;
+            document.getElementById('bulk-modify-btn').disabled = !isBaseTable;
+
+            const disabledClass = 'bg-gray-400 cursor-not-allowed hover:bg-gray-400';
+            const enabledAddClass = 'bg-blue-600 hover:bg-blue-700';
+            const enabledBulkClass = 'bg-green-600 hover:bg-green-700';
+            const enabledModifyClass = 'bg-yellow-600 hover:bg-yellow-700';
+            
+            // Helper to toggle classes
+            const toggleButtonClasses = (btnId, isEnabled, enabledClasses) => {
+                const btn = document.getElementById(btnId);
+                if (!btn) return;
+
+                // Remove existing color classes
+                btn.classList.remove('bg-blue-600', 'bg-green-600', 'bg-yellow-600', 'bg-gray-400', 
+                                     'hover:bg-blue-700', 'hover:bg-green-700', 'hover:bg-yellow-700', 'hover:bg-gray-400');
+                btn.classList.remove('cursor-not-allowed', 'hover:shadow-lg');
+
+                if (isEnabled) {
+                    btn.classList.add(...enabledClasses.split(' ').filter(c => c));
+                    btn.classList.add('hover:shadow-lg');
+                } else {
+                    btn.classList.add(...disabledClass.split(' ').filter(c => c));
+                }
+            };
+
+            toggleButtonClasses('add-single-entry-btn', isBaseTable, enabledAddClass);
+            toggleButtonClasses('bulk-csv-upload-btn', isBaseTable, enabledBulkClass);
+            toggleButtonClasses('bulk-modify-btn', isBaseTable, enabledModifyClass);
+
+            // Update tooltips
+            document.getElementById('add-tooltip').textContent = isBaseTable ? 'Add a new row to this table.' : 'Only base tables can be edited/added.';
+            document.getElementById('upload-tooltip').textContent = isBaseTable ? 'Bulk insert data into this table.' : 'Only base tables can be uploaded to.';
+            document.getElementById('modify-tooltip').textContent = isBaseTable ? 'Bulk update existing rows in this table.' : 'Only base tables can be bulk modified.';
         }
         
         function renderTable(dataToDisplay, schemaInfo) {
@@ -412,6 +452,7 @@
 
             if (!schemaInfo || schemaInfo.length === 0) {
                 tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500">No schema information available for this table.</td></tr>`;
+                updateMainActionButtons(null);
                 return;
             }
 
@@ -419,13 +460,15 @@
             
             let headerHtml = '';
             columnsToDisplay.forEach(col => {
+                // Pre-set filter value if it exists for persistence
+                const filterValue = columnFilters[col.column_name] || '';
                 headerHtml += `
                     <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                         <div class="sortable-header" data-column="${col.column_name}">
                             <span>${formatColumnName(col.column_name)}</span>
                             <i data-lucide="chevrons-up-down" class="sort-icon text-gray-400"></i>
                         </div>
-                        <input type="text" placeholder="Filter ${formatColumnName(col.column_name)}..." class="filter-input" data-column="${col.column_name}">
+                        <input type="text" placeholder="Filter ${formatColumnName(col.column_name)}..." class="filter-input" data-column="${col.column_name}" value="${filterValue}">
                     </th>
                 `;
             });
@@ -447,7 +490,7 @@
                         }
                     }
 
-                    const isBaseTable = currentTableSchema.length > 0 && currentTableSchema[0].table_type === 'BASE TABLE';
+                    const isBaseTable = schemaInfo[0].table_type === 'BASE TABLE';
                     const actionButtonsDisabled = isBaseTable ? '' : 'disabled';
                     const actionButtonClasses = isBaseTable ? 'text-gray-500 hover:text-blue-600' : 'text-gray-300 cursor-not-allowed';
                     const deleteButtonClasses = isBaseTable ? 'text-gray-500 hover:text-red-600' : 'text-gray-300 cursor-not-allowed';
@@ -460,7 +503,7 @@
                             value = 'N/A';
                         } else if (col.data_type === 'date' && value) {
                             try { value = new Date(value).toLocaleDateString('en-CA'); } catch (e) { /* keep original */ }
-                        } else if (col.data_type === 'timestamp with time zone' && value) {
+                        } else if (col.data_type.includes('timestamp') && value) {
                             try { value = new Date(value).toLocaleString(); } catch (e) { /* keep original */ }
                         } else if (typeof value === 'object') {
                             value = `<pre class="bg-gray-100 p-1 text-xs rounded overflow-x-auto">${JSON.stringify(value, null, 2).substring(0, 50)}...</pre>`;
@@ -483,130 +526,16 @@
             updateMainActionButtons(schemaInfo.length > 0 ? schemaInfo[0].table_type : null);
         }
 
-        function getPkValues(row) {
-            const pkColumns = masterCache[`pk.${currentTableName}`] || [];
-            const pkValues = {};
-            pkColumns.forEach(pkCol => {
-                if (row[pkCol] !== undefined) {
-                    pkValues[pkCol] = row[pkCol];
-                }
-            });
-            return pkValues;
-        }
-
-        const formatDateForInput = (dateString) => {
-            if (!dateString) return '';
-            try {
-                const date = new Date(dateString);
-                return isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0];
-            } catch (e) {
-                return '';
+        function updateSortIcons() {
+            document.querySelectorAll('.sortable-header i').forEach(icon => icon.setAttribute('data-lucide', 'chevrons-up-down'));
+            if (sortColumn) {
+                const currentSortIcon = document.querySelector(`.sortable-header[data-column="${sortColumn}"] i`);
+                if (currentSortIcon) currentSortIcon.setAttribute('data-lucide', sortDirection === 'asc' ? 'chevron-up' : 'chevron-down');
             }
-        };
-
-        const formatDateTimeForInput = (dateTimeString) => {
-            if (!dateTimeString) return '';
-            try {
-                const date = new Date(dateTimeString);
-                return isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 16);
-            } catch (e) {
-                return '';
-            }
-        };
-
-
-        function addTableActionListeners() {
-            document.querySelectorAll('.dynamic-table-row').forEach(row => {
-                row.addEventListener('click', (e) => {
-                    if (e.target.closest('button')) return;
-                    document.querySelectorAll('.dynamic-table-row').forEach(r => r.classList.remove('table-row-selected'));
-                    row.classList.add('table-row-selected');
-                    const pkValues = JSON.parse(row.dataset.pkValues);
-                    
-                    // Only show detailed view for the main projects table
-                    if (currentTableName === 'lims.projects') {
-                        renderProjectDetails(pkValues);
-                    } else {
-                         document.getElementById('project-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="folder-kanban" class="mx-auto h-12 w-12"></i><p class="mt-2">View details on the main "Projects" tab.</p></div></div>`;
-                         lucide.createIcons();
-                    }
-                });
-            });
-
-            document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', async e => {
-                e.stopPropagation();
-                if (btn.disabled) return;
-                const pkValues = JSON.parse(e.currentTarget.dataset.pkValues);
-                
-                // Find the complete record from the current data set
-                const record = currentTableData.find(r => {
-                    return Object.keys(pkValues).every(key => {
-                        const colSchema = currentTableSchema.find(s => s.column_name === key);
-                        if (colSchema && colSchema.data_type === 'date') {
-                            return formatDateForInput(r[key]) === pkValues[key];
-                        }
-                        return String(r[key]) === String(pkValues[key]);
-                    });
-                });
-                
-                // Ensure the form is built for the base table if we are editing a view
-                const targetBaseTable = VIEW_TO_BASE_TABLE_MAPPING[currentTableName] || currentTableName;
-
-                if (record) showCreateEditModal(record, targetBaseTable);
-                else console.error("Record not found for editing.");
-            }));
-
-            document.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', async e => {
-                e.stopPropagation();
-                if (btn.disabled) return;
-                
-                const tableToDeleteFrom = VIEW_TO_BASE_TABLE_MAPPING[currentTableName] || currentTableName;
-                const [schemaName, tableName] = tableToDeleteFrom.split('.');
-                const pkValues = JSON.parse(e.currentTarget.dataset.pkValues);
-                const recordIdentifier = Object.values(pkValues).join(' / ');
-                
-                if (!confirm(`Are you sure you want to delete this record (${recordIdentifier}) from ${tableName}? This is usually permanent.`)){
-                    return;
-                }
-
-                let success = false;
-                // Special handling for deletion cascades if needed (as in experiments.html), otherwise generic delete
-                
-                // If deleting lims.projects, manually delete children in project_persons
-                if (tableName === 'projects') {
-                    const projectId = pkValues.project_id;
-                    const result = await apiFetch(`table/lims/project_persons?filter_project_id=${projectId}`, { method: 'DELETE' });
-                    if(result.error) {
-                         alert('Warning: Failed to delete associated personnel. Attempting to delete main project anyway.');
-                    }
-                }
-
-                const queryString = new URLSearchParams(pkValues).toString();
-                const result = await apiFetch(`table/${schemaName}/${tableName}?${queryString}`, { method: 'DELETE' });
-                
-                if (result.success) {
-                    alert('Record deleted successfully!');
-                    loadAndRenderTable(currentTableName);
-                    if (currentTableName === 'lims.projects') {
-                        document.getElementById('project-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="folder-kanban" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a project to view its details</p></div></div>`;
-                    }
-                } else {
-                    alert('Failed to delete record: ' + (result ? result.error : 'Unknown error'));
-                }
-            }));
+            lucide.createIcons();
         }
 
-        function addFilterAndSortListeners() {
-            document.querySelectorAll('.sortable-header').forEach(header => {
-                header.removeEventListener('click', handleSortClick);
-                header.addEventListener('click', handleSortClick);
-            });
-            document.querySelectorAll('.filter-input').forEach(input => {
-                input.removeEventListener('input', handleFilterInput);
-                input.addEventListener('input', handleFilterInput);
-            });
-            updateSortIcons();
-        }
+        // --- Filtering and Sorting Logic ---
 
         function handleSortClick(e) {
             const column = e.currentTarget.dataset.column;
@@ -664,16 +593,123 @@
             updateSortIcons();
         }
 
-        function updateSortIcons() {
-            document.querySelectorAll('.sortable-header i').forEach(icon => icon.setAttribute('data-lucide', 'chevrons-up-down'));
-            if (sortColumn) {
-                const currentSortIcon = document.querySelector(`.sortable-header[data-column="${sortColumn}"] i`);
-                if (currentSortIcon) currentSortIcon.setAttribute('data-lucide', sortDirection === 'asc' ? 'chevron-up' : 'chevron-down');
-            }
-            lucide.createIcons();
+        function addFilterAndSortListeners() {
+            document.querySelectorAll('.sortable-header').forEach(header => {
+                header.removeEventListener('click', handleSortClick);
+                header.addEventListener('click', handleSortClick);
+            });
+            document.querySelectorAll('.filter-input').forEach(input => {
+                input.removeEventListener('input', handleFilterInput);
+                input.addEventListener('input', handleFilterInput);
+            });
+            updateSortIcons();
         }
 
-        // START OF ENHANCED LOGIC FOR PROJECT DETAILS AND MODAL
+
+        // --- Project Details & Nested Actions ---
+
+        function attachProjectDetailListeners(pkValues, projectPersons, allPersons) {
+             document.querySelectorAll('.accordion-header').forEach(header => {
+                header.addEventListener('click', () => {
+                    const content = header.nextElementSibling;
+                    header.classList.toggle('active');
+                    content.classList.toggle('open');
+                    lucide.createIcons();
+                });
+            });
+
+            const personsMap = new Map((allPersons && !allPersons.error) ? allPersons.map(p => [p.person_id, p.full_name || p.person_id]) : []);
+            const currentLinkedPersons = (projectPersons && !projectPersons.error) ? projectPersons.map(pp => pp.person_id) : [];
+
+            document.querySelectorAll('.person-tag').forEach(tag => {
+                tag.addEventListener('click', async (e) => {
+                    const projectId = tag.dataset.projectId;
+                    const personId = tag.dataset.personId;
+                    
+                    // Custom non-alert confirmation (simplified here for brevity, assumes a custom modal implementation for production)
+                    if (window.confirm(`Remove ${personsMap.get(personId) || personId} from this project?`)) {
+                        const result = await apiFetch(`table/lims/project_persons?project_id=${projectId}&person_id=${personId}`, { method: 'DELETE' });
+                        if (result && result.success) {
+                            window.alert('Person unlinked successfully!');
+                            renderProjectDetails(pkValues);
+                        } else {
+                            window.alert('Failed to unlink person: ' + (result ? result.error : 'Unknown error'));
+                        }
+                    }
+                });
+            });
+
+            document.getElementById('add-person-to-project-btn')?.addEventListener('click', async (e) => {
+                const projectId = e.currentTarget.dataset.projectId;
+                const allFetchedPersons = (allPersons && !allPersons.error) ? allPersons : [];
+                
+                const availablePersons = allFetchedPersons.filter(p => !currentLinkedPersons.includes(p.person_id));
+
+                if (availablePersons.length === 0) {
+                    window.alert("No more persons to add or all are already linked.");
+                    return;
+                }
+
+                let optionsHtml = availablePersons.map(p => `<option value="${p.person_id}">${p.full_name || p.person_id}</option>`).join('');
+
+                const addPersonModalHtml = `
+                    <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
+                        <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-md transform transition-all -translate-y-10 opacity-0">
+                            <div class="flex justify-between items-center mb-6">
+                                <h2 class="text-2xl font-bold">Add Person to Project</h2>
+                                <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                            </div>
+                            <form id="add-person-form" class="space-y-4">
+                                <div>
+                                    <label class="block text-gray-700 text-sm font-bold mb-1" for="new-person-id">Select Person</label>
+                                    <select id="new-person-id" name="person_id" class="w-full mt-1 p-2 border rounded" required>
+                                        <option value="">-- Select --</option>
+                                        ${optionsHtml}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-gray-700 text-sm font-bold mb-1" for="new-person-role">Role (Optional)</label>
+                                    <input type="text" id="new-person-role" name="role" class="w-full mt-1 p-2 border rounded" placeholder="e.g., Technician, Bioinformatician">
+                                </div>
+                                <div class="pt-4 flex justify-end">
+                                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">
+                                        Add Person
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                `;
+                const { closeModal: closeAddPersonModal } = showModal(addPersonModalHtml);
+
+                document.getElementById('add-person-form').onsubmit = async (submitEvent) => {
+                    submitEvent.preventDefault();
+                    const newPersonId = document.getElementById('new-person-id').value;
+                    const newRole = document.getElementById('new-person-role').value;
+                    if (!newPersonId) { window.alert("Please select a person."); return; }
+                    try {
+                        const result = await apiFetch(`table/lims/project_persons`, {
+                            method: 'POST',
+                            body: {
+                                project_id: projectId,
+                                person_id: newPersonId,
+                                role: newRole || 'Member',
+                                link_date: new Date().toISOString().split('T')[0]
+                            }
+                        });
+                        if (result && !result.error) {
+                            window.alert('Person linked successfully!');
+                            closeAddPersonModal();
+                            renderProjectDetails(pkValues);
+                        } else {
+                            window.alert('Failed to link person: ' + (result.error || 'Unknown error'));
+                        }
+                    } catch (error) {
+                        window.alert('Error adding person to project: ' + error.message);
+                    }
+                };
+            });
+        }
 
         async function renderProjectDetails(pkValues) {
             const container = document.getElementById('project-details-container');
@@ -719,6 +755,8 @@
             }
             
             let detailsHtml = `<div class="space-y-3 text-sm">`;
+
+            // Core Info Accordion
             detailsHtml += `
                 <div class="accordion-item">
                     <button class="accordion-header active" data-accordion="core-info">
@@ -814,107 +852,83 @@
             attachProjectDetailListeners(pkValues, projectPersons, allPersons);
         }
 
-        function attachProjectDetailListeners(pkValues, projectPersons, allPersons) {
-             document.querySelectorAll('.accordion-header').forEach(header => {
-                header.addEventListener('click', () => {
-                    const content = header.nextElementSibling;
-                    header.classList.toggle('active');
-                    content.classList.toggle('open');
-                    lucide.createIcons();
-                });
-            });
-
-            const personsMap = new Map((allPersons && !allPersons.error) ? allPersons.map(p => [p.person_id, p.full_name || p.person_id]) : []);
-            const currentLinkedPersons = (projectPersons && !projectPersons.error) ? projectPersons.map(pp => pp.person_id) : [];
-
-            document.querySelectorAll('.person-tag').forEach(tag => {
-                tag.addEventListener('click', async (e) => {
-                    const projectId = tag.dataset.projectId;
-                    const personId = tag.dataset.personId;
-                    if (confirm(`Remove ${personsMap.get(personId) || personId} from this project?`)) {
-                        const result = await apiFetch(`table/lims/project_persons?project_id=${projectId}&person_id=${personId}`, { method: 'DELETE' });
-                        if (result && result.success) {
-                            alert('Person unlinked successfully!');
-                            renderProjectDetails(pkValues);
-                        } else {
-                            alert('Failed to unlink person: ' + (result ? result.error : 'Unknown error'));
-                        }
+        function addTableActionListeners() {
+            document.querySelectorAll('.dynamic-table-row').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    if (e.target.closest('button')) return;
+                    document.querySelectorAll('.dynamic-table-row').forEach(r => r.classList.remove('table-row-selected'));
+                    row.classList.add('table-row-selected');
+                    const pkValues = JSON.parse(row.dataset.pkValues);
+                    
+                    // Only show detailed view for the main projects table
+                    if (currentTableName === 'lims.projects') {
+                        renderProjectDetails(pkValues);
+                    } else {
+                         document.getElementById('project-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="folder-kanban" class="mx-auto h-12 w-12"></i><p class="mt-2">View details on the main "Projects" tab.</p></div></div>`;
+                         lucide.createIcons();
                     }
                 });
             });
 
-            document.getElementById('add-person-to-project-btn')?.addEventListener('click', async (e) => {
-                const projectId = e.currentTarget.dataset.projectId;
-                const allFetchedPersons = (allPersons && !allPersons.error) ? allPersons : [];
+            document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', async e => {
+                e.stopPropagation();
+                if (btn.disabled) return;
+                const pkValues = JSON.parse(e.currentTarget.dataset.pkValues);
                 
-                const availablePersons = allFetchedPersons.filter(p => !currentLinkedPersons.includes(p.person_id));
+                // Find the complete record from the current data set
+                const record = currentTableData.find(r => {
+                    return Object.keys(pkValues).every(key => {
+                        const colSchema = currentTableSchema.find(s => s.column_name === key);
+                        if (colSchema && colSchema.data_type === 'date') {
+                            return formatDateForInput(r[key]) === pkValues[key];
+                        }
+                        return String(r[key]) === String(pkValues[key]);
+                    });
+                });
+                
+                // Ensure the form is built for the base table if we are editing a view
+                const targetBaseTable = VIEW_TO_BASE_TABLE_MAPPING[currentTableName] || currentTableName;
 
-                if (availablePersons.length === 0) {
-                    alert("No more persons to add or all are already linked.");
+                if (record) showCreateEditModal(record, targetBaseTable);
+                else console.error("Record not found for editing.");
+            }));
+
+            document.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', async e => {
+                e.stopPropagation();
+                if (btn.disabled) return;
+                
+                const tableToDeleteFrom = VIEW_TO_BASE_TABLE_MAPPING[currentTableName] || currentTableName;
+                const [schemaName, tableName] = tableToDeleteFrom.split('.');
+                const pkValues = JSON.parse(e.currentTarget.dataset.pkValues);
+                const recordIdentifier = Object.values(pkValues).join(' / ');
+                
+                if (!window.confirm(`Are you sure you want to delete this record (${recordIdentifier}) from ${tableName}? This is usually permanent.`)){
                     return;
                 }
 
-                let optionsHtml = availablePersons.map(p => `<option value="${p.person_id}">${p.full_name || p.person_id}</option>`).join('');
-
-                const addPersonModalHtml = `
-                    <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
-                        <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-md transform transition-all -translate-y-10 opacity-0">
-                            <div class="flex justify-between items-center mb-6">
-                                <h2 class="text-2xl font-bold">Add Person to Project</h2>
-                                <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
-                            </div>
-                            <form id="add-person-form" class="space-y-4">
-                                <div>
-                                    <label class="block text-gray-700 text-sm font-bold mb-1" for="new-person-id">Select Person</label>
-                                    <select id="new-person-id" name="person_id" class="w-full mt-1 p-2 border rounded" required>
-                                        <option value="">-- Select --</option>
-                                        ${optionsHtml}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-gray-700 text-sm font-bold mb-1" for="new-person-role">Role (Optional)</label>
-                                    <input type="text" id="new-person-role" name="role" class="w-full mt-1 p-2 border rounded" placeholder="e.g., Technician, Bioinformatician">
-                                </div>
-                                <div class="pt-4 flex justify-end">
-                                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">
-                                        Add Person
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                `;
-                const { closeModal: closeAddPersonModal } = showModal(addPersonModalHtml);
-
-                document.getElementById('add-person-form').onsubmit = async (submitEvent) => {
-                    submitEvent.preventDefault();
-                    const newPersonId = document.getElementById('new-person-id').value;
-                    const newRole = document.getElementById('new-person-role').value;
-                    if (!newPersonId) { alert("Please select a person."); return; }
-                    try {
-                        const result = await apiFetch(`table/lims/project_persons`, {
-                            method: 'POST',
-                            body: {
-                                project_id: projectId,
-                                person_id: newPersonId,
-                                role: newRole || 'Member',
-                                link_date: new Date().toISOString().split('T')[0]
-                            }
-                        });
-                        if (result && !result.error) {
-                            alert('Person linked successfully!');
-                            closeAddPersonModal();
-                            renderProjectDetails(pkValues);
-                        } else {
-                            alert('Failed to link person: ' + (result.error || 'Unknown error'));
-                        }
-                    } catch (error) {
-                        alert('Error adding person to project: ' + error.message);
+                // If deleting lims.projects, manually delete children in project_persons
+                if (tableName === 'projects') {
+                    const projectId = pkValues.project_id;
+                    const result = await apiFetch(`table/lims/project_persons?filter_project_id=${projectId}`, { method: 'DELETE' });
+                    if(result.error) {
+                         window.alert('Warning: Failed to delete associated personnel. Attempting to delete main project anyway.');
                     }
-                };
-            });
-        }
+                }
 
+                const queryString = new URLSearchParams(pkValues).toString();
+                const result = await apiFetch(`table/${schemaName}/${tableName}?${queryString}`, { method: 'DELETE' });
+                
+                if (result.success) {
+                    window.alert('Record deleted successfully!');
+                    loadAndRenderTable(currentTableName);
+                    if (currentTableName === 'lims.projects') {
+                        document.getElementById('project-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="folder-kanban" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a project to view its details</p></div></div>`;
+                    }
+                } else {
+                    window.alert('Failed to delete record: ' + (result ? result.error : 'Unknown error'));
+                }
+            }));
+        }
 
         // --- MODAL LOGIC (START) ---
         function showModal(content) {
@@ -932,14 +946,44 @@
             return { closeModal };
         }
 
+        async function updateProjectPersonLinks(projectId, newPersonIds) {
+            if (!projectId) return;
+
+            const existingLinksResult = await apiFetch(`table/lims/project_persons?filter_project_id=${projectId}`);
+            const existingLinkedPersonIds = existingLinksResult && !existingLinksResult.error ? existingLinksResult.map(pp => pp.person_id) : [];
+
+            // Identify persons to add and remove
+            const personsToAdd = newPersonIds.filter(id => !existingLinkedPersonIds.includes(id));
+            const personsToRemove = existingLinkedPersonIds.filter(id => !newPersonIds.includes(id));
+
+            const linkPromises = [];
+
+            // Add new links
+            for (const personId of personsToAdd) {
+                linkPromises.push(apiFetch(`table/lims/project_persons`, {
+                    method: 'POST',
+                    body: { project_id: projectId, person_id: personId, link_date: new Date().toISOString().split('T')[0] }
+                }).catch(e => console.error(`Failed to link person ${personId}:`, e)));
+            }
+
+            // Remove old links
+            for (const personId of personsToRemove) {
+                linkPromises.push(apiFetch(`table/lims/project_persons?project_id=${projectId}&person_id=${personId}`, {
+                    method: 'DELETE'
+                }).catch(e => console.error(`Failed to unlink person ${personId}:`, e)));
+            }
+
+            await Promise.all(linkPromises);
+        }
+
         async function showCreateEditModal(record = null, targetTable = null) {
             const finalTargetTableName = targetTable || currentTableName; 
             const [schemaName, tableName] = finalTargetTableName.split('.');
-            const isEditing = record !== null && targetTable === null; // True if record is present AND we didn't specify a different target table (i.e., not a redirect from a view)
+            const isEditing = record !== null;
 
             const targetTableSchema = await getTableSchema(schemaName, tableName);
             if (!targetTableSchema || targetTableSchema.error) {
-                alert('Error fetching schema for form: ' + (targetTableSchema ? targetTableSchema.error : 'Unknown error'));
+                window.alert('Error fetching schema for form: ' + (targetTableSchema ? targetTableSchema.error : 'Unknown error'));
                 return;
             }
             const pkColumnsForTargetTable = await getPrimaryKeysForTable(schemaName, tableName);
@@ -964,7 +1008,7 @@
                 const isAutoGenerated = col.column_default && col.column_default.includes('nextval');
                 const isReadOnlyField = isEditing && pkColumnsForTargetTable.includes(col.column_name) && !isAutoGenerated;
 
-                if (col.column_name.includes('password_hash') || col.column_name.includes('search_vector') || col.column_name.includes('attachment')) return;
+                if (col.column_name.includes('password_hash') || col.column_name.includes('search_vector') || col.column_name.includes('attachment') || col.column_name.includes('user_id')) return;
 
                 let value = record ? (record[col.column_name] || '') : (col.column_default ? col.column_default.replace(/::[a-z_]+/g, '').replace(/'/g, '') : '');
                 
@@ -1096,15 +1140,17 @@
                             return; // Don't include this in the main body payload
                         }
                         
+                        // Handle numeric and boolean fields
                         if (colSchema && (colSchema.data_type.includes('integer') || colSchema.data_type.includes('numeric'))) {
                             body[key] = value === '' ? null : Number(value);
                         } else if (colSchema && colSchema.data_type === 'boolean') {
-                            body[key] = formElement.querySelector(`[name="${key}"]`).checked; 
+                            // Checkboxes only send a value if checked. If unchecked, the value is missing from FormData.
+                            body[key] = formElement.querySelector(`[name="${key}"]`)?.checked || false; 
                         } else if (colSchema && colSchema.data_type === 'jsonb') {
                             try {
                                 body[key] = value === '' ? null : JSON.parse(value);
                             } catch (jsonError) {
-                                alert(`Invalid JSON for ${formatColumnName(key)}: ${jsonError.message}`);
+                                window.alert(`Invalid JSON for ${formatColumnName(key)}: ${jsonError.message}`);
                                 throw new Error(`Invalid JSON for ${formatColumnName(key)}`);
                             }
                         } else {
@@ -1115,7 +1161,6 @@
 
                 const method = isEditing ? 'PUT' : 'POST';
                 let endpoint = `table/${schemaName}/${tableName}`;
-                let newOrUpdatedPkValues = {};
 
                 if (isEditing) {
                     const pkValuesForApi = {};
@@ -1130,7 +1175,6 @@
                     }
                     const pkQueryString = new URLSearchParams(pkValuesForApi).toString();
                     endpoint += `?${pkQueryString}`;
-                    newOrUpdatedPkValues = pkValuesForApi; // Use original PKs for refresh, assuming they didn't change
                 }
                 
                 const result = await apiFetch(endpoint, { method, body: body });
@@ -1140,7 +1184,7 @@
                 spinner.classList.add('hidden');
 
                 if (result && !result.error) { 
-                    alert(`${isEditing ? 'Updated' : 'Created'} record successfully!`);
+                    window.alert(`${isEditing ? 'Updated' : 'Created'} record successfully!`);
                     closeModal(); 
                     loadAndRenderTable(currentTableName); 
                     
@@ -1153,185 +1197,97 @@
                     if (finalTargetTableName === 'lims.projects') {
                         // Refresh selected details if project
                         const pkToRefresh = { project_id: result.project_id || record.project_id };
-                        setTimeout(() => { renderProjectDetails(pkToRefresh); }, 100);
+                        // Give loadAndRenderTable a moment to update currentTableData
+                        setTimeout(() => { renderProjectDetails(pkToRefresh); }, 100); 
                     }
                 } else {
-                    alert(`Failed to ${isEditing ? 'save' : 'create'} record: ` + (result ? result.error : 'Unknown error')); 
+                    window.alert(`Failed to ${isEditing ? 'save' : 'create'} record: ` + (result ? result.error : 'Unknown error')); 
                 }
             };
         }
-
-        async function updateProjectPersonLinks(projectId, newPersonIds) {
-            if (!projectId) return;
-
-            const existingLinksResult = await apiFetch(`table/lims/project_persons?filter_project_id=${projectId}`);
-            const existingLinkedPersonIds = existingLinksResult && !existingLinksResult.error ? existingLinksResult.map(pp => pp.person_id) : [];
-
-            // Identify persons to add and remove
-            const personsToAdd = newPersonIds.filter(id => !existingLinkedPersonIds.includes(id));
-            const personsToRemove = existingLinkedPersonIds.filter(id => !newPersonIds.includes(id));
-
-            const linkPromises = [];
-
-            // Add new links
-            for (const personId of personsToAdd) {
-                linkPromises.push(apiFetch(`table/lims/project_persons`, {
-                    method: 'POST',
-                    body: { project_id: projectId, person_id: personId, link_date: new Date().toISOString().split('T')[0] }
-                }).catch(e => console.error(`Failed to link person ${personId}:`, e)));
-            }
-
-            // Remove old links
-            for (const personId of personsToRemove) {
-                linkPromises.push(apiFetch(`table/lims/project_persons?project_id=${projectId}&person_id=${personId}`, {
-                    method: 'DELETE'
-                }).catch(e => console.error(`Failed to unlink person ${personId}:`, e)));
-            }
-
-            await Promise.all(linkPromises);
-        }
         // --- MODAL LOGIC (END) ---
 
+        // --- BULK ACTION MODALS ---
 
-        async function loadAndRenderTable(fullTableName) {
-            console.log(`loadAndRenderTable: Attempting to load data for ${fullTableName}`);
-            currentTableName = fullTableName;
-            const [schemaName, tableName] = fullTableName.split('.');
-            
-            sortColumn = null;
-            sortDirection = 'asc';
-            columnFilters = {};
-            document.querySelectorAll('.filter-input').forEach(input => input.value = '');
+        async function processBulkModifyRecords(recordsToModify, statusDiv, closeModal) {
+            if (!recordsToModify.length) {
+                statusDiv.innerHTML = `<p class="text-red-500">No records found in the file.</p>`;
+                return;
+            }
 
-            const tableBody = document.getElementById('dynamic-table-body');
-            tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Loading data...</td></tr>`;
+            const recordsToModifyCleaned = recordsToModify.map(row => {
+                const newRow = {};
+                for (const key in row) {
+                    newRow[key] = row[key] === '' ? null : row[key];
+                }
+                return newRow;
+            });
+
+            statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Performing bulk update on ${recordsToModifyCleaned.length} records...</p>`;
             lucide.createIcons();
 
-            let dataFilter = '';
-            // Only filter the main projects table to 'In Progress' by default
-            if (tableName === 'projects') {
-                 dataFilter = '?filter_status_id=In Progress';
-            } else if (tableName === 'personal' || tableName === 'sop') {
-                 dataFilter = '?exclude_status_id=Archived';
-            } else if (VIEW_TO_BASE_TABLE_MAPPING[fullTableName]) {
-                 // Prevent setting default filters on complex views as it might break RLS/query logic
-                 dataFilter = '';
-            }
+            const [schemaName, tableName] = currentTableName.split('.');
+            const result = await apiFetch(`table/${schemaName}/${tableName}/batch_update`, {
+                method: 'PUT',
+                body: recordsToModifyCleaned
+            });
 
-
-            const [data, schema] = await Promise.all([
-                apiFetch(`table/${schemaName}/${tableName}${dataFilter}`),
-                getTableSchema(schemaName, tableName),
-            ]);
-
-            const pkInfo = await getPrimaryKeysForTable(schemaName, tableName);
-
-            if (data && !data.error && schema && !schema.error && pkInfo) {
-                console.log(`Successfully loaded data for ${fullTableName}. Data count: ${data.length}`);
-                currentTableData = data;
-                currentTableSchema = schema;
-                masterCache[`pk.${fullTableName}`] = pkInfo;
-                
-                // Clear details pane if loading a non-project table
-                if (tableName !== 'projects') {
-                    document.getElementById('project-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="search" class="mx-auto h-12 w-12"></i><p class="mt-2">Use the Main Projects tab for detail viewing.</p></div></div>`;
-                }
-
-                applyFiltersAndSort();
+            if (result && result.success) {
+                statusDiv.innerHTML = `<p class="text-green-600">Successfully updated ${result.updated_rows} records!</p>`;
+                loadAndRenderTable(currentTableName);
+                setTimeout(closeModal, 2000);
             } else {
-                console.error(`Failed to load data for ${fullTableName}. Data error: ${data ? data.error : 'N/A'}, Schema error: ${schema ? schema.error : 'N/A'}`);
-                tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-red-500">Error loading data for ${fullTableName}: ${data ? data.error : schema ? schema.error : 'Unknown error'}</td></tr>`;
-                updateMainActionButtons(null);
+                statusDiv.innerHTML = `<p class="text-red-500">Bulk modify failed: ${result ? result.error : 'Unknown error'}</p>`;
             }
+            lucide.createIcons();
         }
 
-        async function getPrimaryKeysForTable(schema, table) {
-            const cacheKey = `pk.${schema}.${table}`;
-            if (masterCache[cacheKey]) return masterCache[cacheKey];
+        async function downloadBulkModifyTemplate(fullTableName) {
+            const [schemaName, tableName] = fullTableName.split('.');
+            const schema = await getTableSchema(schemaName, tableName);
+            const pkColumns = await getPrimaryKeysForTable(schemaName, tableName);
 
-            const schemaData = await getTableSchema(schema, table);
-            if (schemaData && !schemaData.error) {
-                const pkColumns = schemaData.filter(col => col.is_primary_key).map(col => col.column_name);
-                masterCache[cacheKey] = pkColumns;
-                return pkColumns;
+            if (!schema || schema.error) {
+                window.alert('Failed to fetch table schema for template: ' + (schema ? schema.error : 'Unknown error'));
+                return;
             }
-            return [];
-        }
 
-        async function initializePage() {
-            setupTabListeners();
-            await populateDynamicTableSelect();
-            await loadAndRenderTable(currentTableName);
-
-            document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal());
-            document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal);
-            document.getElementById('bulk-modify-btn').addEventListener('click', showBulkModifyModal);
-            document.getElementById('download-template-general-btn').addEventListener('click', () => downloadCsvTemplate(currentTableName));
-        }
-
-        function setupTabListeners() {
-            const tabProjects = document.getElementById('tab-projects');
-            const dynamicTableSelect = document.getElementById('dynamic-table-select');
-
-            tabProjects.addEventListener('click', () => {
-                tabProjects.classList.add('active');
-                dynamicTableSelect.classList.remove('active');
-                dynamicTableSelect.value = 'lims.projects';
-                currentTableName = 'lims.projects';
-                loadAndRenderTable(currentTableName);
-            });
-
-            dynamicTableSelect.addEventListener('change', (e) => {
-                tabProjects.classList.remove('active');
-                dynamicTableSelect.classList.add('active');
-                currentTableName = e.target.value;
-                loadAndRenderTable(currentTableName);
-            });
-        }
-
-        async function populateDynamicTableSelect() {
-            const select = document.getElementById('dynamic-table-select');
-            const tables = await apiFetch('table_names_for_forms');
+            let headers = pkColumns;
             
-            select.innerHTML = '';
-            select.innerHTML += `<option value="lims.projects">lims.projects (Main)</option>`;
+            const commonEditableColumns = schema.filter(col =>
+                !pkColumns.includes(col.column_name) &&
+                !col.column_name.includes('attachment') &&
+                !col.column_name.includes('password_hash') &&
+                !col.column_name.includes('search_vector') &&
+                !col.column_name.includes('geom') &&
+                !col.column_name.includes('created_at') &&
+                !col.column_name.includes('last_modified_at') &&
+                !col.column_name.includes('user_id') &&
+                !(col.column_default && col.column_default.includes('nextval'))
+            ).map(col => col.column_name);
 
-            if (tables && !tables.error) {
-                // Filter and sort tables relevant to projects page
-                const otherProjectTables = tables.filter(t => 
-                    (t.startsWith('lims.p') || t.startsWith('lims.c') || t.startsWith('lims.e') || t.startsWith('projects.')) &&
-                    t !== 'lims.projects' // Exclude main table as it is added separately
-                ).sort();
-                
-                // Group related tables for better navigation
-                const projectGroup = otherProjectTables.filter(t => t.startsWith('lims.project'));
-                const otherLimsGroup = otherProjectTables.filter(t => t.startsWith('lims.') && !t.startsWith('lims.project'));
-                const projectSpecificGroup = otherProjectTables.filter(t => t.startsWith('projects.'));
-                
-                let optionsHtml = '';
-                
-                if (projectGroup.length > 0) optionsHtml += `<optgroup label="LIMS Project Links/Views">`;
-                optionsHtml += projectGroup.map(table => `<option value="${table}">${table}</option>`).join('');
-                if (projectGroup.length > 0) optionsHtml += `</optgroup>`;
-                
-                if (projectSpecificGroup.length > 0) optionsHtml += `<optgroup label="Specific Project Tables">`;
-                optionsHtml += projectSpecificGroup.map(table => `<option value="${table}">${table}</option>`).join('');
-                if (projectSpecificGroup.length > 0) optionsHtml += `</optgroup>`;
+            headers = [...new Set([...headers, ...commonEditableColumns])];
+            
+            headers.sort((a, b) => {
+                const isAPk = pkColumns.includes(a);
+                const isBPk = pkColumns.includes(b);
+                if (isAPk && !isBPk) return -1;
+                if (!isAPk && isBPk) return 1;
+                return a.localeCompare(b);
+            });
 
-                if (otherLimsGroup.length > 0) optionsHtml += `<optgroup label="Other LIMS Data">`;
-                optionsHtml += otherLimsGroup.map(table => `<option value="${table}">${table}</option>`).join('');
-                if (otherLimsGroup.length > 0) optionsHtml += `</optgroup>`;
-
-                select.innerHTML += optionsHtml;
-            }
-            select.value = currentTableName;
+            const csv = unparseCSV([headers]);
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${tableName}_bulk_modify_template.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            window.alert("Bulk modify template downloaded successfully!");
         }
-
-        // Reusing bulk modify functions here, though they rely on generic logic in loadAndRenderTable
-        // The implementation for showBulkUploadModal, downloadCsvTemplate, showBulkModifyModal, downloadBulkModifyTemplate, processBulkModifyRecords are assumed to be correct based on previous files.
-        // I will keep the originals as they were included in the provided Canvas.
-        
-        // --- Added for completeness and dynamic buttons/modals ---
 
         async function showBulkModifyModal() {
             const modalHTML = `
@@ -1376,14 +1332,14 @@
                 reader.onload = async (e) => {
                     let recordsToModify = [];
                     try {
-                        if (file.type === 'application/json') {
+                        if (file.type.includes('json') || file.name.endsWith('.json')) {
                             recordsToModify = JSON.parse(e.target.result);
                             if (!Array.isArray(recordsToModify)) {
                                 throw new Error("JSON file must contain an array of objects.");
                             }
                             await processBulkModifyRecords(recordsToModify, statusDiv, closeModal);
 
-                        } else if (file.type === 'text/csv') {
+                        } else if (file.type.includes('csv') || file.name.endsWith('.csv')) {
                             PapaParse.parse(e.target.result, {
                                 header: true,
                                 skipEmptyLines: true,
@@ -1408,86 +1364,6 @@
                 };
                 reader.readAsText(file);
             });
-        }
-
-        async function processBulkModifyRecords(recordsToModify, statusDiv, closeModal) {
-            if (!recordsToModify.length) {
-                statusDiv.innerHTML = `<p class="text-red-500">No records found in the file.</p>`;
-                return;
-            }
-
-            const recordsToModifyCleaned = recordsToModify.map(row => {
-                const newRow = {};
-                for (const key in row) {
-                    newRow[key] = row[key] === '' ? null : row[key];
-                }
-                return newRow;
-            });
-
-            statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Performing bulk update on ${recordsToModifyCleaned.length} records...</p>`;
-            lucide.createIcons();
-
-            const [schemaName, tableName] = currentTableName.split('.');
-            const result = await apiFetch(`table/${schemaName}/${tableName}/batch_update`, {
-                method: 'PUT',
-                body: recordsToModifyCleaned
-            });
-
-            if (result && result.success) {
-                statusDiv.innerHTML = `<p class="text-green-600">Successfully updated ${result.updated_rows} records!</p>`;
-                loadAndRenderTable(currentTableName);
-                setTimeout(closeModal, 2000);
-            } else {
-                statusDiv.innerHTML = `<p class="text-red-500">Bulk modify failed: ${result ? result.error : 'Unknown error'}</p>`;
-            }
-            lucide.createIcons();
-        }
-
-        async function downloadBulkModifyTemplate(fullTableName) {
-            const [schemaName, tableName] = fullTableName.split('.');
-            const schema = await getTableSchema(schemaName, tableName);
-            const pkColumns = masterCache[`pk.${fullTableName}`] || [];
-
-            if (!schema || schema.error) {
-                alert('Failed to fetch table schema for template: ' + (schema ? schema.error : 'Unknown error'));
-                return;
-            }
-
-            let headers = pkColumns;
-            
-            const commonEditableColumns = schema.filter(col =>
-                !pkColumns.includes(col.column_name) &&
-                !col.column_name.includes('attachment') &&
-                !col.column_name.includes('password_hash') &&
-                !col.column_name.includes('search_vector') &&
-                !col.column_name.includes('geom') &&
-                !col.column_name.includes('created_at') &&
-                !col.column_name.includes('last_modified_at') &&
-                !col.column_name.includes('user_id') &&
-                !(col.column_default && col.column_default.includes('nextval'))
-            ).map(col => col.column_name);
-
-            headers = [...new Set([...headers, ...commonEditableColumns])];
-            
-            headers.sort((a, b) => {
-                const isAPk = pkColumns.includes(a);
-                const isBPk = pkColumns.includes(b);
-                if (isAPk && !isBPk) return -1;
-                if (!isAPk && isBPk) return 1;
-                return a.localeCompare(b);
-            });
-
-            const csv = unparseCSV([headers]);
-            
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `${tableName}_bulk_modify_template.csv`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(link.href);
-            alert("Bulk modify template downloaded successfully!");
         }
 
         async function showBulkUploadModal() {
@@ -1617,12 +1493,13 @@
         }
 
         async function downloadCsvTemplate(fullTableName) {
-            if (!fullTableName) { alert("Please select a table to download its template."); return; }
+            if (!fullTableName) { window.alert("Please select a table to download its template."); return; }
 
             const [schemaName, tableName] = fullTableName.split('.');
             const schema = await getTableSchema(schemaName, tableName);
+            const pkCols = await getPrimaryKeysForTable(schemaName, tableName);
             if (!schema || schema.error) {
-                alert('Failed to fetch table schema for template: ' + (schema ? schema.error : 'Unknown error'));
+                window.alert('Failed to fetch table schema for template: ' + (schema ? schema.error : 'Unknown error'));
                 return;
             }
 
@@ -1632,10 +1509,12 @@
 
             if (fullTableName === 'lims.projects') { headers.push('linked_person_ids'); }
 
-            const pkCols = await getPrimaryKeysForTable(schemaName, tableName);
             pkCols.forEach(pkCol => {
                 const pkColSchema = schema.find(c => c.column_name === pkCol);
-                if (pkColSchema && !(pkColSchema.column_default && pkColSchema.column_default.includes('nextval')) && !headers.includes(pkCol)) { headers.unshift(pkCol); }
+                if (pkColSchema && !(pkColSchema.column_default && pkColSchema.column_default.includes('nextval')) && !headers.includes(pkCol)) { 
+                    headers = headers.filter(h => h !== pkCol); // Remove if already present at the end
+                    headers.unshift(pkCol); 
+                }
             });
             
             headers.sort((a, b) => {
@@ -1655,280 +1534,62 @@
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(link.href);
-            alert("CSV template download initiated.");
-        }
-        
-        async function getPrimaryKeysForTable(schema, table) {
-            const cacheKey = `pk.${schema}.${table}`;
-            if (masterCache[cacheKey]) return masterCache[cacheKey];
-
-            const schemaData = await getTableSchema(schema, table);
-            if (schemaData && !schemaData.error) {
-                const pkColumns = schemaData.filter(col => col.is_primary_key).map(col => col.column_name);
-                masterCache[cacheKey] = pkColumns;
-                return pkColumns;
-            }
-            return [];
+            window.alert("CSV template download initiated.");
         }
 
-        async function showCreateEditModal(record = null, targetBaseTable = null) {
-            const finalTargetTableName = targetBaseTable || currentTableName; 
-            const [schemaName, tableName] = finalTargetTableName.split('.');
-            const isEditing = record !== null && targetBaseTable === null;
 
-            const targetTableSchema = await getTableSchema(schemaName, tableName);
-            if (!targetTableSchema || targetTableSchema.error) {
-                alert('Error fetching schema for form: ' + (targetTableSchema ? targetTableSchema.error : 'Unknown error'));
-                return;
+        // --- Page Loading & Initialization ---
+
+        async function loadAndRenderTable(fullTableName) {
+            console.log(`loadAndRenderTable: Attempting to load data for ${fullTableName}`);
+            currentTableName = fullTableName;
+            const [schemaName, tableName] = fullTableName.split('.');
+            
+            sortColumn = null;
+            sortDirection = 'asc';
+            columnFilters = {};
+            // Note: filter inputs are rendered with default empty values in renderTable but if we have existing filters we should re-apply them via applyFiltersAndSort(). Since we clear them here, the table resets.
+
+            const tableBody = document.getElementById('dynamic-table-body');
+            tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Loading data...</td></tr>`;
+            lucide.createIcons();
+
+            let dataFilter = '';
+            // Only filter the main projects table to 'In Progress' by default
+            if (tableName === 'projects') {
+                 dataFilter = '?filter_status_id=In Progress';
+            } else if (tableName === 'personal' || tableName === 'sop') {
+                 dataFilter = '?exclude_status_id=Archived';
+            } else if (VIEW_TO_BASE_TABLE_MAPPING[fullTableName]) {
+                 // Prevent setting default filters on complex views as it might break RLS/query logic
+                 dataFilter = '';
             }
-            const pkColumnsForTargetTable = await getPrimaryKeysForTable(schemaName, tableName);
 
-            // Fetch reference data for dropdowns
-            const [persons, statuses, customers] = await Promise.all([ 
-                getReferenceData('personal', 'lims'), 
-                getReferenceData('status', 'reference'),
-                getReferenceData('customers', 'lims')
+
+            const [data, schema] = await Promise.all([
+                apiFetch(`table/${schemaName}/${tableName}${dataFilter}`),
+                getTableSchema(schemaName, tableName),
             ]);
-            
-            // --- 1. Form Field Generation ---
-            let formFieldsHtml = '';
-            let defaultLinkedPersons = '';
 
-            if (finalTargetTableName === 'lims.projects' && isEditing) {
-                const linkedPersonsResult = await apiFetch(`table/lims/project_persons?filter_project_id=${record.project_id}`);
-                defaultLinkedPersons = (linkedPersonsResult && !linkedPersonsResult.error) ? linkedPersonsResult.map(pp => pp.person_id).join(';') : '';
+            const pkInfo = await getPrimaryKeysForTable(schemaName, tableName);
+
+            if (data && !data.error && schema && !schema.error && pkInfo) {
+                console.log(`Successfully loaded data for ${fullTableName}. Data count: ${data.length}`);
+                currentTableData = data;
+                currentTableSchema = schema;
+                masterCache[`pk.${fullTableName}`] = pkInfo;
+                
+                // Clear details pane if loading a non-project table or view
+                if (tableName !== 'projects') {
+                    document.getElementById('project-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="search" class="mx-auto h-12 w-12"></i><p class="mt-2">Use the Main Projects tab for detail viewing.</p></div></div>`;
+                }
+
+                applyFiltersAndSort(); // This calls renderTable internally
+            } else {
+                console.error(`Failed to load data for ${fullTableName}. Data error: ${data ? data.error : 'N/A'}, Schema error: ${schema ? schema.error : 'N/A'}`);
+                tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-red-500">Error loading data for ${fullTableName}: ${data ? data.error : schema ? schema.error : 'Unknown error'}</td></tr>`;
+                updateMainActionButtons(null);
             }
-
-            targetTableSchema.forEach(col => {
-                const isAutoGenerated = col.column_default && col.column_default.includes('nextval');
-                const isReadOnlyField = isEditing && pkColumnsForTargetTable.includes(col.column_name) && !isAutoGenerated;
-
-                if (col.column_name.includes('password_hash') || col.column_name.includes('search_vector') || col.column_name.includes('attachment')) return;
-
-                let value = record ? (record[col.column_name] || '') : (col.column_default ? col.column_default.replace(/::[a-z_]+/g, '').replace(/'/g, '') : '');
-                
-                let inputType = 'text';
-                let extraAttrs = isReadOnlyField ? 'readonly' : '';
-                let label = formatColumnName(col.column_name);
-                let optionsHtml = '';
-                let isRequired = col.is_nullable === 'NO' && !col.column_default && !isEditing && !isAutoGenerated;
-
-                if (col.data_type === 'date' && value) value = formatDateForInput(value);
-                if (col.data_type.includes('timestamp') && value) value = formatDateTimeForInput(value);
-                
-                if (col.data_type === 'boolean') {
-                    inputType = 'checkbox';
-                    extraAttrs += value ? ' checked' : '';
-                    value = '';
-                }
-
-                if (['description', 'notes', 'sop_protocol', 'body', 'title'].includes(col.column_name) || col.data_type === 'jsonb') {
-                    formFieldsHtml += `
-                        <div class="md:col-span-2 ${isReadOnlyField ? 'opacity-70' : ''}">
-                            <label class="block text-gray-700 text-sm font-bold mb-1">${label} ${col.data_type === 'jsonb' ? '(JSON)' : ''}</label>
-                            <textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-24" ${extraAttrs} ${isRequired ? 'required' : ''}>${col.data_type === 'jsonb' && value ? JSON.stringify(value, null, 2) : value}</textarea>
-                        </div>
-                    `;
-                    return;
-                }
-
-                let refData = [];
-                let valueKey = col.column_name;
-                let displayKey = col.column_name;
-
-                if (col.column_name.includes('person_id') && persons) { refData = persons; displayKey = 'full_name'; }
-                else if (col.column_name.includes('status_id') && statuses) { refData = statuses; displayKey = 'status_id'; }
-                else if (col.column_name.includes('customer_id') && customers) { refData = customers; displayKey = 'customer_name'; }
-
-                if (refData.length > 0) {
-                    optionsHtml = `<option value="">-- Select ${label} --</option>`;
-                    optionsHtml += refData.map(item => `<option value="${item[valueKey]}" ${value == item[valueKey] ? 'selected' : ''}>${item[displayKey] || item[valueKey]}</option>`).join('');
-                    
-                    formFieldsHtml += `
-                        <div class="${isReadOnlyField ? 'opacity-70' : ''}">
-                            <label class="block text-gray-700 text-sm font-bold mb-1">${label} ${isRequired ? '<span class="text-red-500">*</span>' : ''}</label>
-                            <select name="${col.column_name}" class="w-full mt-1 p-2 border rounded" ${extraAttrs} ${isRequired ? 'required' : ''}>${optionsHtml}</select>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                formFieldsHtml += `
-                    <div class="${(isAutoGenerated && !isEditing) ? 'hidden' : ''} ${isReadOnlyField ? 'opacity-70' : ''}">
-                        <label class="block text-gray-700 text-sm font-bold mb-1">${label} ${isRequired ? '<span class="text-red-500">*</span>' : ''}</label>
-                        <input type="${inputType}" name="${col.column_name}" class="w-full mt-1 p-2 border rounded" value="${value}" ${extraAttrs} ${isRequired ? 'required' : ''}>
-                    </div>
-                `;
-            });
-            
-            if (finalTargetTableName === 'lims.projects') {
-                formFieldsHtml += `
-                    <div class="md:col-span-2">
-                        <label class="block text-gray-700 text-sm font-bold mb-1">Linked Personnel IDs (semicolon-separated)</label>
-                        <input type="text" name="linked_person_ids" class="w-full mt-1 p-2 border rounded" placeholder="e.g., john.smith;jane.doe" value="${defaultLinkedPersons}">
-                        <p class="text-xs text-gray-500 mt-1">Enter existing Person IDs separated by semicolons. These will be linked in 'lims.project_persons'.</p>
-                    </div>
-                `;
-            }
-
-
-            const modalTitle = isEditing ? `Edit ${formatColumnName(tableName)} Record` : `Create New ${formatColumnName(tableName)} Record`;
-            const submitButtonText = isEditing ? 'Save Changes' : 'Create Record';
-
-            const modalHTML = `
-                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
-                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-4xl max-h-[90vh] overflow-y-auto transform transition-all -translate-y-10 opacity-0">
-                        <div class="flex justify-between items-center mb-6">
-                            <h2 class="text-2xl font-bold">${modalTitle}</h2>
-                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
-                        </div>
-                        <form id="record-form" class="space-y-4">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                ${formFieldsHtml}
-                            </div>
-                            <div class="pt-4 flex justify-end">
-                                <button type="submit" id="modal-submit-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center transition-all duration-200">
-                                    <span id="button-text">${submitButtonText}</span>
-                                    <span id="loading-spinner" class="hidden ml-2 loading-spinner w-5 h-5"></span>
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            `;
-            const { closeModal } = showModal(modalHTML);
-
-            document.getElementById('record-form').onsubmit = async (e) => {
-                e.preventDefault();
-                
-                const formElement = e.target;
-                const submitBtn = document.getElementById('modal-submit-btn');
-                const btnText = document.getElementById('button-text');
-                const spinner = document.getElementById('loading-spinner');
-                
-                submitBtn.disabled = true;
-                btnText.textContent = 'Processing...';
-                spinner.classList.remove('hidden');
-
-                const isFileUpload = formElement.querySelector('input[type="file"]') && formElement.querySelector('input[type="file"]').files.length > 0;
-                
-                let body;
-                let linkedPersonIds = null;
-
-                if (isFileUpload) {
-                    body = new FormData(formElement);
-                } else {
-                    body = {};
-                    const formData = new FormData(formElement);
-                    formData.forEach((value, key) => {
-                        const colSchema = targetTableSchema.find(s => s.column_name === key);
-
-                        if (key === 'linked_person_ids') {
-                            linkedPersonIds = value.split(';').map(id => id.trim()).filter(id => id !== '');
-                            return;
-                        }
-                        
-                        if (colSchema && (colSchema.data_type.includes('integer') || colSchema.data_type.includes('numeric'))) {
-                            body[key] = value === '' ? null : Number(value);
-                        } else if (colSchema && colSchema.data_type === 'boolean') {
-                            body[key] = formElement.querySelector(`[name="${key}"]`).checked; 
-                        } else if (colSchema && colSchema.data_type === 'jsonb') {
-                            try {
-                                body[key] = value === '' ? null : JSON.parse(value);
-                            } catch (jsonError) {
-                                alert(`Invalid JSON for ${formatColumnName(key)}: ${jsonError.message}`);
-                                throw new Error(`Invalid JSON for ${formatColumnName(key)}`);
-                            }
-                        } else {
-                            body[key] = value === '' ? null : value;
-                        }
-                    });
-                }
-
-                const method = isEditing ? 'PUT' : 'POST';
-                let endpoint = `table/${schemaName}/${tableName}`;
-                let newOrUpdatedPkValues = {};
-
-                if (isEditing) {
-                    const pkValuesForApi = {};
-                    const originalPkValues = getPkValues(record);
-                    for (const key in originalPkValues) {
-                        const colSchema = targetTableSchema.find(s => s.column_name === key);
-                        if (colSchema && colSchema.data_type === 'date') {
-                            pkValuesForApi[key] = formatDateForInput(originalPkValues[key]);
-                        } else {
-                            pkValuesForApi[key] = originalPkValues[key];
-                        }
-                    }
-                    const pkQueryString = new URLSearchParams(pkValuesForApi).toString();
-                    endpoint += `?${pkQueryString}`;
-                    newOrUpdatedPkValues = pkValuesForApi;
-                }
-                
-                const result = await apiFetch(endpoint, { method, body: body });
-
-                submitBtn.disabled = false;
-                btnText.textContent = submitButtonText;
-                spinner.classList.add('hidden');
-
-                if (result && !result.error) { 
-                    alert(`${isEditing ? 'Updated' : 'Created'} record successfully!`);
-                    closeModal(); 
-                    loadAndRenderTable(currentTableName); 
-                    
-                    if (finalTargetTableName === 'lims.projects' && linkedPersonIds !== null) {
-                        const projectId = result.project_id || record.project_id;
-                        await updateProjectPersonLinks(projectId, linkedPersonIds);
-                    }
-                    
-                    if (finalTargetTableName === 'lims.projects') {
-                        const pkToRefresh = { project_id: result.project_id || record.project_id };
-                        setTimeout(() => { renderProjectDetails(pkToRefresh); }, 100);
-                    }
-                } else {
-                    alert(`Failed to ${isEditing ? 'save' : 'create'} record: ` + (result ? result.error : 'Unknown error')); 
-                }
-            };
-        }
-
-        async function updateProjectPersonLinks(projectId, newPersonIds) {
-            if (!projectId) return;
-
-            const existingLinksResult = await apiFetch(`table/lims/project_persons?filter_project_id=${projectId}`);
-            const existingLinkedPersonIds = existingLinksResult && !existingLinksResult.error ? existingLinksResult.map(pp => pp.person_id) : [];
-
-            const personsToAdd = newPersonIds.filter(id => !existingLinkedPersonIds.includes(id));
-            const personsToRemove = existingLinkedPersonIds.filter(id => !newPersonIds.includes(id));
-
-            const linkPromises = [];
-
-            for (const personId of personsToAdd) {
-                linkPromises.push(apiFetch(`table/lims/project_persons`, {
-                    method: 'POST',
-                    body: { project_id: projectId, person_id: personId, link_date: new Date().toISOString().split('T')[0] }
-                }).catch(e => console.error(`Failed to link person ${personId}:`, e)));
-            }
-
-            for (const personId of personsToRemove) {
-                linkPromises.push(apiFetch(`table/lims/project_persons?project_id=${projectId}&person_id=${personId}`, {
-                    method: 'DELETE'
-                }).catch(e => console.error(`Failed to unlink person ${personId}:`, e)));
-            }
-
-            await Promise.all(linkPromises);
-        }
-
-        // --- Original initialization functions follow ---
-
-        async function initializePage() {
-            setupTabListeners();
-            await populateDynamicTableSelect();
-            await loadAndRenderTable(currentTableName);
-
-            document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal());
-            document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal);
-            document.getElementById('bulk-modify-btn').addEventListener('click', showBulkModifyModal);
-            document.getElementById('download-template-general-btn').addEventListener('click', () => downloadCsvTemplate(currentTableName));
         }
 
         function setupTabListeners() {
@@ -1953,17 +1614,20 @@
 
         async function populateDynamicTableSelect() {
             const select = document.getElementById('dynamic-table-select');
+            // Fetch all tables that can be interacted with (using table_names_for_forms as proxy)
             const tables = await apiFetch('table_names_for_forms');
             
             select.innerHTML = '';
             select.innerHTML += `<option value="lims.projects">lims.projects (Main)</option>`;
 
             if (tables && !tables.error) {
+                // Filter and sort tables relevant to projects page
                 const otherProjectTables = tables.filter(t => 
                     (t.startsWith('lims.p') || t.startsWith('lims.c') || t.startsWith('lims.e') || t.startsWith('projects.')) &&
-                    t !== 'lims.projects' 
+                    t !== 'lims.projects' // Exclude main table as it is added separately
                 ).sort();
                 
+                // Group related tables for better navigation
                 const projectGroup = otherProjectTables.filter(t => t.startsWith('lims.project'));
                 const otherLimsGroup = otherProjectTables.filter(t => t.startsWith('lims.') && !t.startsWith('lims.project'));
                 const projectSpecificGroup = otherProjectTables.filter(t => t.startsWith('projects.'));
@@ -1987,54 +1651,43 @@
             select.value = currentTableName;
         }
 
-        async function loadAndRenderTable(fullTableName) {
-            console.log(`loadAndRenderTable: Attempting to load data for ${fullTableName}`);
-            currentTableName = fullTableName;
-            const [schemaName, tableName] = fullTableName.split('.');
-            
-            sortColumn = null;
-            sortDirection = 'asc';
-            columnFilters = {};
-            document.querySelectorAll('.filter-input').forEach(input => input.value = '');
+        async function initializePage() {
+            setupTabListeners();
+            await populateDynamicTableSelect();
+            await loadAndRenderTable(currentTableName);
 
-            const tableBody = document.getElementById('dynamic-table-body');
-            tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Loading data...</td></tr>`;
-            lucide.createIcons();
-
-            let dataFilter = '';
-            if (tableName === 'projects') {
-                 dataFilter = '?filter_status_id=In Progress';
-            } else if (tableName === 'personal' || tableName === 'sop') {
-                 dataFilter = '?exclude_status_id=Archived';
-            } else if (VIEW_TO_BASE_TABLE_MAPPING[fullTableName]) {
-                 dataFilter = '';
-            }
-
-
-            const [data, schema] = await Promise.all([
-                apiFetch(`table/${schemaName}/${tableName}${dataFilter}`),
-                getTableSchema(schemaName, tableName),
-            ]);
-
-            const pkInfo = await getPrimaryKeysForTable(schemaName, tableName);
-
-            if (data && !data.error && schema && !schema.error && pkInfo) {
-                console.log(`Successfully loaded data for ${fullTableName}. Data count: ${data.length}`);
-                currentTableData = data;
-                currentTableSchema = schema;
-                masterCache[`pk.${fullTableName}`] = pkInfo;
-                
-                if (tableName !== 'projects') {
-                    document.getElementById('project-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="search" class="mx-auto h-12 w-12"></i><p class="mt-2">Use the Main Projects tab for detail viewing.</p></div></div>`;
-                }
-
-                applyFiltersAndSort();
-            } else {
-                console.error(`Failed to load data for ${fullTableName}. Data error: ${data ? data.error : 'N/A'}, Schema error: ${schema ? schema.error : 'N/A'}`);
-                tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-red-500">Error loading data for ${fullTableName}: ${data ? data.error : schema ? schema.error : 'Unknown error'}</td></tr>`;
-                updateMainActionButtons(null);
-            }
+            // Button Listeners
+            document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal());
+            document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal);
+            document.getElementById('bulk-modify-btn').addEventListener('click', showBulkModifyModal);
+            document.getElementById('download-template-general-btn').addEventListener('click', () => downloadCsvTemplate(currentTableName));
         }
+
+        // --- DOM Ready ---
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("DOMContentLoaded: Initializing page.");
+            lucide.createIcons();
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if (user) {
+                let userName = 'User';
+                if (user.full_name) userName = user.full_name;
+                else if (user.person_id) userName = user.person_id;
+                else if (user.customer_name) userName = user.customer_name;
+                else if (user.contact_id) userName = user.contact_id;
+                document.getElementById('user-profile').innerHTML = `
+                    <span class="mr-2 p-2 bg-blue-500 text-white rounded-full text-xs font-bold">${userName.charAt(0).toUpperCase()}</span>
+                    <p class="font-semibold text-sm text-gray-800">${userName}</p>
+                `;
+            }
+            
+            document.getElementById('logout-button').addEventListener('click', () => {
+                console.log("Logout button clicked.");
+                sessionStorage.clear();
+                window.location.href = './login.html';
+            });
+            
+            initializePage();
+        });
     </script>
 </body>
 </html>
