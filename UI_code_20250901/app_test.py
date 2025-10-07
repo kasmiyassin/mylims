@@ -21,12 +21,13 @@ SECRET_KEY: str = os.getenv('SECRET_KEY', 'a_very_secret_key_for_session_managem
 
 STATIC_FOLDER: str = '.'
 FLASK_ENV: str = os.getenv('FLASK_ENV', 'production')
-API_PREFIX: str = os.getenv('API_PREFIX', '/api')
+API_PREFIX: str = os.getenv('API_PREFIX', '/api') # Changed to /mylims/api to match frontend
 
 app = Flask(__name__, static_folder=STATIC_FOLDER)
 app.secret_key = SECRET_KEY
 CORS(app, supports_credentials=True)
 
+# --- Primary Key Mapping ---
 PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     ('reference', 'status'): 'status_id',
     ('reference', 'room'): 'room_id',
@@ -292,11 +293,12 @@ def _get_column_types(conn, schema: str, table: str) -> Dict[str, str]:
     return column_types
 
 
+# --- Authentication Routes ---
+
 @app.route(f'{API_PREFIX}/login', methods=['POST'])
 def login_user():
     """
     Handles user login across different user tables, including special cases for superadmins.
-    FIX: Ensures customer_id is stored as a string in the session for RLS consistency.
     """
     data = request.get_json()
     username = data.get('username')
@@ -375,6 +377,8 @@ def logout_user():
     session.pop('user_type', None)
     session.pop('is_admin', None)
     return jsonify({"success": True, "message": "Logged out"}), 200
+
+# --- Dashboard & Search Routes ---
 
 @app.route(f'{API_PREFIX}/global-search/<string:search_term>', methods=['GET'])
 def global_search(search_term: str):
@@ -502,6 +506,8 @@ def get_dashboard_stats():
         return jsonify({"error": "An internal server error occurred while fetching dashboard stats."}), 500
 
 
+# --- Table Metadata Routes ---
+
 @app.route(f'{API_PREFIX}/table_names_for_forms', methods=['GET'])
 def table_names_for_forms():
     """
@@ -568,6 +574,99 @@ def get_table_schema(schema: str, table: str):
         return jsonify({"error": str(e)}), 500
 
 
+# --- Filter Support Route (NEW) ---
+
+@app.route(f'{API_PREFIX}/table/<string:schema>/<string:table>/distinct_values', methods=['GET'])
+def get_distinct_column_values(schema: str, table: str):
+    """
+    Fetches a list of distinct, non-null values for a specified column
+    from a table, optionally constrained by a pre-filter (WHERE clause).
+    """
+    conn = g.db_conn
+    column_name = request.args.get('column')
+    
+    if not column_name:
+        return jsonify({"error": "Missing 'column' parameter"}), 400
+
+    try:
+        resolved = _resolve_table_casing(conn, schema, table)
+        if not resolved:
+            return jsonify({"error": f"Table or view '{schema}.{table}' not found or inaccessible."}), 404
+        actual_schema, actual_table, table_type = resolved
+        
+        column_types = _get_column_types(conn, actual_schema, actual_table)
+
+        if column_name not in column_types:
+            return jsonify({"error": f"Column '{column_name}' does not exist in {schema}.{table}"}), 404
+
+        # Dynamic filtering based on query parameters (e.g., filter_project_id=P001)
+        where_clauses: List[str] = []
+        params: List[Any] = []
+        
+        # Collect all filter_XXX parameters except the column we are querying distinct values for
+        for key, value in request.args.items():
+            if key.startswith('filter_') and key != f'filter_{column_name}' and value:
+                col_to_filter = key[len('filter_'):]
+                
+                # Check if the column exists to prevent injection errors
+                if col_to_filter not in column_types:
+                    continue 
+
+                col_type = column_types[col_to_filter]
+                
+                # Handling date column filters (assuming client filters by year for simplicity)
+                if col_to_filter == 'planned_collection_date' and len(value) == 4 and value.isdigit():
+                    try:
+                        year = int(value)
+                        start_date = date(year, 1, 1)
+                        end_date = date(year + 1, 1, 1)
+                        where_clauses.append(f'"{col_to_filter}" >= %s AND "{col_to_filter}" < %s')
+                        params.extend([start_date, end_date])
+                    except ValueError:
+                        pass # Ignore invalid year format
+                
+                # General exact match for ID fields or numeric/date types
+                elif col_to_filter.endswith('_id') or col_to_filter == 'project_id' or col_type in ['integer', 'bigint', 'date']:
+                    where_clauses.append(f'"{col_to_filter}" = %s')
+                    params.append(value)
+                
+                # General ILIKE for text fields
+                elif col_type in ['text', 'character varying']:
+                    where_clauses.append(f'"{col_to_filter}" ILIKE %s')
+                    params.append(f'%{value}%')
+
+
+        # Construct the query using psycopg2.sql
+        query_template = sql.SQL('SELECT DISTINCT {} FROM {}.{}')
+        
+        if where_clauses:
+            query_template = sql.SQL('SELECT DISTINCT {} FROM {}.{} WHERE {}')
+
+        query = query_template.format(
+            sql.Identifier(column_name),
+            sql.Identifier(actual_schema),
+            sql.Identifier(actual_table),
+            sql.SQL(' AND ').join(map(sql.SQL, where_clauses)) if where_clauses else sql.SQL('')
+        )
+        
+        # Final query execution
+        final_query = query
+        print(f"Executing DISTINCT query: {final_query.as_string(conn)} with params: {params}")
+
+        with conn.cursor() as cur:
+            cur.execute(final_query, params)
+            # Filter out None/NULL values and return a simple list
+            distinct_values = [row[0] for row in cur.fetchall() if row[0] is not None]
+        
+        return jsonify(distinct_values), 200
+        
+    except Exception as e:
+        print(f"Error fetching distinct values for {schema}.{table}.{column_name}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# --- CRUD Routes (General) ---
+
 @app.route(f'{API_PREFIX}/table/<string:schema>/<string:table>', methods=['GET'])
 def get_table_data(schema: str, table: str):
     """
@@ -597,7 +696,7 @@ def get_table_data(schema: str, table: str):
         filter_status_id_value = request.args.get('filter_status_id')
         filter_associated_experiment_id_value = request.args.get('filter_associated_experiment_id')
         filter_associated_experiment_date_value = request.args.get('filter_associated_experiment_date')
-        filter_planned_collection_date_ge_value = request.args.get('filter_planned_collection_date_ge') # ADDED FOR PLANNED SAMPLES
+        filter_planned_collection_date_ge_value = request.args.get('filter_planned_collection_date_ge')
         
         # Booking specific filters
         filter_start_time_start_value = request.args.get('filter_start_time_start')
@@ -634,7 +733,7 @@ def get_table_data(schema: str, table: str):
                     params.append(end_dt)
 
 
-        if filter_planned_collection_date_ge_value and actual_table.lower() == 'reservation_samples': # ADDED FOR PLANNED SAMPLES
+        if filter_planned_collection_date_ge_value and actual_table.lower() == 'reservation_samples':
             filter_date_obj = parse_date_filter(filter_planned_collection_date_ge_value)
             if filter_date_obj:
                 where_clauses.append(f'"{actual_table}"."planned_collection_date" >= %s')
@@ -812,8 +911,12 @@ def get_table_data(schema: str, table: str):
             query += f" WHERE {' AND '.join(where_clauses)}"
             
         if order_by_column:
-            quoted_order_by_column = f'"{actual_table}"."{order_by_column}"'
-            query += f' ORDER BY {quoted_order_by_column} {order_direction}'
+            # Check if order_by_column is a valid column name before using it
+            if order_by_column in _get_column_types(conn, actual_schema, actual_table):
+                quoted_order_by_column = f'"{actual_table}"."{order_by_column}"'
+                query += f' ORDER BY {quoted_order_by_column} {order_direction}'
+            else:
+                print(f"Warning: Invalid order_by column '{order_by_column}' skipped.")
             
         if limit is not None:
             query += f" LIMIT %s"
@@ -841,7 +944,6 @@ def create_record(schema: str, table: str):
     """
     Creates a new record in the specified table.
     Handles file uploads, password hashing, and special linked records (e.g., projects and persons).
-    FIX: Sets a fallback project_id for root_samples to avoid DB ID generation errors.
     """
     conn = g.db_conn
     try:
@@ -880,14 +982,13 @@ def create_record(schema: str, table: str):
         sample_ids_str = None
         linked_person_ids = None
         
-        # --- FIX: Set Fallback ID for root_samples if needed ---
+        # --- Root Sample Logic (Fix for missing project_id/customer_id) ---
         if actual_schema.lower() == 'lab' and actual_table.lower() == 'root_samples':
             if data.get('parent_sample_id') is None and data.get('project_id') is None and data.get('customer_id') is None:
-                # The DB function lab.generate_root_sample_id requires project_id or customer_id
-                # If neither is provided, set a known project_id for the function to run
+                # Set a known project_id for the ID function to work if neither is provided
                 print("WARNING: Missing project_id/customer_id for new root sample. Using PROJ_FALLBACK.")
                 data['project_id'] = 'Proj_BioMon' # Assuming 'Proj_BioMon' exists and is accessible
-        # --- END FIX ---
+        # --- END Root Sample Logic ---
 
 
         if actual_schema.lower() == 'lab' and actual_table.lower() == 'experiments':
@@ -920,7 +1021,7 @@ def create_record(schema: str, table: str):
                     filtered_data[k] = None
             elif column_types.get(k) == 'boolean':
                 filtered_data[k] = str(v).lower() in ['true', 'on']
-            elif column_types.get(k) == 'date' and isinstance(v, str):
+            elif column_types.get(k) == 'date' and isinstance(v, str) and v:
                 try:
                     filtered_data[k] = datetime.strptime(v, '%Y-%m-%d').date()
                 except ValueError:
@@ -944,8 +1045,9 @@ def create_record(schema: str, table: str):
             
             if actual_schema.lower() == 'lab' and actual_table.lower() == 'experiments' and new_record:
                 experiment_id = new_record['experiment_id']
-                experiment_date = new_record['experiment_date']
-
+                experiment_date = new_record['experiment_date'] # Date object
+                
+                # --- Link Projects ---
                 if project_ids_str:
                     project_list = [p.strip() for p in project_ids_str.split(';') if p.strip()]
                     for project_id in project_list:
@@ -957,6 +1059,7 @@ def create_record(schema: str, table: str):
                         except Exception as e:
                             print(f"  Warning: Could not link project {project_id} to experiment {experiment_id}: {e}")
 
+                # --- Link Samples ---
                 if sample_ids_str:
                     sample_list = [s.strip() for s in sample_ids_str.split(';') if s.strip()]
                     for sample_id in sample_list:
@@ -964,13 +1067,14 @@ def create_record(schema: str, table: str):
                             cur.execute(
                                 'SELECT "sample_creation_date" FROM "lab"."root_samples" WHERE "sample_id" = %s;', (sample_id,)
                             )
-                            sample_creation_date = cur.fetchone()['sample_creation_date']
+                            sample_creation_date = cur.fetchone()['sample_creation_date'] # Date object
                             cur.execute(
                                 'INSERT INTO "lab"."experiments_samples" ("experiment_id", "experiment_date", "sample_id", "sample_creation_date") VALUES (%s, %s, %s, %s);',
                                 (experiment_id, experiment_date, sample_id, sample_creation_date)
                             )
                         except Exception as e:
                             print(f"  Warning: Could not link sample {sample_id} to experiment {experiment_id}: {e}")
+            
             elif actual_schema.lower() == 'lims' and actual_table.lower() == 'projects' and new_record and linked_person_ids:
                 project_id = new_record['project_id']
                 for person_id in linked_person_ids:
@@ -996,7 +1100,6 @@ def update_record(schema: str, table: str):
     """
     Updates an existing record in the specified table identified by its primary key(s).
     Handles file uploads, password hashing, and ignores special linked records.
-    FIX: Ensure password hashing is applied correctly during updates for user tables.
     """
     conn = g.db_conn
     try:
@@ -1067,17 +1170,16 @@ def update_record(schema: str, table: str):
             elif column_types.get(key) == 'boolean':
                 set_clauses.append(f'"{key}" = %s')
                 values.append(str(val).lower() in ['true', 'on'])
-            elif column_types.get(key) == 'date' and isinstance(val, str):
+            elif column_types.get(key) == 'date' and isinstance(val, str) and val:
                 try:
                     set_clauses.append(f'"{key}" = %s')
                     values.append(datetime.strptime(val, '%Y-%m-%d').date())
                 except ValueError:
                     print(f"WARNING: Invalid date format for column '{key}'. Skipping update for this field.")
                     continue
-            elif column_types.get(key) == 'timestamp with time zone' and isinstance(val, str):
+            elif column_types.get(key) == 'timestamp with time zone' and isinstance(val, str) and val:
                 try:
                     # Parse local datetime string from HTML and assume it's in the client's timezone, 
-                    # but PostgreSQL will handle the conversion due to the column type.
                     set_clauses.append(f'"{key}" = %s')
                     values.append(datetime.strptime(val, '%Y-%m-%dT%H:%M'))
                 except ValueError:
@@ -1095,7 +1197,7 @@ def update_record(schema: str, table: str):
         for pk_col in pk_columns:
             pk_where_clauses.append(f'"{pk_col}" = %s')
             pk_val = pk_values_from_request[pk_col]
-            if column_types.get(pk_col) in ['date', 'timestamp with time zone'] and pk_val is not None:
+            if column_types.get(pk_col) == 'date' and pk_val is not None:
                 # Need to ensure that PK date strings are converted back to date objects for comparison
                 if isinstance(pk_val, str):
                     try:
@@ -1130,7 +1232,7 @@ def update_record(schema: str, table: str):
 @app.route(f'{API_PREFIX}/table/<string:schema>/<string:table>', methods=['DELETE'])
 def delete_record(schema: str, table: str):
     """
-    Deletes a record from the specified table using its primary key(s).
+    Deletes a record from the specified table using its primary key(s) or filters.
     """
     conn = g.db_conn
     try:
@@ -1145,7 +1247,7 @@ def delete_record(schema: str, table: str):
         pk_values_for_query = []
         where_clauses = []
         
-        # Handle query parameters for mass deletion (e.g., /table/lims/project_persons?project_id=P001)
+        # Handle query parameters for mass deletion (e.g., /table/lims/project_persons?filter_project_id=P001)
         mass_delete_params = {k: v for k, v in request.args.items() if k.startswith('filter_')}
         
         if mass_delete_params:
@@ -1248,7 +1350,7 @@ def batch_upload(schema: str, table: str):
                                 filtered_record[k] = None
                         elif column_types.get(k) == 'boolean':
                             filtered_record[k] = str(v).lower() in ['true', 'on']
-                        elif column_types.get(k) == 'date' and isinstance(v, str):
+                        elif column_types.get(k) == 'date' and isinstance(v, str) and v: # <-- FIX: Handle date string
                             try:
                                 filtered_record[k] = datetime.strptime(v, '%Y-%m-%d').date()
                             except ValueError:
@@ -1257,6 +1359,7 @@ def batch_upload(schema: str, table: str):
                         else:
                             filtered_record[k] = v
                     
+                    # Password/Attachment handling (copied from original, ensuring consistency)
                     if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
                        (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
                        (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
@@ -1294,7 +1397,8 @@ def batch_upload(schema: str, table: str):
                             inserted_count += 1
 
                             experiment_id = new_record['experiment_id']
-                            experiment_date = new_record['experiment_date']
+                            # FIX: Use the actual returned date object for linking
+                            experiment_date = new_record['experiment_date'] 
 
                             if project_ids_str:
                                 project_list = [p.strip() for p in project_ids_str.split(';') if p.strip()]
@@ -1302,7 +1406,7 @@ def batch_upload(schema: str, table: str):
                                     try:
                                         cur.execute(
                                             'INSERT INTO "lab"."experiments_projects" ("experiment_id", "experiment_date", "project_id") VALUES (%s, %s, %s);',
-                                            (experiment_id, experiment_date, project_id)
+                                            (experiment_id, experiment_date, project_id) # <-- FIX: Pass date object
                                         )
                                     except Exception as e:
                                         print(f"  Warning: Could not link project {project_id} to experiment {experiment_id} during batch upload: {e}")
@@ -1314,10 +1418,10 @@ def batch_upload(schema: str, table: str):
                                         cur.execute(
                                             'SELECT "sample_creation_date" FROM "lab"."root_samples" WHERE "sample_id" = %s;', (sample_id,)
                                         )
-                                        sample_creation_date = cur.fetchone()['sample_creation_date']
+                                        sample_creation_date = cur.fetchone()['sample_creation_date'] # Date object
                                         cur.execute(
                                             'INSERT INTO "lab"."experiments_samples" ("experiment_id", "experiment_date", "sample_id", "sample_creation_date") VALUES (%s, %s, %s, %s);',
-                                            (experiment_id, experiment_date, sample_id, sample_creation_date)
+                                            (experiment_id, experiment_date, sample_id, sample_creation_date) # <-- FIX: Pass date objects
                                         )
                                     except Exception as e:
                                         print(f"  Warning: Could not link sample {sample_id} to experiment {experiment_id}: {e}")
@@ -1342,7 +1446,7 @@ def batch_upload(schema: str, table: str):
                                 filtered_record[k] = None
                         elif column_types.get(k) == 'boolean':
                             filtered_record[k] = str(v).lower() in ['true', 'on']
-                        elif column_types.get(k) == 'date' and isinstance(v, str):
+                        elif column_types.get(k) == 'date' and isinstance(v, str) and v:
                             try:
                                 filtered_record[k] = datetime.strptime(v, '%Y-%m-%d').date()
                             except ValueError:
@@ -1422,7 +1526,7 @@ def batch_upload(schema: str, table: str):
                             temp_record[k] = None
                     elif column_types.get(k) == 'boolean':
                         temp_record[k] = str(v).lower() in ['true', 'on']
-                    elif column_types.get(k) == 'date' and isinstance(v, str):
+                    elif column_types.get(k) == 'date' and isinstance(v, str) and v:
                         try:
                             temp_record[k] = datetime.strptime(v, '%Y-%m-%d').date()
                         except ValueError:
@@ -1513,7 +1617,7 @@ def batch_update(schema: str, table: str):
                     elif column_types.get(key) == 'boolean':
                         set_clauses_parts.append(f'"{key}" = %s')
                         set_values.append(str(val).lower() in ['true', 'on'])
-                    elif column_types.get(key) == 'date' and isinstance(val, str):
+                    elif column_types.get(key) == 'date' and isinstance(val, str) and val:
                         try:
                             set_clauses_parts.append(f'"{key}" = %s')
                             set_values.append(datetime.strptime(val, '%Y-%m-%d').date())

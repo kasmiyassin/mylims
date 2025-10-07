@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
         /* Base styles */
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
@@ -22,19 +22,30 @@
 
         .sortable-header { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; padding-right: 8px; }
         .filter-input { width: calc(100% - 10px); padding: 4px; margin-top: 4px; border: 1px solid #cbd5e1; border-radius: 0.25rem; font-size: 0.75rem; box-sizing: border-box; }
+        .filter-select { width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 0.25rem; font-size: 0.875rem; box-sizing: border-box; background-color: white; }
         
         .accordion-item { margin-bottom: 0.75rem; border: 1px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; }
         .accordion-header { background-color: #f1f5f9; padding: 0.75rem 1rem; cursor: pointer; width: 100%; text-align: left; display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: #475569; }
+        .accordion-header.active .lucide { transform: rotate(180deg); }
         .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, padding 0.3s ease-out; padding: 0 1rem; background-color: white; border-top: 1px solid #e2e8f0; }
         .accordion-content.open { max-height: 700px; padding: 1rem; }
 
         .loading-spinner { border: 2px solid rgba(255, 255, 255, 0.5); border-top-color: #fff; border-radius: 50%; width: 1.25rem; height: 1.25rem; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Multi-selection table styles */
+        .table-auto thead th:first-child, .table-auto tbody td:first-child {
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+        }
+        .table-auto tbody tr.selected {
+            background-color: #eef2ff !important;
+            border-left: 4px solid #4f46e5;
+        }
     </style>
 </head>
 <body>
     <div id="main-app" class="flex">
-        <!-- Sidebar -->
         <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col z-20">
             <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0">
                 <i data-lucide="flask-conical" class="inline-block mr-2 text-blue-600"></i><span>TIFI MG</span>
@@ -82,21 +93,46 @@
             <div class="border-b border-gray-200 mb-6">
                 <nav class="-mb-px flex space-x-8" aria-label="Tabs">
                     <a id="tab-reservations" class="tab-link whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active">
-                        All Reservations (Upcoming)
+                        All Reservations
                     </a>
                 </nav>
+            </div>
+
+            <div class="card p-4 mb-6 grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div class="col-span-1">
+                    <label class="block text-gray-700 text-xs font-semibold mb-1">Status</label>
+                    <select id="filter-status-id" class="filter-select"></select>
+                </div>
+                <div class="col-span-1">
+                    <label class="block text-gray-700 text-xs font-semibold mb-1">Project</label>
+                    <select id="filter-project-id" class="filter-select"></select>
+                </div>
+                <div class="col-span-1">
+                    <label class="block text-gray-700 text-xs font-semibold mb-1">Planned Year</label>
+                    <select id="filter-planned-year" class="filter-select"></select>
+                </div>
+                <div class="col-span-2">
+                    <label class="block text-gray-700 text-xs font-semibold mb-1">General Search</label>
+                    <input type="text" id="filter-general-text" placeholder="Search ID, Notes..." class="filter-select">
+                </div>
             </div>
 
             <div id="content-reservations" class="grid grid-cols-1 lg:grid-cols-5 gap-8 mt-6">
                 <div class="lg:col-span-3">
                     <div class="card p-4 h-[70vh]">
-                        <div class="overflow-y-auto h-full relative">
+                        <div class="mb-2 flex justify-between items-center">
+                             <button id="bulk-delete-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-lg text-sm transition-all" disabled>
+                                 <i data-lucide="trash-2" class="w-4 h-4 inline-block mr-1"></i> Bulk Delete Selected
+                            </button>
+                            <p id="selected-count" class="text-sm text-gray-600">0 selected</p>
+                        </div>
+                        <div class="overflow-y-auto h-[calc(70vh-40px)] relative">
                             <table class="min-w-full table-auto divide-y divide-gray-200">
                                 <thead class="bg-gray-100 sticky top-0 z-10 shadow-sm">
                                     <tr id="table-headers"></tr>
                                 </thead>
                                 <tbody id="dynamic-table-body" class="divide-y divide-gray-200">
-                                    <tr><td colspan="6" class="text-center p-4 text-gray-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Loading data...</td></tr>
+                                    <tr><td colspan="7" class="text-center p-4 text-gray-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Loading data...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -119,7 +155,27 @@
     </div>
 
     <script>
-        // --- AUTH & SETUP ---
+        // --- CSV UTILITY ---
+        function unparseCSV(data) {
+            const delimiter = ',';
+            const newline = '\n';
+            const quoteChar = '"';
+
+            if (!Array.isArray(data) || data.length === 0) return '';
+            
+            return data.map(row => {
+                return row.map(field => {
+                    if (field === null || field === undefined) return '';
+                    let stringField = String(field);
+                    if (stringField.includes(delimiter) || stringField.includes(quoteChar) || stringField.includes('\n') || stringField.includes('\r')) {
+                        return quoteChar + stringField.replace(new RegExp(quoteChar, 'g'), quoteChar + quoteChar) + quoteChar;
+                    }
+                    return stringField;
+                }).join(delimiter);
+            }).join(newline);
+        }
+
+        // --- AUTH & GLOBAL STATE ---
         if (sessionStorage.getItem('isLoggedIn') !== 'true') {
             localStorage.setItem('redirectUrl', window.location.href);
             window.location.href = './login.html';
@@ -134,7 +190,15 @@
         let currentTableSchema = []; 
         let sortColumn = 'planned_collection_date'; 
         let sortDirection = 'asc';
-        let columnFilters = {};
+        let currentFilters = {
+            'status_id': '',
+            'project_id': '',
+            'planned_year': '',
+            'general_text': ''
+        };
+        let selectedRows = new Set();
+        let globalRootSampleSchema = [];
+
 
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
@@ -152,7 +216,7 @@
             initializePage();
         });
 
-        // --- API & DATA HANDLING ---
+        // --- API & CACHE FUNCTIONS ---
         async function apiFetch(endpoint, options = {}) {
             try {
                 const isFormData = options.body instanceof FormData;
@@ -187,9 +251,9 @@
             const toastContainer = document.getElementById('toast-container');
             const toast = document.createElement('div');
             toast.className = `toast ${type} fixed top-4 right-4 z-50 p-3 rounded-lg shadow-lg text-white font-semibold transition-all duration-300`;
-            if (type === 'success') toast.classList.add('bg-green-500');
-            else if (type === 'error') toast.classList.add('bg-red-500');
-            else toast.classList.add('bg-blue-500');
+            if (type === 'success') toast.classList.add('bg-green-600');
+            else if (type === 'error') toast.classList.add('bg-red-600');
+            else toast.classList.add('bg-blue-600');
 
             const icon = type === 'success' ? 'check-circle' : (type === 'error' ? 'x-circle' : 'info');
             toast.innerHTML = `<div class="flex items-center"><i data-lucide="${icon}" class="w-5 h-5 mr-2"></i><span>${message}</span></div>`;
@@ -251,137 +315,8 @@
             } catch (e) { return 'N/A'; }
         };
         
-        // --- PAGE LOGIC ---
+        // --- FILTERING & SORTING LOGIC ---
 
-        async function initializePage() {
-            // Preload critical reference data
-            await Promise.all([
-                getReferenceData('projects', 'lims'),
-                getReferenceData('samples_type', 'reference'),
-                getReferenceData('sampling', 'lab'),
-            ]);
-            
-            await loadAndRenderTable(TARGET_TABLE);
-            
-            document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal());
-            document.getElementById('download-template-general-btn').addEventListener('click', () => downloadCsvTemplate(TARGET_TABLE));
-            document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal);
-        }
-        
-        async function loadAndRenderTable(fullTableName) {
-            const [schemaName, tableName] = fullTableName.split('.');
-            
-            // Initial loading state
-            const tableBody = document.getElementById('dynamic-table-body');
-            tableBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-gray-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Loading data...</td></tr>`;
-            lucide.createIcons();
-
-            // Load data for today and future dates only
-            const today = formatDateForInput(new Date());
-            // Filter is added as a URL query param, ordering is done client-side for simplicity/consistency
-            const dataFilter = `?filter_planned_collection_date_ge=${today}`;
-
-            const [data, schema, pkInfo] = await Promise.all([
-                apiFetch(`table/${schemaName}/${tableName}${dataFilter}`),
-                getTableSchema(schemaName, tableName),
-                getPrimaryKeysForTable(schemaName, tableName)
-            ]);
-
-            if (data && !data.error && schema && !schema.error && pkInfo) {
-                currentTableData = data;
-                currentTableSchema = schema;
-                masterCache[`pk.${fullTableName}`] = pkInfo;
-                applyFiltersAndSort();
-            } else {
-                console.error(`Failed to load data for ${fullTableName}.`, data?.error || schema?.error);
-                let errorMessage = data?.error || schema?.error || 'Unknown network error.';
-                tableBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-red-500">Error loading data: ${errorMessage}</td></tr>`;
-            }
-        }
-        
-        function applyFiltersAndSort() {
-            let tempArray = [...currentTableData]; 
-            // Simple sorting by planned_collection_date
-            tempArray.sort((a, b) => {
-                const dateA = new Date(a[sortColumn] || '3000-01-01');
-                const dateB = new Date(b[sortColumn] || '3000-01-01');
-                const comparison = dateA.getTime() - dateB.getTime();
-                return sortDirection === 'asc' ? comparison : -comparison;
-            });
-            renderTable(tempArray, currentTableSchema);
-        }
-
-
-        function renderTable(dataToDisplay, schemaInfo) {
-            const tableHeaders = document.getElementById('table-headers');
-            const tableBody = document.getElementById('dynamic-table-body');
-            
-            const columns = [
-                'reservation_sample_id', 
-                'project_id', 
-                'sample_type_id', 
-                'planned_collection_date',
-                'actual_sample_id'
-            ];
-            
-            tableHeaders.innerHTML = columns.map(col => `
-                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                    <div class="sortable-header" data-column="${col}">
-                        <span>${formatColumnName(col)}</span>
-                        <i data-lucide="${sortColumn === col ? (sortDirection === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="w-4 h-4 text-gray-400 sort-icon"></i>
-                    </div>
-                </th>
-            `).join('') + '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>';
-
-            tableBody.innerHTML = dataToDisplay.map(row => {
-                const pkValues = { reservation_sample_id: row.reservation_sample_id };
-                const isFulfilled = !!row.actual_sample_id;
-                
-                // Enhanced display values
-                const project = (masterCache['lims.projects'] || []).find(p => p.project_id === row.project_id);
-                const sampleType = (masterCache['reference.samples_type'] || []).find(st => st.sample_type_id === row.sample_type_id);
-                
-                return `
-                    <tr class="hover:bg-gray-50 cursor-pointer dynamic-table-row ${isFulfilled ? 'bg-green-50/50' : 'bg-yellow-50/50'}" data-pk-values='${JSON.stringify(pkValues)}'>
-                        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">${row.reservation_sample_id}</td>
-                        <td class="px-4 py-3 whitespace-nowrap text-sm">${project ? project.project_abrv || project.project_id : row.project_id}</td>
-                        <td class="px-4 py-3 whitespace-nowrap text-sm">${sampleType ? sampleType.sample_type_abrv : row.sample_type_id}</td>
-                        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-blue-600">${formatDate(row.planned_collection_date)}</td>
-                        <td class="px-4 py-3 whitespace-nowrap text-sm">${isFulfilled ? `<span class="text-green-600 font-semibold">${row.actual_sample_id}</span>` : 'Pending'}</td>
-                        <td class="px-4 py-3 flex space-x-2">
-                            <button class="view-btn p-1 text-gray-500 hover:text-blue-600" data-pk-values='${JSON.stringify(pkValues)}' data-action="view"><i data-lucide="eye" class="w-4 h-4"></i></button>
-                            <button class="edit-btn p-1 text-gray-500 hover:text-blue-600" data-pk-values='${JSON.stringify(pkValues)}' data-action="edit"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
-                            <button class="delete-btn p-1 text-gray-500 hover:text-red-600" data-pk-values='${JSON.stringify(pkValues)}' data-action="delete"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                        </td>
-                    </tr>
-                `;
-            }).join('') || `<tr><td colspan="6" class="text-center p-4 text-gray-500">No upcoming reservations found.</td></tr>`;
-            
-            lucide.createIcons();
-            
-            // Add listeners
-            document.querySelectorAll('.sortable-header').forEach(header => header.addEventListener('click', handleSortClick));
-            document.querySelectorAll('.dynamic-table-row').forEach(row => row.addEventListener('click', (e) => {
-                if (e.target.closest('button')) return;
-                document.querySelectorAll('.dynamic-table-row').forEach(r => r.classList.remove('table-row-selected'));
-                row.classList.add('table-row-selected');
-                const pk = JSON.parse(row.dataset.pkValues);
-                const record = currentTableData.find(r => r.reservation_sample_id === pk.reservation_sample_id);
-                renderReservationDetails(record);
-            }));
-            document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', (e) => {
-                const pk = JSON.parse(e.currentTarget.dataset.pkValues);
-                showCreateEditModal(pk.reservation_sample_id);
-            }));
-            document.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', (e) => {
-                const pk = JSON.parse(e.currentTarget.dataset.pkValues);
-                deleteRecord(pk);
-            }));
-            
-            // Initial details render if there's data
-            if(dataToDisplay.length) renderReservationDetails(dataToDisplay[0]);
-        }
-        
         function handleSortClick(e) {
             const column = e.currentTarget.dataset.column;
             if (sortColumn === column) {
@@ -393,22 +328,267 @@
             applyFiltersAndSort();
         }
 
+        function populateFilterBar() {
+            const statusSelect = document.getElementById('filter-status-id');
+            const projectSelect = document.getElementById('filter-project-id');
+            const yearSelect = document.getElementById('filter-planned-year');
+            const generalInput = document.getElementById('filter-general-text');
+            
+            const statuses = masterCache['reference.status'] || [];
+            const projects = masterCache['lims.projects'] || [];
+            
+            // Get all unique years from the current dataset
+            const years = [...new Set(currentTableData.map(r => r.planned_collection_date && new Date(r.planned_collection_date).getFullYear().toString()).filter(y => y))].sort((a, b) => b - a);
+            
+            // Statuses
+            statusSelect.innerHTML = `<option value="">All Statuses</option>` + statuses.map(s => `<option value="${s.status_id}" ${currentFilters.status_id === s.status_id ? 'selected' : ''}>${s.status_id}</option>`).join('');
+            
+            // Projects
+            projectSelect.innerHTML = `<option value="">All Projects</option>` + projects.map(p => `<option value="${p.project_id}" ${currentFilters.project_id === p.project_id ? 'selected' : ''}>${p.project_abrv || p.project_id}</option>`).join('');
+            
+            // Planned Year
+            yearSelect.innerHTML = `<option value="">All Years</option>` + years.map(y => `<option value="${y}" ${currentFilters.planned_year === y ? 'selected' : ''}>${y}</option>`).join('');
+
+            // Add event listeners (they call applyFiltersAndSort)
+            [statusSelect, projectSelect, yearSelect].forEach(select => {
+                // Ensure listeners are only added once
+                select.removeEventListener('change', handleFilterChange);
+                select.addEventListener('change', handleFilterChange);
+            });
+            generalInput.removeEventListener('input', handleFilterChange);
+            generalInput.addEventListener('input', handleFilterChange);
+
+            // Re-set general input value from currentFilters
+            generalInput.value = currentFilters.general_text;
+        }
+
+        function handleFilterChange(e) {
+            const filterKey = e.target.id.replace('filter-', '').replace('-year', '_year');
+            if (e.target.type === 'text') {
+                 currentFilters[filterKey] = e.target.value.toLowerCase();
+            } else {
+                 currentFilters[filterKey] = e.target.value;
+            }
+            applyFiltersAndSort();
+        }
+
+        function applyFiltersAndSort() {
+            let tempArray = [...currentTableData]; 
+            
+            // 1. Filtering
+            tempArray = tempArray.filter(row => {
+                const statusMatch = !currentFilters.status_id || row.status_id === currentFilters.status_id;
+                const projectMatch = !currentFilters.project_id || row.project_id === currentFilters.project_id;
+                
+                // Planned Year filter
+                const year = row.planned_collection_date ? new Date(row.planned_collection_date).getFullYear().toString() : '';
+                const yearMatch = !currentFilters.planned_year || year === currentFilters.planned_year;
+                
+                const generalTextMatch = !currentFilters.general_text || 
+                    String(row.reservation_sample_id || '').toLowerCase().includes(currentFilters.general_text) ||
+                    String(row.notes || '').toLowerCase().includes(currentFilters.general_text) ||
+                    String(row.actual_sample_id || '').toLowerCase().includes(currentFilters.general_text) ||
+                    String(row.sample_type_id || '').toLowerCase().includes(currentFilters.general_text);
+                
+                return statusMatch && projectMatch && yearMatch && generalTextMatch;
+            });
+
+            // 2. Sorting
+            tempArray.sort((a, b) => {
+                const dateA = new Date(a[sortColumn] || '3000-01-01');
+                const dateB = new Date(b[sortColumn] || '3000-01-01');
+                let comparison = dateA.getTime() - dateB.getTime();
+                
+                // Fallback to ID sort if date is the same or invalid
+                if (comparison === 0) {
+                     comparison = String(a.reservation_sample_id).localeCompare(String(b.reservation_sample_id));
+                }
+                
+                return sortDirection === 'asc' ? comparison : -comparison;
+            });
+            
+            renderTable(tempArray, currentTableSchema);
+            // Re-populate filters to update options based on *filtered* data (e.g., if a year disappears)
+            populateFilterBar();
+        }
+
+        // --- TABLE RENDERING & ACTIONS ---
+
         async function deleteRecord(pkValues) {
-            if (!confirm(`Are you sure you want to delete reservation ${pkValues.reservation_sample_id}?`)) return;
-            
-            const [schemaName, tableName] = TARGET_TABLE.split('.');
+            const pk = pkValues.reservation_sample_id;
+            if (!window.confirm(`Are you sure you want to delete reservation ${pk}? This action is permanent.`)) return;
+
             const queryString = new URLSearchParams(pkValues).toString();
-            const result = await apiFetch(`table/${schemaName}/${tableName}?${queryString}`, { method: 'DELETE' });
-            
+            const result = await apiFetch(`table/${TARGET_SCHEMA}/${TARGET_TABLE_NAME}?${queryString}`, { method: 'DELETE' });
+
             if (result.success) {
-                showToast('Reservation deleted successfully!', 'success');
+                showToast(`Reservation ${pk} deleted successfully!`, 'success');
                 loadAndRenderTable(TARGET_TABLE);
                 document.getElementById('reservation-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="calendar-check" class="mx-auto h-16 w-16 text-blue-400 mb-4 animate-pulse"></i><p class="mt-2 text-lg font-semibold">Reservation Details</p><p class="text-sm mt-1">Select a reservation to view its status and action buttons.</p></div></div>`;
                 lucide.createIcons();
             } else {
-                showToast('Failed to delete reservation: ' + (result.error || 'Unknown error'), 'error');
+                showToast('Failed to delete record: ' + (result ? result.error : 'Unknown error'), "error");
             }
         }
+
+
+        function renderTable(dataToDisplay, schemaInfo) {
+            const tableHeaders = document.getElementById('table-headers');
+            const tableBody = document.getElementById('dynamic-table-body');
+            
+            const columns = [
+                { id: 'checkbox', label: '' },
+                { id: 'reservation_sample_id', label: 'Reservation ID' }, 
+                { id: 'project_id', label: 'Project' }, 
+                { id: 'sample_type_id', label: 'Sample Type' }, 
+                { id: 'planned_collection_date', label: 'Planned Date' },
+                { id: 'actual_sample_id', label: 'Actual Sample ID' },
+                { id: 'status_id', label: 'Status' }
+            ];
+            
+            tableHeaders.innerHTML = columns.map(col => `
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    ${col.id === 'checkbox' ? `<input type="checkbox" id="select-all-checkbox">` : `
+                    <div class="sortable-header" data-column="${col.id}">
+                        <span>${col.label}</span>
+                        <i data-lucide="${sortColumn === col.id ? (sortDirection === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="w-4 h-4 text-gray-400 sort-icon"></i>
+                    </div>`}
+                </th>
+            `).join('') + '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>';
+
+            tableBody.innerHTML = dataToDisplay.map(row => {
+                const pkValue = row.reservation_sample_id;
+                const isFulfilled = !!row.actual_sample_id;
+                const isSelected = selectedRows.has(pkValue);
+                
+                const project = (masterCache['lims.projects'] || []).find(p => p.project_id === row.project_id);
+                const sampleType = (masterCache['reference.samples_type'] || []).find(st => st.sample_type_id === row.sample_type_id);
+                
+                return `
+                    <tr class="hover:bg-gray-50 cursor-pointer dynamic-table-row ${isSelected ? 'table-row-selected' : ''}" data-pk-value='${pkValue}'>
+                        <td class="px-4 py-3"><input type="checkbox" class="row-select-checkbox" data-pk-value="${pkValue}" ${isSelected ? 'checked' : ''}></td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">${row.reservation_sample_id}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm">${project ? project.project_abrv || row.project_id : row.project_id}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm">${sampleType ? sampleType.sample_type_abrv : row.sample_type_id}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-blue-600">${formatDate(row.planned_collection_date)}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm">${isFulfilled ? `<a href="samples.html" class="text-green-600 hover:underline font-semibold">${row.actual_sample_id}</a>` : 'Pending'}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm">${row.status_id}</td>
+                        <td class="px-4 py-3 flex space-x-2">
+                            <button class="edit-btn p-1 text-gray-500 hover:text-blue-600" data-pk-value='${pkValue}'><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                            <button class="delete-btn p-1 text-gray-500 hover:text-red-600" data-pk-value='${pkValue}'><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </td>
+                    </tr>
+                `;
+            }).join('') || `<tr><td colspan="8" class="text-center p-4 text-gray-500">No reservations match the current filters.</td></tr>`;
+            
+            lucide.createIcons();
+            addSelectionListeners();
+            
+            // Add action listeners (for sorting, edit, delete, and row click)
+            document.querySelectorAll('.sortable-header').forEach(header => {
+                 header.removeEventListener('click', handleSortClick);
+                 header.addEventListener('click', handleSortClick)
+            });
+
+            document.querySelectorAll('.dynamic-table-row').forEach(row => row.addEventListener('click', (e) => {
+                if (e.target.closest('button') || e.target.type === 'checkbox') return;
+                document.querySelectorAll('.dynamic-table-row').forEach(r => r.classList.remove('table-row-selected'));
+                row.classList.add('table-row-selected');
+                const pk = row.dataset.pkValue;
+                const record = currentTableData.find(r => r.reservation_sample_id === pk);
+                renderReservationDetails(record);
+            }));
+            document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', (e) => {
+                const pk = e.currentTarget.dataset.pkValue;
+                showCreateEditModal(pk);
+            }));
+            document.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', (e) => {
+                const pk = { reservation_sample_id: e.currentTarget.dataset.pkValue };
+                deleteRecord(pk);
+            }));
+            
+            // Initial details render if data exists and no selection made yet
+            if(dataToDisplay.length && !document.querySelector('.table-row-selected')) {
+                 renderReservationDetails(dataToDisplay[0]);
+                 document.querySelector(`.dynamic-table-row[data-pk-value='${dataToDisplay[0].reservation_sample_id}']`)?.classList.add('table-row-selected');
+            }
+        }
+
+        function addSelectionListeners() {
+            const allCheckbox = document.getElementById('select-all-checkbox');
+            const rowCheckboxes = document.querySelectorAll('.row-select-checkbox');
+            const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+            const selectedCountDisplay = document.getElementById('selected-count');
+
+            if (!allCheckbox) return; // Exit if table is empty
+
+            allCheckbox.onclick = () => {
+                selectedRows.clear();
+                if (allCheckbox.checked) {
+                    // Only select rows currently visible in the filtered list
+                    document.querySelectorAll('.dynamic-table-row').forEach(row => {
+                         const pk = row.dataset.pkValue;
+                         selectedRows.add(pk);
+                    });
+                }
+                document.querySelectorAll('.dynamic-table-row').forEach(row => {
+                    const checkbox = row.querySelector('.row-select-checkbox');
+                    if(allCheckbox.checked) {
+                        row.classList.add('selected');
+                        checkbox.checked = true;
+                    } else {
+                        row.classList.remove('selected');
+                        checkbox.checked = false;
+                    }
+                });
+                updateBulkButtonState();
+            };
+
+            rowCheckboxes.forEach(checkbox => {
+                checkbox.onclick = (e) => {
+                    const pkValue = e.target.dataset.pkValue;
+                    const row = e.target.closest('tr');
+                    if (e.target.checked) {
+                        selectedRows.add(pkValue);
+                        row.classList.add('selected');
+                    } else {
+                        selectedRows.delete(pkValue);
+                        row.classList.remove('selected');
+                    }
+                    updateBulkButtonState();
+                };
+            });
+
+            function updateBulkButtonState() {
+                const count = selectedRows.size;
+                bulkDeleteBtn.disabled = count === 0;
+                selectedCountDisplay.textContent = `${count} selected`;
+                bulkDeleteBtn.classList.toggle('opacity-50', count === 0);
+            }
+        }
+        
+        async function bulkDeleteSelected() {
+            if (selectedRows.size === 0) return;
+            
+            if (!window.confirm(`Are you sure you want to delete ${selectedRows.size} selected reservations? This action is permanent.`)) return;
+
+            const deletionPromises = Array.from(selectedRows).map(id => {
+                const queryString = new URLSearchParams({ reservation_sample_id: id }).toString();
+                return apiFetch(`table/${TARGET_SCHEMA}/${TARGET_TABLE_NAME}?${queryString}`, { method: 'DELETE' });
+            });
+
+            const results = await Promise.all(deletionPromises);
+            const successfulDeletes = results.filter(r => r && r.success).length;
+
+            if (successfulDeletes > 0) {
+                showToast(`Successfully deleted ${successfulDeletes} reservations.`, 'success');
+                selectedRows.clear();
+                loadAndRenderTable(TARGET_TABLE);
+            } else {
+                showToast('Bulk deletion failed for all selected items.', 'error');
+            }
+        }
+
         
         function renderReservationDetails(record) {
             const container = document.getElementById('reservation-details-container');
@@ -429,7 +609,7 @@
                     <div class="space-y-4 flex-grow overflow-y-auto pr-2">
                         <div class="p-3 ${isFulfilled ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-yellow-50 text-yellow-700 border border-yellow-200'} rounded-lg font-semibold flex items-center">
                             <i data-lucide="${isFulfilled ? 'check-circle' : 'alert-triangle'}" class="w-5 h-5 mr-2"></i>
-                            ${isFulfilled ? 'STATUS: FULFILLED' : 'STATUS: PENDING / PLANNED'}
+                            ${isFulfilled ? 'STATUS: FULFILLED' : `STATUS: ${record.status_id}`}
                         </div>
                         <div class="accordion-item">
                             <button class="accordion-header active" data-accordion="core-info">
@@ -467,20 +647,26 @@
                             </button>
                             <div class="accordion-content">
                                 <dl class="space-y-2 py-2">
-                                    ${renderDetailRow('Actual Sample ID', record.actual_sample_id || 'Not Yet Registered')}
+                                    ${renderDetailRow('Actual Sample ID', record.actual_sample_id ? `<a href="samples.html" class="text-blue-600 hover:underline">${record.actual_sample_id}</a>` : 'Not Yet Registered')}
                                     ${renderDetailRow('Actual Creation Date', formatDate(record.actual_sample_creation_date))}
                                 </dl>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Action Buttons -->
                     <div class="mt-4 pt-4 border-t space-y-2">
-                        ${!isFulfilled ? `<button onclick="showFulfillModal('${record.reservation_sample_id}')" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center">
-                            <i data-lucide="check" class="w-5 h-5 mr-2"></i>Mark as Received / Fulfill
-                        </button>` : `<button onclick="showToast('Sample already received: ${record.actual_sample_id}', 'info')" class="w-full bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg flex items-center justify-center cursor-not-allowed">
-                            <i data-lucide="check-check" class="w-5 h-5 mr-2"></i>Sample Already Registered
-                        </button>`}
+                        ${!isFulfilled ? `
+                            <button onclick="showMarkReceivedModal('${record.reservation_sample_id}')" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center">
+                                <i data-lucide="tag" class="w-5 h-5 mr-2"></i>Mark as Received (Status Change)
+                            </button>
+                            <button onclick="showFulfillModal('${record.reservation_sample_id}')" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center">
+                                <i data-lucide="check-check" class="w-5 h-5 mr-2"></i>Add to Root Samples (Fulfill)
+                            </button>
+                        ` : `
+                            <button onclick="showToast('Sample already received: ${record.actual_sample_id}', 'info')" class="w-full bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg flex items-center justify-center cursor-not-allowed">
+                                <i data-lucide="check-check" class="w-5 h-5 mr-2"></i>Sample Already Registered
+                            </button>
+                        `}
                         <button onclick="showCreateEditModal('${record.reservation_sample_id}')" class="w-full bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center">
                             <i data-lucide="edit" class="w-5 h-5 mr-2"></i>Edit Reservation Details
                         </button>
@@ -524,19 +710,22 @@
             }
 
             // Fetch latest ref data for modals
-            const [projects, sampleTypes, samplingEvents] = await Promise.all([
+            const [projects, sampleTypes, samplingEvents, statuses] = await Promise.all([
                 getReferenceData('projects', 'lims'),
                 getReferenceData('samples_type', 'reference'),
-                getReferenceData('sampling', 'lab') 
+                getReferenceData('sampling', 'lab'),
+                getReferenceData('status', 'reference')
             ]);
             
             const projectOptions = `<option value="">-- Select Project --</option>` + projects.map(p => `<option value="${p.project_id}" ${record?.project_id === p.project_id ? 'selected' : ''}>${p.title || p.project_id}</option>`).join('');
             const sampleTypeOptions = `<option value="">-- Select Type --</option>` + sampleTypes.map(st => `<option value="${st.sample_type_id}" ${record?.sample_type_id === st.sample_type_id ? 'selected' : ''}>${st.sample_type_abrv} - ${st.notes}</option>`).join('');
+            const statusOptions = statuses.map(s => `<option value="${s.status_id}" ${record?.status_id === s.status_id ? 'selected' : ''}>${s.status_id}</option>`).join('');
+
             
             const samplingOptions = `<option value="">-- Optional Sampling Event --</option>` + samplingEvents.map(s => {
-                // Combine sampling ID and date into a single dataset attribute for easy lookup
                 const sDate = formatDateForInput(s.sampling_date);
-                return `<option value="${s.sampling_id}" data-date="${sDate}" ${record?.sampling_id === s.sampling_id && formatDateForInput(record.sampling_date) === sDate ? 'selected' : ''}>${s.sampling_id} (${s.location_name} - ${formatDate(s.sampling_date)})</option>`;
+                const isSelected = record?.sampling_id === s.sampling_id && formatDateForInput(record.sampling_date) === sDate;
+                return `<option value="${s.sampling_id}" data-date="${sDate}" ${isSelected ? 'selected' : ''}>${s.sampling_id} (${s.location_name} - ${formatDate(s.sampling_date)})</option>`;
             }).join('');
 
             const modalHTML = `
@@ -550,6 +739,11 @@
                             ${isEditing ? `<input type="hidden" name="reservation_sample_id" value="${record.reservation_sample_id}">` : ''}
                             
                             <div>
+                                <label class="block text-gray-700 text-sm font-bold mb-1">Reservation ID ${isEditing ? `(${record.reservation_sample_id})` : '(Auto-generated on save)'}</label>
+                                <input type="text" name="reservation_sample_id_readonly" value="${record?.reservation_sample_id || 'TBD on Save'}" readonly class="w-full mt-1 p-2 border rounded bg-gray-100 ${isEditing ? '' : 'hidden'}">
+                            </div>
+                            
+                            <div>
                                 <label class="block text-gray-700 text-sm font-bold mb-1">Project ID <span class="text-red-500">*</span></label>
                                 <select name="project_id" required class="w-full mt-1 p-2 border rounded">${projectOptions}</select>
                             </div>
@@ -561,6 +755,11 @@
                                 <label class="block text-gray-700 text-sm font-bold mb-1">Planned Collection Date</label>
                                 <input type="date" name="planned_collection_date" value="${formatDateForInput(record?.planned_collection_date)}" class="w-full mt-1 p-2 border rounded">
                             </div>
+                             <div>
+                                <label class="block text-gray-700 text-sm font-bold mb-1">Status <span class="text-red-500">*</span></label>
+                                <select name="status_id" required class="w-full mt-1 p-2 border rounded">${statusOptions}</select>
+                            </div>
+
 
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
@@ -598,8 +797,16 @@
                 const date = selectedOption.dataset.date || ''; // Reads the data-date attribute
                 samplingDateInput.value = date;
             });
-            // Trigger change event if editing and a sampling event is already selected to ensure date is populated
-            if (isEditing && record.sampling_id) samplingIdSelect.dispatchEvent(new Event('change'));
+            if (isEditing && record.sampling_id) {
+                // Find the option element that corresponds to the selected sampling_id and date
+                const selectedOption = Array.from(samplingIdSelect.options).find(opt => {
+                    return opt.value === record.sampling_id && opt.dataset.date === formatDateForInput(record.sampling_date);
+                });
+                if (selectedOption) {
+                    samplingIdSelect.value = record.sampling_id;
+                    samplingDateInput.value = formatDateForInput(record.sampling_date);
+                }
+            }
 
 
             document.getElementById('record-form').onsubmit = async (e) => {
@@ -612,13 +819,17 @@
                     sample_type_id: formData.sample_type_id,
                     planned_collection_date: formData.planned_collection_date || null,
                     sampling_id: formData.sampling_id || null,
-                    // Use the readonly sampling_date input's value for the final payload
-                    sampling_date: formData.sampling_id ? formData.sampling_date : null,
+                    // If a sampling ID is selected, use the date from the date input (which is auto-filled from the event data-attribute)
+                    sampling_date: formData.sampling_id ? document.getElementById('sampling-date-input').value : null,
+                    status_id: formData.status_id,
                     notes: formData.notes || null
                 };
+                
+                // Remove the read-only input from payload
+                delete payload.reservation_sample_id_readonly; 
 
                 const method = isEditing ? 'PUT' : 'POST';
-                const endpoint = `${TARGET_SCHEMA}/${TARGET_TABLE_NAME}`;
+                let endpoint = `${TARGET_SCHEMA}/${TARGET_TABLE_NAME}`;
                 
                 if (isEditing) {
                     endpoint += `?reservation_sample_id=${payload.reservation_sample_id}`;
@@ -635,6 +846,24 @@
                 }
             };
         }
+
+        async function showMarkReceivedModal(reservationId) {
+            const record = currentTableData.find(r => r.reservation_sample_id === reservationId);
+            if (!record || record.actual_sample_id) { showToast("Reservation is already fulfilled.", "error"); return; }
+            
+            // Mark as Received only changes status_id to 'Received'
+            if (!window.confirm(`Confirm mark reservation ${reservationId} as 'Received'? This WILL NOT create a lab sample. Use 'Add to Root Samples' to fulfill.`)) return;
+
+            const payload = { status_id: 'Received' };
+            const updateResult = await apiFetch(`table/${TARGET_SCHEMA}/${TARGET_TABLE_NAME}?reservation_sample_id=${reservationId}`, { method: 'PUT', body: payload });
+
+            if (updateResult && !updateResult.error) {
+                showToast(`Reservation ${reservationId} status updated to 'Received'!`, 'success');
+                loadAndRenderTable(TARGET_TABLE);
+            } else {
+                showToast(`Failed to update status: ${updateResult?.error || 'Unknown error'}`, 'error');
+            }
+        }
         
         async function showFulfillModal(reservationId) {
             const record = currentTableData.find(r => r.reservation_sample_id === reservationId);
@@ -642,27 +871,85 @@
                 showToast("Reservation is already fulfilled.", "error"); return; 
             }
 
-            // Fetch the sample types to allow user to select the actual type if different from planned
-            const sampleTypes = await getReferenceData('samples_type', 'reference');
-            const sampleTypeOptions = sampleTypes.map(st => `<option value="${st.sample_type_id}" ${record.sample_type_id === st.sample_type_id ? 'selected' : ''}>${st.sample_type_abrv} - ${st.notes}</option>`).join('');
+            const [sampleTypes, persons, projects, statuses] = await Promise.all([
+                getReferenceData('samples_type', 'reference'),
+                getReferenceData('personal', 'lims'),
+                getReferenceData('projects', 'lims'),
+                getReferenceData('status', 'reference')
+            ]);
+            
+            // Person/Status/Type options for the dynamically built form
+            const personOptions = persons.map(p => `<option value="${p.person_id}">${p.full_name || p.person_id}</option>`).join('');
+            const statusOptions = statuses.map(s => `<option value="${s.status_id}" ${s.status_id === 'Received' ? 'selected' : ''}>${s.status_id}</option>`).join('');
+            const projectOptions = projects.map(p => `<option value="${p.project_id}" ${p.project_id === record.project_id ? 'selected' : ''}>${p.title || p.project_id}</option>`).join('');
+            const sampleTypeOptions = sampleTypes.map(st => `<option value="${st.sample_type_id}" ${st.sample_type_id === record.sample_type_id ? 'selected' : ''}>${st.sample_type_abrv} - ${st.notes}</option>`).join('');
+
+            // Get root_samples schema for dynamic form rendering
+            const rootSampleSchema = masterCache['schema.lab.root_samples'] || [];
+            const skipColumns = ['sample_id', 'sample_creation_date', 'parent_sample_id', 'parent_sample_creation_date', 'root_sample_id', 'root_sample_creation_date', 'attachment', 'search_vector', 'password_hash', 'creation_date'];
+
+            let rootSampleFormHtml = '';
+
+            rootSampleSchema.filter(col => !skipColumns.includes(col.column_name)).forEach(col => {
+                let value = ''; 
+                let inputType = 'text';
+                let label = formatColumnName(col.column_name);
+                let isRequired = col.is_nullable === 'NO' && !col.column_default;
+                let optionsHtml = '';
+                
+                // Pre-fill common fields from reservation record
+                if (col.column_name === 'project_id') value = record.project_id;
+                if (col.column_name === 'sample_type_id') value = record.sample_type_id;
+                if (col.column_name === 'reception_date') value = formatDateForInput(new Date());
+                if (col.column_name === 'sampling_id') value = record.sampling_id;
+                if (col.column_name === 'sampling_date') value = formatDateForInput(record.sampling_date);
+                if (col.column_name === 'external_name') value = `RES-${record.reservation_sample_id}`;
+                if (col.column_name === 'status_id') value = 'Received';
+                if (col.column_name === 'notes') value = `Fulfilled from Reservation ID: ${record.reservation_sample_id}. ${record.notes || ''}`;
+                
+                // Handle dropdowns based on column name
+                if (col.column_name === 'sampler_person_id' || col.column_name === 'receiver_person_id') {
+                    optionsHtml = personOptions;
+                    rootSampleFormHtml += `<div><label class="block text-gray-700 text-sm font-bold mb-1">${label}${isRequired ? ' <span class="text-red-500">*</span>' : ''}</label><select name="${col.column_name}" class="w-full mt-1 p-2 border rounded" ${isRequired ? 'required' : ''}>${optionsHtml}</select></div>`;
+                    return;
+                } else if (col.column_name === 'sample_type_id') {
+                    rootSampleFormHtml += `<div><label class="block text-gray-700 text-sm font-bold mb-1">${label}${isRequired ? ' <span class="text-red-500">*</span>' : ''}</label><select name="${col.column_name}" class="w-full mt-1 p-2 border rounded" ${isRequired ? 'required' : ''}>${sampleTypeOptions}</select></div>`;
+                    return;
+                } else if (col.column_name === 'project_id') {
+                    rootSampleFormHtml += `<div><label class="block text-gray-700 text-sm font-bold mb-1">${label}${isRequired ? ' <span class="text-red-500">*</span>' : ''}</label><select name="${col.column_name}" class="w-full mt-1 p-2 border rounded" ${isRequired ? 'required' : ''}>${projectOptions}</select></div>`;
+                    return;
+                } else if (col.column_name === 'status_id') {
+                    rootSampleFormHtml += `<div><label class="block text-gray-700 text-sm font-bold mb-1">${label}${isRequired ? ' <span class="text-red-500">*</span>' : ''}</label><select name="${col.column_name}" class="w-full mt-1 p-2 border rounded" ${isRequired ? 'required' : ''}>${statusOptions}</select></div>`;
+                    return;
+                }
+
+                // Default input
+                if (col.data_type === 'date') inputType = 'date';
+                else if (col.column_name.includes('notes') || col.column_name.includes('transport') || col.column_name.includes('conservation')) inputType = 'textarea';
+
+                if (inputType === 'textarea') {
+                     rootSampleFormHtml += `<div class="md:col-span-2"><label class="block text-gray-700 text-sm font-bold mb-1">${label}</label><textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-16">${value}</textarea></div>`;
+                } else {
+                     rootSampleFormHtml += `<div><label class="block text-gray-700 text-sm font-bold mb-1">${label}${isRequired ? ' <span class="text-red-500">*</span>' : ''}</label><input type="${inputType}" name="${col.column_name}" value="${value}" class="w-full mt-1 p-2 border rounded" ${isRequired ? 'required' : ''}></div>`;
+                }
+            });
+
 
             const modalHTML = `
                 <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
-                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-md max-h-[90vh] overflow-y-auto">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
                         <div class="flex justify-between items-center mb-6">
-                            <h2 class="text-2xl font-bold">Fulfill Reservation: ${reservationId}</h2>
+                            <h2 class="text-2xl font-bold">Fulfill Reservation: ${reservationId} (Create Sample)</h2>
                             <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
                         </div>
-                        <p class="text-gray-700 mb-4">This action registers the physical sample in the main system (<code class="bg-gray-100 p-1 rounded">lab.root_samples</code>) and links it back to this reservation.</p>
+                        <p class="text-gray-700 mb-4">A new <code class="bg-gray-100 p-1 rounded">lab.root_samples</code> record will be created. Verify the details below and fill in any missing information (e.g., sampler, receiver, storage).</p>
                         <form id="fulfill-form" class="space-y-4">
-                            <div>
-                                <label class="block text-gray-700 text-sm font-bold mb-1">Actual Sample Type <span class="text-red-500">*</span></label>
-                                <select name="actual_sample_type_id" required class="w-full mt-1 p-2 border rounded">${sampleTypeOptions}</select>
+                            <input type="hidden" name="reservation_sample_id" value="${reservationId}">
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                ${rootSampleFormHtml}
                             </div>
-                            <div>
-                                <label class="block text-gray-700 text-sm font-bold mb-1">Reception Date <span class="text-red-500">*</span></label>
-                                <input type="date" name="reception_date" value="${formatDateForInput(new Date())}" required class="w-full mt-1 p-2 border rounded">
-                            </div>
+
                             <div class="pt-4 flex justify-end">
                                 <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Fulfill & Create Sample</button>
                             </div>
@@ -675,17 +962,15 @@
             document.getElementById('fulfill-form').onsubmit = async (e) => {
                 e.preventDefault();
                 const formData = Object.fromEntries(new FormData(e.target).entries());
-
+                
                 // 1. Create the lab.root_samples record
                 const samplePayload = {
-                    sample_type_id: formData.actual_sample_type_id,
-                    external_name: `RES-${record.reservation_sample_id}`, // Use RES- prefix to mark it as fulfilled reservation
-                    project_id: record.project_id,
-                    sampling_id: record.sampling_id,
-                    sampling_date: record.sampling_date,
-                    reception_date: formData.reception_date,
-                    // Note: sample_creation_date is handled by the DB trigger upon POST
-                    status_id: 'Received' 
+                    ...formData,
+                    // Remove reservation_sample_id before posting to root_samples
+                    reservation_sample_id: undefined, 
+                    // Handle potential null dates
+                    reception_date: formData.reception_date || null,
+                    sampling_date: formData.sampling_date || null,
                 };
 
                 showToast("Creating physical sample in system...", 'info');
@@ -694,13 +979,13 @@
                 if (newSampleResult && !newSampleResult.error && newSampleResult.sample_id) {
                     // 2. Update the reservation_samples record with the actual sample ID
                     const actualSampleId = newSampleResult.sample_id;
-                    // Note: sample_creation_date comes from the DB response
                     const actualCreationDate = formatDateForInput(newSampleResult.sample_creation_date); 
                     
                     const reservationUpdatePayload = {
                         actual_sample_id: actualSampleId,
                         actual_sample_creation_date: actualCreationDate,
-                        notes: (record.notes || '') + ` | Fulfilled from reservation by system on ${new Date().toISOString().split('T')[0]}`
+                        status_id: 'Received', // Update status to Received
+                        notes: (record.notes || '') + ` | Fulfilled and linked to sample ${actualSampleId}`
                     };
 
                     const updateResult = await apiFetch(`table/lab/reservation_samples?reservation_sample_id=${reservationId}`, { method: 'PUT', body: reservationUpdatePayload });
@@ -712,7 +997,7 @@
                     } else {
                         showToast(`Sample created (${actualSampleId}), but failed to link to reservation: ${updateResult?.error}`, 'error');
                         closeModal();
-                        loadAndRenderTable(TARGET_TABLE); // Reload data even if linkage failed to get the table state right
+                        loadAndRenderTable(TARGET_TABLE);
                     }
                 } else {
                     showToast(`Failed to create physical sample: ${newSampleResult?.error || 'Unknown error'}`, 'error');
@@ -723,21 +1008,13 @@
         async function downloadCsvTemplate(fullTableName) {
             if (!fullTableName) { showToast("Please select a table to download its template.", "error"); return; }
 
-            const [schemaName, tableName] = fullTableName.split('.');
-            const schema = await getTableSchema(schemaName, tableName);
-            if (!schema || schema.error) {
-                showToast('Failed to fetch table schema for template: ' + (schema ? schema.error : 'Unknown error'), "error");
-                return;
-            }
-
-            // Define the specific columns needed for batch reservation upload
             const requiredHeaders = ['project_id', 'sample_type_id', 'planned_collection_date', 'sampling_id', 'sampling_date', 'notes'];
             
             const csv = unparseCSV([requiredHeaders]);
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = `${tableName}_template.csv`;
+            link.download = `${TARGET_TABLE_NAME}_template.csv`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -810,25 +1087,6 @@
                     }
                 });
             });
-        }
-
-        function unparseCSV(data) {
-            const delimiter = ',';
-            const newline = '\n';
-            const quoteChar = '"';
-
-            if (!Array.isArray(data) || data.length === 0) return '';
-            
-            return data.map(row => {
-                return row.map(field => {
-                    if (field === null || field === undefined) return '';
-                    let stringField = String(field);
-                    if (stringField.includes(delimiter) || stringField.includes(quoteChar) || stringField.includes('\n') || stringField.includes('\r')) {
-                        return quoteChar + stringField.replace(new RegExp(quoteChar, 'g'), quoteChar + quoteChar) + quoteChar;
-                    }
-                    return stringField;
-                }).join(delimiter);
-            }).join(newline);
         }
     </script>
 </body>
