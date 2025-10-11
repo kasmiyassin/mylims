@@ -171,12 +171,16 @@ def before_request_func():
 
     try:
         with g.db_conn.cursor() as cur:
-            # Set the RLS context for the current user.
+            # Set the RLS context (already present)
             cur.execute("SELECT set_config('lims.current_person_id', %s, FALSE)", (person_id_to_set,))
+            
+            # --- NEW: Set a separate variable for Auditing ---
+            cur.execute("SELECT set_config('audit.logged_in_user', %s, FALSE)", (person_id_to_set,))
+            
             g.db_conn.commit()
-            print(f"RLS: Set lims.current_person_id to '{person_id_to_set}'")
+            print(f"RLS & Audit: Set lims.current_person_id and audit.logged_in_user to '{person_id_to_set}'")
     except Exception as e:
-        print(f"ERROR: Could not set lims.current_person_id for RLS: {e}")
+        print(f"ERROR: Could not set session variables: {e}")
 
 
 @app.teardown_request
