@@ -54,7 +54,6 @@ CREATE TABLE IF NOT EXISTS "audit"."log" (
 CREATE TABLE IF NOT EXISTS "reference"."status" (
     "status_id" text PRIMARY KEY,
     "tags" text,
-    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -68,7 +67,6 @@ CREATE TABLE IF NOT EXISTS "reference"."room" (
     "city" text,
     "country" text,
     "tags" text,
-    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -78,7 +76,6 @@ CREATE TABLE IF NOT EXISTS "reference"."vessel" (
     "vessel_id" text PRIMARY KEY,
     "vessel_name" text,
     "belong_to" text,
-    "tags" text,
     "tags" text,
     "notes" text,
     "attachment" bytea,
@@ -888,6 +885,8 @@ CREATE TABLE IF NOT EXISTS "lab"."pcr" (
     "pcr_id" text NOT NULL,
     "sample_id" text NOT NULL,
     "sample_creation_date" date,
+    "experiment_id" text,
+    "experiment_date" date, 
     "storage_id" text REFERENCES "lab"."storage"("storage_id"),
     "storage_position" text,
     "position" text,
@@ -903,7 +902,7 @@ CREATE TABLE IF NOT EXISTS "lab"."pcr" (
     "attachment_link" text,
     "volume_reaction_ul" numeric,
     "creation_date" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    "pcr_date" date, -- This column will be populated by a trigger
+    "pcr_date" date, 
     PRIMARY KEY ("pcr_id", "creation_date"),
     FOREIGN KEY ("sample_id", "sample_creation_date") REFERENCES "lab"."root_samples"("sample_id", "sample_creation_date"),
     FOREIGN KEY ("experiment_id", "experiment_date") REFERENCES "lab"."experiments"("experiment_id", "experiment_date")
@@ -916,7 +915,7 @@ CREATE TABLE IF NOT EXISTS "lab"."dissections" (
     "sample_creation_date" date,
     "project_id" text REFERENCES "lims"."projects"("project_id"),
     "experiment_id" text,
-    "experiment_date" date, -- Populated by trigger
+    "experiment_date" date, 
     "stomach_contents_jsonb" jsonb,
     "gonad_weight_g" numeric,
     "liver_weight_g" numeric,
@@ -936,7 +935,7 @@ CREATE TABLE IF NOT EXISTS "lab"."nanodrop" (
     "sample_id" text NOT NULL,
     "sample_creation_date" date,
     "experiment_id" text,
-    "experiment_date" date, -- Populated by trigger
+    "experiment_date" date, 
     "nanodrop_concentration" numeric,
     "concentration_unit_id" text REFERENCES "reference"."units"("unit_id"),
     "a260" numeric,
@@ -965,7 +964,7 @@ CREATE TABLE IF NOT EXISTS "lab"."qubit" (
     "sample_id" text NOT NULL,
     "sample_creation_date" date,
     "experiment_id" text,
-    "experiment_date" date, -- Populated by trigger
+    "experiment_date" date, 
     "run_id" text,
     "assay_kit" text,
     "qubit_tube_conc" numeric,
@@ -993,7 +992,7 @@ CREATE TABLE IF NOT EXISTS "lab"."tapestation" (
     "sample_id" text NOT NULL,
     "sample_creation_date" date,
     "experiment_id" text,
-    "experiment_date" date, -- Populated by trigger
+    "experiment_date" date, 
     "position" text,
     "kit" text,
     "person_id" text REFERENCES "lims"."personal"("person_id"),
