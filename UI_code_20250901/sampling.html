@@ -318,11 +318,13 @@
             console.log("Fetching all tables for sampling page.");
             const tables = await apiFetch('table_names_for_forms');
             if (tables && !tables.error) {
-                // Filter for tables relevant to sampling: lab.sampling, lims.cruises, lab.fishing
+                // Filter tables relevant to sampling: lab.sampling, lims.cruises, lab.fishing, etc.
                 allSamplingTables = tables.filter(t => 
                     t === 'lab.sampling' || 
                     t === 'lims.cruises' || 
-                    t === 'lab.fishing'
+                    t === 'lab.fishing' || 
+                    t === 'lab.individual_catch_catch' ||
+                    t === 'lab.sampling_abiotic_data'
                 );
                 console.log("Filtered sampling tables:", allSamplingTables);
                 return allSamplingTables;
@@ -461,7 +463,6 @@
                     row.classList.add('table-row-selected');
                     const pkValues = JSON.parse(row.dataset.pkValues);
                     
-                    // --- MODIFIED SECTION START ---
                     const recordToDisplay = currentTableData.find(item => {
                         return Object.keys(pkValues).every(key => {
                             const colSchema = currentTableSchema.find(s => s.column_name === key);
@@ -473,17 +474,15 @@
                         });
                     });
 
-                    if (recordToDisplay) {
-                        // Pass the found record directly to renderSamplingDetails
-                        // This allows renderSamplingDetails to use the exact object without re-searching
+                    if (currentTableName === 'lab.sampling' && recordToDisplay) {
+                        // If on the main sampling table, render the full details view
                         renderSamplingDetails(recordToDisplay); 
+                    } else if (recordToDisplay) {
+                        // If on a sub-table, render a generic overview of that sub-record
+                        renderGenericDetails(recordToDisplay, currentTableName);
                     } else {
-                        console.error("Clicked record not found in currentTableData:", pkValues);
-                        // Fallback to re-loading if record not found (shouldn't happen often)
-                        // This could happen if currentTableData is stale or row data is partial
-                        renderSamplingDetails(pkValues); 
+                        console.error("Clicked record not found or table is not selected.", pkValues);
                     }
-                    // --- MODIFIED SECTION END ---
                 });
             });
 
@@ -516,37 +515,55 @@
                 }
 
                 let success = false;
+                const [schemaName, tableName] = currentTableName.split('.');
+
                 // Special handling for lab.sampling: Delete child records first
                 if (currentTableName === 'lab.sampling') {
                     const samplingId = pkValues.sampling_id;
-                    const samplingDate = pkValues.sampling_date; 
+                    const samplingDate = pkValues.sampling_date; // Already in YYYY-MM-DD format
 
                     const childTablesToDelete = [
-                        { name: 'lab.parental_samples', pkCols: ['sample_id', 'sampling_date'] }, // Corrected to parental_samples
-                        { name: 'lab.fishing', pkCols: ['fishing_id', 'sampling_date'] }
+                        { name: 'lab.fishing', pkCols: ['fishing_id', 'sampling_date'] },
+                        { name: 'lab.individual_catch_catch', pkCols: ['individual_catch_id', 'sampling_date'] },
+                        { name: 'lab.sampling_abiotic_data', pkCols: ['sampling_id', 'creation_date'] },
+                        // Need to check for lab.root_samples and lab.reservation_samples too, but those links might be mandatory.
+                        // For safety, we only delete data tables explicitly requested by the user.
                     ];
 
                     let allChildrenDeleted = true;
                     for (const childTable of childTablesToDelete) {
                         try {
                             const [childSchema, childTableName] = childTable.name.split('.');
-                            let filterParams = `filter_sampling_id=${samplingId}&filter_sampling_date=${samplingDate}`;
                             
-                            console.log(`Attempting to fetch children from ${childTable.name} for sampling event ${samplingId} on ${samplingDate}`);
-                            const children = await apiFetch(`table/${childSchema}/${childTableName}?${filterParams}`);
+                            // Determine filter parameters based on linking fields
+                            let filterParams = new URLSearchParams();
+                            if (childTable.name.includes('sampling_abiotic_data')) {
+                                // sampling_abiotic_data uses sampling_id and creation_date (no explicit sampling_date filter needed if joined by ID)
+                                filterParams.append('filter_sampling_id', samplingId);
+                            } else {
+                                // Other tables link via both sampling_id and sampling_date
+                                filterParams.append('filter_sampling_id', samplingId);
+                                filterParams.append('filter_sampling_date', samplingDate);
+                            }
+                            
+                            console.log(`Attempting to fetch children from ${childTable.name} with filters: ${filterParams.toString()}`);
+                            const children = await apiFetch(`table/${childSchema}/${childTableName}?${filterParams.toString()}`);
                             
                             if (children && children.length > 0) {
                                 for (const childRecord of children) {
                                     const deleteChildPkValues = {};
-                                    childTable.pkCols.forEach(col => {
-                                        if (childRecord[col] !== undefined) {
-                                            deleteChildPkValues[col] = childRecord[col];
-                                            const childColSchema = (masterCache[`schema.${childSchema}.${childTableName}`] || []).find(s => s.column_name === col);
-                                            if (childColSchema && childColSchema.data_type === 'date') {
-                                                deleteChildPkValues[col] = formatDateForInput(childRecord[col]);
-                                            }
+                                    // Use the actual primary key columns of the child table for deletion
+                                    const childPkColumns = await getPrimaryKeysForTable(childSchema, childTableName);
+                                    
+                                    childPkColumns.forEach(col => {
+                                        let pkVal = childRecord[col];
+                                        const childColSchema = (masterCache[`schema.${childSchema}.${childTableName}`] || []).find(s => s.column_name === col);
+                                        if (childColSchema && childColSchema.data_type === 'date') {
+                                            pkVal = formatDateForInput(pkVal);
                                         }
+                                        deleteChildPkValues[col] = pkVal;
                                     });
+
                                     const childQueryString = new URLSearchParams(deleteChildPkValues).toString();
                                     console.log(`Deleting child record from ${childTable.name} with PKs:`, deleteChildPkValues);
                                     const deleteChildResult = await apiFetch(`table/${childSchema}/${childTableName}?${childQueryString}`, { method: 'DELETE' });
@@ -570,7 +587,7 @@
                     if (allChildrenDeleted) {
                         console.log(`All children deleted. Proceeding to delete main sampling event ${recordIdentifier}.`);
                         const queryString = new URLSearchParams(pkValues).toString();
-                        const result = await apiFetch(`table/${currentTableName.split('.')[0]}/${currentTableName.split('.')[1]}?${queryString}`, { method: 'DELETE' });
+                        const result = await apiFetch(`table/${schemaName}/${tableName}?${queryString}`, { method: 'DELETE' });
                         if (result.success) {
                             success = true;
                         } else {
@@ -582,7 +599,7 @@
                     // Generic delete for other tables
                     console.log(`Deleting generic record from ${currentTableName} with PKs:`, pkValues);
                     const queryString = new URLSearchParams(pkValues).toString();
-                    const result = await apiFetch(`table/${currentTableName.split('.')[0]}/${currentTableName.split('.')[1]}?${queryString}`, { method: 'DELETE' });
+                    const result = await apiFetch(`table/${schemaName}/${tableName}?${queryString}`, { method: 'DELETE' });
                     if(result.success) {
                         success = true;
                     } else {
@@ -667,6 +684,65 @@
             }
             lucide.createIcons(); 
         }
+        
+        // --- NEW FUNCTION: Generic Details for Sub-Tables ---
+        function renderGenericDetails(record, tableName) {
+            const container = document.getElementById('sampling-details-container');
+            const title = formatColumnName(tableName.split('.')[1]) + ' Record Details';
+
+            const excludedKeys = ['attachment', 'password_hash', 'search_vector'];
+            let detailRows = '';
+
+            for (const key in record) {
+                if (excludedKeys.includes(key)) continue;
+
+                let value = record[key];
+                const colSchema = currentTableSchema.find(s => s.column_name === key);
+                const label = formatColumnName(key);
+
+                if (value === null || value === undefined) {
+                    value = 'N/A';
+                } else if (colSchema && colSchema.data_type === 'date' && value) {
+                    value = new Date(value).toLocaleDateString('en-CA');
+                } else if (colSchema && colSchema.data_type.includes('timestamp') && value) {
+                    value = new Date(value).toLocaleString();
+                } else if (colSchema && colSchema.data_type === 'time' && value) {
+                    // Time format fix
+                    const dt = new Date(`2000-01-01T${value}`);
+                    value = isNaN(dt.getTime()) ? 'N/A' : dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                } else if (typeof value === 'object' && value !== null) {
+                    value = `<pre class="bg-gray-100 p-1 text-xs rounded overflow-x-auto">${JSON.stringify(value, null, 2)}</pre>`;
+                } else if (value.toString().startsWith('http')) {
+                    value = `<a href="${value}" target="_blank" class="text-blue-600 hover:underline">${value}</a>`;
+                }
+                
+                detailRows += `
+                    <div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100">
+                        <dt class="font-medium text-gray-500">${label}</dt>
+                        <dd class="text-gray-900 break-all text-sm">${value}</dd>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = `
+                <div class="card p-6 h-full flex flex-col">
+                    <div class="flex justify-between items-start mb-4">
+                        <h2 class="text-2xl font-bold text-gray-800">${title}</h2>
+                        <p class="text-xs text-blue-500">Source: ${tableName}</p>
+                    </div>
+                    <div class="flex-grow overflow-y-auto pr-2">
+                        <dl class="space-y-2 py-2">
+                            ${detailRows}
+                        </dl>
+                        <p class="mt-4 p-2 bg-yellow-50 text-yellow-700 text-sm rounded-lg">
+                            <i data-lucide="alert-triangle" class="w-4 h-4 inline-block mr-1"></i>
+                            This is a generic view for related records. Full event interaction is on the **All Sampling Events** tab.
+                        </p>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
 
         async function renderSamplingDetails(recordToDisplay) { // Now accepts the full record
             console.log("Rendering sampling details for record:", recordToDisplay);
@@ -680,7 +756,10 @@
                 return; 
             }
 
-            const samplingEvent = recordToDisplay; // Use the provided record directly
+            const samplingEvent = recordToDisplay;
+            const samplingId = samplingEvent.sampling_id;
+            const samplingDate = formatDateForInput(samplingEvent.sampling_date);
+
 
             const formatDate = (dateString) => {
                 if (!dateString) return 'N/A';
@@ -688,20 +767,16 @@
                     const date = new Date(dateString);
                     return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString('en-CA');
                 } catch (e) {
-                    console.warn("Failed to format date for display:", dateString, e);
                     return 'N/A';
                 }
             };
 
-            const formatTime = (timeString) => { // Added for time values
+            const formatTime = (timeString) => { 
                 if (!timeString) return 'N/A';
                 try {
-                    // Time objects from backend might be just "HH:MM:SS"
-                    // Prepend a dummy date to parse it as a valid Date object
                     const dt = new Date(`2000-01-01T${timeString}`);
                     return isNaN(dt.getTime()) ? 'N/A' : dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
                 } catch (e) {
-                    console.warn("Failed to format time for display:", timeString, e);
                     return 'N/A';
                 }
             };
@@ -712,7 +787,6 @@
                     const date = new Date(dateString);
                     return isNaN(date.getTime()) ? 'N/A' : date.toLocaleString();
                 } catch (e) {
-                    console.warn("Failed to format datetime for display:", dateString, e);
                     return 'N/A';
                 }
             };
@@ -724,67 +798,34 @@
                 let displayValue = value;
                 if (typeof value === 'object' && value !== null && value.type === 'Point' && Array.isArray(value.coordinates)) {
                     displayValue = `Lon: ${value.coordinates[0]}, Lat: ${value.coordinates[1]}`;
-                } else if (typeof value === 'object' && value !== null) { // Ensure value is not null before stringifying
-                    displayValue = `<pre class="bg-gray-100 p-2 rounded-md text-xs overflow-auto max-h-24">${JSON.stringify(value, null, 2)}</pre>`; // Pretty print JSONB
+                } else if (typeof value === 'object' && value !== null && Array.isArray(value)) {
+                    displayValue = value.join('; '); // Handle array fields (e.g., tags, multi-person IDs)
+                } else if (typeof value === 'object' && value !== null) { 
+                    displayValue = `<pre class="bg-gray-100 p-1 rounded-md text-xs overflow-auto max-h-24">${JSON.stringify(value, null, 2)}</pre>`;
                 } else if (label.includes('Attachment Link') && typeof value === 'string') {
                     displayValue = `<a href="${value}" target="_blank" class="text-blue-600 hover:underline">View Attachment</a>`;
                 } else if (label.includes('Attachment File') && value) {
                     displayValue = `<span class="text-gray-500">Binary data present</span>`;
                 }
+                
                 return `<div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100"><dt class="font-medium text-gray-500">${label}</dt><dd class="text-gray-900 break-all">${displayValue}</dd></div>`;
             };
 
             const relatedTables = [
-                { name: 'lab.parental_samples', icon: 'beaker', title: 'Associated Samples', filterField: 'sampling_id' },
-                { name: 'lab.fishing', icon: 'fish', title: 'Fishing Details', filterField: 'sampling_id' }
-                // lims.cruises needs special handling because it's linked by cruise_id not sampling_id
-                // Adding it directly here might overcomplicate the generic loop unless we generalize filterField logic further.
-                // For now, it's safer to fetch cruises separately if needed or ensure this loop only covers tables related by sampling_id.
+                { name: 'lab.fishing', icon: 'fish', title: 'Fishing Catch Records', pkCols: ['fishing_id', 'creation_date'] },
+                { name: 'lab.individual_catch_catch', icon: 'ruler', title: 'Individual Catch Measurements', pkCols: ['individual_catch_id', 'creation_date'] },
+                { name: 'lab.sampling_abiotic_data', icon: 'cloud-drizzle', title: 'Environmental/Abiotic Data', pkCols: ['sampling_id', 'creation_date'] },
+                { name: 'lab.root_samples', icon: 'beaker', title: 'Associated Samples', pkCols: ['sample_id', 'sample_creation_date'], filterField: 'sampling_id' },
+                { name: 'lab.reservation_samples', icon: 'calendar-check', title: 'Planned Reservations', pkCols: ['reservation_sample_id'], filterField: 'sampling_id' }
             ];
 
-            // Fetch related cruise details if available
-            let cruiseDetailsHtml = '';
-            if (samplingEvent.cruise_id) {
-                const cruiseData = await apiFetch(`table/lims/cruises?filter_cruise_id=${samplingEvent.cruise_id}`);
-                if (cruiseData && cruiseData.length > 0) {
-                    const cruise = cruiseData[0];
-                    const cruiseSchema = await getTableSchema('lims', 'cruises');
-                    if (cruiseSchema && !cruiseSchema.error) {
-                        cruiseDetailsHtml = `
-                            <div class="accordion-item mt-2">
-                                <button class="accordion-header" data-accordion="cruise-details">
-                                    <span class="flex items-center"><i data-lucide="ship" class="w-5 h-5 mr-2"></i> Associated Cruise (${cruise.cruise_id})</span>
-                                    <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
-                                </button>
-                                <div class="accordion-content">
-                                    <div class="space-y-2 py-2">
-                                        ${cruiseSchema.filter(col => !col.column_name.includes('attachment') && !col.column_name.includes('password_hash') && !col.column_name.includes('search_vector'))
-                                            .map(col => {
-                                            let value = cruise[col.column_name];
-                                            if (value === null || value === undefined) {
-                                                value = 'N/A';
-                                            } else if (col.data_type === 'date') {
-                                                value = formatDate(value);
-                                            } else if (col.data_type === 'timestamp with time zone' || col.data_type === 'timestamp without time zone') {
-                                                value = formatDateTime(value);
-                                            } else if (typeof value === 'object' && value !== null) {
-                                                value = JSON.stringify(value, null, 2);
-                                            }
-                                            return renderDetailRow(formatColumnName(col.column_name), value);
-                                        }).join('')}
-                                    </div>
-                                </div>
-                            </div>`;
-                    }
-                }
-            }
-
-
             let detailsHtml = `<div class="space-y-3 text-sm">`;
+
+            // --- 1. CORE EVENT DETAILS (Always Open) ---
             detailsHtml += `
                 <div class="accordion-item">
                     <button class="accordion-header active" data-accordion="core-info">
-                        <span class="flex items-center"><i data-lucide="info" class="w-5 h-5 mr-2"></i> Core Information</span>
+                        <span class="flex items-center"><i data-lucide="info" class="w-5 h-5 mr-2"></i> Core Event Information</span>
                         <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
                     </button>
                     <div class="accordion-content open">
@@ -794,82 +835,86 @@
                             ${renderDetailRow('Location Name', samplingEvent.location_name)}
                             ${renderDetailRow('Start Time', formatTime(samplingEvent.start_at))}
                             ${renderDetailRow('End Time', formatTime(samplingEvent.end_at))}
-                            ${renderDetailRow('Geometry', samplingEvent.geom)}
-                            ${renderDetailRow('Fishing Start Geometry', samplingEvent.fishing_start_geom)}
-                            ${renderDetailRow('Fishing End Geometry', samplingEvent.fishing_end_geom)}
-                            ${renderDetailRow('Depth (m)', samplingEvent.depth_m)}
-                            ${renderDetailRow('Temperature (C)', samplingEvent.temperature_atmospheric_c)}
-                            ${renderDetailRow('Weather', samplingEvent.weather)}
-                            ${renderDetailRow('Wind Speed', samplingEvent.wind_speed ? `${samplingEvent.wind_speed} ${samplingEvent.wind_unit_id || ''}` : 'N/A')}
-                            ${renderDetailRow('Salinity', samplingEvent.salinity ? `${samplingEvent.salinity} ${samplingEvent.salinity_unit_id || ''}` : 'N/A')}
-                            ${renderDetailRow('Oxygen', samplingEvent.oxygen ? `${samplingEvent.oxygen} ${samplingEvent.oxygen_unit_id || ''}` : 'N/A')}
-                            ${renderDetailRow('pH', samplingEvent.ph)}
-                            ${renderDetailRow('Instrument ID', samplingEvent.instrument_id)}
+                            ${renderDetailRow('Duration (min)', samplingEvent.operation_duration_min)}
                             ${renderDetailRow('Project ID', samplingEvent.project_id)}
                             ${renderDetailRow('Cruise ID', samplingEvent.cruise_id)}
+                            ${renderDetailRow('Vessel ID', samplingEvent.vessel_id)}
+                            ${renderDetailRow('Method/Gear', `${samplingEvent.fishing_method} / ${samplingEvent.gear_type}`)}
+                            ${renderDetailRow('Total Catch (kg)', samplingEvent.total_catch_quantity_kg)}
+                            ${renderDetailRow('Total Catch (fish)', samplingEvent.total_catch_quantity_fish)}
                             ${renderDetailRow('Status', samplingEvent.status_id)}
                             ${renderDetailRow('Notes', samplingEvent.notes)}
-                            ${renderDetailRow('Attachment Link', samplingEvent.attachment_link)}
-                            ${renderDetailRow('Attachment File', samplingEvent.attachment)}
                         </dl>
                     </div>
                 </div>
             `;
 
-            detailsHtml += cruiseDetailsHtml; // Add cruise details here
-
+            // --- 2. DYNAMIC RELATED DATA ACCORDIONS ---
             for (const tableInfo of relatedTables) {
                 const [schemaName, tableName] = tableInfo.name.split('.');
-                // Construct filter for composite PK based on sampling_id and sampling_date
-                const filterParams = `filter_sampling_id=${samplingEvent.sampling_id}&filter_sampling_date=${formatDateForInput(samplingEvent.sampling_date)}`;
+                
+                // Determine filter parameters: using sampling_id AND sampling_date for core linked tables
+                const filterParams = new URLSearchParams({
+                    filter_sampling_id: samplingId,
+                    filter_sampling_date: samplingDate
+                }).toString();
                 
                 console.log(`Fetching related items for ${tableInfo.name} with filters: ${filterParams}`);
                 const items = await apiFetch(`table/${schemaName}/${tableName}?${filterParams}`);
                 
                 if (items && !items.error && items.length > 0) {
                     const tableSchema = await getTableSchema(schemaName, tableName);
-                    if (tableSchema && !tableSchema.error) {
-                        detailsHtml += `
-                            <div class="accordion-item mt-2">
-                                <button class="accordion-header" data-accordion="${tableInfo.name.replace(/\./g, '-').toLowerCase()}">
-                                    <span class="flex items-center"><i data-lucide="${tableInfo.icon}" class="w-5 h-5 mr-2"></i> ${tableInfo.title} (${items.length})</span>
-                                    <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
-                                </button>
-                                <div class="accordion-content">
-                                    <div class="space-y-2 py-2">
-                                        ${items.map(item => `
-                                            <div class="p-2 bg-gray-100 rounded-md">
-                                                <dl class="space-y-1">
-                                                    ${tableSchema.filter(col => !col.column_name.includes('attachment') && !col.column_name.includes('password_hash') && !col.column_name.includes('search_vector'))
-                                                        .map(col => {
-                                                        let value = item[col.column_name];
-                                                        if (value === null || value === undefined) {
-                                                            value = 'N/A';
-                                                        } else if (col.data_type === 'date') {
-                                                            value = formatDate(value);
-                                                        } else if (col.data_type === 'timestamp with time zone' || col.data_type === 'timestamp without time zone') {
-                                                            value = formatDateTime(value);
-                                                        } else if (typeof value === 'object' && value !== null) {
-                                                            value = JSON.stringify(value, null, 2);
-                                                        }
-                                                        return renderDetailRow(formatColumnName(col.column_name), value);
-                                                    }).join('')}
-                                                </dl>
+
+                    detailsHtml += `
+                        <div class="accordion-item mt-2">
+                            <button class="accordion-header" data-accordion="${tableInfo.name.replace(/\./g, '-').toLowerCase()}">
+                                <span class="flex items-center"><i data-lucide="${tableInfo.icon}" class="w-5 h-5 mr-2"></i> ${tableInfo.title} (${items.length})</span>
+                                <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                            </button>
+                            <div class="accordion-content">
+                                <div class="space-y-4 py-2">
+                                    ${items.map(item => {
+                                        let itemDetails = '';
+                                        tableSchema.forEach(col => {
+                                            const label = formatColumnName(col.column_name);
+                                            let value = item[col.column_name];
+
+                                            if (col.column_name.includes('sampling_id') || col.column_name.includes('sampling_date')) return; // Skip duplicate PK/FK display
+
+                                            if (value === null || value === undefined) {
+                                                value = 'N/A';
+                                            } else if (col.data_type === 'date') {
+                                                value = formatDate(value);
+                                            } else if (col.data_type.includes('timestamp')) {
+                                                value = formatDateTime(value);
+                                            } else if (col.data_type === 'time') {
+                                                value = formatTime(value);
+                                            } else if (typeof value === 'object' && value !== null && Array.isArray(value)) {
+                                                 value = value.join('; ');
+                                            }
+                                            
+                                            // Render as a compact detail row within the accordion item
+                                            itemDetails += renderDetailRow(label, value);
+                                        });
+                                        return `
+                                            <div class="p-3 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
+                                                <p class="font-bold text-sm text-indigo-600 mb-2">Record ID: ${item[tableInfo.pkCols[0]]}</p>
+                                                <dl class="space-y-1">${itemDetails}</dl>
                                             </div>
-                                        `).join('')}
-                                    </div>
+                                        `;
+                                    }).join('')}
                                 </div>
-                            </div>`;
-                    } else {
-                        console.error(`Failed to get schema for related table ${tableInfo.name}:`, tableSchema ? tableSchema.error : 'Unknown error');
-                    }
+                            </div>
+                        </div>`;
                 } else if (items && items.error) {
                     console.error(`Failed to fetch items for related table ${tableInfo.name}:`, items.error);
                 }
             }
 
-            container.innerHTML = `<div class="card p-6 h-full flex flex-col"><div class="flex justify-between items-start mb-4"><div><h2 class="text-2xl font-bold">Sampling Event: ${samplingEvent.sampling_id}</h2><p class="text-sm text-gray-500">${formatDate(samplingEvent.sampling_date)} - ${samplingEvent.location_name}</p></div></div><div class="flex-grow overflow-y-auto pr-2">${detailsHtml}</div></div>`;
+            container.innerHTML = `<div class="card p-6 h-full flex flex-col"><div class="flex justify-between items-start mb-4"><div><h2 class="text-2xl font-bold">Sampling Event: ${samplingEvent.sampling_id}</h2><p class="text-sm text-gray-500">${formatDate(samplingEvent.sampling_date)} - ${samplingEvent.location_name}</p></div></div><div class="flex-grow overflow-y-auto pr-2 space-y-4">${detailsHtml}</div></div>`;
+            
             lucide.createIcons(); 
+            // Activate accordion toggles
             document.querySelectorAll('.accordion-header').forEach(header => {
                 header.addEventListener('click', () => {
                     const content = header.nextElementSibling;
@@ -880,7 +925,8 @@
             });
         }
 
-        // --- MODAL LOGIC ---
+        // --- MODAL LOGIC (Existing functions remain the same) ---
+        
         function showModal(content) {
             const container = document.getElementById('modal-container');
             container.innerHTML = content;
@@ -896,15 +942,74 @@
             return { closeModal };
         }
 
+        function renderGenericDetails(record, tableName) {
+            const container = document.getElementById('sampling-details-container');
+            const title = formatColumnName(tableName.split('.')[1]) + ' Record Details';
+
+            const excludedKeys = ['attachment', 'password_hash', 'search_vector'];
+            let detailRows = '';
+
+            for (const key in record) {
+                if (excludedKeys.includes(key)) continue;
+
+                let value = record[key];
+                const colSchema = currentTableSchema.find(s => s.column_name === key);
+                const label = formatColumnName(key);
+
+                if (value === null || value === undefined) {
+                    value = 'N/A';
+                } else if (colSchema && colSchema.data_type === 'date' && value) {
+                    value = new Date(value).toLocaleDateString('en-CA');
+                } else if (colSchema && colSchema.data_type.includes('timestamp') && value) {
+                    value = new Date(value).toLocaleString();
+                } else if (colSchema && colSchema.data_type === 'time' && value) {
+                    const dt = new Date(`2000-01-01T${value}`);
+                    value = isNaN(dt.getTime()) ? 'N/A' : dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                } else if (typeof value === 'object' && value !== null) {
+                    value = `<pre class="bg-gray-100 p-1 text-xs rounded overflow-x-auto">${JSON.stringify(value, null, 2)}</pre>`;
+                } else if (value.toString().startsWith('http')) {
+                    value = `<a href="${value}" target="_blank" class="text-blue-600 hover:underline">${value}</a>`;
+                }
+                
+                detailRows += `
+                    <div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100">
+                        <dt class="font-medium text-gray-500">${label}</dt>
+                        <dd class="text-gray-900 break-all text-sm">${value}</dd>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = `
+                <div class="card p-6 h-full flex flex-col">
+                    <div class="flex justify-between items-start mb-4">
+                        <h2 class="text-2xl font-bold text-gray-800">${title}</h2>
+                        <p class="text-xs text-blue-500">Source: ${tableName}</p>
+                    </div>
+                    <div class="flex-grow overflow-y-auto pr-2">
+                        <dl class="space-y-2 py-2">
+                            ${detailRows}
+                        </dl>
+                        <p class="mt-4 p-2 bg-yellow-50 text-yellow-700 text-sm rounded-lg">
+                            <i data-lucide="alert-triangle" class="w-4 h-4 inline-block mr-1"></i>
+                            This is a generic view for related records. Full event interaction is on the **All Sampling Events** tab.
+                        </p>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
         async function showCreateEditModal(record = null) {
             console.log("Showing create/edit modal. Record:", record);
             const isEditing = record !== null;
             const targetTableSchema = currentTableSchema;
             const schemaName = currentTableName.split('.')[0];
             const tableName = currentTableName.split('.')[1];
+            const pkColumnsForTargetTable = await getPrimaryKeysForTable(schemaName, tableName);
+
 
             const [persons, statuses, cruises, vessels, regions, ecosystems, customers, units, sample_types, projects] = await Promise.all([ 
-                getReferenceData('personal', 'reference'), 
+                getReferenceData('personal', 'lims'), // Corrected to lims.personal
                 getReferenceData('status', 'reference'),
                 getReferenceData('cruises', 'lims'),
                 getReferenceData('vessel', 'reference'),
@@ -913,39 +1018,29 @@
                 getReferenceData('customers', 'lims'),
                 getReferenceData('units', 'reference'),
                 getReferenceData('samples_type', 'reference'),
-                getReferenceData('projects', 'lims') // Fetch projects for project_id dropdown
+                getReferenceData('projects', 'lims') 
             ]);
 
             let formFieldsHtml = '';
             targetTableSchema.forEach(col => {
-                const isAutoGenerated = col.column_name.includes('_id') && col.column_default && col.column_default.includes('nextval');
-                
-                // --- MODIFIED: Ensure sampling_id is editable if not editing ---
-                // Also, do not skip project_id, customer_id if they are needed for dropdowns
-                if (
-                    col.column_name.includes('password_hash') || 
-                    col.column_name.includes('search_vector') ||
-                    // For sampling table, sampling_id is auto-generated on INSERT, but part of PK.
-                    // Allow input if creating new, but skip if editing as it's PK.
-                    (!isEditing && isAutoGenerated && col.column_name === 'sampling_id') || 
-                    (isEditing && col.is_primary_key && !col.column_name.endsWith('_date')) // Keep date PKs for editing too.
-                ) {
-                    // Explicitly allow sampling_id for input when creating
-                    if (!isEditing && col.column_name === 'sampling_id') {
-                        // This specific case is handled below, so we don't want to 'return' here.
-                        // Let it fall through to the default input field.
-                    } else {
-                         return; // Skip this column entirely
-                    }
-                }
+                const isAutoGenerated = col.column_default && col.column_default.includes('nextval');
+                const isReadOnlyField = isEditing && pkColumnsForTargetTable.includes(col.column_name) && !isAutoGenerated;
 
-                let value = isEditing ? (record[col.column_name] || '') : (col.column_default ? col.column_default.replace(/::[a-z_]+/g, '').replace(/'/g, '') : '');
+                if (col.column_name.includes('password_hash') || col.column_name.includes('search_vector') || col.column_name.includes('attachment') || col.column_name.includes('user_id')) return;
+
+                let value = record ? (record[col.column_name] || '') : (col.column_default ? col.column_default.replace(/::[a-z_]+/g, '').replace(/'/g, '') : '');
+                
                 let inputType = 'text';
-                let extraAttrs = '';
+                let extraAttrs = isReadOnlyField ? 'readonly' : '';
                 let label = formatColumnName(col.column_name);
                 let optionsHtml = '';
                 let isSelect = false;
 
+                // Handle array fields (convert to semicolon string for input)
+                const isArrayField = col.data_type === 'text[]';
+                if (isArrayField && Array.isArray(value)) value = value.join('; ');
+                
+                // Handle file attachment input
                 if (col.column_name === 'attachment') {
                     formFieldsHtml += `
                         <div>
@@ -955,19 +1050,28 @@
                         </div>
                     `;
                     return;
-                } else if (col.column_name === 'attachment_link') {
-                    inputType = 'url';
-                } else if (col.column_name.includes('geom')) { // Handle geometry columns
+                }
+                
+                // Handle large text/JSONB/GeoJSON/Array inputs
+                if (['description', 'notes', 'sop_protocol', 'body', 'catch_notes'].includes(col.column_name) || col.data_type === 'jsonb' || col.column_name.includes('geom') || isArrayField) {
+                     let textAreaValue = col.data_type === 'jsonb' && value ? JSON.stringify(value, null, 2) : value;
+                     if (col.column_name.includes('geom')) {
+                        textAreaValue = value ? JSON.stringify(value, null, 2) : '{"type": "Point", "coordinates": [0, 0]}';
+                        label += ' (GeoJSON Point)';
+                     } else if (isArrayField) {
+                         label += ' (semicolon-separated)';
+                     }
+                    
                     formFieldsHtml += `
-                        <div class="md:col-span-2">
-                            <label class="block text-gray-700 text-sm font-bold mb-1">${label} (GeoJSON Point)</label>
-                            <textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-24">${value ? JSON.stringify(value, null, 2) : ''}</textarea>
-                            <p class="text-xs text-gray-500 mt-1">Example: {"type": "Point", "coordinates": [longitude, latitude]}</p>
+                        <div class="md:col-span-2 ${isReadOnlyField ? 'opacity-70' : ''}">
+                            <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
+                            <textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-24" ${extraAttrs} ${col.is_nullable === 'NO' && !col.column_default && !isEditing && !isAutoGenerated ? 'required' : ''}>${textAreaValue}</textarea>
                         </div>
                     `;
                     return;
                 }
 
+                // Handle basic input types (date, time, number, datetime-local, text)
                 switch (col.data_type) {
                     case 'integer':
                     case 'numeric':
@@ -978,7 +1082,7 @@
                         inputType = 'date';
                         if (isEditing) value = formatDateForInput(value);
                         break;
-                    case 'time': // Handle time columns
+                    case 'time':
                         inputType = 'time';
                         break;
                     case 'timestamp with time zone':
@@ -993,69 +1097,39 @@
                         break;
                     case 'text':
                     case 'character varying':
-                        if (col.column_name.includes('notes') || col.column_name.includes('description') || col.column_name.includes('weather') || col.column_name.includes('location_name') || col.column_name.includes('fishing_method') || col.column_name.includes('gear_type') || col.column_name.includes('sea_state') || col.column_name.includes('preservative') || col.column_name.includes('instrument_id') || col.column_name.includes('address')) {
-                            formFieldsHtml += `
-                                <div class="${['notes', 'description', 'weather', 'location_name', 'fishing_method'].includes(col.column_name) ? 'md:col-span-2' : ''}">
-                                    <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
-                                    <textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-24">${value}</textarea>
-                                </div>
-                            `;
-                            return;
-                        }
+                        if (col.column_name.includes('link')) inputType = 'url';
                         break;
-                    case 'jsonb':
-                        formFieldsHtml += `
-                            <div class="md:col-span-2">
-                                <label class="block text-gray-700 text-sm font-bold mb-1">${label} (JSON)</label>
-                                <textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-24">${value ? JSON.stringify(value, null, 2) : ''}</textarea>
-                            </div>
-                        `;
-                        return;
+                }
+                
+                // Handle Dropdowns (Foreign Keys)
+                let refData = [];
+                let valueKey = col.column_name;
+                let displayKey = col.column_name;
+
+                if (col.column_name.includes('person_id') && persons) { refData = persons; displayKey = 'full_name'; }
+                else if (col.column_name.includes('status_id') && statuses) { refData = statuses; displayKey = 'status_id'; }
+                else if (col.column_name.includes('cruise_id') && cruises) { refData = cruises; displayKey = 'cruise_id'; }
+                else if (col.column_name.includes('vessel_id') && vessels) { refData = vessels; displayKey = 'vessel_name'; }
+                else if (col.column_name.includes('region_id') && regions) { refData = regions; displayKey = 'region_abrv'; }
+                else if (col.column_name.includes('ecosystem_id') && ecosystems) { refData = ecosystems; displayKey = 'ecosystem_abrv'; }
+                else if (col.column_name.includes('customer_id') && customers) { refData = customers; displayKey = 'customer_name'; valueKey = 'customer_id'; }
+                else if (col.column_name.includes('unit_id') && units) { refData = units; displayKey = 'unit_abbreviation'; }
+                else if (col.column_name === 'project_id' && projects) { refData = projects; displayKey = 'title'; }
+                
+                if (refData.length > 0) {
+                    isSelect = true;
+                    optionsHtml = `<option value="">-- Select ${label} --</option>`;
+                    optionsHtml += refData.map(item => `<option value="${item[valueKey]}" ${value == item[valueKey] ? 'selected' : ''}>${item[displayKey] || item[valueKey]}</option>`).join('');
+                    formFieldsHtml += `
+                        <div class="${isReadOnlyField ? 'opacity-70' : ''}">
+                            <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
+                            <select name="${col.column_name}" class="w-full mt-1 p-2 border rounded" ${extraAttrs} ${col.is_nullable === 'NO' && !col.column_default && !isEditing ? 'required' : ''}>${optionsHtml}</select>
+                        </div>
+                    `;
+                    return;
                 }
 
-                // Handling for _id fields that should be dropdowns
-                if (col.column_name.endsWith('_id') && col.column_name !== 'sampling_id' && col.column_name !== 'original_srid') {
-                    let refData = [];
-                    let valueKey = col.column_name;
-                    let displayKey = col.column_name;
-
-                    if (col.column_name.includes('person_id') && persons) {
-                        refData = persons; displayKey = 'full_name';
-                    } else if (col.column_name.includes('status_id') && statuses) {
-                        refData = statuses; displayKey = 'status_id';
-                    } else if (col.column_name.includes('cruise_id') && cruises) {
-                        refData = cruises; displayKey = 'cruise_id'; 
-                    } else if (col.column_name.includes('vessel_id') && vessels) {
-                        refData = vessels; displayKey = 'vessel_name';
-                    } else if (col.column_name.includes('region_id') && regions) {
-                        refData = regions; displayKey = 'region_abrv';
-                    } else if (col.column_name.includes('ecosystem_id') && ecosystems) {
-                        refData = ecosystems; displayKey = 'ecosystem_abrv';
-                    } else if (col.column_name.includes('customer_id') && customers) {
-                        refData = customers; displayKey = 'customer_name'; valueKey = 'customer_id';
-                    } else if (col.column_name.includes('unit_id') && units) {
-                        refData = units; displayKey = 'unit_abbreviation';
-                    } else if (col.column_name.includes('sample_type_id') && sample_types) {
-                        refData = sample_types; displayKey = 'sample_type_abrv';
-                    } else if (col.column_name === 'project_id' && projects) { // Project ID as dropdown
-                        refData = projects; displayKey = 'title';
-                    }
-                    
-                    if (refData.length > 0) {
-                        isSelect = true;
-                        optionsHtml = `<option value="">-- Select ${label} --</option>`;
-                        optionsHtml += refData.map(item => `<option value="${item[valueKey]}" ${value == item[valueKey] ? 'selected' : ''}>${item[displayKey] || item[valueKey]}</option>`).join('');
-                        formFieldsHtml += `
-                            <div>
-                                <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
-                                <select name="${col.column_name}" class="w-full mt-1 p-2 border rounded">${optionsHtml}</select>
-                            </div>
-                        `;
-                        return;
-                    }
-                }
-
-                // Default input field for all other columns (including sampling_id now)
+                // Default input field for all other columns
                 formFieldsHtml += `
                     <div>
                         <label class="block text-gray-700 text-sm font-bold mb-1">${label}</label>
@@ -1112,36 +1186,41 @@
                     } else if (colSchema && (colSchema.data_type === 'integer' || colSchema.data_type === 'numeric' || colSchema.data_type === 'bigint')) {
                         body[key] = value === '' ? null : Number(value);
                     } else if (colSchema && colSchema.data_type === 'boolean') {
-                        // Checkboxes submit 'on' if checked, or nothing if unchecked.
-                        // For unchecked, the key won't be in formData.
                         body[key] = formElement.querySelector(`[name="${key}"]`).checked; 
-                    } else if (colSchema && (colSchema.data_type === 'jsonb' || colSchema.column_name.includes('geom'))) { // Handle GeoJSON as JSONB
-                        try {
-                            body[key] = value === '' ? null : JSON.parse(value);
-                        } catch (jsonError) {
-                            alert(`Invalid JSON for ${formatColumnName(key)}: ${jsonError.message}`);
-                            throw new Error(`Invalid JSON for ${formatColumnName(key)}`);
-                        }
+                    } else if (colSchema && colSchema.data_type === 'jsonb') {
+                         try {
+                             body[key] = value === '' ? null : JSON.parse(value);
+                         } catch (jsonError) {
+                             alert(`Invalid JSON for ${formatColumnName(key)}: ${jsonError.message}`);
+                             throw new Error(`Invalid JSON for ${formatColumnName(key)}`);
+                         }
+                    } else if (colSchema && colSchema.column_name.includes('geom')) {
+                         try {
+                             body[key] = value === '' ? null : JSON.parse(value);
+                         } catch (jsonError) {
+                             alert(`Invalid GeoJSON for ${formatColumnName(key)}: ${jsonError.message}`);
+                             throw new Error(`Invalid GeoJSON for ${formatColumnName(key)}`);
+                         }
+                    } else if (colSchema && colSchema.data_type === 'text[]') {
+                        // Convert semicolon separated string into a Python list
+                        body[key] = value === '' ? null : value.split(';').map(s => s.trim()).filter(s => s);
                     } else {
                         body[key] = value === '' ? null : value;
                     }
                 });
 
                 if (hasFileSelected) {
-                    // For file uploads, reconstruct FormData to include processed JSON parts and the file
                     const formDataWithFile = new FormData();
                     for (const key in body) {
-                        // For JSON values, ensure they are stringified back for FormData
                         if (typeof body[key] === 'object' && body[key] !== null) {
                             formDataWithFile.append(key, JSON.stringify(body[key]));
-                        } else {
+                        } else if (body[key] !== null) {
                             formDataWithFile.append(key, body[key]);
                         }
                     }
                     formDataWithFile.append('attachment', attachmentInput.files[0]);
-                    body = formDataWithFile; // Replace 'body' with FormData object
+                    body = formDataWithFile;
                 }
-                // If no file selected, 'body' remains a plain object for JSON submission
 
                 const method = isEditing ? 'PUT' : 'POST';
                 
@@ -1159,10 +1238,8 @@
                     }
                     const pkQueryString = new URLSearchParams(pkValuesForApi).toString();
                     endpoint += `?${pkQueryString}`;
-                    console.log("Edit endpoint with PKs:", endpoint);
                 }
                 
-                console.log(`Submitting form: Method=${method}, Endpoint=${endpoint}, Body:`, body);
                 const result = await apiFetch(endpoint, { method, body });
 
                 submitBtn.disabled = false;
@@ -1170,51 +1247,33 @@
                 spinner.classList.add('hidden');
 
                 if (result && !result.error) { 
-                    console.log("API call successful:", result);
                     alert(`${isEditing ? 'Updated' : 'Created'} record successfully!`);
                     closeModal(); 
-                    await loadAndRenderTable(currentTableName); // Ensure table is re-rendered before finding the row
+                    await loadAndRenderTable(currentTableName); 
                     
                     if (currentTableName === 'lab.sampling') {
-                        // For sampling, we need to find the newly created/updated row to re-select it
                         const targetPkValues = {
                             sampling_id: result.sampling_id || record.sampling_id, 
                             sampling_date: result.sampling_date ? formatDateForInput(result.sampling_date) : (record.sampling_date ? formatDateForInput(record.sampling_date) : undefined)
                         };
 
-                        // Use a slight delay to allow table re-render before trying to select row
                         setTimeout(() => {
-                            const rowToSelect = document.querySelector(`.dynamic-table-row[data-pk-values='${JSON.stringify(targetPkValues)}']`);
-                            if (rowToSelect) { 
-                                rowToSelect.classList.add('table-row-selected'); 
-                                renderSamplingDetails(currentTableData.find(item => 
-                                    item.sampling_id === targetPkValues.sampling_id && 
-                                    formatDateForInput(item.sampling_date) === targetPkValues.sampling_date
-                                ));
-                            } else {
-                                console.warn("Could not find newly created/updated row to select in table. Manually rendering details if data is available.");
-                                // Fallback to rendering details if row couldn't be found (e.g., due to sorting/filtering)
-                                const foundRecord = currentTableData.find(item => 
-                                    item.sampling_id === targetPkValues.sampling_id && 
-                                    formatDateForInput(item.sampling_date) === targetPkValues.sampling_date
-                                );
-                                if (foundRecord) renderSamplingDetails(foundRecord);
-                            }
+                            const foundRecord = currentTableData.find(item => 
+                                item.sampling_id === targetPkValues.sampling_id && 
+                                formatDateForInput(item.sampling_date) === targetPkValues.sampling_date
+                            );
+                            if (foundRecord) renderSamplingDetails(foundRecord);
                         }, 100);
-                    } else {
-                        // For other tables, just re-load the table without re-selecting a specific row
-                        // (or implement specific re-selection logic for them if needed)
                     }
-
                 } else {
-                    console.error("API call failed:", result);
                     alert(`Failed to ${isEditing ? 'save' : 'create'} record: ` + (result ? result.error : 'Unknown error')); 
                 }
             };
         }
 
         async function showBulkUploadModal() {
-            const modalHTML = `
+            // ... (Bulk Upload Modal logic remains the same)
+             const modalHTML = `
                 <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
                     <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl transform transition-all -translate-y-10 opacity-0">
                         <div class="flex justify-between items-center mb-6">
@@ -1313,6 +1372,7 @@
         }
 
         async function downloadCsvTemplate(fullTableName) {
+            // ... (Download CSV Template logic remains the same)
             console.log("downloadCsvTemplate called for:", fullTableName);
             if (!fullTableName) {
                 alert("Please select a table to download its template.");
@@ -1363,7 +1423,8 @@
         }
 
         async function showBulkModifyModal() {
-            const modalHTML = `
+            // ... (Bulk Modify Modal logic remains the same)
+             const modalHTML = `
                 <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
                     <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl transform transition-all -translate-y-10 opacity-0">
                         <div class="flex justify-between items-center mb-6">
@@ -1480,6 +1541,7 @@
         }
 
         async function downloadBulkModifyTemplate(fullTableName) {
+            // ... (Download Bulk Modify Template logic remains the same)
             console.log("downloadBulkModifyTemplate called for:", fullTableName);
             if (!fullTableName) {
                 alert("Please select a table to download its bulk modify template.");
@@ -1524,6 +1586,7 @@
             console.log("Bulk modify template download initiated.");
         }
 
+
         async function initializePage() {
             setupTabListeners();
             await populateDynamicTableSelect();
@@ -1563,12 +1626,25 @@
             
             select.innerHTML = '<option value="">-- Select Related Table --</option>';
             // Add lab.sampling as the first explicit option if it's not the current default
-            select.innerHTML += `<option value="lab.sampling">lab.sampling (Main)</option>`;
+            
+            // Create map for better display names
+            const tableNamesMap = {
+                'lab.sampling': 'Main Events (lab.sampling)',
+                'lab.fishing': 'Fishing Catch Data (lab.fishing)',
+                'lab.individual_catch_catch': 'Individual Catch Data',
+                'lab.sampling_abiotic_data': 'Environmental Data',
+                'lims.cruises': 'Cruises (lims.cruises)',
+            };
+
 
             if (samplingTables && !samplingTables.error) {
-                const otherSamplingTables = samplingTables.filter(t => t !== 'lab.sampling');
-                otherSamplingTables.forEach(table => {
-                    select.innerHTML += `<option value="${table}">${table}</option>`;
+                const mainTable = 'lab.sampling';
+                const relatedTables = samplingTables.filter(t => t !== mainTable);
+                
+                select.innerHTML += `<option value="${mainTable}" selected>${tableNamesMap[mainTable]}</option>`;
+
+                relatedTables.forEach(table => {
+                    select.innerHTML += `<option value="${table}">${tableNamesMap[table] || table}</option>`;
                 });
             }
             select.value = currentTableName;
