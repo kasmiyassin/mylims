@@ -3,71 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Profile - TIFI MG LIMS</title>
+    <title>My Profile - TIFI LIMS</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
+        /* Base styles */
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-        
-        /* Sidebar Styling (Synchronized Structure) */
-        .sidebar { border-right: 1px solid #e2e8f0; height: 100vh; }
-        .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.5rem; }
-        .sidebar-nav-container::-webkit-scrollbar { width: 6px; }
-        .sidebar-nav-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        .sidebar-item { color: #475569; transition: all 0.2s ease; }
+        .sidebar { border-right: 1px solid #e2e8f0; }
+        .sidebar-item { color: #475569; }
         .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
         .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
-        .user-profile-link { cursor: pointer; text-decoration: none; transition: all 0.2s ease; }
-        .user-profile-link:hover { background-color: #f1f5f9; border-radius: 0.25rem; }
-
-        .card { 
-            background-color: white; 
-            border-radius: 0.75rem; 
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); 
-        }
-
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 10px -2px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05); }
+        .loading-spinner { border: 4px solid rgba(0, 0, 0, 0.1); border-left-color: #4f46e5; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         /* Toast Notification Styles */
         .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 100; }
-        .toast {
-            background-color: #fff;
-            padding: 1rem 1.5rem;
-            border-radius: 0.5rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.08);
-            display: flex;
-            align-items: center;
-            opacity: 0;
-            transform: translateY(-100%);
-            animation: fadeInSlideDown 0.3s ease-out forwards, fadeOut 0.3s ease-out 4s forwards;
-            margin-bottom: 0.75rem;
-            border-left: 5px solid;
-        }
+        .toast { background-color: #fff; padding: 1rem 1.5rem; border-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.08); display: flex; align-items: center; opacity: 0; transform: translateY(-100%); animation: fadeInSlideDown 0.3s ease-out forwards; margin-bottom: 0.75rem; border-left: 5px solid; }
         .toast.success { border-color: #10b981; color: #065f46; }
         .toast.error { border-color: #ef4444; color: #991b1b; }
-
         @keyframes fadeInSlideDown { from { opacity: 0; transform: translateY(-100%); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-100%); } }
-        
-        .button-spinner {
-            border: 2px solid rgba(255, 255, 255, 0.5);
-            border-top-color: #fff;
-            border-radius: 50%;
-            width: 1rem; 
-            height: 1rem; 
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
     <div id="main-app" class="flex">
-        <div id="sidebar" class="sidebar fixed top-0 left-0 bg-white w-64 p-4 flex flex-col z-20">
-            <div class="text-gray-800 text-2xl font-bold mb-4 flex items-center shrink-0">
-                <i data-lucide="flask-conical" class="inline-block mr-2 text-blue-600"></i><span>TIFI MG</span>
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col z-20">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0">
+                <i data-lucide="flask-conical" class="inline-block mr-2 text-blue-600"></i><span>TIFI LIMS</span>
             </div>
-            
-            <div class="sidebar-nav-container space-y-2">
+            <nav class="flex-grow space-y-2">
+                <!-- Links to all major pages -->
                 <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
                 <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
                 <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
@@ -80,499 +45,340 @@
                 <a href="booking.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Booking</span></a>
                 <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
                 <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Tables</span></a>
-            </div>
-            
-            <div class="mt-4 shrink-0">
-                <a href="user_profile.html" id="user-profile-link" class="user-profile-link p-2 mb-2 border-t flex items-center text-gray-800 active">
-                    <div id="user-profile" class="flex items-center">
-                        <i data-lucide="user-circle" class="w-6 h-6 mr-3 text-blue-600"></i>
-                        <p class="font-semibold text-sm text-gray-800">My Profile</p>
-                    </div>
+            </nav>
+            <div class="mt-auto shrink-0">
+                <a href="user_profile.html" class="sidebar-item flex items-center p-2 rounded-md active" id="user-profile-sidebar">
+                    <i data-lucide="user" class="w-5 h-5 mr-3"></i><span>My Profile</span>
                 </a>
                 <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
             </div>
         </div>
 
         <div id="main-content" class="ml-64 p-8 flex-grow">
-            <div class="flex justify-between items-center mb-6">
-                <div>
-                    <h1 class="text-3xl font-bold text-gray-800">User Profile Management</h1>
-                    <p class="mt-1 text-md text-gray-600" id="user-role-info">Loading user data...</p>
-                </div>
-            </div>
-
-            <div id="profile-card-container" class="grid grid-cols-1 lg:grid-cols-3 gap-8 hidden">
-                <div class="lg:col-span-1">
-                    <div class="card p-6 h-full text-center">
-                        <div id="user-avatar" class="mx-auto w-24 h-24 rounded-full flex items-center justify-center text-4xl font-bold text-white mb-4 bg-gray-500">
-                            </div>
-                        <h3 class="text-xl font-bold text-gray-800" id="summary-full-name"></h3>
-                        <p class="text-sm text-gray-500" id="summary-id"></p>
-                        <div class="mt-6 space-y-2">
-                            <div id="summary-mail-group" class="flex items-center justify-center text-sm text-gray-700">
-                                <i data-lucide="mail" class="w-4 h-4 mr-2 text-blue-500"></i><span id="summary-mail"></span>
-                            </div>
-                            <div id="summary-phone-group" class="flex items-center justify-center text-sm text-gray-700 hidden">
-                                <i data-lucide="phone" class="w-4 h-4 mr-2 text-green-500"></i><span id="summary-phone"></span>
-                            </div>
-                            <div id="summary-room-group" class="flex items-center justify-center text-sm text-gray-700 hidden">
-                                <i data-lucide="building-2" class="w-4 h-4 mr-2 text-indigo-500"></i><span id="summary-room"></span>
-                            </div>
-                            <div id="summary-address-group" class="text-sm text-gray-700 hidden">
-                                <p class="font-medium text-gray-500 mt-2">Address:</p><span id="summary-address" class="block"></span>
-                            </div>
-                            <p class="text-xs text-gray-400 pt-4">Last modified: <span id="summary-last-modified">N/A</span></p>
-                        </div>
-                    </div>
+            <div class="max-w-4xl mx-auto">
+                <h1 class="text-3xl font-bold text-gray-800 flex items-center mb-6">
+                    <i data-lucide="user-circle" class="w-8 h-8 mr-3 text-blue-600"></i> My Profile
+                </h1>
+                
+                <div id="loading-area" class="card p-6 text-center">
+                    <div class="loading-spinner mx-auto mb-4"></div>
+                    <p class="text-gray-600">Loading user data...</p>
                 </div>
 
-                <div class="lg:col-span-2">
+                <div id="profile-container" class="hidden space-y-8">
+                    <!-- Profile Details Card -->
                     <div class="card p-6">
-                        <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center"><i data-lucide="settings-2" class="w-6 h-6 mr-3"></i> Edit Details</h2>
-                        
-                        <form id="profile-form" class="space-y-6">
-                            <input type="hidden" id="pk-id-field" name="pk_id_field">
-                            <input type="hidden" id="pk-value" name="pk_value">
-
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div id="name-field-group" class="col-span-1">
-                                    <label for="name_field" class="block text-sm font-medium text-gray-700">Full Name</label>
-                                    <input type="text" id="name_field" name="name_field" class="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" required>
+                        <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Account Information</h2>
+                        <form id="profile-form" class="space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="person_id" class="block text-sm font-semibold text-gray-700">User ID</label>
+                                    <input type="text" id="person_id" name="person_id" readonly class="mt-1 block w-full p-2 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed">
                                 </div>
-                                <div id="mail-field-group" class="col-span-1">
-                                    <label for="mail" class="block text-sm font-medium text-gray-700">Email (Used for Login)</label>
-                                    <input type="email" id="mail" name="mail" class="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" required>
-                                </div>
-                                <div id="phone-field-group" class="col-span-1 hidden">
-                                    <label for="phone_field" class="block text-sm font-medium text-gray-700">Phone/Telephone</label>
-                                    <input type="text" id="phone_field" name="phone_field" class="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                                </div>
-                                <div id="room-field-group" class="col-span-1 hidden">
-                                    <label for="room" class="block text-sm font-medium text-gray-700">Room</label>
-                                    <input type="text" id="room" name="room" class="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                                </div>
-                                <div id="address-field-group" class="md:col-span-2 hidden">
-                                    <label for="address" class="block text-sm font-medium text-gray-700">Address</label>
-                                    <textarea id="address" name="address" rows="2" class="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"></textarea>
+                                <div>
+                                    <label for="user_type" class="block text-sm font-semibold text-gray-700">User Type</label>
+                                    <input type="text" id="user_type" name="user_type" readonly class="mt-1 block w-full p-2 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed">
                                 </div>
                             </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- Enhanced Fields -->
+                                <div>
+                                    <label for="status_id" class="block text-sm font-semibold text-gray-700">Status</label>
+                                    <input type="text" id="status_id" name="status_id" readonly class="mt-1 block w-full p-2 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed">
+                                </div>
+                                <div>
+                                    <label for="join_date" class="block text-sm font-semibold text-gray-700">Join Date</label>
+                                    <input type="text" id="join_date" name="join_date" readonly class="mt-1 block w-full p-2 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed">
+                                </div>
+                                <!-- End Enhanced Fields -->
+                            </div>
 
-                            <div class="border-t pt-6 mt-6 space-y-4">
-                                <h3 class="text-lg font-semibold text-gray-800 flex items-center"><i data-lucide="key-round" class="w-5 h-5 mr-2"></i>Change Password</h3>
-                                <p class="text-sm text-gray-500">Leave these fields empty if you do not wish to change your password. Note: Changing the password requires re-login.</p>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div>
-                                        <label for="password" class="block text-sm font-medium text-gray-700">New Password</label>
-                                        <input type="password" id="password" name="password" class="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500" placeholder="••••••••">
-                                    </div>
-                                    <div>
-                                        <label for="password_confirm" class="block text-sm font-medium text-gray-700">Confirm New Password</label>
-                                        <input type="password" id="password_confirm" name="password_confirm" class="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500" placeholder="••••••••">
-                                    </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="full_name" class="block text-sm font-semibold text-gray-700">Full Name</label>
+                                    <input type="text" id="full_name" name="full_name" class="mt-1 block w-full p-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label for="mail" class="block text-sm font-semibold text-gray-700">Email Address</label>
+                                    <input type="email" id="mail" name="mail" class="mt-1 block w-full p-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="telephone" class="block text-sm font-semibold text-gray-700">Phone Number</label>
+                                    <input type="tel" id="telephone" name="telephone" class="mt-1 block w-full p-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label for="room" class="block text-sm font-semibold text-gray-700">Room</label>
+                                    <input type="text" id="room" name="room" class="mt-1 block w-full p-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500">
                                 </div>
                             </div>
                             
-                            <div class="pt-6 flex justify-end">
-                                <button type="submit" id="save-profile-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg flex items-center transition-all duration-200 shadow-md hover:shadow-lg">
-                                    <span id="button-text"><i data-lucide="save" class="w-5 h-5 mr-2"></i>Save Changes</span>
-                                    <span id="loading-spinner" class="hidden ml-2 button-spinner"></span>
-                                </button>
+                            <!-- Additional Fields for Notes/Tags -->
+                            <div>
+                                <label for="tags" class="block text-sm font-semibold text-gray-700">Tags (Semicolon-separated)</label>
+                                <input type="text" id="tags" name="tags" class="mt-1 block w-full p-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500">
                             </div>
+                            <div>
+                                <label for="notes" class="block text-sm font-semibold text-gray-700">Notes</label>
+                                <textarea id="notes" name="notes" rows="3" class="mt-1 block w-full p-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500"></textarea>
+                            </div>
+                            <!-- End Additional Fields -->
+                            
+                            <button type="submit" id="save-profile-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center transition-colors">
+                                <i data-lucide="save" class="w-5 h-5 mr-2"></i> Save Profile Details
+                            </button>
+                            <p id="profile-message" class="text-center text-sm font-medium"></p>
+                        </form>
+                    </div>
+
+                    <!-- Password Change Card -->
+                    <div class="card p-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Change Password</h2>
+                        <form id="password-form" class="space-y-4">
+                            <div>
+                                <label for="new_password" class="block text-sm font-semibold text-gray-700">New Password</label>
+                                <input type="password" id="new_password" name="password" required class="mt-1 block w-full p-2 border border-gray-300 rounded-lg focus:border-red-500 focus:ring-red-500">
+                            </div>
+                            <div>
+                                <label for="confirm_password" class="block text-sm font-semibold text-gray-700">Confirm New Password</label>
+                                <input type="password" id="confirm_password" required class="mt-1 block w-full p-2 border border-gray-300 rounded-lg focus:border-red-500 focus:ring-red-500">
+                            </div>
+                            <button type="submit" id="change-password-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center transition-colors">
+                                <i data-lucide="lock" class="w-5 h-5 mr-2"></i> Change Password
+                            </button>
+                            <p id="password-message" class="text-center text-sm font-medium"></p>
                         </form>
                     </div>
                 </div>
-            </div>
 
-            <div id="loading-placeholder" class="card p-12 text-center text-gray-500">
-                <i data-lucide="loader-2" class="animate-spin w-8 h-8 text-blue-600 mx-auto mb-4"></i>
-                <p>Authenticating user and loading profile...</p>
             </div>
         </div>
         <div id="toast-container" class="toast-container"></div>
     </div>
 
     <script>
-        // --- Security and Setup ---
-        // CRITICAL FIX: Ensure session data is valid or redirect immediately.
-        // The check now ensures both 'isLoggedIn' is true AND the 'user' object exists.
-        if (sessionStorage.getItem('isLoggedIn') !== 'true' || !sessionStorage.getItem('user')) {
-            localStorage.setItem('redirectUrl', window.location.href);
+        // --- Configuration & Session Check ---
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') {
             window.location.href = './login.html';
         }
         
         const API_BASE_URL = '/mylims/api'; 
-        let userProfileData = null;
-        
-        // Maps user types to their table and primary key for API calls, and handles custom field names.
-        const userTypeMap = {
-            'personal': { schema: 'lims', table: 'personal', idField: 'person_id', nameField: 'full_name', phoneField: 'telephone', roomField: 'room', addressField: null, roleDisplay: 'Lab Personnel' },
-            'customer': { schema: 'lims', table: 'customers', idField: 'customer_id', nameField: 'customer_name', phoneField: 'phone', roomField: null, addressField: 'address', roleDisplay: 'Customer' },
-            'external_contact': { schema: 'lims', table: 'external_contacts', idField: 'contact_id', nameField: 'full_name', phoneField: 'telephone', roomField: null, addressField: 'address', roleDisplay: 'External Contact' },
-        };
+        const USER_SESSION_DATA = JSON.parse(sessionStorage.getItem('user'));
+        const USER_TYPE = sessionStorage.getItem('user_type');
+        let TARGET_TABLE = '';
+        let USER_PK_KEY = ''; 
+        let USER_ID = '';
 
-        // --- Utility Functions ---
-
-        async function apiFetch(endpoint, options = {}) {
-            try {
-                // Flask PUT/POST uses Content-Type: application/json
-                if (options.method === 'PUT' || options.method === 'POST') {
-                    options.headers = { ...options.headers, 'Content-Type': 'application/json' };
-                    options.body = JSON.stringify(options.body);
-                }
-                
-                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
-                if (!response.ok) {
-                    const errorBody = await response.json().catch(() => ({error: `Server error or HTTP ${response.status}`}));
-                    
-                    if (response.status === 401) {
-                         // Force client-side logout if the server rejects the request due to authentication
-                         sessionStorage.clear();
-                         showToast("Session expired. Redirecting to login.", 'error');
-                         setTimeout(() => window.location.href = './login.html', 1500);
-                         return null;
-                    }
-                    throw new Error(errorBody.error || `HTTP error! Status: ${response.status}`);
-                }
-                // Check for successful update with no content returned (Status 204 or empty 200)
-                if (response.status === 204 || response.headers.get('content-length') === '0') {
-                    return { success: true };
-                }
-                
-                return response.json(); 
-
-            } catch (error) {
-                console.error(`API Error on ${endpoint}:`, error);
-                // Only show toast if it's not the 401 redirect path
-                if (error.message && !error.message.includes('HTTP error! Status: 401')) {
-                    showToast(`API Error: ${error.message}`, 'error');
-                }
-                return null;
-            }
+        // Map user type to the correct database table and primary key column name
+        if (USER_TYPE === 'personal' || USER_TYPE === 'admin' || USER_TYPE === 'superadmin') {
+            TARGET_TABLE = 'lims.personal';
+            USER_PK_KEY = 'person_id';
+            USER_ID = USER_SESSION_DATA.person_id;
+        } else if (USER_TYPE === 'customer') {
+            TARGET_TABLE = 'lims.customers';
+            USER_PK_KEY = 'customer_id';
+            USER_ID = USER_SESSION_DATA.customer_id; // Note: customer_id is typically an integer
+        } else if (USER_TYPE === 'external_contact') {
+            TARGET_TABLE = 'lims.external_contacts';
+            USER_PK_KEY = 'contact_id';
+            USER_ID = USER_SESSION_DATA.contact_id;
         }
-        
+
+
+        // --- Core Utilities ---
+
         function showToast(message, type = 'info') {
             const toastContainer = document.getElementById('toast-container');
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
-            const icon = type === 'success' ? 'check-circle' : 'x-circle';
-            toast.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 mr-3"></i><span class="toast-message">${message}</span>`;
+            const icon = type === 'success' ? 'check-circle' : (type === 'error' ? 'x-circle' : 'info');
+            toast.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5"></i><span class="toast-message">${message}</span>`;
             toastContainer.appendChild(toast);
             lucide.createIcons();
-            // The CSS handles the fade out animation
+            
+            setTimeout(() => { toast.remove(); }, 3000);
         }
 
-        // --- Core Logic ---
+        async function apiFetch(endpoint, options = {}) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
+                    ...options,
+                    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+                    // Fix: Check if body is FormData (for file uploads if we were using it here) before stringifying
+                    body: options.body instanceof FormData ? options.body : (options.body ? JSON.stringify(options.body) : undefined)
+                });
 
-        function getSessionUser() {
-            // FIX: This function now relies on the top-level check for basic validity.
-            const user = JSON.parse(sessionStorage.getItem('user'));
-            const userType = sessionStorage.getItem('user_type');
-            const isAdmin = sessionStorage.getItem('is_admin') === 'true';
-
-            if (!user) { return null; }
-
-            let info;
-            
-            // 1. Determine user type and fetch mapping info
-            if (userType in userTypeMap) {
-                info = userTypeMap[userType];
-            } else if (isAdmin) {
-                // Handle admin fallbacks, assuming they belong to 'personal' table for profile data
-                info = userTypeMap['personal'];
-                info.roleDisplay = user.full_name || user.person_id || user.customer_name || 'Administrator';
-            } else {
-                 return null; 
-            }
-
-            // 2. Extract Primary Key Value (MUST be string for URL/RLS consistency)
-            let pkValue;
-            // Robustly find the PK value from the session user object based on the expected field.
-            pkValue = String(user[info.idField] || user.person_id || user.customer_id || user.contact_id);
-
-            if (pkValue === 'undefined' || pkValue === 'null') {
-                return null;
-            }
-            
-            // 3. Return combined user/mapping object
-            return {
-                ...info,
-                pkValue: pkValue,
-                currentData: user,
-            };
-        }
-
-        async function loadProfile() {
-            const userInfo = getSessionUser();
-            const placeholder = document.getElementById('loading-placeholder');
-            const cardContainer = document.getElementById('profile-card-container');
-            
-            if (!userInfo) { 
-                 // This block should rarely execute due to the top-level check/redirect.
-                 placeholder.innerHTML = `<p class="text-red-500">Session data incomplete. Please log in again.</p>`;
-                 cardContainer.classList.add('hidden');
-                 placeholder.classList.remove('hidden');
-                 return;
-            }
-            
-            // Show loading state while fetching
-            placeholder.classList.remove('hidden');
-            cardContainer.classList.add('hidden');
-            
-            // 1. Fetch live data using the correctly mapped PK
-            const pkFieldInDb = userInfo.idField;
-            const endpoint = `table/${userInfo.schema}/${userInfo.table}?${pkFieldInDb}=${encodeURIComponent(userInfo.pkValue)}`;
-            
-            const response = await apiFetch(endpoint);
-
-            if (!response || response.length === 0 || response.error) {
-                placeholder.innerHTML = `<p class="text-red-500">Failed to load profile for ID: ${userInfo.pkValue}. Profile record not found or inaccessible. (Check RLS/Project links)</p>`;
-                return;
-            }
-
-            userProfileData = response[0]; 
-            
-            placeholder.classList.add('hidden');
-            cardContainer.classList.remove('hidden');
-            
-            // 2. Populate form and summary
-            populateForm(userProfileData, userInfo);
-            updateSidebarAndSummary(userProfileData, userInfo);
-            
-            // 3. Setup listener for form submission (only needs to be done once)
-            const form = document.getElementById('profile-form');
-            if (form && !form.dataset.listenerAttached) {
-                form.addEventListener('submit', handleFormSubmit);
-                form.dataset.listenerAttached = 'true';
-            }
-            
-            lucide.createIcons();
-        }
-
-        function populateForm(data, userInfo) {
-            const form = document.getElementById('profile-form');
-            
-            // Set PK identification fields
-            document.getElementById('pk-id-field').value = userInfo.idField;
-            document.getElementById('pk-value').value = userInfo.pkValue;
-
-            // Name Field
-            const nameField = form.querySelector('#name_field');
-            nameField.name = userInfo.nameField; // Use the correct DB name (e.g., 'full_name' or 'customer_name')
-            nameField.value = data[userInfo.nameField] || '';
-            document.getElementById('name-field-group').querySelector('label').textContent = formatFieldName(userInfo.nameField);
-
-            // Email Field (Mail)
-            form.querySelector('#mail').value = data.mail || '';
-            
-            // Phone Field
-            const phoneGroup = document.getElementById('phone-field-group');
-            if (userInfo.phoneField) {
-                phoneGroup.classList.remove('hidden');
-                const phoneField = form.querySelector('#phone_field');
-                phoneField.name = userInfo.phoneField; // Use the correct DB name (e.g., 'telephone' or 'phone')
-                phoneField.value = data[userInfo.phoneField] || '';
-                phoneGroup.querySelector('label').textContent = formatFieldName(userInfo.phoneField);
-            } else {
-                phoneGroup.classList.add('hidden');
-            }
-
-            // Room Field (only for lims.personal)
-            const roomGroup = document.getElementById('room-field-group');
-            if (userInfo.roomField) {
-                roomGroup.classList.remove('hidden');
-                form.querySelector('#room').value = data[userInfo.roomField] || '';
-            } else {
-                roomGroup.classList.add('hidden');
-            }
-
-            // Address Field (for external_contacts and customers)
-            const addressGroup = document.getElementById('address-field-group');
-            if (userInfo.addressField) {
-                addressGroup.classList.remove('hidden');
-                form.querySelector('#address').value = data[userInfo.addressField] || '';
-                form.querySelector('#address').name = userInfo.addressField; // Use the correct DB field name
-            } else {
-                addressGroup.classList.add('hidden');
-            }
-
-            // Clear password fields (security measure)
-            form.querySelector('#password').value = '';
-            form.querySelector('#password_confirm').value = '';
-        }
-
-        function updateSidebarAndSummary(data, userInfo) {
-            const fullName = data[userInfo.nameField] || 'N/A';
-            const email = data.mail || 'N/A';
-            const phone = userInfo.phoneField ? (data[userInfo.phoneField] || 'N/A') : 'N/A';
-            const room = userInfo.roomField ? (data[userInfo.roomField] || 'N/A') : 'N/A';
-            const address = userInfo.addressField ? (data[userInfo.addressField] || 'N/A') : 'N/A';
-            const lastModified = data.last_modified_at ? new Date(data.last_modified_at).toLocaleString() : 'N/A';
-
-            document.getElementById('user-role-info').textContent = `Role: ${userInfo.roleDisplay}`;
-
-            // Summary Panel
-            document.getElementById('summary-full-name').textContent = fullName;
-            document.getElementById('summary-id').textContent = `${formatFieldName(userInfo.idField)}: ${userInfo.pkValue}`;
-            document.getElementById('summary-mail').textContent = email;
-            
-            // Phone
-            document.getElementById('summary-phone').textContent = phone;
-            document.getElementById('summary-phone-group').classList.toggle('hidden', !userInfo.phoneField || phone === 'N/A');
-
-            // Room
-            document.getElementById('summary-room').textContent = room;
-            document.getElementById('summary-room-group').classList.toggle('hidden', !userInfo.roomField || room === 'N/A');
-
-            // Address
-            document.getElementById('summary-address').textContent = address;
-            document.getElementById('summary-address-group').classList.toggle('hidden', !userInfo.addressField || address === 'N/A');
-
-            document.getElementById('summary-last-modified').textContent = lastModified;
-
-            // Avatar setup
-            const avatarDiv = document.getElementById('user-avatar');
-            const initial = (fullName.charAt(0) || userInfo.pkValue.charAt(0)).toUpperCase();
-            let avatarColor = 'bg-gray-500';
-            if (userInfo.table === 'lims.personal') avatarColor = 'bg-blue-600';
-            if (userInfo.table === 'lims.customers') avatarColor = 'bg-green-600';
-            if (userInfo.table === 'lims.external_contacts') avatarColor = 'bg-purple-600';
-            if (userInfo.pkValue === 'TIFI' || userInfo.pkValue === 'kasmi') avatarColor = 'bg-red-600';
-
-            avatarDiv.className = `mx-auto w-24 h-24 rounded-full flex items-center justify-center text-4xl font-bold text-white mb-4 ${avatarColor}`;
-            avatarDiv.textContent = initial;
-            
-            // Update sidebar profile content 
-            const sidebarProfileLink = document.getElementById('user-profile-link');
-            sidebarProfileLink.classList.remove('active');
-            
-            document.getElementById('user-profile').innerHTML = `
-                <span class="mr-2 p-2 ${avatarColor} text-white rounded-full text-xs font-bold">${initial}</span>
-                <p class="font-semibold text-sm text-gray-800">${fullName}</p>
-            `;
-            sidebarProfileLink.classList.add('active');
-        }
-
-        function formatFieldName(fieldName) {
-            return fieldName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        }
-
-        async function handleFormSubmit(e) {
-            e.preventDefault();
-            const form = e.target;
-            const submitBtn = document.getElementById('save-profile-btn');
-            const btnText = submitBtn.querySelector('#button-text');
-            const spinner = document.getElementById('loading-spinner');
-            
-            submitBtn.disabled = true;
-            btnText.innerHTML = `Saving...`;
-            spinner.classList.remove('hidden');
-            lucide.createIcons();
-
-            const userInfo = getSessionUser();
-            const pkCol = document.getElementById('pk-id-field').value;
-            const pkVal = document.getElementById('pk-value').value;
-
-            // 1. Password confirmation check
-            const newPassword = form.querySelector('#password').value.trim();
-            const confirmPassword = form.querySelector('#password_confirm').value.trim();
-
-            if (newPassword && newPassword !== confirmPassword) {
-                showToast('Passwords do not match. Please verify.', 'error');
-                submitBtn.disabled = false;
-                btnText.innerHTML = `<i data-lucide="save" class="w-5 h-5 mr-2"></i>Save Changes`;
-                spinner.classList.add('hidden');
-                lucide.createIcons();
-                return;
-            }
-
-            // 2. Build the update body with correct API field names
-            const updateBody = {};
-            
-            // Dynamically map form fields back to their DB names
-            const fieldMappings = {
-                'name_field': userInfo.nameField,
-                'phone_field': userInfo.phoneField,
-                'room': userInfo.roomField,
-                'address': userInfo.addressField,
-                'mail': 'mail',
-                'password': 'password' 
-            };
-
-            for (const [key, dbName] of Object.entries(fieldMappings)) {
-                if (!dbName) continue; 
-
-                const inputElement = form.querySelector(`#${key}`);
-                const value = inputElement ? inputElement.value.trim() : null;
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: `Server error or HTTP ${response.status}` }));
+                    throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
+                }
                 
-                if (key === 'password') {
-                    if (newPassword) {
-                        updateBody[dbName] = newPassword; // Send plaintext, server hashes it
+                if (response.status === 204) return { success: true };
+                return await response.json();
+            } catch (error) {
+                console.error(`API Error on ${endpoint}:`, error);
+                return { error: error.message };
+            }
+        }
+        
+        // --- Profile Management Functions ---
+
+        async function fetchProfileData() {
+            if (!USER_ID || !TARGET_TABLE) {
+                document.getElementById('loading-area').innerHTML = `<p class="text-red-600">Error: User session data is incomplete or unsupported.</p>`;
+                return;
+            }
+
+            const [schema, data] = TARGET_TABLE.split('.');
+            const endpoint = `table/${schema}/${data}?${USER_PK_KEY}=${USER_ID}`;
+            
+            const result = await apiFetch(endpoint);
+
+            if (result && !result.error && result.length > 0) {
+                const profile = result[0];
+                renderProfileForm(profile);
+            } else {
+                document.getElementById('loading-area').innerHTML = `<p class="text-red-600">Error loading profile: ${result?.error || 'Record not found.'}</p>`;
+            }
+        }
+
+        function renderProfileForm(profile) {
+            document.getElementById('loading-area').classList.add('hidden');
+            document.getElementById('profile-container').classList.remove('hidden');
+
+            const form = document.getElementById('profile-form');
+
+            // Set User ID and Type
+            document.getElementById('person_id').value = profile[USER_PK_KEY] || USER_ID;
+            document.getElementById('user_type').value = USER_TYPE;
+
+            // Display Enhanced Fields (Read-only)
+            // Note: These fields are only likely available in lims.personal, otherwise they remain hidden
+            document.getElementById('status_id').value = profile.status_id || 'N/A';
+            // Assuming 'creation_date' or similar exists for joining, defaulting to a placeholder
+            document.getElementById('join_date').value = profile.creation_date ? new Date(profile.creation_date).toLocaleDateString('en-CA') : 'N/A';
+            
+            // Fill editable fields based on the table structure
+            const editableFields = ['full_name', 'mail', 'telephone', 'room', 'customer_name', 'phone', 'address', 'tags', 'notes'];
+
+            editableFields.forEach(field => {
+                const input = document.getElementById(field);
+                if (input) {
+                    if (profile[field] !== undefined) {
+                        input.value = profile[field] || '';
+                        input.name = field; // Ensure input has the correct name attribute for PUT request
+                    } else {
+                         // Hide field if it doesn't apply to this user type's table (e.g., hiding 'room' for customers)
+                        input.closest('div').classList.add('hidden');
                     }
-                } else if (value !== null) {
-                    // Include all standard fields that exist, setting empty strings to null
-                    updateBody[dbName] = value === '' ? null : value;
-                }
-            }
-            
-            // 3. Construct API call (PUT)
-            const pkQueryString = `${pkCol}=${encodeURIComponent(pkVal)}`;
-            const endpoint = `table/${userInfo.schema}/${userInfo.table}?${pkQueryString}`;
-            
-            const result = await apiFetch(endpoint, { method: 'PUT', body: updateBody });
-
-            // 4. Handle result
-            submitBtn.disabled = false;
-            btnText.innerHTML = `<i data-lucide="save" class="w-5 h-5 mr-2"></i>Save Changes`;
-            spinner.classList.add('hidden');
-            lucide.createIcons();
-
-            if (result && !result.error) {
-                showToast('Profile updated successfully! 💾', 'success');
-                
-                // If password was changed, force logout/re-login
-                if (newPassword) {
-                    showToast('Password updated. Logging out for security...', 'success');
-                    // No need to await logout here, as session clear and redirect is immediate
-                    apiFetch('logout', { method: 'POST' }).finally(() => {
-                         sessionStorage.clear();
-                         setTimeout(() => window.location.href = './login.html', 1500);
-                    });
-                    return;
-                }
-                
-                // Update the session with merged data for immediate UI refresh
-                const updatedProfile = {...userProfileData, ...updateBody, ...result}; 
-                sessionStorage.setItem('user', JSON.stringify(updatedProfile));
-
-                // Clear password fields on success
-                form.querySelector('#password').value = '';
-                form.querySelector('#password_confirm').value = '';
-
-                // Reload the profile to refresh the summary
-                loadProfile();
-
-            } else {
-                showToast(`Update Failed: ${result ? result.error : 'Unknown error'}`, 'error');
-            }
-        }
-
-        // --- Initialize ---
-        document.addEventListener('DOMContentLoaded', loadProfile);
-        document.addEventListener('DOMContentLoaded', () => {
-            lucide.createIcons();
-            // Logout button functionality is attached here
-            document.getElementById('logout-button').addEventListener('click', async () => {
-                try {
-                    // Call backend logout endpoint
-                    await apiFetch('logout', { method: 'POST' });
-                } catch (error) {
-                    console.error("Logout API failed, but proceeding with client-side clear:", error);
-                } finally {
-                    sessionStorage.clear();
-                    localStorage.removeItem('redirectUrl');
-                    window.location.href = './login.html';
                 }
             });
+            
+            // Handle textarea separately
+            const notesTextarea = document.getElementById('notes');
+            if(notesTextarea && profile.notes !== undefined) {
+                notesTextarea.value = profile.notes || '';
+            } else if (notesTextarea) {
+                notesTextarea.closest('div').classList.add('hidden');
+            }
+
+
+            form.onsubmit = handleProfileSubmit;
+            document.getElementById('password-form').onsubmit = handlePasswordSubmit;
+            lucide.createIcons();
+        }
+
+        async function handleProfileSubmit(e) {
+            e.preventDefault();
+            const form = e.target;
+            const messageDiv = document.getElementById('profile-message');
+            messageDiv.innerHTML = `<div class="loading-spinner"></div> Saving...`;
+            
+            // Collect payload manually, ignoring hidden/readonly fields
+            const payload = {};
+            const formData = new FormData(form);
+            
+            for (let [key, value] of formData.entries()) {
+                 const element = form.elements[key];
+                 // Check if element exists, is not hidden (or if it is a textarea/input), and is not readonly
+                 if (element && element.closest('div') && !element.closest('div').classList.contains('hidden') && !element.readOnly && element.type !== 'submit') {
+                    // Normalize empty strings to null for database
+                    payload[key] = value.trim() === '' ? null : value.trim();
+                 }
+            }
+            
+            // Ensure payload includes only necessary fields for the update 
+            const [schema, data] = TARGET_TABLE.split('.');
+            const queryString = `${USER_PK_KEY}=${USER_ID}`;
+            const endpoint = `table/${schema}/${data}?${queryString}`;
+
+            const result = await apiFetch(endpoint, { method: 'PUT', body: payload });
+
+            if (result && !result.error) {
+                // Update session storage with new details (if successfully saved)
+                let updatedSession = JSON.parse(sessionStorage.getItem('user'));
+                updatedSession = { ...updatedSession, ...payload };
+                sessionStorage.setItem('user', JSON.stringify(updatedSession));
+                
+                messageDiv.innerHTML = `<span class="text-green-600 font-bold">Profile updated successfully!</span>`;
+                showToast("Profile updated successfully!", "success");
+            } else {
+                messageDiv.innerHTML = `<span class="text-red-600 font-bold">Error: ${result?.error || 'Update failed.'}</span>`;
+                showToast("Update failed.", "error");
+            }
+            lucide.createIcons();
+        }
+
+        async function handlePasswordSubmit(e) {
+            e.preventDefault();
+            const form = e.target;
+            const newPassword = form.elements['password'].value;
+            const confirmPassword = form.elements['confirm_password'].value;
+            const messageDiv = document.getElementById('password-message');
+            messageDiv.innerHTML = '';
+
+            if (newPassword !== confirmPassword) {
+                messageDiv.innerHTML = `<span class="text-red-600 font-bold">Error: Passwords do not match.</span>`;
+                return;
+            }
+            if (newPassword.length < 6) {
+                messageDiv.innerHTML = `<span class="text-red-600 font-bold">Error: Password must be at least 6 characters long.</span>`;
+                return;
+            }
+
+            messageDiv.innerHTML = `<div class="loading-spinner"></div> Changing password...`;
+            
+            const [schema, data] = TARGET_TABLE.split('.');
+            const queryString = `${USER_PK_KEY}=${USER_ID}`;
+            const endpoint = `table/${schema}/${data}?${queryString}`;
+            
+            // Payload only needs the 'password' field. The Flask backend handles hashing it into 'password_hash'.
+            const payload = { password: newPassword }; 
+
+            const result = await apiFetch(endpoint, { method: 'PUT', body: payload });
+
+            if (result && !result.error) {
+                messageDiv.innerHTML = `<span class="text-green-600 font-bold">Password changed successfully!</span>`;
+                showToast("Password changed successfully!", "success");
+                form.reset();
+            } else {
+                messageDiv.innerHTML = `<span class="text-red-600 font-bold">Error: ${result?.error || 'Password update failed.'}</span>`;
+                showToast("Password update failed.", "error");
+            }
+            lucide.createIcons();
+        }
+
+
+        // --- Initialize on load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            document.getElementById('logout-button').addEventListener('click', async () => {
+                await apiFetch('logout', { method: 'POST' });
+                sessionStorage.clear();
+                window.location.href = './login.html';
+            });
+            fetchProfileData();
         });
     </script>
 </body>
