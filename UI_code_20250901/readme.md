@@ -50,7 +50,7 @@ app → Flask instance name inside that file
 -w 4 → use 4 worker processes
 -b 0.0.0.0:8000 → bind to port 8000 (change if needed)
 
-** production command **
+**production command**
 
 ```
 gunicorn --workers 4 --threads 2 --timeout 60 --bind 0.0.0.0:8000 app_test:app
