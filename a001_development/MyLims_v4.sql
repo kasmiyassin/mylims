@@ -34,13 +34,16 @@ CREATE TABLE IF NOT EXISTS "audit"."log" (
     "id" bigserial PRIMARY KEY,
     "schema_name" text NOT NULL,
     "table_name" text NOT NULL,
-    "user_name" text DEFAULT current_user,
+    "user_db_name" text DEFAULT current_user, -- Renamed for clarity: original DB user
+    "logged_in_person_id" text,               -- NEW: The person ID from LIMS session
+    "logged_in_full_name" text,               -- NEW: The person's full name
     "action_timestamp" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "action" text NOT NULL CHECK ("action" IN ('I', 'D', 'U', 'T')), -- Insert, Delete, Update, Truncate
+    "action" text NOT NULL CHECK ("action" IN ('I', 'D', 'U', 'T')),
     "original_data" jsonb,
     "new_data" jsonb,
     "query_text" text
 );
+
 
 
 -- -- =========================================
@@ -50,6 +53,8 @@ CREATE TABLE IF NOT EXISTS "audit"."log" (
 
 CREATE TABLE IF NOT EXISTS "reference"."status" (
     "status_id" text PRIMARY KEY,
+    "tags" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -62,6 +67,8 @@ CREATE TABLE IF NOT EXISTS "reference"."room" (
     "institute" text,
     "city" text,
     "country" text,
+    "tags" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -71,6 +78,8 @@ CREATE TABLE IF NOT EXISTS "reference"."vessel" (
     "vessel_id" text PRIMARY KEY,
     "vessel_name" text,
     "belong_to" text,
+    "tags" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -81,6 +90,7 @@ CREATE TABLE IF NOT EXISTS "reference"."region" (
     "region_abrv" text UNIQUE NOT NULL,
     "parent_region" text,
     "rank" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -92,6 +102,7 @@ CREATE TABLE IF NOT EXISTS "reference"."ecosystem" (
     "ecosystem_abrv" text UNIQUE NOT NULL,
     "country" text,
     "rank" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -100,6 +111,7 @@ CREATE TABLE IF NOT EXISTS "reference"."ecosystem" (
 
 CREATE TABLE IF NOT EXISTS "reference"."category" (
     "category_id" text PRIMARY KEY,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -109,6 +121,7 @@ CREATE TABLE IF NOT EXISTS "reference"."samples_type" (
     "sample_type_id" text PRIMARY KEY,
     "sample_type_abrv" text UNIQUE NOT NULL,
     "rank" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -116,6 +129,7 @@ CREATE TABLE IF NOT EXISTS "reference"."samples_type" (
 
 CREATE TABLE IF NOT EXISTS "reference"."gene" (
     "gene_id" text PRIMARY KEY,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -129,6 +143,7 @@ CREATE TABLE IF NOT EXISTS "reference"."taxon" (
     "max_length_mm" numeric,
     "max_age_years" numeric,
     "rank" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -148,6 +163,7 @@ CREATE TABLE IF NOT EXISTS "reference"."reference_databases" (
     "db_id" serial PRIMARY KEY,
     "db_name" text NOT NULL,
     "db_version" text,
+    "tags" text,
     "notes" text,
     "url" text,
     "path" text,
@@ -169,6 +185,7 @@ CREATE TABLE IF NOT EXISTS "lims"."personal" (
     "mail" text UNIQUE,
     "password_hash" text NOT NULL,
     "status_id" text NOT NULL REFERENCES "reference"."status"("status_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -183,6 +200,7 @@ CREATE TABLE IF NOT EXISTS "lims"."external_contacts" (
     "mail" text,
     "address" text,
     "password_hash" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -197,6 +215,7 @@ CREATE TABLE IF NOT EXISTS "lims"."customers" (
     "mail" text,
     "phone" text,
     "password_hash" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -216,6 +235,7 @@ CREATE TABLE IF NOT EXISTS "lims"."projects" (
     "contact_finance" text,
     "contact_funder" text,
     "description" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -227,6 +247,7 @@ CREATE TABLE IF NOT EXISTS "lims"."project_persons" (
     "role" text,
     PRIMARY KEY ("project_id", "person_id"),
     "link_date" date,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -244,7 +265,8 @@ CREATE TABLE IF NOT EXISTS "lab"."storage" (
     "storage_position_format" text,
     "project_id" text REFERENCES "lims"."projects"("project_id"),
     "address" text,
-    "status_id" text, -- archived removed 
+    "status_id" text, 
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -262,6 +284,7 @@ CREATE TABLE IF NOT EXISTS "lims"."cruises" (
     "start_date" date,
     "end_date" date,
     "together_with_contact_id" text REFERENCES "lims"."external_contacts"("contact_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -277,6 +300,7 @@ CREATE TABLE IF NOT EXISTS "lims"."sop" (
     "reviewer2_person_id" text REFERENCES "lims"."personal"("person_id"),
     "date_realise" date,
     "sop_protocol" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -285,6 +309,7 @@ CREATE TABLE IF NOT EXISTS "lims"."sop" (
 CREATE TABLE IF NOT EXISTS "lims"."batch" (
     "batch_id" text PRIMARY KEY,
     "batch_name" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -298,6 +323,7 @@ CREATE TABLE IF NOT EXISTS "lims"."batch_steps" (
     "sop_id" text REFERENCES "lims"."sop"("sop_id"),
     "status_id" text DEFAULT 'Received' NOT NULL REFERENCES "reference"."status"("status_id"),
     "target_table_name" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -310,6 +336,7 @@ CREATE TABLE IF NOT EXISTS "lims"."permits" (
     "valid_from" date,
     "valid_to" date,
     "reference" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -322,6 +349,9 @@ CREATE TABLE IF NOT EXISTS "lims"."primers" (
     "primer_sequence_rev" text,
     "probe" text,
     "reference" text,
+    "storage_id" text REFERENCES "lab"."storage"("storage_id"),
+    "storage_position" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -334,6 +364,7 @@ CREATE TABLE IF NOT EXISTS "lims"."equipment" (
     "lot" text,
     "mobility" text,
     "date_maintenance" date,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -347,6 +378,7 @@ CREATE TABLE IF NOT EXISTS "lims"."instrument_maintenance" (
     "maintenance_type" text NOT NULL CHECK (maintenance_type IN ('Calibration', 'Repair', 'Preventive Maintenance', 'Validation')),
     "description" text,
     "next_due_date" date,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -359,6 +391,7 @@ CREATE TABLE IF NOT EXISTS "lims"."suppliers" (
     "contact_person" text,
     "phone" text,
     "mail" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -368,6 +401,7 @@ CREATE TABLE IF NOT EXISTS "lims"."inventory_items" (
     "item_id" text PRIMARY KEY,
     "item_name" text NOT NULL,
     "category_id" text REFERENCES "reference"."category"("category_id"),
+    "tags" text,
     "notes" text,
     "unit_id" text REFERENCES "reference"."units"("unit_id"),
     "attachment" bytea,
@@ -384,6 +418,7 @@ CREATE TABLE IF NOT EXISTS "lims"."orders" (
     "project_id" text REFERENCES "lims"."projects"("project_id"),
     "supplier_id" text REFERENCES "lims"."suppliers"("supplier_id"),
     "status_id" text REFERENCES "reference"."status"("status_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -410,6 +445,7 @@ CREATE TABLE IF NOT EXISTS "lims"."reagents" (
 
 CREATE TABLE IF NOT EXISTS "lims"."publication_type" (
     "publication_type_id" text PRIMARY KEY,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -429,6 +465,7 @@ CREATE TABLE IF NOT EXISTS "lims"."publications" (
     "first_author_person_id" text REFERENCES "lims"."personal"("person_id"),
     "corresponding_author_person_id" text REFERENCES "lims"."personal"("person_id"),
     "project_id" text REFERENCES "lims"."projects"("project_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -447,6 +484,7 @@ CREATE TABLE IF NOT EXISTS "lab"."experiments" (
     "method" text,
     "sop_id" text,
     "person_id" text,
+    "tags" text,
     "notes" text,
     "lab_book" text,
     "status_id" text,
@@ -459,6 +497,7 @@ CREATE TABLE IF NOT EXISTS "lab"."experiments_projects" (
     "experiment_id" text NOT NULL,
     "experiment_date" date NOT NULL,
     "project_id" text NOT NULL,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -472,6 +511,7 @@ CREATE TABLE IF NOT EXISTS "lab"."experiments_samples" (
     "experiment_date" date,
     "sample_id" text NOT NULL,
     "sample_creation_date" date ,
+    "tags" text,
     "notes" text,
     PRIMARY KEY ("experiment_id", "experiment_date", "sample_id", "sample_creation_date"),
     FOREIGN KEY ("experiment_id", "experiment_date") REFERENCES "lab"."experiments"("experiment_id", "experiment_date")
@@ -484,6 +524,7 @@ CREATE TABLE IF NOT EXISTS "lab"."protocol_runs" (
     "protocol_text" text,
     "person_id" text REFERENCES "lims"."personal"("person_id"),
     "protocol_run_details" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -500,6 +541,8 @@ CREATE TABLE "lab"."sampling" (
     "ecosystem_id" text REFERENCES "reference"."ecosystem"("ecosystem_id"),
     "vessel_id" text REFERENCES "reference"."vessel"("vessel_id"),
     "customer_id" integer REFERENCES "lims"."customers"("customer_id"),
+    "experiment_id" text,
+    "experiment_date" date,
     "geom" geometry(Point, 4326),
     "fishing_start_geom" geometry(Point, 4326),
     "fishing_end_geom" geometry(Point, 4326),
@@ -520,9 +563,11 @@ CREATE TABLE "lab"."sampling" (
     "operation_duration_min" numeric,
     "together_with_contact_id" text REFERENCES "lims"."external_contacts"("contact_id"),
     "status_id" text DEFAULT 'Planned' NOT NULL REFERENCES "reference"."status"("status_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
+    FOREIGN KEY ("experiment_id", "experiment_date") REFERENCES "lab"."experiments"("experiment_id", "experiment_date"),
     PRIMARY KEY ("sampling_id","sampling_date")
 ) PARTITION BY RANGE ("sampling_date");
 
@@ -534,6 +579,7 @@ CREATE TABLE IF NOT EXISTS "lab"."fishing" (
     "catch_kg" numeric,
     "catch_fish" numeric,
     "done_by" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -553,6 +599,7 @@ CREATE TABLE IF NOT EXISTS "lab"."individual_catch_catch" (
     "sex" text CHECK ("sex" IN ('Male', 'Female', 'Undetermined', NULL)),
     "maturity_stage" text,
     "done_by" text,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -591,6 +638,7 @@ CREATE TABLE "lab"."sampling_abiotic_data" (
     "rainfall_mm" numeric,
     "instrument_id" text,
     "visibility_m" numeric,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -608,6 +656,7 @@ CREATE TABLE IF NOT EXISTS "lab"."reservation_samples" (
     "sample_type_id" text NOT NULL REFERENCES "reference"."samples_type"("sample_type_id"),
     "planned_collection_date" date,
     "status_id" text REFERENCES "reference"."status"("status_id") DEFAULT 'Planned',
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -644,6 +693,7 @@ CREATE TABLE "lab"."root_samples" (
     "conservation" text,
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "batch_id" text REFERENCES "lims"."batch"("batch_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -663,6 +713,7 @@ CREATE TABLE IF NOT EXISTS "lab"."storage_log" (
     "move_date" timestamptz DEFAULT CURRENT_TIMESTAMP,
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "storage_position" text,
+    "tags" text,
     "notes" text,
     FOREIGN KEY ("sample_id", "sample_creation_date") REFERENCES "lab"."root_samples"("sample_id", "sample_creation_date")
 );
@@ -686,6 +737,7 @@ CREATE TABLE IF NOT EXISTS "lab"."fish" (
     "step_id" text REFERENCES "lims"."batch_steps"("step_id"),
     "customer_id" integer REFERENCES "lims"."customers"("customer_id"),
     "status_id" text REFERENCES "reference"."status"("status_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -705,6 +757,7 @@ CREATE TABLE IF NOT EXISTS "lab"."tissue" (
     "batch_id" text REFERENCES "lims"."batch"("batch_id"),
     "step_id" text REFERENCES "lims"."batch_steps"("step_id"),
     "status_id" text REFERENCES "reference"."status"("status_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -724,6 +777,7 @@ CREATE TABLE IF NOT EXISTS "lab"."otoliths" (
     "batch_id" text REFERENCES "lims"."batch"("batch_id"),
     "step_id" text REFERENCES "lims"."batch_steps"("step_id"),
     "status_id" text REFERENCES "reference"."status"("status_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -751,6 +805,7 @@ CREATE TABLE IF NOT EXISTS "lab"."dna" (
     "batch_id" text REFERENCES "lims"."batch"("batch_id"),
     "step_id" text REFERENCES "lims"."batch_steps"("step_id"),
     "status_id" text REFERENCES "reference"."status"("status_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -778,6 +833,7 @@ CREATE TABLE IF NOT EXISTS "lab"."rna" (
     "batch_id" text REFERENCES "lims"."batch"("batch_id"),
     "step_id" text REFERENCES "lims"."batch_steps"("step_id"),
     "status_id" text REFERENCES "reference"."status"("status_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -798,6 +854,7 @@ CREATE TABLE IF NOT EXISTS "lab"."sediments" (
     "batch_id" text REFERENCES "lims"."batch"("batch_id"),
     "step_id" text REFERENCES "lims"."batch_steps"("step_id"),
     "status_id" text REFERENCES "reference"."status"("status_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -818,6 +875,7 @@ CREATE TABLE IF NOT EXISTS "lab"."water" (
     "batch_id" text REFERENCES "lims"."batch"("batch_id"),
     "step_id" text REFERENCES "lims"."batch_steps"("step_id"),
     "status_id" text REFERENCES "reference"."status"("status_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -830,12 +888,15 @@ CREATE TABLE IF NOT EXISTS "lab"."pcr" (
     "pcr_id" text NOT NULL,
     "sample_id" text NOT NULL,
     "sample_creation_date" date,
+    "storage_id" text REFERENCES "lab"."storage"("storage_id"),
+    "storage_position" text,
     "position" text,
     "primer_id" text REFERENCES "lims"."primers"("primer_id"),
     "pcr_blank_id" text,
     "person_id" text REFERENCES "lims"."personal"("person_id"),
     "kit" text,
     "status_id" text REFERENCES "reference"."status"("status_id"),
+    "tags" text,
     "notes" text,
     "project_id" text REFERENCES "lims"."projects"("project_id"),
     "attachment" bytea,
@@ -844,7 +905,8 @@ CREATE TABLE IF NOT EXISTS "lab"."pcr" (
     "creation_date" timestamptz DEFAULT CURRENT_TIMESTAMP,
     "pcr_date" date, -- This column will be populated by a trigger
     PRIMARY KEY ("pcr_id", "creation_date"),
-    FOREIGN KEY ("sample_id", "sample_creation_date") REFERENCES "lab"."root_samples"("sample_id", "sample_creation_date")
+    FOREIGN KEY ("sample_id", "sample_creation_date") REFERENCES "lab"."root_samples"("sample_id", "sample_creation_date"),
+    FOREIGN KEY ("experiment_id", "experiment_date") REFERENCES "lab"."experiments"("experiment_id", "experiment_date")
 ) PARTITION BY RANGE ("creation_date");
 
 CREATE TABLE IF NOT EXISTS "lab"."dissections" (
@@ -858,6 +920,7 @@ CREATE TABLE IF NOT EXISTS "lab"."dissections" (
     "stomach_contents_jsonb" jsonb,
     "gonad_weight_g" numeric,
     "liver_weight_g" numeric,
+    "tags" text,
     "notes" text,
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "creation_date" timestamptz DEFAULT CURRENT_TIMESTAMP,
@@ -883,6 +946,7 @@ CREATE TABLE IF NOT EXISTS "lab"."nanodrop" (
     "a260_230_note" text,
     "elution_volume_ul" numeric,
     "person_id" text REFERENCES "lims"."personal"("person_id"),
+    "tags" text,
     "notes" text,
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "attachment" bytea,
@@ -911,6 +975,7 @@ CREATE TABLE IF NOT EXISTS "lab"."qubit" (
     "sample_volume_ul" numeric,
     "elution_volume_ul" numeric,
     "person_id" text REFERENCES "lims"."personal"("person_id"),
+    "tags" text,
     "notes" text,
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "project_id" text REFERENCES "lims"."projects"("project_id"),
@@ -932,6 +997,7 @@ CREATE TABLE IF NOT EXISTS "lab"."tapestation" (
     "position" text,
     "kit" text,
     "person_id" text REFERENCES "lims"."personal"("person_id"),
+    "tags" text,
     "notes" text,
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "project_id" text REFERENCES "lims"."projects"("project_id"),
@@ -958,6 +1024,7 @@ CREATE TABLE IF NOT EXISTS "lab"."gelelectrophoresis" (
     "person_id" text REFERENCES "lims"."personal"("person_id"),
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "project_id" text REFERENCES "lims"."projects"("project_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -983,6 +1050,7 @@ CREATE TABLE IF NOT EXISTS "lab"."qpcr" (
     "volume_ul" numeric,
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "project_id" text REFERENCES "lims"."projects"("project_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -1007,6 +1075,7 @@ CREATE TABLE IF NOT EXISTS "lab"."library" (
     "read_length_bp" integer,
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "project_id" text REFERENCES "lims"."projects"("project_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -1036,6 +1105,7 @@ CREATE TABLE IF NOT EXISTS "lab"."sequencing_run" (
     "project_id" text REFERENCES "lims"."projects"("project_id"),
     "attachment" bytea,
     "attachment_link" text,
+    "tags" text,
     "notes" text,
     "creation_date" timestamptz DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY ("sequencing_run_id", "creation_date"),
@@ -1059,6 +1129,7 @@ CREATE TABLE IF NOT EXISTS "lab"."seq_dataset" (
     "project_id" text,
     "attachment" bytea,
     "attachment_link" text,
+    "tags" text,
     "notes" text,
     "data_seq_date" date, -- Populated by trigger
     "creation_date" timestamptz DEFAULT CURRENT_TIMESTAMP,
@@ -1080,6 +1151,7 @@ CREATE TABLE IF NOT EXISTS "lab"."datasets" (
     "stored_location_id" text REFERENCES "lab"."storage"("storage_id"),
     "reception_date" date NOT NULL,
     "status_id" text REFERENCES "reference"."status"("status_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -1104,6 +1176,7 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."analysis_pipelines" (
     "experiment_id" text,
     "experiment_date" date,
     "status_id" text REFERENCES "reference"."status"("status_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -1124,6 +1197,7 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."analysis_runs" (
     "experiment_id" text,
     "experiment_date" date,
     "status_id" text REFERENCES "reference"."status"("status_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -1146,6 +1220,7 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."edna_assignments" (
     "experiment_id" text,
     "experiment_date" date,
     "status_id" text REFERENCES "reference"."status"("status_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -1202,6 +1277,7 @@ CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_FishingData" (
     "weather_conditions" text,
     "wind_speed" numeric,
     "wind_unit_id" text REFERENCES "reference"."units"("unit_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -1231,6 +1307,7 @@ CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_FishCatch" (
     "condition_factor" numeric,
     "disease_info" text,
     "origin_type" text CHECK ("origin_type" IN ('Wild', 'Hatchery', 'Unknown', NULL)),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -1252,6 +1329,7 @@ CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_Mail" (
     "sent_at" timestamptz NOT NULL,
     "attachment" bytea,
     "attachment_link" text,
+    "tags" text,
     "notes" text,
     "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
     "created_by" text,
@@ -1267,6 +1345,7 @@ CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_Conversation" (
     "topic" text NOT NULL,
     "started_at" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "last_updated_at" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "tags" text,
     "notes" text,
     "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
     "created_by" text,
@@ -1283,6 +1362,7 @@ CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_ChatMessage" (
     "sender_contact_id" text REFERENCES "lims"."external_contacts"("contact_id"),
     "message_text" text NOT NULL,
     "sent_at" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -1302,6 +1382,8 @@ DECLARE
     v_old_data jsonb;
     v_new_data jsonb;
     v_action text;
+    v_person_id text := current_setting('audit.logged_in_user', TRUE); -- Get LIMS user ID
+    v_full_name text;
 BEGIN
     IF (TG_OP = 'UPDATE') THEN
         v_action := 'U';
@@ -1319,11 +1401,26 @@ BEGIN
         RETURN NULL;
     END IF;
 
-    INSERT INTO "audit"."log" ("schema_name", "table_name", "user_name", "action", "original_data", "new_data", "query_text")
+    -- Lookup the full name of the logged-in person if the ID is set
+    IF v_person_id IS NOT NULL AND v_person_id != '' THEN
+        SELECT full_name INTO v_full_name FROM "lims"."personal" WHERE person_id = v_person_id;
+        IF NOT FOUND THEN
+             -- Handle case where user is a customer/external contact (or 'TIFI' admin)
+             v_full_name := 'System User/' || v_person_id;
+        END IF;
+    END IF;
+
+    INSERT INTO "audit"."log" (
+        "schema_name", "table_name", "user_db_name", 
+        "logged_in_person_id", "logged_in_full_name", 
+        "action", "original_data", "new_data", "query_text"
+    )
     VALUES (
         TG_TABLE_SCHEMA::text,
         TG_TABLE_NAME::text,
         current_user::text,
+        v_person_id,
+        v_full_name,
         v_action,
         v_old_data,
         v_new_data,
@@ -3179,7 +3276,6 @@ END $$;
 -- Great booking schema
 -- ####################################
 
-
 -- lims.bookable_resource Table
 CREATE TABLE IF NOT EXISTS "lims"."bookable_resource" (
     "resource_id" text PRIMARY KEY,
@@ -3188,6 +3284,7 @@ CREATE TABLE IF NOT EXISTS "lims"."bookable_resource" (
     "room_id" text REFERENCES "reference"."room"("room_id"),
     "equipment_id" text,
     "capacity" integer DEFAULT 1, -- The number of people/bookings this resource can handle simultaneously
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text
@@ -3202,6 +3299,7 @@ CREATE TABLE IF NOT EXISTS "lims"."booking" (
     "start_time" timestamptz NOT NULL,
     "end_time" timestamptz NOT NULL,
     "project_id" text REFERENCES "lims"."projects"("project_id"),
+    "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
