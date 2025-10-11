@@ -45,10 +45,10 @@ pip install gunicorn
 gunicorn -w 4 -b 0.0.0.0:8000 app_test:app
 ``` 
 
-app_test → filename without .py
-app → Flask instance name inside that file
--w 4 → use 4 worker processes
--b 0.0.0.0:8000 → bind to port 8000 (change if needed)
+- app_test → filename without .py
+- app → Flask instance name inside that file
+- -w 4 → use 4 worker processes
+- -b 0.0.0.0:8000 → bind to port 8000 (change if needed)
 
 **production command**
 
