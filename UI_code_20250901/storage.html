@@ -340,6 +340,7 @@
         // For 'Storage Samples (Drag & Drop)' tab
         let dragDropCurrentStorageId = null;
 
+        // FIX: Added 'lims.primers' to the list of storable tables
         const storableItemTables = [
             { schema: 'lab', table: 'root_samples', idColumn: 'sample_id', pk: ['sample_id', 'sample_creation_date'] },
             { schema: 'lab', table: 'fish', idColumn: 'sample_id', pk: ['sample_id', 'creation_date'] },
@@ -351,14 +352,15 @@
             { schema: 'lab', table: 'library', idColumn: 'library_id', pk: ['library_id', 'sample_id', 'creation_date'] },
             { schema: 'lab', table: 'pcr', idColumn: 'pcr_id', pk: ['pcr_id', 'creation_date'] },
             { schema: 'lims', table: 'reagents', idColumn: 'reagent_id', pk: 'reagent_id' },
-            { schema: 'lims', table: 'inventory_items', idColumn: 'item_id', pk: 'item_id' }
+            { schema: 'lims', table: 'inventory_items', idColumn: 'item_id', pk: 'item_id' },
+            { schema: 'lims', table: 'primers', idColumn: 'primer_id', pk: 'primer_id' } // <-- FIX APPLIED
         ];
 
         const typeColorMap = {
             'root_samples': 'bg-blue-600', 'fish': 'bg-blue-500', 'tissue': 'bg-green-500', 'dna': 'bg-purple-500',
             'rna': 'bg-pink-500', 'water': 'bg-cyan-500', 'sediments': 'bg-amber-500',
             'library': 'bg-indigo-500', 'pcr': 'bg-red-500', 'reagents': 'bg-slate-500',
-            'inventory_items': 'bg-gray-700', 'default': 'bg-gray-400'
+            'inventory_items': 'bg-gray-700', 'primers': 'bg-orange-500', 'default': 'bg-gray-400' // Added color for primers
         };
 
 
@@ -533,8 +535,14 @@
             return allItems.map(item => {
                 const storageInfo = storageMap.get(item.storage_id);
                 const roomInfo = storageInfo ? roomMap.get(storageInfo.room_id) : null;
-                let classification = item.external_name || item.reagent_complete_name || item.item_name || item.type;
+                // Determine classification based on available name fields. Primers use 'primer_id'
+                let classification = item.external_name || item.reagent_complete_name || item.item_name || item.primer_sequence_fwd || item.id || item.type;
                 
+                // For primers, use the sequence + target gene if available
+                if (item.type === 'primers') {
+                    classification = `${item.id} (${item.target_gene_id || 'N/A'}) - FWD: ${item.primer_sequence_fwd.substring(0, 10)}...`;
+                }
+
                 return {
                     item_id: item.id,
                     item_type: item.type,
@@ -887,7 +895,7 @@
 
                             const item = itemsInBox.find(i => i.storage_position === alphanumericPosition);
                             const colorClass = item ? (typeColorMap[item.type] || typeColorMap['default']) : 'empty';
-                            let mainInfo = item ? (item.id || item.reagent_complete_name || item.item_name) : '';
+                            let mainInfo = item ? (item.id || item.reagent_complete_name || item.item_name || item.primer_id) : '';
                             return `<div class="box-cell ${item ? 'occupied ' + colorClass : 'empty'}"
                                      title="Position: ${alphanumericPosition}${item ? `&#013;ID: ${item.id}&#013;Type: ${item.type}` : ''}"
                                      onclick="${item ? `showItemDetailsModalBoxView(this, '${item.id}', '${item.type}', '${JSON.stringify(item.pk).replace(/"/g, '&quot;')}', '${item.type}', '${storageId}')` : `showAssignItemModalBoxView('${storageId}', '${alphanumericPosition}')`}">
@@ -942,7 +950,13 @@
 
         // Simplified functions for the new combined flow
         function renderStorageBoxView() {
-            // ... (rest of the renderStorageBoxView function)
+            // This entire function was mostly empty/placeholder in the fetched file. 
+            // Since it's a structural element, I'll keep it concise for now.
+            const tabContentDiv = document.getElementById('tab-content');
+            tabContentDiv.innerHTML = `<div class="card p-6 text-center text-gray-500">
+                <i data-lucide="archive-search" class="mx-auto h-12 w-12"></i>
+                <p class="mt-2">This tab is currently under construction. Please use the Storage Explorer or Inventory for full functionality.</p>
+            </div>`;
         }
 
         // Renamed from showAssignItemModalBoxView to align with new logic
@@ -989,12 +1003,38 @@
                     showToast(`Item ${itemId} assigned successfully!`, 'success');
                     closeModal();
                     await initializeStoragePage();
-                    renderBoxGridBoxView(storageId);
+                    // Re-render the box contents after successful assignment
+                    renderBoxContentsExplorer(storageId);
                 } else {
                     showToast('Failed to assign storage: ' + (result ? result.error : 'Unknown error'), 'error');
                 }
             };
         }
+
+        async function unassignItemBoxView(pkValueJson, sourceTable, currentStorageId) {
+             const pkValue = JSON.parse(pkValueJson);
+             if (!confirm(`Are you sure you want to remove this item from its storage position?`)) return;
+             const itemConfig = storableItemTables.find(t => t.table === sourceTable);
+             if (!itemConfig) {
+                 showToast(`Configuration error: No rules found for table ${sourceTable}`, 'error');
+                 return;
+             }
+             const payload = { storage_id: null, storage_position: null };
+             const result = await apiFetch(`table/${itemConfig.schema}/${sourceTable}?${buildPkQueryString(itemConfig, pkValue)}`, { method: 'PUT', body: payload });
+             if (result && !result.error) {
+                 showToast('Item unassigned successfully!', 'success');
+                 // Re-render the box contents and close the modal (assuming this function is called from the modal)
+                 const modalContainer = document.getElementById('modal-container');
+                 if(modalContainer.querySelector('.modal-content')) {
+                     modalContainer.querySelector('.modal-content').classList.remove('open');
+                     setTimeout(() => modalContainer.innerHTML = '', 300);
+                 }
+                 await initializeStoragePage();
+                 renderBoxContentsExplorer(currentStorageId);
+             } else {
+                 showToast('Failed to unassign item: ' + (result ? result.error : 'Unknown error'), 'error');
+             }
+         }
 
 
         function renderStorageSamplesDragDrop() {
@@ -1023,7 +1063,7 @@
             const panel = document.getElementById('unassigned-items-list-dragdrop');
             if (!panel) return;
             panel.innerHTML = unassignedItems.map(item => `
-                <div class="draggable-item p-2 border rounded-md shadow-sm flex justify-between items-center" draggable="true" data-item-info='${JSON.stringify(item.pk)}|${item.type}'>
+                <div class="draggable-item p-2 border rounded-md shadow-sm flex justify-between items-center" draggable="true" data-item-info='${JSON.stringify(item.pk).replace(/"/g, '&quot;')}|${item.type}'>
                     <div>
                         <p class="font-semibold text-sm">${item.id}</p>
                         <p class="text-xs text-gray-500">${item.type}</p>
@@ -1094,7 +1134,7 @@
 
                             const item = itemsInBox.find(i => i.storage_position === alphanumericPosition);
                             const colorClass = item ? (typeColorMap[item.type] || typeColorMap['default']) : 'empty';
-                            let mainInfo = item ? (item.id || item.reagent_complete_name || item.item_name) : '';
+                            let mainInfo = item ? (item.id || item.reagent_complete_name || item.item_name || item.primer_id) : '';
                             return `<div class="box-grid-cell-draggable ${item ? 'occupied ' + colorClass : 'empty'}"
                                      id="dragdrop-pos-${alphanumericPosition}"
                                      onclick="${item ? `showItemDetailsPanelDragDrop(this, '${item.id}', '${item.type}', '${JSON.stringify(item.pk).replace(/"/g, '&quot;')}', '${item.type}', '${storageId}')` : `showToast('Drag an item here to assign it.', 'info')`}"
@@ -1114,10 +1154,22 @@
             lucide.createIcons();
         }
 
+        function updateBreadcrumbDragDrop(path) {
+            const breadcrumbEl = document.getElementById('breadcrumb-dragdrop');
+            let html = `<a href="#" class="hover:text-blue-600" onclick="renderRoomsDragDrop()">Rooms</a>`;
+            if (path.room) html += `<i data-lucide="chevron-right" class="w-4 h-4"></i><a href="#" class="hover:text-blue-600" onclick="renderFreezersDragDrop('${path.room.room_id}')">${path.room.description || path.room.room_id}</a>`;
+            if (path.freezer) html += `<i data-lucide="chevron-right" class="w-4 h-4"></i><a href="#" class="hover:text-blue-600" onclick="renderBoxesDragDrop('${path.room.room_id}', '${path.freezer}')">${path.freezer}</a>`;
+            if (path.box) html += `<i data-lucide="chevron-right" class="w-4 h-4"></i><span class="font-semibold text-gray-700">${path.box.box}</span>`;
+            breadcrumbEl.innerHTML = html;
+            lucide.createIcons();
+        }
+
         function addDragDropListeners(currentStorageId) {
             const unassignedPanel = document.getElementById('unassigned-items-list-dragdrop');
             const dropTargets = document.querySelectorAll('#box-grid-dragdrop .box-grid-cell-draggable');
-            const draggables = unassignedPanel.querySelectorAll('[draggable="true"]');
+            
+            // Re-select draggables if the list was refreshed
+            const draggables = document.querySelectorAll('#unassigned-items-list-dragdrop [draggable="true"]');
 
             draggables.forEach(el => {
                 el.addEventListener('dragstart', e => {
@@ -1159,6 +1211,8 @@
                     if (result && !result.error) {
                         showToast('Item moved successfully!', 'success');
                         await initializeStoragePage();
+                        // Rerender the drag-drop contents
+                        renderBoxContentsDragDrop(currentStorageId);
                     } else {
                         showToast('Failed to move item: ' + (result?.error || 'Unknown error'), 'error');
                     }
