@@ -7,6 +7,39 @@ the following code run the following command ` python3 app.py `.
 # Updating the reverse proxy
 
 ```
+<VirtualHost *:80>
+    ServerName 134.110.12.162
+    ServerAdmin webmaster@localhost
+    DocumentRoot /var/www/html
+
+    ErrorLog  ${APACHE_LOG_DIR}/mylimsdemo-error.log
+    CustomLog ${APACHE_LOG_DIR}/mylimsdemo-access.log combined
+
+    ProxyRequests Off
+    ProxyPreserveHost On
+    # (make sure modules are enabled: a2enmod proxy proxy_http headers)
+
+    # /mylims_demo -> 127.0.0.1:5400
+    <Location "/mylims_demo/">
+        ProxyPass        http://127.0.0.1:5400/
+        ProxyPassReverse http://127.0.0.1:5400/
+        RequestHeader set X-Forwarded-Proto "http"
+    </Location>
+    # If the app sets cookies/paths, keep them under the prefix:
+    ProxyPassReverseCookiePath / /mylims_demo/
+
+    # /mylims -> 127.0.0.1:5300
+    <Location "/mylims/">
+        ProxyPass        http://127.0.0.1:5300/
+        ProxyPassReverse http://127.0.0.1:5300/
+        RequestHeader set X-Forwarded-Proto "http"
+    </Location>
+    ProxyPassReverseCookiePath / /mylims/
+</VirtualHost>
+
+```
+
+```
 sudo nano  /etc/apache2/sites-available/mylims.conf
 sudo a2ensite mylims.conf
 sudo systemctl restart apache2 
