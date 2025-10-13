@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow Tracking - TIFI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .sidebar { border-right: 1px solid #e2e8f0; }
+        .sidebar-item { color: #475569; }
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        .kanban-board { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 1rem; min-height: 65vh; }
+        .kanban-column { min-width: 320px; max-width: 320px; background-color: #f1f5f9; border-radius: 0.75rem; display: flex; flex-direction: column; transition: background-color 0.2s ease-in-out; }
+        .kanban-column-header { padding: 1rem; }
+        .kanban-cards-container { padding: 0 1rem 1rem 1rem; flex-grow: 1; overflow-y: auto; }
+        .kanban-card { background-color: white; border-radius: 0.5rem; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1); transition: all 0.2s ease; cursor: grab; border-left-width: 4px; }
+        .kanban-card:hover { box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); transform: translateY(-2px); }
+        .kanban-card.dragging { opacity: 0.5; cursor: grabbing; transform: scale(1.05); }
+        .kanban-column.drag-valid { background-color: #dcfce7; } /* Light Green */
+        .kanban-column.drag-invalid { background-color: #fee2e2; } /* Light Red */
+        .modal-overlay { z-index: 50; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+        .border-l-blue-500 { border-left-color: #3b82f6; } .border-l-red-500 { border-left-color: #ef4444; } .border-l-pink-500 { border-left-color: #ec4899; } .border-l-amber-500 { border-left-color: #f59e0b; } .border-l-teal-500 { border-left-color: #14b8a6; } .border-l-fuchsia-500 { border-left-color: #d946ef; } .border-l-gray-500 { border-left-color: #6b7280; }
+        .border-l-orange-500 { border-left-color: #f97316; }
+        .border-l-lime-500 { border-left-color: #84cc16; }
+        .border-l-emerald-500 { border-left-color: #10b981; }
+        .border-l-violet-500 { border-left-color: #8b5cf6; }
+        .border-l-rose-500 { border-left-color: #f43f5e; }
+        .border-l-cyan-500 { border-left-color: #06b6d4; }
+        .border-l-purple-500 { border-left-color: #a855f7; }
+        .border-l-indigo-500 { border-left-color: #6366f1; }
+        .border-l-green-500 { border-left-color: #22c55e; }
+        .border-l-yellow-500 { border-left-color: #eab308; }
+        .border-l-gray-400 { border-left-color: #9ca3af; }
+        .border-l-gray-600 { border-left-color: #4b5563; }
+    </style>
+</head>
+<body>
+    <div id="main-app">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI</span></div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md "><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (ELN)</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md "><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+                <a href="booking.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Booking</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Tables</span></a>
+            </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t"></div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+        
+        <div id="main-content" class="ml-64 p-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Workflow Automation & Tracking</h1>
+            <p class="text-gray-600 mb-6">Drag a sample to the next column to log a new analysis step and advance the workflow.</p>
+            
+            <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div>
+                        <label for="filter-workflow" class="text-sm font-medium text-gray-700">Filter by Workflow</label>
+                        <select id="filter-workflow" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm"></select>
+                    </div>
+                    <div>
+                        <label for="filter-project" class="text-sm font-medium text-gray-700">Filter by Project</label>
+                        <select id="filter-project" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm"></select>
+                    </div>
+                    <div>
+                        <label for="filter-type" class="text-sm font-medium text-gray-700">Filter by Sample Type</label>
+                        <select id="filter-type" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm"></select>
+                    </div>
+                    <div>
+                        <label for="filter-search" class="text-sm font-medium text-gray-700">Search Sample ID</label>
+                        <div class="flex items-center space-x-4 mt-1">
+                            <input type="text" id="filter-search" placeholder="e.g., W25iDE0001" class="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                            <div class="flex items-center whitespace-nowrap pt-2">
+                                <input type="checkbox" id="filter-workflow-only" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                <label for="filter-workflow-only" class="ml-2 block text-sm text-gray-900">Has Workflow</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="kanban-board-container" class="kanban-board">
+                <div class="w-full flex items-center justify-center h-full">
+                    <i data-lucide="loader-2" class="animate-spin h-12 w-12 text-blue-600"></i>
+                    <p class="ml-4 text-lg text-gray-600">Loading Workflow Data...</p>
+                </div>
+            </div>
+        </div>
+        <div id="modal-container"></div>
+    </div>
+
+<script>
+    if (sessionStorage.getItem('isLoggedIn') !== 'true') window.location.href = './login.html';
+    
+    // --- YOUR ORIGINAL VARIABLES AND MAPS (PRESERVED) ---
+    const API_BASE_URL = '/mylims_demo/api'; // Changed to '/mylims/api' for consistency
+    let masterSampleList = []; // This will now hold data from lab.detailed_samples_view
+    let allWorkflows = [];
+    let allWorkflowSteps = [];
+    let allProjects = [];
+    let allSampleTypes = [];
+
+    // This ordered list defines our Kanban columns
+    // This should ideally come from lims.workflow_steps, dynamically.
+    // For now, it's hardcoded to represent typical LIMS stages.
+    const workflowSteps = [
+        'Received', 'Dissection', 'Extracted', 'Nanodrop QC', 'Qubit QC', 'Tapestation QC',
+        'PCR Done', 'qPCR Done', 'Library Prep', 'Sequencing Done', 'Bioinformatics Done', 'Completed'
+    ];
+    
+    // Mapping for Kanban card border colors based on sample type abbreviation
+    const sampleTypeColors = {
+        'Water': 'blue-500', 'DNA': 'red-500', 'RNA': 'pink-500', 'Sediments': 'amber-500',
+        'Tissue': 'teal-500', 'Library': 'fuchsia-500', 'Fish': 'gray-500', 'default': 'gray-400',
+        'EXT': 'orange-500', // Extraction product
+        'NDQC': 'lime-500', // Nanodrop QC result
+        'QBC': 'emerald-500', // Qubit QC result
+        'TSQC': 'violet-500', // Tapestation QC result
+        'PCRP': 'rose-500', // PCR Product
+        'QPCRR': 'cyan-500', // qPCR Result
+        'LIBP': 'purple-500', // Library Prep Product
+        'SEQR': 'indigo-500', // Sequencing Run result
+        'Analysis': 'green-500', // Bioinformatics Analysis (general, if not covered by SEQR)
+        'Otolith': 'yellow-500', // Otolith
+        'GE': 'red-400', // Gel Electrophoresis result
+        'Dissection': 'blue-400', // Dissection (referring to the process/product)
+        'Storage': 'gray-600', // Storage related
+        'Dataset': 'lime-700', // Dataset type
+        'Publication': 'purple-700' // Publication type
+    };
+
+    // This map links a workflow status to the *primary* table where new data for that step is logged.
+    // It also specifies the primary key fields for that table, which are needed to construct API calls.
+    const statusToTableMap = {
+        'Received': { schema: 'lab', table: 'parental_samples', // This is where the status is updated
+            pk_fields: ['sample_id', 'sampling_date'], // PK of the samples table
+            fields: [
+                { name: 'reception_date', label: 'Reception Date', type: 'date', required: true },
+                { name: 'receiver_person_id', label: 'Receiver Person ID', type: 'text', required: true },
+                { name: 'transport', label: 'Transport Method', type: 'text' }
+            ]
+        },
+        'Dissection': {
+            schema: 'lab', table: 'dissections',
+            pk_fields: ['dissection_id', 'dissection_date'],
+            fields: [
+                { name: 'dissection_date', label: 'Dissection Date', type: 'date', required: true },
+                { name: 'person_id', label: 'Dissector Person ID', type: 'text', required: true },
+                { name: 'stomach_contents_jsonb', label: 'Stomach Contents (JSON)', type: 'textarea' },
+                { name: 'gonad_weight_g', label: 'Gonad Weight (g)', type: 'number' },
+                { name: 'liver_weight_g', label: 'Liver Weight (g)', type: 'number' }
+            ]
+        },
+        'Extracted': {
+            schema: 'lab', table: 'extraction',
+            pk_fields: ['extraction_id', 'extraction_date'],
+            fields: [
+                { name: 'extraction_date', label: 'Extraction Date', type: 'date', required: true },
+                { name: 'person_id', label: 'Person', type: 'text', required: true },
+                { name: 'kit', label: 'Kit', type: 'text' },
+                { name: 'elution_volume_ul', label: 'Elution Volume (?)', type: 'number' },
+                { name: 'yield_qubit_ng_ul', label: 'Yield Qubit (ng/?)', type: 'number' },
+                { name: 'yield_nanodrop_ng_ul', label: 'Yield Nanodrop (ng/?)', type: 'number' },
+                { name: 'extracted_dna_sample_id', label: 'Extracted DNA Sample ID', type: 'text' },
+                { name: 'extracted_rna_sample_id', label: 'Extracted RNA Sample ID', type: 'text' }
+            ]
+        },
+        'Nanodrop QC': {
+            schema: 'lab', table: 'nanodrop',
+            pk_fields: ['nanodrop_id', 'measurement_date'],
+            fields: [
+                { name: 'measurement_date', label: 'Date', type: 'date', required: true },
+                { name: 'person_id', label: 'Person', type: 'text', required: true },
+                { name: 'nanodrop_concentration', label: 'Concentration (ng/?)', type: 'number' },
+                { name: 'a260_280', label: 'A260/280 Ratio', type: 'number' },
+                { name: 'a260_230', label: 'A260/230 Ratio', type: 'number' }
+            ]
+        },
+        'Qubit QC': {
+            schema: 'lab', table: 'qubit',
+            pk_fields: ['qubit_id', 'measurement_date'],
+            fields: [
+                { name: 'measurement_date', label: 'Date', type: 'date', required: true },
+                { name: 'person_id', label: 'Person', type: 'text', required: true },
+                { name: 'qubit_original_sample_conc', label: 'Concentration (ng/?)', type: 'number' },
+                { name: 'assay_kit', label: 'Assay Kit', type: 'text' }
+            ]
+        },
+        'Tapestation QC': {
+            schema: 'lab', table: 'tapestation',
+            pk_fields: ['tapestation_id', 'measurement_date'],
+            fields: [
+                { name: 'measurement_date', label: 'Date', type: 'date', required: true },
+                { name: 'person_id', label: 'Person', type: 'text', required: true },
+                { name: 'kit', label: 'Kit', type: 'text' },
+                { name: 'position', label: 'Position', type: 'text' }
+            ]
+        },
+        'PCR Done': {
+            schema: 'lab', table: 'pcr',
+            pk_fields: ['pcr_id', 'pcr_date'],
+            fields: [
+                { name: 'pcr_date', label: 'Date', type: 'date', required: true },
+                { name: 'person_id', label: 'Person', type: 'text', required: true },
+                { name: 'primer_id', label: 'Primer ID', type: 'text' },
+                { name: 'kit', label: 'Kit', type: 'text' }
+            ]
+        },
+        'qPCR Done': {
+            schema: 'lab', table: 'qpcr',
+            pk_fields: ['qpcr_id', 'qpcr_date'],
+            fields: [
+                { name: 'qpcr_date', label: 'Date', type: 'date', required: true },
+                { name: 'person_id', label: 'Person', type: 'text', required: true },
+                { name: 'primer_id', label: 'Primer ID', type: 'text' },
+                { name: 'ct_value', label: 'Ct Value', type: 'number' }
+            ]
+        },
+        'Library Prep': {
+            schema: 'lab', table: 'library',
+            pk_fields: ['library_id', 'prep_date'],
+            fields: [
+                { name: 'library_name', label: 'Library Name', type: 'text', required: true },
+                { name: 'prep_date', label: 'Date', type: 'date', required: true },
+                { name: 'person_id', label: 'Person', type: 'text', required: true },
+                { name: 'library_prep_kit', label: 'Prep Kit', type: 'text' },
+                { name: 'index_sequence', label: 'Index Sequence', type: 'text' }
+            ]
+        },
+        'Sequencing Done': {
+            schema: 'lab', table: 'sequencing',
+            pk_fields: ['sequencing_id', 'sequencing_date'],
+            fields: [
+                { name: 'sequencing_date', label: 'Date', type: 'date', required: true },
+                { name: 'person_id', label: 'Person', type: 'text', required: true },
+                { name: 'sequencer', label: 'Sequencer', type: 'text' },
+                { name: 'flow_cell_id', label: 'Flow Cell ID', type: 'text' },
+                { name: 'total_reads', label: 'Total Reads', type: 'number' },
+                { name: 'raw_data_path', label: 'Raw Data Path', type: 'text' }
+            ]
+        },
+        'Bioinformatics Done': {
+            schema: 'bioinformatics', table: 'analysis_runs',
+            pk_fields: ['run_id', 'run_date'],
+            fields: [
+                { name: 'run_id', label: 'Run ID', type: 'text', required: true },
+                { name: 'run_date', label: 'Date', type: 'date', required: true },
+                { name: 'person_id', label: 'Person', type: 'text', required: true },
+                { name: 'pipeline_id', label: 'Pipeline ID', type: 'text' },
+                { name: 'reference_db_id', label: 'Reference DB ID', type: 'text' },
+                { name: 'final_output_path', label: 'Output Path', type: 'text' }
+            ]
+        },
+        'Completed': { // Mark a sample as fully completed
+            schema: 'lab', table: 'parental_samples', // Updates the sample's main record
+            pk_fields: ['sample_id', 'sampling_date'], // PK of the samples table
+            fields: [
+                { name: 'completion_date', label: 'Completion Date', type: 'date', required: true },
+                { name: 'notes', label: 'Completion Notes', type: 'textarea' }
+            ]
+        }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+        const user = JSON.parse(sessionStorage.getItem('user'));
+        if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.full_name || user.person_id}</p>`;
+        document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href = './login.html'; });
+        initializeWorkflowPage();
+    });
+
+    async function apiFetch(endpoint, options = {}) {
+        try {
+            if (!(options.body instanceof FormData) && options.body !== null && typeof options.body === 'object') {
+                options.headers = { 'Content-Type': 'application/json', ...options.headers };
+                if(options.body) options.body = JSON.stringify(options.body);
+            } else if (options.body === null) {
+                options.body = null;
+            }
+            const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+            if (!response.ok) { 
+                const err = await response.json().catch(() => ({error: 'Server error'})); 
+                throw new Error(err.error || `API request failed with status ${response.status}`); 
+            }
+            return response.status === 204 ? { success: true } : await response.json();
+        } catch (error) { console.error("API Error:", error); return { error: error.message }; }
+    }
+
+    // New helper to get schema for a specific table
+    async function getTableSchema(schema, table) {
+        const cacheKey = `schema.${schema}.${table}`;
+        if (sessionStorage.getItem(cacheKey)) {
+            return JSON.parse(sessionStorage.getItem(cacheKey));
+        }
+        const schemaData = await apiFetch(`table/${schema}/${table}/schema`);
+        if (schemaData && !schemaData.error) {
+            sessionStorage.setItem(cacheKey, JSON.stringify(schemaData));
+        }
+        return schemaData;
+    }
+
+    function renderKanbanBoard(samples) {
+        const container = document.getElementById('kanban-board-container');
+        container.innerHTML = workflowSteps.map(statusId => {
+            const samplesInColumn = samples.filter(s => s.sample_status_id === statusId);
+            return `
+            <div class="kanban-column" data-status-id="${statusId}">
+                <div class="kanban-column-header">
+                    <h2 class="font-bold text-lg text-gray-700 flex justify-between items-center">
+                        <span>${statusId}</span>
+                        <span class="text-base font-bold text-white bg-gray-500 rounded-full px-2.5 py-1">${samplesInColumn.length}</span>
+                    </h2>
+                </div>
+                <div class="kanban-cards-container space-y-3 pr-2">
+                    ${samplesInColumn.map(sample => {
+                        const color = sampleTypeColors[sample.sample_type_abrv] || sampleTypeColors.default;
+                        const currentIndex = workflowSteps.indexOf(sample.sample_status_id);
+                        const nextStepIndex = currentIndex + 1;
+                        const canProceed = nextStepIndex < workflowSteps.length;
+                        
+                        // Pass the primary sample's ID and sampling_date for status updates
+                        // These fields are directly available from detailed_samples_view
+                        const samplePKsForLabSamples = {
+                            sample_id: sample.sample_id,
+                            sampling_date: formatDateForUrl(sample.sampling_date)
+                        };
+
+                        // Use a display name that combines the sample ID and origin type for clarity
+                        const displayName = `${sample.sample_id} (${sample.sample_origin_type || 'N/A'})`;
+
+                        return `
+                        <div class="kanban-card p-3 border-l-${color}" draggable="${canProceed ? 'true' : 'false'}" 
+                             data-sample-pks-for-lab-samples='${JSON.stringify(samplePKsForLabSamples)}' 
+                             data-current-status="${sample.sample_status_id}"
+                             data-sample-id-for-modal="${sample.sample_id}">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="font-semibold text-gray-900">${displayName}</p>
+                                    <p class="text-sm text-gray-600">${sample.external_name || 'No external name'}</p>
+                                    <p class="text-xs text-gray-500">${sample.sample_type_abrv || 'N/A'} - ${sample.project_id || 'N/A'}</p>
+                                </div>
+                                ${canProceed ? `<button class="proceed-btn text-gray-400 hover:text-blue-600" data-next-step="${workflowSteps[nextStepIndex]}" title="Proceed to ${workflowSteps[nextStepIndex]}">
+                                    <i class="pointer-events-none" data-lucide="arrow-right-circle"></i>
+                                </button>` : ''}
+                            </div>
+                            <p class="text-xs text-gray-400 mt-2">Last status change: ${timeSince(sample.reception_date || sample.extraction_date || sample.measurement_date || sample.run_date || sample.prep_date || sample.sequencing_date)} ago</p>
+                        </div>
+                        `}).join('')}
+                </div>
+            </div>`;
+        }).join('');
+        lucide.createIcons();
+        addEventListeners();
+    }
+
+    function addEventListeners() {
+        document.querySelectorAll('.kanban-card').forEach(card => {
+            card.addEventListener('dragstart', handleDragStart);
+            card.addEventListener('dragend', handleDragEnd);
+            card.addEventListener('click', (e) => {
+                if (!e.target.closest('.proceed-btn')) {
+                    const sampleIdForModal = card.dataset.sampleIdForModal;
+                    showSampleDetailsModal(sampleIdForModal); 
+                }
+            });
+        });
+        document.querySelectorAll('.kanban-column').forEach(column => {
+            column.addEventListener('dragover', handleDragOver);
+            column.addEventListener('dragleave', handleDragLeave);
+            column.addEventListener('drop', handleDrop);
+        });
+        document.querySelectorAll('.proceed-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const card = e.target.closest('.kanban-card');
+                const samplePKsForLabSamples = JSON.parse(card.dataset.samplePksForLabSamples);
+                const nextStep = e.target.closest('.proceed-btn').dataset.nextStep;
+                openWorkflowActionModal(samplePKsForLabSamples, nextStep);
+            });
+        });
+    }
+
+    function handleDragStart(e) {
+        e.target.classList.add('dragging');
+        const samplePKsForLabSamples = JSON.parse(e.target.dataset.samplePksForLabSamples);
+        const currentStatus = e.target.dataset.currentStatus;
+        const currentIndex = workflowSteps.indexOf(currentStatus);
+        const nextStepIndex = currentIndex + 1;
+        
+        e.dataTransfer.setData('text/plain', JSON.stringify(samplePKsForLabSamples));
+        
+        document.querySelectorAll('.kanban-column').forEach(col => {
+            if (nextStepIndex < workflowSteps.length && col.dataset.statusId === workflowSteps[nextStepIndex]) {
+                col.classList.add('drag-valid');
+            } else {
+                col.classList.add('drag-invalid');
+            }
+        });
+    }
+
+    function handleDragEnd(e) {
+        e.target.classList.remove('dragging');
+        document.querySelectorAll('.kanban-column').forEach(col => {
+            col.classList.remove('drag-valid', 'drag-invalid');
+        });
+    }
+
+    function handleDragOver(e) { e.preventDefault(); }
+    function handleDragLeave(e) {}
+
+    async function handleDrop(e) {
+        e.preventDefault();
+        const targetColumn = e.currentTarget;
+        if (targetColumn.classList.contains('drag-valid')) {
+            const samplePKsForLabSamples = JSON.parse(e.dataTransfer.getData('text/plain'));
+            const newStatus = targetColumn.dataset.statusId;
+            openWorkflowActionModal(samplePKsForLabSamples, newStatus);
+        }
+    }
+
+    async function openWorkflowActionModal(samplePKsForLabSamples, targetStatus) {
+        const actionInfo = statusToTableMap[targetStatus];
+        if (!actionInfo) {
+            alert(`No action definition found for status: ${targetStatus}. Please check statusToTableMap.`);
+            return;
+        }
+
+        // Find the full detailed sample object from masterSampleList
+        const sample = masterSampleList.find(s => 
+            String(s.sample_id) === String(samplePKsForLabSamples.sample_id) && 
+            formatDateForUrl(s.sampling_date) === formatDateForUrl(samplePKsForLabSamples.sampling_date)
+        );
+        if (!sample) {
+            alert('Sample not found in current list. Please refresh the page.');
+            return;
+        }
+        
+        let formFieldsHtml = '';
+        const targetTableSchema = await getTableSchema(actionInfo.schema, actionInfo.table);
+
+        for (const field of actionInfo.fields) {
+            let inputType = field.type;
+            let value = '';
+
+            if (field.name === 'sample_id') {
+                value = sample.sample_id; // The sample_id being moved
+            } else if (field.name === 'parent_sample_id') {
+                value = sample.sample_id; // The "current" sample becomes the parent for a newly generated product
+            }
+            else if (field.name.includes('_date') || field.name.includes('_at')) {
+                value = new Date().toISOString().split('T')[0]; // Default to today
+            } else if (field.name.includes('person_id')) {
+                const loggedInUser = JSON.parse(sessionStorage.getItem('user'));
+                value = loggedInUser?.person_id || ''; // Pre-fill with logged-in user
+            } else if (field.name === 'library_id' && sample.library_id) {
+                value = sample.library_id;
+            } else if (field.name === 'workflow_id' && sample.workflow_id) {
+                value = sample.workflow_id;
+            } else if (field.name === 'step_id' && sample.step_id) {
+                value = sample.step_id;
+            } else if (sample[field.name] !== undefined && sample[field.name] !== null) {
+                value = sample[field.name];
+                if (inputType === 'date') value = formatDateForUrl(value);
+            }
+            
+            if (inputType === 'textarea') {
+                formFieldsHtml += `
+                    <div>
+                        <label for="${field.name}" class="block text-sm font-medium text-gray-700">${field.label || field.name}</label>
+                        <textarea id="${field.name}" name="${field.name}" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" ${field.required ? 'required' : ''}>${value}</textarea>
+                    </div>
+                `;
+            } else {
+                formFieldsHtml += `
+                    <div>
+                        <label for="${field.name}" class="block text-sm font-medium text-gray-700">${field.label || field.name}</label>
+                        <input type="${inputType}" id="${field.name}" name="${field.name}" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" value="${value}" ${field.required ? 'required' : ''}>
+                    </div>
+                `;
+            }
+        }
+        
+        const modalHTML = `<div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4"><div class="modal-content bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg"><div class="flex justify-between items-center mb-4 pb-4 border-b"><h2 class="text-2xl font-bold text-gray-800">Log: ${targetStatus}</h2><button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-3xl">&times;</button></div><form id="workflow-action-form" class="space-y-4"><p>For Sample: <strong class="text-blue-600">${sample.sample_id}</strong> (Type: ${sample.sample_type_abrv || 'N/A'}, Project: ${sample.project_id || 'N/A'})</p>${formFieldsHtml}<div class="pt-4 flex justify-end"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Save & Advance</button></div></form></div></div>`;
+        const { closeModal } = showModal(modalHTML);
+        
+        document.getElementById('workflow-action-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const dataToLog = {};
+            for (let [key, value] of formData.entries()) {
+                if (value === '') {
+                    dataToLog[key] = null;
+                } else if (targetTableSchema.find(col => col.column_name === key && col.data_type === 'jsonb')) {
+                    try { dataToLog[key] = JSON.parse(value); } catch { dataToLog[key] = value; }
+                } else if (targetTableSchema.find(col => col.column_name === key && ['integer', 'numeric', 'bigint'].includes(col.data_type))) {
+                    dataToLog[key] = Number(value);
+                } else {
+                    dataToLog[key] = value;
+                }
+            }
+            
+            // Crucially, the sample_id being passed to the new record creation table
+            // should be the ID of the *current card/item* being moved.
+            // Its parent_sample_id should be the main sample's ID if this is a derived product.
+            if (actionInfo.table !== 'parental_samples') { // If logging to a child table (not just updating parent status)
+                // Set the sample_id of the new record to the ID of the current card
+                // The detailed_samples_view has this as sample.sample_id
+                dataToLog.sample_id = sample.sample_id;
+            }
+            // For tables that accept a parent_sample_id (like dna, rna, tissue, fish, etc.)
+            // The sample.sample_id from detailed_samples_view acts as the parent here.
+            if (['dna', 'rna', 'tissue', 'fish', 'sediments', 'water', 'otoliths'].includes(actionInfo.table)) {
+                dataToLog.parent_sample_id = sample.sample_id;
+            }
+
+            // Handle composite PKs for the target table (e.g., experiment_id, experiment_date; sampling_id, sampling_date)
+            const pkColumnsForTargetTable = targetTableSchema.filter(col => col.is_primary_key).map(col => col.column_name);
+
+            if (pkColumnsForTargetTable.includes('experiment_id') && sample.associated_experiment_id) {
+                dataToLog.experiment_id = sample.associated_experiment_id;
+            } else if (pkColumnsForTargetTable.includes('experiment_id') && !dataToLog.experiment_id) {
+                if (targetTableSchema.some(col => col.column_name === 'experiment_id' && col.is_primary_key && col.is_nullable === 'NO')) {
+                    alert(`Error: '${actionInfo.table}' requires an 'experiment_id' for new entries, but it's not associated with this sample. Please ensure the sample is linked to an experiment.`);
+                    return;
+                }
+            }
+            
+            if (pkColumnsForTargetTable.includes('experiment_date') && sample.associated_experiment_date) {
+                dataToLog.experiment_date = formatDateForUrl(sample.associated_experiment_date);
+            } else if (pkColumnsForTargetTable.includes('experiment_date') && !dataToLog.experiment_date) {
+                const dateFieldForLogTable = actionInfo.fields.find(f => f.name.includes('_date'));
+                if (dateFieldForLogTable && dataToLog[dateFieldForLogTable.name]) {
+                    dataToLog.experiment_date = formatDateForUrl(dataToLog[dateFieldForLogTable.name]);
+                } else {
+                    dataToLog.experiment_date = new Date().toISOString().split('T')[0];
+                }
+            }
+
+            if (pkColumnsForTargetTable.includes('sampling_id') && sample.sampling_id) {
+                dataToLog.sampling_id = sample.sampling_id;
+            }
+            if (pkColumnsForTargetTable.includes('sampling_date') && sample.sampling_date) {
+                dataToLog.sampling_date = formatDateForUrl(sample.sampling_date);
+            }
+
+            console.log("Data to log in target table:", dataToLog);
+
+            let actionLogResult;
+            try {
+                actionLogResult = await apiFetch(`table/${actionInfo.schema}/${actionInfo.table}`, { method: 'POST', body: dataToLog });
+            } catch (error) {
+                alert(`Error logging action in ${actionInfo.schema}.${actionInfo.table}: ${error.message}`);
+                return;
+            }
+            
+            if (actionLogResult && !actionLogResult.error) {
+                // ALWAYS update the status in lab.parental_samples using the original sample's PKs
+                const updateSampleStatusResult = await apiFetch(`table/lab/parental_samples?sample_id=${sample.sample_id}&sampling_date=${formatDateForUrl(sample.sampling_date)}`, {
+                    method: 'PUT',
+                    body: { sample_status_id: targetStatus }
+                });
+
+                if (updateSampleStatusResult && !updateSampleStatusResult.error) {
+                    alert('Action logged and workflow updated successfully!');
+                    closeModal();
+                    initializeWorkflowPage(); // Re-initialize to refresh kanban board
+                } else {
+                    alert(`Error updating sample workflow status: ${updateSampleStatusResult.error}. You might need to manually correct the status.`);
+                }
+            } else {
+                alert(`Error logging action: ${actionLogResult.error}`);
+            }
+        });
+    }
+
+    function timeSince(dateString) {
+        if (!dateString) return 'N/A';
+        const seconds = Math.floor((new Date() - new Date(dateString)) / 1000);
+        const interval = seconds / 86400;
+        if (interval > 1) return Math.floor(interval) + " days";
+        if (interval * 24 > 1) return Math.floor(interval * 24) + " hours";
+        if (interval * 24 * 60 > 1) return Math.floor(interval * 24 * 60) + " minutes";
+        return "Just now";
+    }
+
+    function showModal(content) {
+        const container = document.getElementById('modal-container');
+        container.innerHTML = content;
+        const modal = container.querySelector('.modal-overlay');
+        const modalContent = container.querySelector('.modal-content');
+        setTimeout(() => modalContent.classList.remove('opacity-0', '-translate-y-10'), 10);
+        const closeModal = () => { modalContent.classList.add('opacity-0', '-translate-y-10'); setTimeout(() => container.innerHTML = '', 300); };
+        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+        container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+        return { closeModal };
+    }
+
+    async function initializeWorkflowPage() {
+        const boardContainer = document.getElementById('kanban-board-container');
+        boardContainer.innerHTML = `<div class="w-full flex items-center justify-center h-full">
+            <i data-lucide="loader-2" class="animate-spin h-12 w-12 text-blue-600"></i>
+            <p class="ml-4 text-lg text-gray-600">Loading Workflow Data...</p>
+        </div>`;
+        lucide.createIcons();
+
+        // Fetch ALL records from detailed_samples_view
+        const [samplesResult, workflowsResult, projectsResult, sampleTypesResult] = await Promise.all([
+            apiFetch('table/lab/detailed_samples_view'), // ***CHANGED FROM parental_samples to detailed_samples_view***
+            apiFetch('table/lims/workflows'),
+            apiFetch('table/lims/projects'),
+            apiFetch('table/reference/samples_type')
+        ]);
+
+        if (samplesResult.error) {
+            boardContainer.innerHTML = `<p class="text-red-500 text-center w-full">Error loading samples: ${samplesResult.error}</p>`;
+            return;
+        }
+        masterSampleList = samplesResult;
+
+        if (!workflowsResult.error) allWorkflows = workflowsResult;
+        if (!projectsResult.error) allProjects = projectsResult;
+        if (!sampleTypesResult.error) allSampleTypes = sampleTypesResult;
+
+        populateFilterDropdowns();
+        applyFilters(); // Initial application of filters
+    }
+    
+    function populateFilterDropdowns() {
+        const workflowFilter = document.getElementById('filter-workflow');
+        const projectFilter = document.getElementById('filter-project');
+        const typeFilter = document.getElementById('filter-type');
+        
+        workflowFilter.innerHTML = '<option value="">All With Workflow</option>';
+        workflowFilter.innerHTML += '<option value="NO_WORKFLOW">Samples without Workflow</option>';
+        allWorkflows.forEach(w => {
+            workflowFilter.innerHTML += `<option value="${w.workflow_id}">${w.workflow_name || w.workflow_id}</option>`;
+        });
+
+        projectFilter.innerHTML = '<option value="">All Projects</option>';
+        allProjects.forEach(p => {
+            projectFilter.innerHTML += `<option value="${p.project_id}">${p.title || p.project_id}</option>`;
+        });
+
+        typeFilter.innerHTML = '<option value="">All Sample Types</option>';
+        // Populate sample type filter based on unique sample_type_abrv from detailed_samples_view
+        const uniqueSampleTypes = [...new Set(masterSampleList.map(s => s.sample_type_abrv).filter(Boolean))];
+        uniqueSampleTypes.sort().forEach(typeAbrv => {
+             typeFilter.innerHTML += `<option value="${typeAbrv}">${typeAbrv}</option>`;
+        });
+    }
+
+    function applyFilters() {
+        const workflowId = document.getElementById('filter-workflow').value;
+        const projectId = document.getElementById('filter-project').value;
+        const sampleType = document.getElementById('filter-type').value;
+        const searchTerm = document.getElementById('filter-search').value.toLowerCase();
+        const workflowOnly = document.getElementById('filter-workflow-only').checked;
+
+        let filteredSamples = masterSampleList;
+
+        // --- EXCLUDE "Completed" and "Closed" status samples first ---
+        filteredSamples = filteredSamples.filter(s => s.sample_status_id !== 'Completed' && s.sample_status_id !== 'Closed');
+
+        if (workflowOnly) {
+            filteredSamples = filteredSamples.filter(s => s.workflow_id != null);
+        }
+
+        if (workflowId) {
+            if (workflowId === 'NO_WORKFLOW') {
+                filteredSamples = filteredSamples.filter(s => s.workflow_id == null);
+            } else {
+                filteredSamples = filteredSamples.filter(s => s.workflow_id == workflowId);
+            }
+        }
+        
+        if (projectId) {
+            filteredSamples = filteredSamples.filter(s => s.project_id === projectId);
+        }
+        if (sampleType) {
+            filteredSamples = filteredSamples.filter(s => s.sample_type_abrv === sampleType);
+        }
+        if (searchTerm) {
+            filteredSamples = filteredSamples.filter(s => 
+                String(s.sample_id).toLowerCase().includes(searchTerm) ||
+                String(s.external_name || '').toLowerCase().includes(searchTerm) ||
+                String(s.sample_origin_type || '').toLowerCase().includes(searchTerm) || // Search in origin type
+                String(s.project_id || '').toLowerCase().includes(searchTerm) // Search project ID as well
+            );
+        }
+        
+        renderKanbanBoard(filteredSamples);
+    }
+    
+    async function showSampleDetailsModal(sampleId) {
+        // Fetch the full detailed sample view record.
+        // For detailed_samples_view, sample_id itself is unique, so filtering by it should be enough.
+        const sampleDetails = await apiFetch(`table/lab/detailed_samples_view?sample_id=${sampleId}`); // Use direct equality for sample_id
+        const sample = sampleDetails && sampleDetails.length > 0 ? sampleDetails[0] : null;
+
+        if (!sample) { alert('Sample not found or details could not be loaded.'); return; }
+
+        const modalHTML = `<div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div class="modal-content bg-white rounded-lg shadow-2xl p-6 w-full max-w-2xl">
+                <div class="flex justify-between items-center mb-4 pb-4 border-b">
+                    <h2 class="text-2xl font-bold text-gray-800">Sample: ${sample.sample_id}</h2>
+                    <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-3xl">&times;</button>
+                </div>
+                <div class="max-h-[70vh] overflow-y-auto pr-4 text-gray-700">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-6">
+                        <div><strong>Origin Type:</strong><span class="font-medium ml-2">${sample.sample_origin_type || 'N/A'}</span></div>
+                        <div><strong>Sample Type:</strong><span class="font-medium ml-2">${sample.sample_type_abrv || sample.sample_type_id || 'N/A'}</span></div>
+                        <div><strong>Current Status:</strong><span class="font-bold ml-2 text-blue-600">${sample.sample_status_id || 'N/A'}</span></div>
+                        <div><strong>External Name:</strong><span class="font-medium ml-2">${sample.external_name || 'N/A'}</span></div>
+                        <div><strong>Parent Sample:</strong><span class="font-medium ml-2">${sample.parent_sample_id || 'N/A'}</span></div>
+                        <div><strong>Project:</strong><span class="font-medium ml-2">${sample.project_id || 'N/A'}</span></div>
+                        <div><strong>Workflow ID:</strong><span class="font-medium ml-2">${sample.workflow_id || 'Not Assigned'}</span></div>
+                        <div><strong>Current Step:</strong><span class="font-medium ml-2">${sample.current_workflow_step || sample.step_id || 'N/A'}</span></div>
+                        <div><strong>Reception Date:</strong><span class="font-medium ml-2">${sample.reception_date ? new Date(sample.reception_date).toLocaleDateString() : 'N/A'}</span></div>
+                        <div><strong>Sampling Date:</strong><span class="font-medium ml-2">${sample.sampling_date ? new Date(sample.sampling_date).toLocaleDateString() : 'N/A'}</span></div>
+                        <div><strong>Storage Location:</strong><span class="font-medium ml-2">${sample.storage_id || 'N/A'} ${sample.storage_box ? `- Box ${sample.storage_box}` : ''} ${sample.storage_position ? `- Pos ${sample.storage_position}` : ''}</span></div>
+                    </div>
+                    
+                    <div id="workflow-steps-container" class="mb-6"></div>
+                    
+                    <h3 class="font-bold text-lg mb-3">Analysis History</h3>
+                    <div class="relative pl-4 border-l-2 border-gray-200" id="history-timeline"><p>Loading history...</p></div>
+                </div>
+            </div>
+        </div>`;
+        showModal(modalHTML);
+        
+        loadWorkflowStepsIntoModal(sample.workflow_id, sample.sample_status_id);
+        
+        const historyContainer = document.getElementById('history-timeline');
+        historyContainer.innerHTML = '';
+        
+        let events = [];
+        // Add events based on available fields in the detailed_samples_view
+        if (sample.reception_date) {
+            events.push({ step: 'Received', date: new Date(sample.reception_date) });
+        }
+        if (sample.dissection_date) {
+            events.push({ step: 'Dissection', date: new Date(sample.dissection_date) });
+        }
+        if (sample.extraction_date) { // For extraction events
+            events.push({ step: 'Extraction', date: new Date(sample.extraction_date) });
+        }
+        // QC steps (Nanodrop, Qubit, Tapestation) often share 'measurement_date' field names
+        // You'll need to check the presence of the specific ID or a relevant field for that type of QC.
+        if (sample.nanodrop_id && sample.nanodrop_measurement_date) {
+            events.push({ step: 'Nanodrop QC', date: new Date(sample.nanodrop_measurement_date) });
+        }
+        if (sample.qubit_id && sample.qubit_measurement_date) {
+            events.push({ step: 'Qubit QC', date: new Date(sample.qubit_measurement_date) });
+        }
+        if (sample.tapestation_id && sample.tapestation_measurement_date) {
+            events.push({ step: 'Tapestation QC', date: new Date(sample.tapestation_measurement_date) });
+        }
+        // PCR, qPCR, Gel (each has its own date field)
+        if (sample.pcr_id && sample.pcr_date) {
+            events.push({ step: 'PCR Done', date: new Date(sample.pcr_date) });
+        }
+        if (sample.qpcr_id && sample.qpcr_date) {
+            events.push({ step: 'qPCR Done', date: new Date(sample.qpcr_date) });
+        }
+        if (sample.gel_gelelectrophoresis_id && sample.gel_run_date) {
+             events.push({ step: 'Gel Electrophoresis', date: new Date(sample.gel_run_date) });
+        }
+        // Library Prep and Sequencing
+        if (sample.library_id && sample.library_prep_date) {
+            events.push({ step: 'Library Prep', date: new Date(sample.library_prep_date) });
+        }
+        if (sample.sequencing_id && sample.sequencing_date) {
+            events.push({ step: 'Sequencing Done', date: new Date(sample.sequencing_date) });
+        }
+        // Bioinformatics Analysis
+        if (sample.analysis_run_id && sample.run_date) {
+             events.push({ step: 'Bioinformatics Analysis', date: new Date(sample.run_date) });
+        }
+        // Otoliths
+        if (sample.otolith_id && sample.otolith_experiment_date) { // Using experiment_date from otoliths
+            events.push({ step: 'Otolith Reading', date: new Date(sample.otolith_experiment_date) });
+        }
+        // Add any other relevant dates from detailed_samples_view here
+
+        events.sort((a,b) => a.date.getTime() - b.date.getTime());
+        if (events.length > 0) {
+            historyContainer.innerHTML = events.map(event => `
+                <div class="mb-4 relative">
+                    <div class="absolute -left-[9px] mt-1.5 w-4 h-4 bg-blue-500 rounded-full border-4 border-white"></div>
+                    <time class="mb-1 text-sm font-normal leading-none text-gray-500">${event.date.toLocaleString()}</time>
+                    <h4 class="text-md font-semibold text-gray-900">${event.step.replace(/_/g, ' ')}</h4>
+                </div>
+            `).join('');
+        } else {
+            historyContainer.innerHTML = '<p>No history found.</p>';
+        }
+    }
+
+    function formatDateForUrl(dateString) {
+        if (!dateString) return '';
+        try {
+            const date = new Date(dateString);
+            return isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0];
+        } catch (e) {
+            console.warn("Failed to format date for URL:", dateString, e);
+            return '';
+        }
+    }
+
+    function timeSince(dateString) {
+        if (!dateString) return 'N/A';
+        const seconds = Math.floor((new Date() - new Date(dateString)) / 1000);
+        const interval = seconds / 86400;
+        if (interval > 1) return Math.floor(interval) + " days";
+        if (interval * 24 > 1) return Math.floor(interval * 24) + " hours";
+        if (interval * 24 * 60 > 1) return Math.floor(interval * 24 * 60) + " minutes";
+        return "Just now";
+    }
+
+    function showModal(content) {
+        const container = document.getElementById('modal-container');
+        container.innerHTML = content;
+        const modal = container.querySelector('.modal-overlay');
+        const modalContent = container.querySelector('.modal-content');
+        setTimeout(() => modalContent.classList.remove('opacity-0', '-translate-y-10'), 10);
+        const closeModal = () => { modalContent.classList.add('opacity-0', '-translate-y-10'); setTimeout(() => container.innerHTML = '', 300); };
+        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+        container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+        return { closeModal };
+    }
+</script>
+</body>
+</html>

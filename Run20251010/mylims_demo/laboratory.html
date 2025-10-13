@@ -1,0 +1,1681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Management - TIFI LIMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        /* Base body styles using Inter font and light background */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        /* Sidebar styling */
+        .sidebar {
+            transition: width 0.3s ease;
+            border-right: 1px solid #e2e8f0;
+        }
+        .sidebar-item {
+            transition: all 0.2s ease;
+            color: #475569;
+        }
+        .sidebar-item.active, .sidebar-item.active i {
+            background-color: #eef2ff;
+            color: #4f46e5;
+            font-weight: 600;
+        }
+        .sidebar-item:hover {
+            background-color: #f1f5f9;
+            color: #1e293b;
+        }
+        /* Card styling for content sections */
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        /* Modal overlay for alerts and popups */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 40; /* Adjusted z-index for overlay */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+        }
+        /* Modal content styling */
+        .modal-content {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.06);
+            padding: 2rem; /* p-8 */
+            width: 100%;
+            max-width: 64rem; /* max-w-4xl */
+            max-height: 90vh;
+            display: flex; /* Use flex for internal layout */
+            flex-direction: column; /* Stack children vertically */
+            transform: translateY(-2.5rem); /* -translate-y-10 */
+            opacity: 0;
+            transition: all 0.3s ease-out;
+            z-index: 50; /* Adjusted z-index for content */
+        }
+        .modal-content.open {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* Form fields within modal */
+        .modal-content form {
+            flex-grow: 1; /* Allow form to take available space */
+            overflow-y: auto; /* Enable scrolling for form content */
+            padding-right: 1rem; /* pr-4, to account for scrollbar */
+        }
+        .modal-content form .grid {
+            margin-right: -1rem; /* Counteract padding-right on form for grid gap */
+        }
+
+        /* Ensure inputs and textareas respect padding/border in their total size */
+        input[type="text"],
+        input[type="number"],
+        input[type="date"],
+        input[type="datetime-local"],
+        input[type="url"],
+        textarea,
+        select {
+            box-sizing: border-box;
+        }
+
+        /* Table row selected state */
+        .table-row-selected { background-color: #eef2ff !important; }
+        /* Add a visible border for multi-selection */
+        .dynamic-table-row.selected { background-color: #eef2ff !important; border-left: 4px solid #4f46e5; } 
+
+        /* Sortable header styling */
+        .sortable-header { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; padding-right: 8px; }
+        .sortable-header:hover { background-color: #e2e8f0; }
+        .sort-icon { display: inline-block; width: 16px; height: 16px; vertical-align: middle; margin-left: 4px; flex-shrink: 0; }
+        /* Filter input styling */
+        .filter-input {
+            width: calc(100% - 10px);
+            padding: 4px;
+            margin-top: 4px;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.25rem;
+            font-size: 0.75rem; /* text-xs */
+            box-sizing: border-box;
+        }
+        /* Accordion styles (reused for details display) */
+        .accordion-item { margin-bottom: 0.5rem; border: 1px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; }
+        .accordion-header { background-color: #f1f5f9; padding: 0.75rem 1rem; cursor: pointer; width: 100%; text-align: left; display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: #475569; }
+        .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, padding 0.3s ease-out; padding: 0 1rem; background-color: white; border-top: 1px solid #e2e8f0; }
+        .accordion-content.open { max-height: 500px; padding: 1rem; }
+        /* Toast Notification Styles */
+        .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 100; }
+        .toast {
+            background-color: #fff;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.08);
+            display: flex;
+            align-items: center;
+            opacity: 0;
+            transform: translateY(-100%);
+            animation: fadeInSlideDown 0.3s ease-out forwards, fadeOut 0.3s ease-out 2.7s forwards;
+            margin-bottom: 0.75rem;
+            border-left: 5px solid;
+        }
+        .toast.success { border-color: #10b981; color: #065f46; } 
+        .toast.error { border-color: #ef4444; color: #991b1b; } 
+        .toast.info { border-color: #3b82f6; color: #1e40af; }
+        @keyframes fadeInSlideDown {
+            from { opacity: 0; transform: translateY(-100%); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(-100%); }
+        }
+        /* Loading Spinner */
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #4f46e5;
+            border-radius: 50%;
+            width: 1.5rem;
+            height: 1.5rem;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    </style>
+</head>
+<body>
+    <div id="main-app" class="flex">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col z-20">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0">
+                <i data-lucide="flask-conical" class="inline-block mr-2 text-blue-600"></i><span>TIFI LIMS</span>
+            </div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md "><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (ELN)</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="planned_samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Planned Samples</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+                <a href="booking.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Booking</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Tables</span></a>
+            </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t flex items-center text-gray-800">
+                </div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+
+        <div id="main-content" class="ml-64 p-8 flex-grow">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800">Data Management</h1>
+                    <p class="mt-1 text-md text-gray-600">Direct CRUD access to all tables and views in the LIMS database.</p>
+                </div>
+                <div class="flex space-x-3">
+                    <button id="export-selected-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all" disabled>
+                        <i data-lucide="download-cloud" class="w-5 h-5 mr-2"></i>Export Selected Rows (0)
+                    </button>
+                    <button id="add-single-entry-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all" disabled>
+                        <i data-lucide="plus" class="w-5 h-5 mr-2"></i>Add New Record
+                    </button>
+                    <button id="bulk-csv-upload-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all" disabled>
+                        <i data-lucide="upload" class="w-5 h-5 mr-2"></i>Bulk CSV Upload
+                    </button>
+                    <button id="bulk-modify-btn" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all" disabled>
+                        <i data-lucide="file-edit" class="w-5 h-5 mr-2"></i>Bulk Modify
+                    </button>
+                    <button id="download-template-general-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow hover:shadow-lg transition-all" disabled>
+                        <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download Template
+                    </button>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <label for="dynamic-table-select" class="block text-sm font-medium text-gray-700 mb-2">Select Table or View:</label>
+                <select id="dynamic-table-select" class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                    <option value="">-- Select a table or view --</option>
+                </select>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-8 mt-6">
+                <div class="lg:col-span-3">
+                    <div class="card p-4">
+                        <div class="overflow-y-auto h-[70vh] relative">
+                            <table class="min-w-full">
+                                <thead class="bg-gray-50 sticky top-0 z-10">
+                                    <tr id="table-headers">
+                                        </tr>
+                                </thead>
+                                <tbody id="dynamic-table-body" class="divide-y divide-gray-200">
+                                    <tr><td colspan="100%" class="text-center p-4 text-gray-500">
+                                        <div class="flex items-center justify-center">
+                                            <i data-lucide="loader-2" class="animate-spin inline-block mr-2 text-blue-600"></i>
+                                            <span>Select a table or view to display data.</span>
+                                        </div>
+                                    </td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="record-details-container" class="lg:col-span-2">
+                    <div class="card p-6 h-full flex items-center justify-center text-gray-500">
+                        <div class="text-center">
+                            <i data-lucide="info" class="mx-auto h-12 w-12"></i>
+                            <p class="mt-2">Select a record from the table to view its details here.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="modal-container"></div>
+        <div id="toast-container" class="toast-container"></div>
+    </div>
+
+    <script>
+        // --- GLOBAL CONSTANTS & CACHE ---
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') {
+            localStorage.setItem('redirectUrl', window.location.href);
+            window.location.href = './login.html';
+        }
+        
+        const API_BASE_URL = '/api'; 
+        let masterCache = {};
+        let currentTableData = []; 
+        let currentTableSchema = []; 
+        let currentTableName = ''; 
+        let sortColumn = null; 
+        let sortDirection = 'asc';
+        let columnFilters = {};
+        let pkMappingCache = {};
+        let selectedRows = new Set(); // Stores PK values (as JSON strings) for selected rows
+
+        // --- MAPPING (Simplified) ---
+        const VIEW_TO_BASE_TABLE_MAPPING = {
+            'lab.detailed_samples_view': 'lab.samples',
+            'lims.project_overview_view': 'lims.projects',
+            'lab.sample_workflow_progress_view': 'lab.samples',
+            'lims.reagent_status_view': 'lims.reagents',
+            'lab.sample_full_details_view': 'lab.samples',
+            'lims.project_personnel_view': 'lims.project_persons',
+            'lims.order_details_view': 'lims.orders',
+            'reference.complete_species_taxon_view': 'reference.taxon', 
+            'bioinformatics.analysis_results_summary': 'bioinformatics.edna_assignments', 
+            'bioinformatics.full_analysis_results_view': 'bioinformatics.edna_assignments',
+            'lab.storage_inventory_view': 'lab.storage',
+            'lab.storage_occupancy_view': 'lab.storage',
+            'lims.project_financial_summary_view': 'lims.projects',
+            'lims.project_comprehensive_summary_view': 'lims.projects',
+            'lab.experiment_progress_overview_view': 'lab.experiments',
+            'lab.experiment_summary_view': 'lab.experiments',
+            'lab.monthly_sample_reception_mv': 'lab.samples', 
+            'reference.taxon_hierarchy_view': 'reference.taxon',
+            // Added from new list/simplified mapping:
+            'lims.project_summary_view': 'lims.projects',
+            'lab.sample_type_counts_view': 'lab.root_samples',
+            'lims.projects_with_contact_details_view': 'lims.projects',
+            'lims.inventory_reagent_summary_view': 'lims.reagents',
+            'lab.project_pipeline_progress_view': 'lims.projects',
+            'lab.full_sampling_data_view': 'lab.sampling',
+            'bioinformatics.analysis_results_view': 'bioinformatics.analysis_runs',
+            'lims.publications_by_project_view': 'lims.publications',
+            'lab.storage_log_history_view': 'lab.storage_log',
+            'bioinformatics.analysis_results_summary_view': 'bioinformatics.analysis_runs',
+            'lab.full_sequencing_run_view': 'lab.sequencing_run',
+            'lab.global_lims_view': 'lab.root_samples',
+        };
+
+        // --- CORE UTILS ---
+        
+        // This is the custom one from the working file, not PapaParse.unparse
+        function unparseCSV(data, options) {
+            options = options || {};
+            const delimiter = options.delimiter || ',';
+            const newline = options.newline || '\n';
+            const quoteChar = options.quoteChar || '"';
+
+            if (!Array.isArray(data) || data.length === 0) {
+                return '';
+            }
+
+            const rows = data;
+
+            return rows.map(row => {
+                return row.map(field => {
+                    if (field === null || field === undefined) {
+                        return '';
+                    }
+                    let stringField = String(field);
+                    if (typeof field === 'object' && field !== null) {
+                        stringField = JSON.stringify(field);
+                    }
+                    if (stringField.includes(delimiter) || stringField.includes(quoteChar) || stringField.includes('\n') || stringField.includes('\r')) {
+                        return quoteChar + stringField.replace(new RegExp(quoteChar, 'g'), quoteChar + quoteChar) + quoteChar;
+                    }
+                    return stringField;
+                }).join(delimiter);
+            }).join(newline);
+        }
+
+
+        function formatColumnName(columnName) {
+            return columnName.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+        }
+
+        const formatDateForInput = (dateString) => {
+            if (!dateString) return '';
+            try {
+                const date = new Date(dateString);
+                return isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0];
+            } catch (e) { return ''; }
+        };
+
+        const formatDateTimeForInput = (dateTimeString) => {
+            if (!dateTimeString) return '';
+            try {
+                const date = new Date(dateTimeString);
+                return isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 16);
+            } catch (e) { return ''; }
+        };
+
+        function showToast(message, type = 'info') {
+            const toastContainer = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            const icon = type === 'success' ? 'check-circle' : (type === 'error' ? 'x-circle' : 'info');
+            toast.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5"></i><span class="toast-message">${message}</span>`;
+            toastContainer.appendChild(toast);
+            lucide.createIcons();
+            setTimeout(() => { toast.remove(); }, 3000);
+        }
+
+        // --- DATA ACCESS HELPERS ---
+
+        async function getReferenceData(tableName, schema = 'reference') {
+            const cacheKey = `${schema}.${tableName}`;
+            if (masterCache[cacheKey]) return masterCache[cacheKey];
+            const data = await apiFetch(`table/${schema}/${tableName}`);
+            if(data && !data.error) masterCache[cacheKey] = data;
+            return data;
+        }
+
+        async function getTableSchema(schema, table) {
+            const cacheKey = `schema.${schema}.${table}`;
+            if (masterCache[cacheKey]) return masterCache[cacheKey];
+            const schemaData = await apiFetch(`table/${schema}/${table}/schema`);
+            if (schemaData && !schemaData.error) masterCache[cacheKey] = schemaData;
+            return schemaData;
+        }
+
+        async function getPrimaryKeysForTable(schema, table) {
+            const cacheKey = `pk.${schema}.${table}`;
+            if (pkMappingCache[cacheKey]) return pkMappingCache[cacheKey];
+            const schemaData = await getTableSchema(schema, table);
+            if (schemaData && !schemaData.error) {
+                const pkColumns = schemaData.filter(col => col.is_primary_key).map(col => col.column_name);
+                pkMappingCache[cacheKey] = pkColumns;
+                return pkColumns;
+            }
+            return [];
+        }
+
+        function getPkValues(row, fullTableName) {
+            const pkColumns = pkMappingCache[`pk.${fullTableName || currentTableName}`] || [];
+            const pkValues = {};
+            pkColumns.forEach(pkCol => {
+                if (row[pkCol] !== undefined) {
+                    pkValues[pkCol] = row[pkCol];
+                }
+            });
+            // Convert date fields to string in a standardized format if they are part of the PK
+            for (const key in pkValues) {
+                const colSchema = currentTableSchema.find(s => s.column_name === key);
+                if (colSchema && colSchema.data_type === 'date') {
+                    pkValues[key] = formatDateForInput(pkValues[key]);
+                }
+            }
+            return pkValues;
+        }
+
+        // --- API FETCH (from the working file) ---
+
+        async function apiFetch(endpoint, options = {}) {
+            console.log(`API Fetch: Calling ${endpoint} with options:`, options);
+            try {
+                const isFormData = options.body instanceof FormData;
+                if (!isFormData && options.body && typeof options.body === 'object') {
+                    options.headers = { ...options.headers, 'Content-Type': 'application/json' };
+                    options.body = JSON.stringify(options.body);
+                }
+
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                
+                if (!response.ok) { 
+                    const errText = await response.text();
+                    console.error(`API Error Response for ${endpoint} (Status: ${response.status}):`, errText);
+                    try { 
+                        const errJson = JSON.parse(errText); 
+                        throw new Error(errJson.error || `API request failed with status ${response.status}`); 
+                    } catch (parseError) { 
+                        throw new Error(`API request failed: ${errText} (Status: ${response.status})`); 
+                    }
+                }
+                if (response.status === 204 || response.headers.get('content-length') === '0') {
+                    console.log(`API Fetch: Received empty response for ${endpoint}.`);
+                    return { success: true };
+                }
+                const jsonResponse = await response.json();
+                console.log(`API Fetch: Successful response for ${endpoint}:`, jsonResponse);
+                return jsonResponse;
+            }
+            catch (error) { 
+                console.error(`API Error on ${endpoint}:`, error); 
+                return { error: error.message }; 
+            }
+        }
+
+
+        // --- CRUD & TABLE RENDERING (Mostly retained from user's provided code block) ---
+
+        function renderTable(dataToDisplay, schemaInfo) {
+            const tableHeaders = document.getElementById('table-headers');
+            const tableBody = document.getElementById('dynamic-table-body');
+            tableHeaders.innerHTML = '';
+            tableBody.innerHTML = '';
+            selectedRows.clear(); // Clear selections on table refresh
+
+            if (!schemaInfo || schemaInfo.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500">No schema information available for this table.</td></tr>`;
+                return;
+            }
+
+            const columnsToDisplay = schemaInfo.filter(col => 
+                !col.column_name.includes('attachment') && 
+                !col.column_name.includes('password_hash') && 
+                !col.column_name.includes('search_vector') && 
+                !col.column_name.includes('geom')
+            );
+            
+            // Render Headers (including Select All checkbox)
+            let headerHtml = `
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-10">
+                    <input type="checkbox" id="select-all-checkbox">
+                </th>
+            `;
+            columnsToDisplay.forEach(col => {
+                const filterValue = columnFilters[col.column_name] || '';
+                headerHtml += `
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        <div class="sortable-header" data-column="${col.column_name}">
+                            <span>${formatColumnName(col.column_name)}</span>
+                            <i data-lucide="${sortColumn === col.column_name ? (sortDirection === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="sort-icon text-gray-400"></i>
+                        </div>
+                        <input type="text" placeholder="Filter ${formatColumnName(col.column_name)}..." class="filter-input" data-column="${col.column_name}" value="${filterValue}">
+                    </th>
+                `;
+            });
+            headerHtml += `<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-20">Actions</th>`;
+            tableHeaders.innerHTML = headerHtml;
+
+            // Render Body
+            if (!dataToDisplay || dataToDisplay.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="${columnsToDisplay.length + 2}" class="text-center p-4 text-gray-500">No data available for this table.</td></tr>`;
+            } else {
+                const isBaseTable = currentTableSchema.length > 0 && currentTableSchema[0].table_type === 'BASE TABLE';
+                const actionButtonsDisabled = isBaseTable ? '' : 'disabled';
+                const actionButtonClasses = isBaseTable ? 'text-gray-500 hover:text-blue-600' : 'text-gray-300 cursor-not-allowed';
+                const deleteButtonClasses = isBaseTable ? 'text-gray-500 hover:text-red-600' : 'text-gray-300 cursor-not-allowed';
+
+                tableBody.innerHTML = dataToDisplay.map(row => {
+                    const pkValues = getPkValues(row);
+                    const pkString = JSON.stringify(pkValues);
+                    const isSelected = selectedRows.has(pkString);
+
+                    let rowHtml = `<tr class="hover:bg-gray-50 cursor-pointer dynamic-table-row ${isSelected ? 'selected' : ''}" data-pk-values='${pkString}'>`;
+                    
+                    // Selection checkbox
+                    rowHtml += `<td class="px-4 py-3"><input type="checkbox" class="row-select-checkbox" data-pk-values='${pkString}' ${isSelected ? 'checked' : ''}></td>`;
+                    
+                    // Data cells
+                    columnsToDisplay.forEach(col => {
+                        let value = row[col.column_name];
+                        if (value === null || value === undefined) {
+                            value = 'N/A';
+                        } else if (col.data_type === 'date' && value) {
+                            try { value = new Date(value).toLocaleDateString('en-CA'); } catch (e) { /* keep original */ }
+                        } else if (col.data_type.includes('timestamp') && value) {
+                            try { value = new Date(value).toLocaleString(); } catch (e) { /* keep original */ }
+                        } else if (typeof value === 'object') { 
+                            value = `<pre class="bg-gray-100 p-1 rounded-md text-xs overflow-auto max-h-16">${JSON.stringify(value, null, 2)}</pre>`;
+                        }
+                        rowHtml += `<td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${value}</td>`;
+                    });
+                    
+                    // Action buttons
+                    rowHtml += `
+                        <td class="px-4 py-3 flex space-x-2">
+                            <button class="edit-btn p-1 ${actionButtonClasses}" data-pk-values='${pkString}' ${actionButtonsDisabled}><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                            <button class="delete-btn p-1 ${deleteButtonClasses}" data-pk-values='${pkString}' ${actionButtonsDisabled}><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </td>
+                    </tr>`;
+                    return rowHtml;
+                }).join('');
+            }
+            
+            lucide.createIcons();
+            addTableActionListeners();
+            addFilterAndSortListeners();
+            updateExportButtonState();
+        }
+
+        // --- EXPORT FUNCTIONALITY (NEW) ---
+
+        function exportSelectedDataAsCsv() {
+            if (selectedRows.size === 0) {
+                showToast("Please select at least one row to export.", "info");
+                return;
+            }
+
+            const rowsToExport = [];
+            const pkStrings = Array.from(selectedRows);
+            
+            const allKeys = new Set();
+            currentTableData.forEach(row => Object.keys(row).forEach(key => allKeys.add(key)));
+
+            const columnsToExport = Array.from(allKeys).filter(key => 
+                !key.includes('password_hash') && 
+                !key.includes('search_vector') &&
+                !key.includes('attachment') && 
+                !key.includes('geom') 
+            );
+
+            const headers = columnsToExport.map(formatColumnName);
+
+            pkStrings.forEach(pkString => {
+                const pkValues = JSON.parse(pkString);
+                const row = currentTableData.find(r => {
+                    const currentRowPkValues = getPkValues(r);
+                    return Object.keys(pkValues).every(key => 
+                        String(currentRowPkValues[key]) === String(pkValues[key])
+                    );
+                });
+
+                if (row) {
+                    const rowData = columnsToExport.map(colName => row[colName]);
+                    rowsToExport.push(rowData);
+                }
+            });
+
+            if (rowsToExport.length === 0) {
+                showToast("No matching data found for the selected rows.", "error");
+                return;
+            }
+            
+            const csvData = [headers, ...rowsToExport];
+            const csv = unparseCSV(csvData);
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${currentTableName.split('.')[1]}_selected_data.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            
+            showToast(`Successfully exported ${rowsToExport.length} rows!`, "success");
+        }
+        
+        function updateExportButtonState() {
+            const count = selectedRows.size;
+            const exportBtn = document.getElementById('export-selected-btn');
+            exportBtn.disabled = count === 0;
+            exportBtn.textContent = `Export Selected Rows (${count})`;
+            lucide.createIcons();
+        }
+
+        // --- EVENT LISTENERS & FILTERING/SORTING (Retained from user's provided code block) ---
+
+        function addTableActionListeners() {
+            // Checkbox handlers
+            document.querySelectorAll('.row-select-checkbox').forEach(checkbox => {
+                checkbox.onclick = (e) => {
+                    e.stopPropagation();
+                    const pkString = e.target.dataset.pkValues;
+                    const row = e.target.closest('tr');
+                    
+                    if (e.target.checked) {
+                        selectedRows.add(pkString);
+                        row.classList.add('selected');
+                    } else {
+                        selectedRows.delete(pkString);
+                        row.classList.remove('selected');
+                    }
+                    updateExportButtonState();
+                    // Update select-all checkbox state
+                    const totalRows = document.querySelectorAll('.row-select-checkbox').length;
+                    const allChecked = selectedRows.size === totalRows;
+                    const selectAllCheckbox = document.getElementById('select-all-checkbox');
+                    if(selectAllCheckbox) selectAllCheckbox.checked = allChecked;
+                };
+            });
+            
+            const selectAllCheckbox = document.getElementById('select-all-checkbox');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.onclick = (e) => {
+                    selectedRows.clear();
+                    const checked = e.target.checked;
+                    document.querySelectorAll('.dynamic-table-row').forEach(row => {
+                        const checkbox = row.querySelector('.row-select-checkbox');
+                        const pkString = row.dataset.pkValues;
+
+                        if (checked) {
+                            selectedRows.add(pkString);
+                            row.classList.add('selected');
+                            if (checkbox) checkbox.checked = true;
+                        } else {
+                            row.classList.remove('selected');
+                            if (checkbox) checkbox.checked = false;
+                        }
+                    });
+                    updateExportButtonState();
+                };
+            }
+
+            // CRUD handlers 
+            document.querySelectorAll('.dynamic-table-row').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    if (e.target.closest('button') || e.target.type === 'checkbox') return; 
+                    document.querySelectorAll('.dynamic-table-row').forEach(r => r.classList.remove('table-row-selected'));
+                    row.classList.add('table-row-selected');
+                    const pkValues = JSON.parse(row.dataset.pkValues);
+                    renderRecordDetails(pkValues);
+                });
+            });
+
+            document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', async e => {
+                e.stopPropagation();
+                if (btn.disabled) { showToast("Cannot edit a record from a View. Please select the underlying base table.", "info"); return; }
+                const pkValues = JSON.parse(e.currentTarget.dataset.pkValues);
+                // Find the record using the PK values
+                const record = currentTableData.find(r => {
+                    return Object.keys(pkValues).every(key => {
+                        const colSchema = currentTableSchema.find(s => s.column_name === key);
+                        if (colSchema && colSchema.data_type === 'date') {
+                            return formatDateForInput(r[key]) === pkValues[key];
+                        }
+                        return String(r[key]) === String(pkValues[key]);
+                    });
+                });
+                const targetTableForEdit = VIEW_TO_BASE_TABLE_MAPPING[currentTableName] || currentTableName;
+                if (record) showCreateEditModal(record, targetTableForEdit);
+                else showToast("Record not found for editing.", "error");
+            }));
+
+            document.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', async e => {
+                e.stopPropagation();
+                if (btn.disabled) { showToast("Cannot delete a record from a View. Please select the underlying base table.", "info"); return; }
+                
+                const tableToDeleteFrom = VIEW_TO_BASE_TABLE_MAPPING[currentTableName] || currentTableName;
+                const [schemaName, tableName] = tableToDeleteFrom.split('.');
+                const pkValues = JSON.parse(e.currentTarget.dataset.pkValues);
+                const recordIdentifier = Object.values(pkValues).join(' / ');
+                
+                if (!confirm(`Are you sure you want to delete this record (${recordIdentifier}) from ${tableName}? This action cannot be undone.`)){ return; }
+
+                // Delete logic
+                const queryString = new URLSearchParams(pkValues).toString();
+                const result = await apiFetch(`table/${schemaName}/${tableName}?${queryString}`, { method: 'DELETE' });
+                
+                if (result.success) {
+                    showToast('Record deleted successfully!', "success");
+                    loadAndRenderTable(currentTableName);
+                    document.getElementById('record-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><i data-lucide="info" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a record from the table to view its details here.</p></div></div>`;
+                    lucide.createIcons();
+                } else {
+                    showToast('Failed to delete record: ' + (result ? result.error : 'Unknown error'), "error");
+                }
+            }));
+        }
+
+        function addFilterAndSortListeners() {
+            document.querySelectorAll('.sortable-header').forEach(header => {
+                header.removeEventListener('click', handleSortClick);
+                header.addEventListener('click', handleSortClick);
+            });
+            document.querySelectorAll('.filter-input').forEach(input => {
+                input.removeEventListener('input', handleFilterInput);
+                input.addEventListener('input', handleFilterInput);
+            });
+            updateSortIcons(); 
+        }
+
+        function handleFilterInput(e) {
+            const column = e.target.dataset.column;
+            columnFilters[column] = e.target.value.toLowerCase();
+            applyFiltersAndSort();
+        }
+
+        function handleSortClick(e) {
+            const column = e.currentTarget.dataset.column;
+            if (sortColumn === column) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = column;
+                sortDirection = 'asc';
+            }
+            applyFiltersAndSort();
+        }
+
+        function applyFiltersAndSort() {
+            let tempArray = [...currentTableData]; 
+            // Filtering
+            for (const column in columnFilters) {
+                const filterText = columnFilters[column];
+                if (filterText) {
+                    tempArray = tempArray.filter(row => 
+                        String(row[column] || '').toLowerCase().includes(filterText)
+                    );
+                }
+            }
+            // Sorting
+            if (sortColumn) {
+                 tempArray.sort((a, b) => {
+                    const valA = a[sortColumn];
+                    const valB = b[sortColumn];
+                    const colSchema = currentTableSchema.find(c => c.column_name === sortColumn);
+
+                    if (valA === null && valB === null) return 0;
+                    if (valA === null) return sortDirection === 'asc' ? 1 : -1;
+                    if (valB === null) return sortDirection === 'asc' ? -1 : 1;
+
+                    if (colSchema && ['integer', 'numeric', 'bigint'].includes(colSchema.data_type)) {
+                        return sortDirection === 'asc' ? valA - valB : valB - valA;
+                    }
+                    else if (colSchema && ['date', 'timestamp with time zone', 'timestamp without time zone'].includes(colSchema.data_type)) {
+                        const dateA = new Date(valA), dateB = new Date(valB);
+                        return sortDirection === 'asc' ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
+                    }
+                    else {
+                        const strA = String(valA || '').toLowerCase();
+                        const strB = String(valB || '').toLowerCase();
+                        return sortDirection === 'asc' ? strA.localeCompare(strB) : strB.localeCompare(strA);
+                    }
+                });
+            }
+            renderTable(tempArray, currentTableSchema);
+            updateSortIcons(); 
+        }
+
+        function updateSortIcons() {
+            document.querySelectorAll('.sortable-header i').forEach(icon => icon.setAttribute('data-lucide', 'chevrons-up-down'));
+            if (sortColumn) {
+                const currentSortIcon = document.querySelector(`.sortable-header[data-column="${sortColumn}"] i`);
+                if (currentSortIcon) currentSortIcon.setAttribute('data-lucide', sortDirection === 'asc' ? 'chevron-up' : 'chevron-down');
+            }
+            lucide.createIcons(); 
+        }
+
+        // --- RECORD DETAILS (Retained from user's provided code block) ---
+        async function renderRecordDetails(pkValues) {
+            const container = document.getElementById('record-details-container');
+            container.innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500"><div class="text-center"><div class="loading-spinner mx-auto"></div><p class="mt-2">Loading record details...</p></div></div>`;
+            lucide.createIcons();
+
+            const record = currentTableData.find(r => {
+                return Object.keys(pkValues).every(key => {
+                    const colSchema = currentTableSchema.find(s => s.column_name === key);
+                    if (colSchema && colSchema.data_type === 'date') {
+                        return formatDateForInput(r[key]) === pkValues[key];
+                    }
+                    return String(r[key]) === String(pkValues[key]);
+                });
+            });
+
+            if (!record) { 
+                container.innerHTML = `<div class="card p-6 text-red-500">Error: Record details not found.</div>`; 
+                return; 
+            }
+
+            const renderDetailRow = (label, value) => {
+                if (value === null || value === undefined || String(value).trim() === '' || value === 'N/A') {
+                    return '';
+                }
+                let displayValue = value;
+                if (typeof value === 'object' && value !== null) {
+                    displayValue = `<pre class="bg-gray-100 p-2 rounded-md text-xs overflow-auto max-h-24">${JSON.stringify(value, null, 2)}</pre>`;
+                } else if (label.includes('Attachment Link') && typeof value === 'string') {
+                    displayValue = `<a href="${value}" target="_blank" class="text-blue-600 hover:underline">View Attachment</a>`;
+                } else if (label.includes('Attachment File') && value) {
+                    displayValue = `<span class="text-gray-500">Binary data present (${(atob(value).length / 1024).toFixed(2)} KB)</span>`;
+                } else if (label.includes('Date') && typeof value === 'string') {
+                    try { displayValue = new Date(value).toLocaleDateString('en-CA'); } catch (e) { /* keep original */ }
+                } else if (label.includes('Timestamp') && typeof value === 'string') {
+                    try { displayValue = new Date(value).toLocaleString(); } catch (e) { /* keep original */ }
+                }
+                return `<div class="grid grid-cols-2 gap-2 py-1 border-b border-gray-100"><dt class="font-medium text-gray-500">${label}</dt><dd class="text-gray-900 break-all">${displayValue}</dd></div>`;
+            };
+
+            let detailsHtml = `<div class="space-y-3 text-sm">`;
+            detailsHtml += `
+                <div class="accordion-item">
+                    <button class="accordion-header active" data-accordion="core-info">
+                        <span class="flex items-center"><i data-lucide="info" class="w-5 h-5 mr-2"></i> Record Details</span>
+                        <i data-lucide="chevron-down" class="w-5 h-5 transform transition-transform duration-300"></i>
+                    </button>
+                    <div class="accordion-content open">
+                        <dl class="space-y-2 py-2">
+                            ${Object.keys(record).map(key => {
+                                if (key.includes('attachment') && key !== 'attachment_link') return '';
+                                if (key.includes('password_hash') || key.includes('search_vector') || key.includes('geom')) return '';
+                                return renderDetailRow(formatColumnName(key), record[key]);
+                            }).join('')}
+                        </dl>
+                    </div>
+                </div>
+            `;
+            container.innerHTML = `<div class="card p-6 h-full flex flex-col"><div class="flex justify-between items-start mb-4"><div><h2 class="text-2xl font-bold text-gray-800">Selected Record</h2><p class="text-sm text-gray-500">${Object.values(pkValues).join(' / ')}</p></div></div><div class="flex-grow overflow-y-auto pr-2">${detailsHtml}</div></div>`;
+            lucide.createIcons(); 
+            document.querySelectorAll('.accordion-header').forEach(header => {
+                header.addEventListener('click', () => {
+                    const content = header.nextElementSibling;
+                    header.classList.toggle('active');
+                    content.classList.toggle('open');
+                    lucide.createIcons();
+                });
+            });
+        }
+
+
+        // --- MODAL & CRUD LOGIC (CORRECTED from uploaded file) ---
+
+        function showModal(content) {
+            const container = document.getElementById('modal-container');
+            container.innerHTML = content;
+            const modal = container.querySelector('.modal-overlay');
+            const modalContent = container.querySelector('.modal-content');
+            setTimeout(() => {
+                modalContent.style.opacity = '1';
+                modalContent.style.transform = 'translateY(0)';
+            }, 10);
+            const closeModal = () => {
+                modalContent.style.opacity = '0';
+                modalContent.style.transform = 'translateY(-2.5rem)';
+                setTimeout(() => container.innerHTML = '', 300);
+            };
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+            container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+            return { closeModal };
+        }
+        
+        async function showCreateEditModal(record = null, targetTable = null) {
+            console.log("showCreateEditModal: Initializing modal. Record:", record, "Target Table:", targetTable);
+            const isEditing = record !== null && !targetTable; 
+            const finalTargetTableName = targetTable || currentTableName; 
+            const [schemaName, tableName] = finalTargetTableName.split('.');
+
+            const targetTableSchema = await getTableSchema(schemaName, tableName);
+            if (!targetTableSchema || targetTableSchema.error) {
+                showToast('Error fetching schema for form: ' + (targetTableSchema ? targetTableSchema.error : 'Unknown error'), "error");
+                return;
+            }
+            
+            const pkColumnsForTargetTable = await getPrimaryKeysForTable(schemaName, tableName);
+
+            // Fetch reference data (heavy lift, caching helps a lot)
+            const [
+                persons, statuses, projects, samplesTypes, samplingEvents, cruises, species, units, 
+                suppliers, inventoryItems, publicationTypes, genes, rooms, customers, vessels, regions, ecosystems,
+                referenceDatabases, analysisPipelines, workflows, workflowSteps, equipment
+            ] = await Promise.all([ 
+                getReferenceData('personal', 'reference'), 
+                getReferenceData('status', 'reference'),
+                getReferenceData('projects', 'lims'),
+                getReferenceData('samples_type', 'reference'),
+                apiFetch('table/lab/sampling?order_by=sampling_date&order_direction=desc&limit=100'),
+                getReferenceData('cruises', 'lims'),
+                getReferenceData('taxon', 'reference'), // Using taxon which typically has species info
+                getReferenceData('units', 'reference'),
+                getReferenceData('suppliers', 'lims'),
+                getReferenceData('inventory_items', 'lims'),
+                getReferenceData('publication_type', 'lims'),
+                getReferenceData('gene', 'reference'),
+                getReferenceData('room', 'reference'),
+                getReferenceData('customers', 'lims'),
+                getReferenceData('vessel', 'reference'),
+                getReferenceData('region', 'reference'),
+                getReferenceData('ecosystem', 'reference'),
+                getReferenceData('reference_databases', 'bioinformatics'),
+                getReferenceData('analysis_pipelines', 'bioinformatics'),
+                getReferenceData('workflows', 'lims'),
+                getReferenceData('workflow_steps', 'lims'),
+                getReferenceData('equipment', 'lims')
+            ]);
+
+
+            const refMap = {
+                'person_id': { data: persons, valueKey: 'person_id', displayKey: 'full_name' },
+                'status_id': { data: statuses, valueKey: 'status_id', displayKey: 'status_id' },
+                'project_id': { data: projects, valueKey: 'project_id', displayKey: 'title' },
+                'sample_type_id': { data: samplesTypes, valueKey: 'sample_type_id', displayKey: 'sample_type_abrv' },
+                'cruise_id': { data: cruises, valueKey: 'cruise_id', displayKey: 'cruise_id' },
+                // Use species/taxon for both species_id and taxon_id
+                'species_id': { data: species, valueKey: 'taxon_id', displayKey: 'en_name' },
+                'taxon_id': { data: species, valueKey: 'taxon_id', displayKey: 'en_name' },
+                'unit_id': { data: units, valueKey: 'unit_id', displayKey: 'unit_abbreviation' },
+                'gene_id': { data: genes, valueKey: 'gene_id', displayKey: 'gene_id' },
+                'supplier_id': { data: suppliers, valueKey: 'supplier_id', displayKey: 'supplier_name' },
+                'item_id': { data: inventoryItems, valueKey: 'item_id', displayKey: 'item_name' },
+                'publication_type_id': { data: publicationTypes, valueKey: 'publication_type_id', displayKey: 'publication_type_id' },
+                'db_id': { data: referenceDatabases, valueKey: 'db_id', displayKey: 'db_name' },
+                'pipeline_id': { data: analysisPipelines, valueKey: 'pipeline_id', displayKey: 'pipeline_name' },
+                'room_id': { data: rooms, valueKey: 'room_id', displayKey: 'room_id' },
+                'customer_id': { data: customers, valueKey: 'customer_id', displayKey: 'customer_name' },
+                'vessel_id': { data: vessels, valueKey: 'vessel_id', displayKey: 'vessel_name' },
+                'region_id': { data: regions, valueKey: 'region_id', displayKey: 'region_abrv' },
+                'ecosystem_id': { data: ecosystems, valueKey: 'ecosystem_id', displayKey: 'ecosystem_abrv' },
+                'workflow_id': { data: workflows, valueKey: 'workflow_id', displayKey: 'workflow_name' },
+                'step_id': { data: workflowSteps, valueKey: 'step_id', displayKey: 'step_name' }, 
+                'equipment_id': { data: equipment, valueKey: 'equipment_id', displayKey: 'equipment_name' },
+            };
+            
+            // Re-fetch complex fields (e.g., linked data) if editing the main experiment/project tables
+            let extraData = {};
+            if (isEditing) {
+                if (tableName === 'experiments') {
+                    // Fetch linked projects and samples
+                    extraData.linkedProjects = (await apiFetch(`table/lab/experiments_projects?filter_experiment_id=${record.experiment_id}&filter_experiment_date=${formatDateForInput(record.experiment_date)}`)).map(lp => lp.project_id).join(';');
+                    extraData.linkedSamples = (await apiFetch(`table/lab/experiments_samples?filter_experiment_id=${record.experiment_id}&filter_experiment_date=${formatDateForInput(record.experiment_date)}`)).map(ls => ls.sample_id).join(';');
+                } else if (tableName === 'projects') {
+                    // Fetch linked persons
+                    extraData.linkedPersons = (await apiFetch(`table/lims/project_persons?filter_project_id=${record.project_id}`)).map(pp => pp.person_id).join(';');
+                }
+            }
+
+            let formFieldsHtml = generateFormFields(targetTableSchema, pkColumnsForTargetTable, record, isEditing, refMap, samplingEvents, extraData);
+
+            const modalTitle = isEditing ? `Edit ${formatColumnName(tableName)} Record` : `Create New ${formatColumnName(tableName)} Record`;
+            const submitButtonText = isEditing ? 'Save Changes' : 'Create Record';
+
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-4xl max-h-[90vh] overflow-y-auto transform transition-all -translate-y-10 opacity-0">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl font-bold">${modalTitle}</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                        </div>
+                        <form id="record-form" class="space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                ${formFieldsHtml}
+                            </div>
+                            <div class="pt-4 flex justify-end">
+                                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">
+                                    ${submitButtonText}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+            
+            // Re-attach submit listener with comprehensive logic
+            document.getElementById('record-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const result = await handleFormSubmission(e, finalTargetTableName, targetTableSchema, pkColumnsForTargetTable, record, isEditing);
+                if (result && !result.error) {
+                    showToast(`${isEditing ? 'Updated' : 'Created'} record successfully!`, "success");
+                    closeModal();
+                    loadAndRenderTable(currentTableName);
+                } else {
+                    showToast(`Failed to ${isEditing ? 'save' : 'create'} record: ` + (result ? result.error : 'Unknown error'), "error");
+                }
+            };
+            
+            // Logic to auto-fill sampling_date (for composite keys)
+            const samplingIdSelect = document.querySelector('#modal-container [name="sampling_id"]');
+            const samplingDateInput = document.querySelector('#modal-container [name="sampling_date"]');
+            if (samplingIdSelect && samplingDateInput) {
+                // Initial check for existing value
+                if (record && record.sampling_id) {
+                    const selectedSamplingEvent = samplingEvents.find(s => s.sampling_id === record.sampling_id);
+                    if (selectedSamplingEvent && selectedSamplingEvent.sampling_date) {
+                         samplingDateInput.value = formatDateForInput(selectedSamplingEvent.sampling_date);
+                    }
+                }
+
+                samplingIdSelect.addEventListener('change', () => {
+                    const selectedId = samplingIdSelect.value;
+                    const selectedSamplingEvent = samplingEvents.find(s => s.sampling_id === selectedId);
+                    samplingDateInput.value = selectedSamplingEvent ? formatDateForInput(selectedSamplingEvent.sampling_date) : '';
+                });
+            }
+        }
+        
+        // Helper function to dynamically build the form fields
+        function generateFormFields(schema, pkColumns, record, isEditing, refMap, samplingEvents, extraData) {
+            let html = '';
+            
+            const findRefMap = (colName) => {
+                for (const key in refMap) {
+                    if (colName.includes(key)) { return refMap[key]; }
+                }
+                return null;
+            };
+
+            schema.forEach(col => {
+                const isAutoGenerated = col.column_default && col.column_default.includes('nextval');
+                const isHiddenField = (!isEditing && isAutoGenerated);
+                // Allow PK dates to be editable to support composite key changes (e.g., experiment_date)
+                let isReadOnlyField = (isEditing && pkColumns.includes(col.column_name) && !isAutoGenerated && col.data_type !== 'date');
+
+                if (col.column_name.includes('password_hash') || col.column_name.includes('search_vector')) return;
+
+                let value = record ? (record[col.column_name] || '') : (col.column_default ? col.column_default.replace(/::[a-z_]+/g, '').replace(/'/g, '') : '');
+                if (record && record[col.column_name] !== undefined) value = record[col.column_name];
+
+                let inputType = 'text'; 
+                let extraAttrs = isReadOnlyField ? ' readonly' : '';
+                let label = formatColumnName(col.column_name);
+                let isRequired = col.is_nullable === 'NO' && !col.column_default && !isEditing && !isHiddenField;
+
+                if (isHiddenField) { html += `<input type="hidden" name="${col.column_name}" value="${value}">`; return; }
+
+                // --- Type Specific Handling ---
+                if (col.column_name === 'attachment') { 
+                    html += `
+                        <div class="${isReadOnlyField ? 'opacity-70' : ''}">
+                            <label class="block text-gray-700 text-sm font-bold mb-1">${label} (File)</label>
+                            <input type="file" name="${col.column_name}" class="w-full mt-1 p-2 border rounded" ${isReadOnlyField ? 'disabled' : ''}>
+                            ${record && record.attachment ? `<p class="text-xs text-gray-500 mt-1">Existing attachment present. Uploading new file will replace it.</p>` : ''}
+                        </div>
+                    `;
+                    return; 
+                }
+                else if (col.column_name === 'attachment_link') { inputType = 'url'; }
+                else if (col.data_type === 'date') { inputType = 'date'; if (value) value = formatDateForInput(value); }
+                else if (col.data_type.includes('timestamp')) { inputType = 'datetime-local'; if (value) value = formatDateTimeForInput(value); }
+                else if (col.data_type === 'boolean') { inputType = 'checkbox'; extraAttrs += value ? ' checked' : ''; value = ''; }
+                else if (col.data_type === 'integer' || col.data_type === 'numeric' || col.data_type === 'bigint') { inputType = 'text'; } 
+                else if (col.data_type === 'jsonb' || col.column_name.includes('notes') || col.column_name.includes('protocol') || col.column_name.includes('description') || col.column_name.includes('aim') || col.column_name.includes('method') || col.column_name.includes('body')) {
+                    html += `<div class="md:col-span-2 ${isReadOnlyField ? 'opacity-70' : ''}"><label class="block text-gray-700 text-sm font-bold mb-1">${label}${col.data_type === 'jsonb' ? ' (JSON)' : ''}</label><textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-24" ${isReadOnlyField ? 'readonly' : ''} ${isRequired ? 'required' : ''}>${col.data_type === 'jsonb' && value ? JSON.stringify(value, null, 2) : value}</textarea></div>`; return;
+                }
+                else if (col.data_type.startsWith('geometry')) {
+                    html += `<div class="md:col-span-2 ${isReadOnlyField ? 'opacity-70' : ''}"><label class="block text-gray-700 text-sm font-bold mb-1">${label} (WKT/GeoJSON)</label><textarea name="${col.column_name}" class="w-full mt-1 p-2 border rounded h-24" ${isReadOnlyField ? 'readonly' : ''} ${isRequired ? 'required' : ''}>${value ? (value.wkt || JSON.stringify(value)) : ''}</textarea><p class="text-xs text-gray-500 mt-1">Enter as WKT (e.g., POINT(lon lat)) or GeoJSON string.</p></div>`; return;
+                }
+                
+                // --- Dropdown/FK Handling ---
+                const ref = findRefMap(col.column_name);
+                if (ref) {
+                    let optionsHtml = `<option value="">-- Select ${label} --</option>`;
+                    
+                    if (col.column_name === 'sampling_id') {
+                        // Special handling for sampling_id + sampling_date composite FK/PK
+                        optionsHtml = `<option value="">-- Select Sampling Event --</option>`;
+                        optionsHtml += samplingEvents.map(s => {
+                            const sDate = formatDateForInput(s.sampling_date);
+                            const isSelected = record?.sampling_id === s.sampling_id && (col.data_type === 'date' ? formatDateForInput(record.sampling_date) : record.sampling_date) === sDate;
+                            return `<option value="${s.sampling_id}" ${isSelected ? 'selected' : ''}>${s.sampling_id} (${s.location_name || 'N/A'} - ${sDate})</option>`;
+                        }).join('');
+                        
+                        html += `<div class="${isReadOnlyField ? 'opacity-70' : ''}"><label class="block text-gray-700 text-sm font-bold mb-1">${label}${isRequired ? ' <span class="text-red-500">*</span>' : ''}</label><select name="${col.column_name}" class="w-full mt-1 p-2 border rounded" ${isReadOnlyField ? 'disabled' : ''} ${isRequired ? 'required' : ''}>${optionsHtml}</select>`;
+                        
+                        // If sampling_date is a separate column/PK component, keep it as an input field
+                        const samplingDateCol = schema.find(c => c.column_name === 'sampling_date');
+                        if (samplingDateCol) {
+                            const dateValue = record ? formatDateForInput(record.sampling_date) : '';
+                            const dateIsRequired = samplingDateCol.is_nullable === 'NO' && !samplingDateCol.column_default && !isEditing;
+                            html += `</div><div class="${isReadOnlyField ? 'opacity-70' : ''}"><label class="block text-gray-700 text-sm font-bold mb-1">Sampling Date${dateIsRequired ? ' <span class="text-red-500">*</span>' : ''}</label><input type="date" name="sampling_date" class="w-full mt-1 p-2 border rounded" value="${dateValue}" readonly ${dateIsRequired ? 'required' : ''}>`;
+                        }
+                        html += `</div>`;
+                        return;
+                    } else {
+                        // Generic dropdown
+                        optionsHtml += ref.data.map(item => `<option value="${item[ref.valueKey]}" ${value == item[ref.valueKey] ? 'selected' : ''}>${item[ref.displayKey] || item[ref.valueKey]}</option>`).join('');
+                        html += `<div class="${isReadOnlyField ? 'opacity-70' : ''}"><label class="block text-gray-700 text-sm font-bold mb-1">${label}${isRequired ? ' <span class="text-red-500">*</span>' : ''}</label><select name="${col.column_name}" class="w-full mt-1 p-2 border rounded" ${isReadOnlyField ? 'disabled' : ''} ${isRequired ? 'required' : ''}>${optionsHtml}</select></div>`;
+                        return;
+                    }
+                }
+                
+                // --- Default Input ---
+                html += `<div class="${isReadOnlyField ? 'opacity-70' : ''}"><label class="block text-gray-700 text-sm font-bold mb-1">${label}${isRequired ? ' <span class="text-red-500">*</span>' : ''}</label><input type="${inputType}" name="${col.column_name}" class="w-full mt-1 p-2 border rounded" value="${value}" ${extraAttrs} ${isReadOnlyField ? 'readonly' : ''} ${isRequired && inputType !== 'checkbox' && inputType !== 'file' ? 'required' : ''}></div>`;
+            });
+            
+            // --- Special Linking Fields (using extraData for pre-filling in edit mode) ---
+            if (tableName === 'experiments') {
+                const linkedProjects = extraData.linkedProjects || '';
+                const linkedSamples = extraData.linkedSamples || '';
+                html += `<div class="md:col-span-2"><label class="block text-gray-700 text-sm font-bold mb-1">Linked Project IDs (semicolon-separated)</label><input type="text" name="project_ids" class="w-full mt-1 p-2 border rounded" placeholder="e.g., P001;P002" value="${linkedProjects}"><p class="text-xs text-gray-500 mt-1">These will be linked in 'experiments_projects'.</p></div>`;
+                html += `<div class="md:col-span-2"><label class="block text-gray-700 text-sm font-bold mb-1">Linked Sample IDs (semicolon-separated)</label><input type="text" name="sample_ids" class="w-full mt-1 p-2 border rounded" placeholder="e.g., S001;S002" value="${linkedSamples}"><p class="text-xs text-gray-500 mt-1">These will be linked in 'experiments_samples'.</p></div>`;
+            } else if (tableName === 'projects') {
+                const linkedPersons = extraData.linkedPersons || '';
+                html += `<div class="md:col-span-2"><label class="block text-gray-700 text-sm font-bold mb-1">Linked Person IDs (semicolon-separated)</label><input type="text" name="linked_person_ids" class="w-full mt-1 p-2 border rounded" placeholder="e.g., john.smith;jane.doe" value="${linkedPersons}"><p class="text-xs text-gray-500 mt-1">These will be linked in 'lims.project_persons'.</p></div>`;
+            }
+
+            return html;
+        }
+
+        async function handleFormSubmission(e, finalTargetTableName, targetTableSchema, pkColumnsForTargetTable, record, isEditing) {
+            const formElement = e.target;
+            const [schemaName, tableName] = finalTargetTableName.split('.');
+            const attachmentInput = formElement.querySelector('input[name="attachment"]');
+            const hasFileSelected = attachmentInput && attachmentInput.files.length > 0;
+            
+            let body;
+            if (hasFileSelected) { 
+                // If file is selected, use FormData
+                body = new FormData(formElement); 
+            } else {
+                // Otherwise, construct JSON body
+                body = {};
+                const formData = new FormData(formElement);
+                formData.forEach((value, key) => {
+                    const colSchema = targetTableSchema.find(s => s.column_name === key);
+                    
+                    if (colSchema && (colSchema.data_type === 'integer' || colSchema.data_type === 'numeric' || colSchema.data_type === 'bigint')) {
+                        body[key] = value === '' ? null : Number(value.replace(',', '.'));
+                    } else if (colSchema && colSchema.data_type === 'boolean') {
+                         // Check the actual checkbox state, not just the FormData value
+                        body[key] = formElement.querySelector(`[name="${key}"]`)?.checked || false;
+                    } else if (colSchema && colSchema.data_type === 'jsonb') {
+                        try {
+                            body[key] = value === '' ? null : JSON.parse(value);
+                        } catch (jsonError) { showToast(`Invalid JSON for ${formatColumnName(key)}`, "error"); throw new Error('JSON error'); }
+                    } else if (colSchema && colSchema.data_type.startsWith('geometry')) {
+                         try {
+                            // Basic check for WKT format
+                            if (value.toUpperCase().startsWith('POINT(') && value.toUpperCase().endsWith(')')) { body[key] = value; }
+                            // Basic check for GeoJSON object
+                            else if (value.trim().startsWith('{') && value.trim().endsWith('}')) { body[key] = JSON.parse(value); }
+                            else { body[key] = null; }
+                         } catch (geomError) { body[key] = null; }
+                    } else if (key === 'project_ids' || key === 'sample_ids' || key === 'linked_person_ids') {
+                        // Exclude linking fields from the main record body
+                        return;
+                    }
+                    else {
+                        body[key] = value === '' ? null : value;
+                    }
+                });
+            }
+
+            const method = isEditing ? 'PUT' : 'POST';
+            let endpoint = `table/${schemaName}/${tableName}`;
+
+            if (isEditing) {
+                const pkValuesForApi = {};
+                const originalPkValues = getPkValues(record, finalTargetTableName);
+                for (const key in originalPkValues) {
+                    const colSchema = targetTableSchema.find(s => s.column_name === key);
+                    // PK date values must be formatted as YYYY-MM-DD for the API query string
+                    if (colSchema && colSchema.data_type === 'date') { 
+                        pkValuesForApi[key] = formatDateForInput(originalPkValues[key]); 
+                    } else { 
+                        pkValuesForApi[key] = originalPkValues[key]; 
+                    }
+                }
+                endpoint += `?${new URLSearchParams(pkValuesForApi).toString()}`;
+            }
+
+            const result = await apiFetch(endpoint, { method, body });
+            
+            if (result && !result.error) {
+                // --- Complex Linking Logic from working file ---
+                const performLinking = async (id, date, type, links) => {
+                    const existingResult = await apiFetch(`table/lab/experiments_${type}?filter_experiment_id=${id}&filter_experiment_date=${date}`);
+                    const existingLinks = existingResult && !existingResult.error ? existingResult.map(l => l[type.slice(0, -1) + '_id']) : [];
+                    const toAdd = links.filter(link => !existingLinks.includes(link));
+                    const toRemove = existingLinks.filter(link => !links.includes(link));
+
+                    for (const link of toAdd) {
+                        try {
+                            await apiFetch(`table/lab/experiments_${type}`, { method: 'POST', body: { experiment_id: id, experiment_date: date, [type.slice(0, -1) + '_id']: link, link_date: new Date().toISOString().split('T')[0] }});
+                        } catch (e) { console.error(`Failed to link ${type.slice(0, -1)} ${link} to ${id}:`, e); }
+                    }
+                    for (const link of toRemove) {
+                        try {
+                            await apiFetch(`table/lab/experiments_${type}?experiment_id=${id}&experiment_date=${date}&${type.slice(0, -1) + '_id'}=${link}`, { method: 'DELETE' });
+                        } catch (e) { console.error(`Failed to unlink ${type.slice(0, -1)} ${link} from ${id}:`, e); }
+                    }
+                };
+
+                const performPersonLinking = async (projectId, personIds) => {
+                    const existingResult = await apiFetch(`table/lims/project_persons?filter_project_id=${projectId}`);
+                    const existingLinks = existingResult && !existingResult.error ? existingResult.map(l => l.person_id) : [];
+                    const toAdd = personIds.filter(id => !existingLinks.includes(id));
+                    const toRemove = existingLinks.filter(id => !personIds.includes(id));
+
+                    for (const id of toAdd) {
+                        try {
+                            await apiFetch(`table/lims/project_persons`, { method: 'POST', body: { project_id: projectId, person_id: id, link_date: new Date().toISOString().split('T')[0] }});
+                        } catch (e) { console.error(`Failed to link person ${id} to project ${projectId}:`, e); }
+                    }
+                    for (const id of toRemove) {
+                        try {
+                            await apiFetch(`table/lims/project_persons?project_id=${projectId}&person_id=${id}`, { method: 'DELETE' });
+                        } catch (e) { console.error(`Failed to unlink person ${id} from project ${projectId}:`, e); }
+                    }
+                };
+                
+                if (tableName === 'experiments' && result.experiment_id && result.experiment_date) {
+                    const expId = result.experiment_id;
+                    const expDate = formatDateForInput(result.experiment_date);
+                    const projectsStr = formElement.querySelector('[name="project_ids"]')?.value;
+                    const samplesStr = formElement.querySelector('[name="sample_ids"]')?.value;
+
+                    if (projectsStr !== undefined) await performLinking(expId, expDate, 'projects', projectsStr.split(';').map(id => id.trim()).filter(id => id));
+                    if (samplesStr !== undefined) await performLinking(expId, expDate, 'samples', samplesStr.split(';').map(id => id.trim()).filter(id => id));
+
+                } else if (tableName === 'projects' && result.project_id) {
+                    const personsStr = formElement.querySelector('[name="linked_person_ids"]')?.value;
+                    if (personsStr !== undefined) await performPersonLinking(result.project_id, personsStr.split(';').map(id => id.trim()).filter(id => id));
+                }
+
+                return result;
+            } else {
+                return result;
+            }
+        }
+
+
+        // --- BULK MODAL LOGIC (Retained from user's provided code block) ---
+
+        async function showBulkUploadModal() {
+            const baseTable = VIEW_TO_BASE_TABLE_MAPPING[currentTableName] || currentTableName;
+            if (baseTable !== currentTableName) { showToast("Upload must be done on the base table.", "error"); return; }
+
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl max-h-[90vh] overflow-y-auto transform transition-all -translate-y-10 opacity-0">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl font-bold">Bulk CSV Upload for ${formatColumnName(baseTable.split('.')[1])}</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                        </div>
+                        <p class="text-gray-700 mb-4">Upload a CSV file. The first row should contain column headers matching your database table. Use the download template button for structure.</p>
+                        <input type="file" id="csv-file-input" accept=".csv" class="w-full p-2 border rounded mb-4">
+                        <div class="flex justify-between space-x-2">
+                            <button id="download-csv-template-btn-modal" class="w-1/2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
+                                <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download Template
+                            </button>
+                            <button id="upload-csv-btn" class="w-1/2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
+                                <i data-lucide="upload" class="w-5 h-5 mr-2"></i>Upload CSV
+                            </button>
+                        </div>
+                        <div id="upload-status" class="mt-4 text-center text-sm"></div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+            document.getElementById('download-csv-template-btn-modal').addEventListener('click', () => downloadCsvTemplate(baseTable));
+
+            document.getElementById('upload-csv-btn').addEventListener('click', () => {
+                const fileInput = document.getElementById('csv-file-input');
+                const statusDiv = document.getElementById('upload-status');
+                const file = fileInput.files[0];
+
+                if (!file) { showToast("Please select a CSV file.", "error"); return; }
+                statusDiv.innerHTML = `<p class="text-blue-500"><div class="loading-spinner mr-2"></div>Processing CSV...</p>`;
+                lucide.createIcons();
+
+                PapaParse.parse(file, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: async (results) => {
+                        if (results.errors.length) { showToast(`CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}`, "error"); return; }
+                        if (!results.data.length) { showToast("No data found in CSV.", "error"); return; }
+
+                        let recordsToUpload = results.data.map(row => {
+                            const newRow = {};
+                            for (const key in row) {
+                                newRow[key] = row[key] === '' ? null : row[key];
+                            }
+                            return newRow;
+                        });
+
+                        const [schemaName, tableName] = baseTable.split('.');
+                        statusDiv.innerHTML = `<p class="text-blue-500"><div class="loading-spinner mr-2"></div>Uploading ${recordsToUpload.length} records...</p>`;
+                        lucide.createIcons();
+
+                        if (tableName === 'projects' || tableName === 'experiments') {
+                            const successfulRecords = [];
+                            for (const record of recordsToUpload) {
+                                let linkedIds = {};
+                                if (tableName === 'projects') {
+                                    linkedIds.persons = record.linked_person_ids ? record.linked_person_ids.split(';').map(id => id.trim()).filter(id => id !== '') : [];
+                                    delete record.linked_person_ids;
+                                } else if (tableName === 'experiments') {
+                                    linkedIds.projects = record.project_ids ? record.project_ids.split(';').map(id => id.trim()).filter(id => id !== '') : [];
+                                    linkedIds.samples = record.sample_ids ? record.sample_ids.split(';').map(id => id.trim()).filter(id => id !== '') : [];
+                                    delete record.project_ids;
+                                    delete record.sample_ids;
+                                }
+
+                                const result = await apiFetch(`table/${schemaName}/${tableName}`, {
+                                    method: 'POST',
+                                    body: record
+                                });
+
+                                if (result && !result.error) {
+                                    successfulRecords.push(result);
+                                    // Linking logic after successful creation
+                                    if (tableName === 'projects' && result.project_id) {
+                                        for (const personId of linkedIds.persons) {
+                                            try {
+                                                await apiFetch(`table/lims/project_persons`, {
+                                                    method: 'POST',
+                                                    body: { project_id: result.project_id, person_id: personId, link_date: new Date().toISOString().split('T')[0] }
+                                                });
+                                            } catch (linkError) { console.error(`Failed to link person ${personId} to new project ${result.project_id} during bulk upload:`, linkError); }
+                                        }
+                                    } else if (tableName === 'experiments' && result.experiment_id && result.experiment_date) {
+                                        const expDate = formatDateForInput(result.experiment_date);
+                                        for (const projectId of linkedIds.projects) {
+                                            try {
+                                                await apiFetch(`table/lab/experiments_projects`, {
+                                                    method: 'POST',
+                                                    body: { experiment_id: result.experiment_id, experiment_date: expDate, project_id: projectId, link_date: new Date().toISOString().split('T')[0] }
+                                                });
+                                            } catch (linkError) { console.error(`Failed to link project ${projectId} to new experiment ${result.experiment_id} during bulk upload:`, linkError); }
+                                        }
+                                        for (const sampleId of linkedIds.samples) {
+                                            try {
+                                                await apiFetch(`table/lab/experiments_samples`, {
+                                                    method: 'POST',
+                                                    body: { experiment_id: result.experiment_id, experiment_date: expDate, sample_id: sampleId }
+                                                });
+                                            } catch (linkError) { console.error(`Failed to link sample ${sampleId} to new experiment ${result.experiment_id} during bulk upload:`, linkError); }
+                                        }
+                                    }
+                                } else {
+                                    console.error(`Failed to upload record:`, record, result);
+                                }
+                            }
+                            if (successfulRecords.length > 0) {
+                                statusDiv.innerHTML = `<p class="text-green-600">Successfully uploaded ${successfulRecords.length} records!</p>`;
+                                loadAndRenderTable(currentTableName);
+                                setTimeout(closeModal, 2000);
+                            } else {
+                                statusDiv.innerHTML = `<p class="text-red-500">Bulk upload failed: No records successfully uploaded.</p>`;
+                            }
+
+                        } else {
+                            // Standard bulk upload for other tables
+                            const result = await apiFetch(`table/${schemaName}/${tableName}/batch_upload`, {
+                                method: 'POST',
+                                body: recordsToUpload
+                            });
+
+                            if (result && result.success) {
+                                showToast(`Successfully uploaded ${result.inserted_rows} records!`, "success");
+                                loadAndRenderTable(currentTableName);
+                                setTimeout(closeModal, 2000);
+                            } else {
+                                showToast(`Bulk upload failed: ${result ? result.error : 'Unknown error'}`, "error");
+                            }
+                        }
+                        lucide.createIcons();
+                    }
+                });
+            });
+        }
+
+        async function showBulkModifyModal() {
+            const baseTable = VIEW_TO_BASE_TABLE_MAPPING[currentTableName] || currentTableName;
+            if (baseTable !== currentTableName) { showToast("Bulk modification must be done on the base table.", "error"); return; }
+
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
+                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl transform transition-all -translate-y-10 opacity-0">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl font-bold">Bulk Modify for ${formatColumnName(baseTable.split('.')[1])}</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                        </div>
+                        <p class="text-gray-700 mb-4">Upload a CSV or JSON file containing records to update. Each record must include all primary key column(s) for identification, and any fields you wish to modify.</p>
+                        <input type="file" id="bulk-modify-file-input" accept=".csv,.json" class="w-full p-2 border rounded mb-4">
+                        <div class="flex justify-between space-x-2">
+                            <button id="download-bulk-modify-template-btn-modal" class="w-1/2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
+                                <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download Template
+                            </button>
+                            <button id="perform-bulk-modify-btn" class="w-1/2 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
+                                <i data-lucide="file-edit" class="w-5 h-5 mr-2"></i>Perform Bulk Modify
+                            </button>
+                        </div>
+                        <div id="modify-status" class="mt-4 text-center text-sm"></div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+
+            document.getElementById('download-bulk-modify-template-btn-modal').addEventListener('click', () => downloadBulkModifyTemplate(baseTable));
+
+            document.getElementById('perform-bulk-modify-btn').addEventListener('click', () => {
+                const fileInput = document.getElementById('bulk-modify-file-input');
+                const statusDiv = document.getElementById('modify-status');
+                const file = fileInput.files[0];
+
+                if (!file) { showToast("Please select a file (CSV or JSON).", "error"); return; }
+                statusDiv.innerHTML = `<p class="text-blue-500"><div class="loading-spinner mr-2"></div>Processing file...</p>`;
+                lucide.createIcons();
+
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    let recordsToModify = [];
+                    try {
+                        if (file.type === 'application/json' || file.name.endsWith('.json')) {
+                            recordsToModify = JSON.parse(e.target.result);
+                        } else if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+                            const parseResult = PapaParse.parse(e.target.result, { header: true, skipEmptyLines: true });
+                            if (parseResult.errors.length) { throw new Error(`CSV parsing errors: ${parseResult.errors.map(err => err.message).join(', ')}`); }
+                            recordsToModify = parseResult.data;
+                        } else {
+                            throw new Error("Unsupported file type. Please upload a CSV or JSON file.");
+                        }
+
+                        if (!recordsToModify.length) { showToast("No records found in the file.", "error"); return; }
+                        
+                        const recordsToModifyCleaned = recordsToModify.map(row => {
+                            const newRow = {};
+                            for (const key in row) { newRow[key] = row[key] === '' ? null : row[key]; }
+                            return newRow;
+                        });
+
+                        const [schemaName, tableName] = baseTable.split('.');
+                        statusDiv.innerHTML = `<p class="text-blue-500"><div class="loading-spinner mr-2"></div>Performing bulk update on ${recordsToModifyCleaned.length} records...</p>`;
+                        lucide.createIcons();
+
+                        const result = await apiFetch(`table/${schemaName}/${tableName}/batch_update`, {
+                            method: 'PUT',
+                            body: recordsToModifyCleaned
+                        });
+
+                        if (result && result.success) {
+                            showToast(`Successfully updated ${result.updated_rows} records!`, "success");
+                            loadAndRenderTable(currentTableName);
+                            setTimeout(closeModal, 2000);
+                        } else {
+                            showToast(`Bulk modify failed: ${result ? result.error : 'Unknown error'}`, "error");
+                        }
+                    } catch (error) {
+                        statusDiv.innerHTML = `<p class="text-red-500">Error processing file: ${error.message}</p>`;
+                        lucide.createIcons();
+                    }
+                };
+                reader.readAsText(file);
+            });
+        }
+
+        async function downloadBulkModifyTemplate(fullTableName) {
+            const [schemaName, tableName] = fullTableName.split('.');
+            const schema = await getTableSchema(schemaName, tableName);
+            const pkColumns = await getPrimaryKeysForTable(schemaName, tableName);
+
+            if (!schema || schema.error) { showToast('Failed to fetch table schema for template.', "error"); return; }
+
+            let headers = pkColumns;
+            
+            const commonEditableColumns = schema.filter(col => 
+                !pkColumns.includes(col.column_name) && 
+                !col.column_name.includes('attachment') && 
+                !col.column_name.includes('password_hash') && 
+                !col.column_name.includes('search_vector') &&
+                !col.column_name.includes('geom') && 
+                !col.column_name.includes('created_at') &&
+                !(col.column_default && col.column_default.includes('nextval'))
+            ).map(col => col.column_name);
+
+            headers = [...new Set([...headers, ...commonEditableColumns])];
+
+            const csv = PapaParse.unparse([headers], { header: false });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${tableName}_bulk_modify_template.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            showToast("Bulk modify template downloaded successfully!", "success");
+        }
+
+        async function downloadCsvTemplate(fullTableName) {
+            const [schemaName, tableName] = fullTableName.split('.');
+            const schema = await getTableSchema(schemaName, tableName);
+            const pkCols = await getPrimaryKeysForTable(schemaName, tableName);
+
+            if (!schema || schema.error) { showToast('Failed to fetch table schema for template.', "error"); return; }
+
+            let headers = schema.filter(col => 
+                !col.column_name.includes('attachment') && !col.column_name.includes('password_hash') && 
+                !col.column_name.includes('search_vector') && !col.column_name.includes('geom') && 
+                !(col.column_default && col.column_default.includes('nextval')) && 
+                !col.column_name.includes('created_at') && !col.column_name.includes('last_modified_at')
+            ).map(col => col.column_name);
+
+            pkCols.forEach(pkCol => {
+                const pkColSchema = schema.find(c => c.column_name === pkCol);
+                if (pkColSchema && !(pkColSchema.column_default && pkColSchema.column_default.includes('nextval'))) {
+                    if (!headers.includes(pkCol)) { headers.unshift(pkCol); }
+                }
+            });
+
+            if (fullTableName === 'lims.projects') { if (!headers.includes('linked_person_ids')) headers.push('linked_person_ids'); } 
+            else if (fullTableName === 'lab.experiments') { 
+                if (!headers.includes('project_ids')) headers.push('project_ids');
+                if (!headers.includes('sample_ids')) headers.push('sample_ids');
+            }
+            
+            const csv = unparseCSV([headers], { header: false });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${tableName}_template.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            showToast("Template downloaded successfully!", "success");
+        }
+
+        // --- DOM INITIALIZATION & PAGE CONTROL (Retained from user's provided code block) ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if (user) {
+                let userName = user.full_name || user.person_id || 'User';
+                document.getElementById('user-profile').innerHTML = `<span class="mr-2 p-2 bg-blue-500 text-white rounded-full text-xs font-bold">${userName.charAt(0).toUpperCase()}</span><p class="font-semibold text-sm text-gray-800">${userName}</p>`;
+            }
+            document.getElementById('logout-button').addEventListener('click', () => { 
+                sessionStorage.clear(); 
+                window.location.href = './login.html'; 
+            });
+            
+            initializePage();
+            document.getElementById('export-selected-btn').addEventListener('click', exportSelectedDataAsCsv);
+        });
+
+        async function initializePage() {
+            await populateDynamicTableSelect();
+
+            document.getElementById('dynamic-table-select').addEventListener('change', (e) => {
+                currentTableName = e.target.value;
+                if (currentTableName) {
+                    loadAndRenderTable(currentTableName);
+                } else {
+                    document.getElementById('table-headers').innerHTML = '';
+                    document.getElementById('dynamic-table-body').innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500">
+                        <div class="flex items-center justify-center">
+                            <i data-lucide="loader-2" class="animate-spin inline-block mr-2 text-blue-600"></i>
+                            <span>Select a table or view to display data.</span>
+                        </div>
+                    </td></tr>`;
+                    document.getElementById('record-details-container').innerHTML = `<div class="card p-6 h-full flex items-center justify-center text-gray-500">
+                        <div class="text-center">
+                            <i data-lucide="info" class="mx-auto h-12 w-12"></i>
+                            <p class="mt-2">Select a record from the table to view its details here.</p>
+                        </div>
+                    </div>`;
+                    updateMainActionButtons(null);
+                    lucide.createIcons();
+                }
+            });
+
+            document.getElementById('add-single-entry-btn').addEventListener('click', () => {
+                const baseTable = VIEW_TO_BASE_TABLE_MAPPING[currentTableName] || currentTableName;
+                showCreateEditModal(null, baseTable);
+            });
+            document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal);
+            document.getElementById('bulk-modify-btn').addEventListener('click', showBulkModifyModal);
+            document.getElementById('download-template-general-btn').addEventListener('click', () => downloadCsvTemplate(currentTableName));
+        }
+
+        async function populateDynamicTableSelect() {
+            const select = document.getElementById('dynamic-table-select');
+            const allTableNames = await apiFetch('table_names_for_forms');
+            
+            select.innerHTML = '<option value="">-- Select a table or view --</option>';
+
+            if (allTableNames && !allTableNames.error) {
+                allTableNames.sort((a, b) => {
+                    const [schemaA, tableA] = a.split('.');
+                    const [schemaB, tableB] = b.split('.');
+                    if (schemaA !== schemaB) { return schemaA.localeCompare(schemaB); }
+                    return tableA.localeCompare(tableB);
+                });
+
+                allTableNames.forEach(table => {
+                    select.innerHTML += `<option value="${table}">${table}</option>`;
+                });
+            } else {
+                select.innerHTML = '<option value="">Error loading tables</option>';
+            }
+        }
+
+        async function loadAndRenderTable(fullTableName) {
+            currentTableName = fullTableName;
+            const [schemaName, tableName] = fullTableName.split('.');
+            
+            sortColumn = null;
+            sortDirection = 'asc';
+            columnFilters = {};
+            document.querySelectorAll('.filter-input').forEach(input => input.value = '');
+
+            const tableBody = document.getElementById('dynamic-table-body');
+            tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-gray-500"><div class="loading-spinner mx-auto"></div>Loading data...</td></tr>`;
+            lucide.createIcons();
+
+            const [data, schema, pkInfo] = await Promise.all([
+                apiFetch(`table/${schemaName}/${tableName}`),
+                getTableSchema(schemaName, tableName),
+                getPrimaryKeysForTable(schemaName, tableName)
+            ]);
+
+            if (data && !data.error && schema && !schema.error && pkInfo && !pkInfo.error) {
+                currentTableData = data;
+                currentTableSchema = schema;
+                pkMappingCache[`pk.${fullTableName}`] = pkInfo;
+                applyFiltersAndSort();
+                updateMainActionButtons(schema.length > 0 ? schema[0].table_type : null);
+            } else {
+                tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-4 text-red-500">Error loading data for ${fullTableName}: ${data ? data.error : schema ? schema.error : 'Unknown error'}</td></tr>`;
+                updateMainActionButtons(null);
+            }
+        }
+
+        function updateMainActionButtons(tableType) {
+            const isBaseTable = tableType === 'BASE TABLE';
+
+            document.getElementById('add-single-entry-btn').disabled = !isBaseTable;
+            document.getElementById('bulk-csv-upload-btn').disabled = !isBaseTable;
+            document.getElementById('bulk-modify-btn').disabled = !isBaseTable;
+            document.getElementById('download-template-general-btn').disabled = !currentTableName;
+            
+            updateExportButtonState();
+        }
+
+    </script>
+</body>
+</html>

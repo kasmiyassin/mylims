@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic LIMS Labeling - TIFI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <style>
+        /* Base styles */
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        select:disabled, button:disabled, input:disabled { background-color: #f3f4f6; cursor: not-allowed; opacity: 0.8; }
+        #loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255, 255, 255, 0.8); z-index: 100; display: none; align-items: center; justify-content: center; border-radius: 0.75rem; }
+        
+        /* Preview and Print Area Styles */
+        #print-area {
+            display: grid;
+            padding: var(--print-area-padding, 1rem);
+            background-color: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            min-height: 200px;
+            gap: var(--label-gap, 8px);
+            grid-template-columns: repeat(var(--label-cols, auto-fill), minmax(var(--label-width-px, 180px), 1fr));
+        }
+        .label-ticket {
+            background-color: white;
+            border: 1px solid #d1d5db;
+            padding: var(--label-padding, 6px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: start;
+            overflow: hidden;
+            word-break: break-all;
+            line-height: 1.3;
+            width: var(--label-width, 180px); /* Used for non-print preview sizing */
+            height: var(--label-height, auto);
+            flex-shrink: 0;
+            flex-grow: 0;
+            box-sizing: border-box;
+        }
+        .label-ticket .code-container { 
+            margin-bottom: 3px; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center;
+            max-height: 40%;
+        }
+        .label-text { 
+            text-align: center; 
+            font-family: 'Arial Narrow', Arial, sans-serif; 
+            font-size: var(--label-font-size, 10px); 
+            width: 100%; 
+        }
+        .label-text b { font-size: calc(var(--label-font-size, 10px) + 1px); font-weight: 700; display: block; margin-bottom: 2px; }
+        .label-text span { display: block; }
+        .label-text .info-key { font-weight: 600; }
+        
+        /* Print media styles */
+        @media print {
+            body > #main-app { display: none; }
+            body > #print-container { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
+            #print-area-for-printing {
+                display: grid;
+                /* These are set dynamically in JS using millimeters */
+            }
+            .label-ticket { border: none; page-break-inside: avoid; }
+            .label-ticket.print-border { border: 0.5pt solid #cccccc; }
+            .label-ticket.blank { visibility: hidden; }
+        }
+    </style>
+    <style id="dynamic-print-styles"></style>
+</head>
+<body>
+    <div id="main-app" class="flex">
+        <div id="sidebar" class="print:hidden fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col z-10">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI</span></div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md "><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (ELN)</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="labeling02.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling02</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+                <a href="reporting02.html" class="sidebar-item flex items-center p-2 rounded-md "><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+                <a href="booking.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Booking</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Tables</span></a>
+            </nav>
+            <div class="mt-auto shrink-0">
+                </div>
+        </div>
+
+        <main id="main-content" class="ml-64 p-8 w-full">
+            <div class="print:hidden">
+                <h1 class="text-3xl font-bold text-gray-800 mb-6 flex items-center"><i data-lucide="tags" class="w-8 h-8 mr-3 text-blue-600"></i>Dynamic LIMS Label Printing</h1>
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <div class="lg:col-span-4 print:hidden">
+                        <div class="card p-6 space-y-6 relative">
+                            <div id="loading-overlay" class="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center rounded-lg"><i data-lucide="loader-2" class="w-10 h-10 animate-spin text-blue-600"></i></div>
+                            
+                            <fieldset><legend class="text-lg font-semibold text-gray-800 mb-3 border-b pb-2">1. Data Selection & Filter</legend>
+                                <div><label for="item-type" class="text-sm font-medium block mb-1">Select Item Type (Table/View)</label><select id="item-type" class="block w-full p-2 border-gray-300 rounded-md shadow-sm"></select></div>
+
+                                <div class="mt-4"><label for="filter-experiment-id" class="text-sm font-medium block mb-1 flex items-center"><i data-lucide="flask-round" class="w-4 h-4 mr-1 text-green-600"></i>Filter by Experiment ID</label>
+                                    <input type="text" id="filter-experiment-id" placeholder="e.g. Exp_eDNA_001" class="block w-full p-2 border-gray-300 rounded-md shadow-sm text-sm" onchange="handleItemTypeChange()">
+                                    <p class="text-xs text-gray-500 mt-1">Clearing this field reloads all data.</p>
+                                </div>
+                            </fieldset>
+                            
+                            <div id="field-selection-panel" class="hidden space-y-4 pt-4 border-t">
+                                <fieldset><legend class="text-lg font-semibold text-gray-800 mb-3 border-b pb-2">2. Data Fields to Include</legend>
+                                    <label for="code-data-field" class="text-sm font-medium block mb-1">Data Field for Barcode/QR</label>
+                                    <select id="code-data-field" class="block w-full p-2 border-gray-300 rounded-md shadow-sm"></select>
+                                    <p class="text-xs text-gray-500 mt-1">Select the unique identifier to encode.</p>
+                                    
+                                    <label for="extra-info-option-search" class="text-sm font-medium mt-4 block mb-1">Extra Info Fields (Text on Label)</label>
+                                    <input type="text" id="extra-info-option-search" placeholder="Search info fields..." class="block w-full p-2 border-gray-300 rounded-md shadow-sm text-sm">
+                                    <div id="extra-info-options" class="mt-2 space-y-1 max-h-40 overflow-y-auto p-2 border rounded-md bg-gray-50 text-sm"></div>
+                                </fieldset>
+                            </div>
+                            
+                            <div id="item-selection-panel" class="hidden pt-4 border-t">
+                                <fieldset><legend class="text-lg font-semibold text-gray-800 mb-3 border-b pb-2">3. Select Items to Print</legend>
+                                    <div>
+                                        <input type="text" id="item-search" placeholder="Search IDs or names in list..." class="block w-full p-2 border-gray-300 rounded-md shadow-sm mb-2">
+                                        <div class="flex justify-between items-center mb-1"><label class="text-sm font-medium text-gray-700">Available Items (<span id="item-count">0</span>)</label>
+                                            <div><button id="select-all-btn" class="text-xs text-blue-600 hover:underline">All</button> | <button id="deselect-all-btn" class="text-xs text-blue-600 hover:underline">None</button></div>
+                                        </div>
+                                        <select id="items-to-print" multiple class="block w-full h-48 p-2 border-gray-300 rounded-md shadow-sm bg-gray-50"></select>
+                                    </div>
+                                </fieldset>
+                            </div>
+                            
+                            <fieldset class="pt-4 border-t"><legend class="text-lg font-semibold text-gray-800 mb-3 border-b pb-2">4. Label Configuration</legend>
+                                <div class="space-y-4">
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div><label for="print-type" class="text-sm font-medium">Print Type</label><select id="print-type" class="mt-1 block w-full p-2 text-sm border-gray-300 rounded-md">
+                                                <option value="with-code">With Code (Barcode/QR)</option><option value="ticket-only">Ticket Only</option>
+                                            </select>
+                                        </div>
+                                        <div><label for="code-type" class="text-sm font-medium">Code Type</label><select id="code-type" class="mt-1 block w-full p-2 text-sm border-gray-300 rounded-md">
+                                                <option value="barcode">Barcode</option><option value="qrcode">QR Code</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center pt-2">
+                                         <input type="checkbox" id="qr-embed-data" class="h-4 w-4 rounded mr-2"><label for="qr-embed-data" class="text-sm font-medium">Embed Full Data in QR Code (JSON)</label>
+                                    </div>
+                                    <div><label for="label-font-size" class="text-sm font-medium block">Text Font Size (px)</label><input type="number" id="label-font-size" value="10" min="4" max="20" class="mt-1 block w-full p-2 text-sm border-gray-300 rounded-md"></div>
+                                </div>
+                            </fieldset>
+
+                            <fieldset class="pt-4 border-t"><legend class="text-lg font-semibold text-gray-800 mb-3 border-b pb-2">5. Layout & Dimensions (mm)</legend>
+                                <div class="space-y-4">
+                                    <div><label for="label-size" class="text-sm font-medium">Label Size Preset</label><select id="label-size" class="mt-1 block w-full p-2 text-sm border-gray-300 rounded-md"></select></div>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div><label for="label-width" class="text-xs font-medium">Label Width (mm)</label><input type="number" id="label-width" value="66" min="1" step="0.1" class="mt-1 block w-full p-2 text-sm border-gray-300 rounded-md"></div>
+                                        <div><label for="label-height" class="text-xs font-medium">Label Height (mm)</label><input type="number" id="label-height" value="33.8" min="1" step="0.1" class="mt-1 block w-full p-2 text-sm border-gray-300 rounded-md"></div>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-4">
+                                        <div><label for="labels-per-row" class="text-xs font-medium">Cols on Sheet</label><input type="number" id="labels-per-row" value="3" min="1" class="mt-1 block w-full p-2 text-sm border-gray-300 rounded-md"></div>
+                                        <div><label for="label-gap-horizontal" class="text-xs font-medium">H. Gap (mm)</label><input type="number" id="label-gap-horizontal" value="0" min="0" step="0.1" class="mt-1 block w-full p-2 text-sm border-gray-300 rounded-md"></div>
+                                        <div><label for="label-gap-vertical" class="text-xs font-medium">V. Gap (mm)</label><input type="number" id="label-gap-vertical" value="0" min="0" step="0.1" class="mt-1 block w-full p-2 text-sm border-gray-300 rounded-md"></div>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-4">
+                                        <div><label for="start-row" class="text-xs font-medium">Start Row</label><input type="number" id="start-row" value="1" min="1" class="mt-1 block w-full p-2 text-sm border-gray-300 rounded-md"></div>
+                                        <div><label for="start-col" class="text-xs font-medium">Start Col</label><input type="number" id="start-col" value="1" min="1" class="mt-1 block w-full p-2 text-sm border-gray-300 rounded-md"></div>
+                                    </div>
+                                    <div class="grid grid-cols-4 gap-2 text-center text-xs pt-2 border-t">
+                                        <div><label for="page-margin-top" class="font-medium">Top M. (mm)</label><input type="number" id="page-margin-top" value="11.8" min="0" step="0.1" class="mt-1 block w-full p-2 text-sm border-gray-300 rounded-md text-center"></div>
+                                        <div><label for="page-margin-bottom" class="font-medium">Bottom M.</label><input type="number" id="page-margin-bottom" value="11.8" min="0" step="0.1" class="mt-1 block w-full p-2 text-sm border-gray-300 rounded-md text-center"></div>
+                                        <div><label for="page-margin-left" class="font-medium">Left M.</label><input type="number" id="page-margin-left" value="7.2" min="0" step="0.1" class="mt-1 block w-full p-2 text-sm border-gray-300 rounded-md text-center"></div>
+                                        <div><label for="page-margin-right" class="font-medium">Right M.</label><input type="number" id="page-margin-right" value="7.2" min="0" step="0.1" class="mt-1 block w-full p-2 text-sm border-gray-300 rounded-md text-center"></div>
+                                    </div>
+                                    <div class="flex items-center pt-2">
+                                         <input type="checkbox" id="print-label-border" class="h-4 w-4 rounded mr-2"><label for="print-label-border" class="text-sm font-medium">Print visible label borders</label>
+                                    </div>
+                                </div>
+                            </fieldset>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-8">
+                        <div class="flex justify-between items-center mb-4 print:hidden">
+                            <h2 class="text-xl font-bold text-gray-700 flex items-center"><i data-lucide="eye" class="w-5 h-5 mr-2"></i>Label Preview</h2>
+                            <div class="flex gap-2">
+                                <button id="generate-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center" disabled><i data-lucide="refresh-cw" class="w-5 h-5 mr-2"></i>Generate</button>
+                                <button id="csv-btn" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg flex items-center" disabled><i data-lucide="file-down" class="w-5 h-5 mr-2"></i>Export CSV</button>
+                                <button id="print-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center" disabled><i data-lucide="printer" class="w-5 h-5 mr-2"></i>Print</button>
+                            </div>
+                        </div>
+                        <div class="card p-2">
+                            <div id="print-area">
+                                <div class="w-full flex items-center justify-center text-gray-500 h-48 col-span-full"><p>Configure and generate labels to see a preview</p></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <div id="print-container" class="hidden"></div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+        initializePrintingPage();
+        handleLabelSizeChange();
+    });
+
+    const API_BASE_URL = '/api'; // Use /mylims/api prefix
+    let masterDataCache = {
+        itemData: {}, 
+        itemSchema: {}, 
+        currentItemSet: null 
+    };
+    let currentFilteredItems = []; 
+    let currentLoadingTable = null; // To prevent multiple simultaneous loads
+
+    const LABEL_SPECS = {
+        'custom':       {},
+        'herma-4389':   { w: 66, h: 33.8, cols: 3, p: '2px', f: '9px', codeSize: 30, marginTop: 11.8, marginLeft: 7.2, gapH: 0, gapV: 0 },
+        'herma-9533':   { w: 99.1, h: 42.3, cols: 2, p: '4px', f: '10px',codeSize: 50, marginTop: 11.2, marginLeft: 5.25,gapH: 0, gapV: 0 },
+        'topstick-8791':{ w: 22, h: 12, cols: 8, p: '1px', f: '6px', codeSize: 20, marginTop: 15, marginLeft: 9, gapH: 4, gapV: 2 },
+        'herma-4385':   { w: 10, h: 10, cols: 17,p: '0px', f: '4px', codeSize: 8,  isRound: true, marginTop: 13, marginLeft: 10, gapH: 2.5, gapV: 2.5 },
+        'micro':        { w: 25, h: 12, cols: 7, p: '2px', f: '8px', codeSize: 20, marginTop: 15.5, marginLeft: 10, gapH: 2, gapV: 2.5 },
+    };
+
+    const ITEM_TYPE_CONFIGS = {
+        // [schema, table, idField, PKs] - PKs are used to create a unique ID for the select list
+        'projects': { schema: 'lims', table: 'projects', idField: 'project_id', pkFields: ['project_id'], displayField: 'title', hasExperimentLink: false},
+        'storage': { schema: 'lab', table: 'storage', idField: 'storage_id', pkFields: ['storage_id'], displayField: 'storage_id', hasExperimentLink: false},
+        'reagents': { schema: 'lims', table: 'reagents', idField: 'reagent_id', pkFields: ['reagent_id'], displayField: 'reagent_complete_name', hasExperimentLink: false},
+        'equipment': { schema: 'lims', table: 'equipment', idField: 'equipment_id', pkFields: ['equipment_id'], displayField: 'equipment_name', hasExperimentLink: false},
+        'sop': { schema: 'lims', table: 'sop', idField: 'sop_id', pkFields: ['sop_id'], displayField: 'title', hasExperimentLink: false},
+        'customers': { schema: 'lims', table: 'customers', idField: 'customer_id', pkFields: ['customer_id'], displayField: 'customer_name', hasExperimentLink: false},
+        'orders': { schema: 'lims', table: 'orders', idField: 'fi_order_nr', pkFields: ['fi_order_nr'], displayField: 'fi_order_nr', hasExperimentLink: false},
+        'cruises': { schema: 'lims', table: 'cruises', idField: 'cruise_id', pkFields: ['cruise_id'], displayField: 'cruise_id', hasExperimentLink: false},
+        'permits': { schema: 'lims', table: 'permits', idField: 'permit_id', pkFields: ['permit_id'], displayField: 'permit_number', hasExperimentLink: false},
+        'personal': { schema: 'lims', table: 'personal', idField: 'person_id', pkFields: ['person_id'], displayField: 'full_name', hasExperimentLink: false},
+        'category': { schema: 'reference', table: 'category', idField: 'category_id', pkFields: ['category_id'], displayField: 'category_id', hasExperimentLink: false},
+        'status': { schema: 'reference', table: 'status', idField: 'status_id', pkFields: ['status_id'], displayField: 'status_id', hasExperimentLink: false},
+        'room': { schema: 'reference', table: 'room', idField: 'room_id', pkFields: ['room_id'], displayField: 'room_id', hasExperimentLink: false},
+        'vessel': { schema: 'reference', table: 'vessel', idField: 'vessel_id', pkFields: ['vessel_id'], displayField: 'vessel_name', hasExperimentLink: false},
+        'region': { schema: 'reference', table: 'region', idField: 'region_id', pkFields: ['region_id'], displayField: 'region_abrv', hasExperimentLink: false},
+        'ecosystem': { schema: 'reference', table: 'ecosystem', idField: 'ecosystem_id', pkFields: ['ecosystem_id'], displayField: 'ecosystem_abrv', hasExperimentLink: false},
+        'taxon': { schema: 'reference', table: 'taxon', idField: 'taxon_id', pkFields: ['taxon_id'], displayField: 'en_name', hasExperimentLink: false},
+        'gene': { schema: 'reference', table: 'gene', idField: 'gene_id', pkFields: ['gene_id'], displayField: 'gene_id', hasExperimentLink: false},
+        
+        // Lab Samples - Link via root_samples.experiment_id
+        'root_samples': { schema: 'lab', table: 'root_samples', idField: 'sample_id', pkFields: ['sample_id', 'sample_creation_date'], displayField: 'external_name', hasExperimentLink: true},
+        'fish': { schema: 'lab', table: 'fish', idField: 'sample_id', pkFields: ['sample_id', 'creation_date'], displayField: 'species_id', hasExperimentLink: false, linkToRoot: true},
+        'tissue': { schema: 'lab', table: 'tissue', idField: 'sample_id', pkFields: ['sample_id', 'creation_date'], displayField: 'tissue_type', hasExperimentLink: false, linkToRoot: true},
+        'water': { schema: 'lab', table: 'water', idField: 'sample_id', pkFields: ['sample_id', 'creation_date'], displayField: 'volume_L', hasExperimentLink: false, linkToRoot: true},
+        'sediments': { schema: 'lab', table: 'sediments', idField: 'sample_id', pkFields: ['sample_id', 'creation_date'], displayField: 'volume', hasExperimentLink: false, linkToRoot: true},
+        'otoliths': { schema: 'lab', table: 'otoliths', idField: 'sample_id', pkFields: ['sample_id', 'reader_person_id', 'side', 'creation_date'], displayField: 'sample_id', hasExperimentLink: false, linkToRoot: true},
+        
+        // Lab Processes & Products - Link directly via experiment_id
+        'sampling': { schema: 'lab', table: 'sampling', idField: 'sampling_id', pkFields: ['sampling_id', 'sampling_date'], displayField: 'location_name', hasExperimentLink: true},
+        'experiments': { schema: 'lab', table: 'experiments', idField: 'experiment_id', pkFields: ['experiment_id', 'experiment_date'], displayField: 'experiment_title', hasExperimentLink: true},
+        'dissections': { schema: 'lab', table: 'dissections', idField: 'dissection_id', pkFields: ['dissection_id', 'creation_date'], displayField: 'sample_id', hasExperimentLink: true},
+        'dna': { schema: 'lab', table: 'dna', idField: 'sample_id', pkFields: ['sample_id', 'creation_date'], displayField: 'concentration_ng_ul', hasExperimentLink: true, linkToRoot: true},
+        'rna': { schema: 'lab', table: 'rna', idField: 'sample_id', pkFields: ['sample_id', 'creation_date'], displayField: 'concentration_ng_ul', hasExperimentLink: true, linkToRoot: true},
+        'qubit': { schema: 'lab', table: 'qubit', idField: 'qubit_id', pkFields: ['qubit_id', 'creation_date'], displayField: 'qubit_tube_conc', hasExperimentLink: true},
+        'nanodrop': { schema: 'lab', table: 'nanodrop', idField: 'nanodrop_id', pkFields: ['nanodrop_id', 'creation_date'], displayField: 'nanodrop_concentration', hasExperimentLink: true},
+        'tapestation': { schema: 'lab', table: 'tapestation', idField: 'tapestation_id', pkFields: ['tapestation_id', 'creation_date'], displayField: 'position', hasExperimentLink: true},
+        'pcr': { schema: 'lab', table: 'pcr', idField: 'pcr_id', pkFields: ['pcr_id', 'creation_date'], displayField: 'primer_id', hasExperimentLink: true},
+        'qpcr': { schema: 'lab', table: 'qpcr', idField: 'qpcr_id', pkFields: ['qpcr_id', 'creation_date'], displayField: 'primer_id', hasExperimentLink: true},
+        'gelelectrophoresis': { schema: 'lab', table: 'gelelectrophoresis', idField: 'gelelectrophoresis_id', pkFields: ['gelelectrophoresis_id', 'creation_date'], displayField: 'position', hasExperimentLink: true},
+        'library': { schema: 'lab', table: 'library', idField: 'library_id', pkFields: ['library_id', 'sample_id', 'creation_date'], displayField: 'library_name', hasExperimentLink: true},
+        'sequencing_run': { schema: 'lab', table: 'sequencing_run', idField: 'sequencing_run_id', pkFields: ['sequencing_run_id', 'creation_date'], displayField: 'sequencer', hasExperimentLink: true},
+        'analysis_runs': { schema: 'bioinformatics', table: 'analysis_runs', idField: 'run_id', pkFields: ['run_id', 'creation_date'], displayField: 'pipeline_id', hasExperimentLink: true},
+        'datasets': { schema: 'lab', table: 'datasets', idField: 'dataset_id', pkFields: ['dataset_id', 'reception_date'], displayField: 'storage_path', hasExperimentLink: true}
+    };
+
+    function getCompositeId(itemData, itemConfig) {
+        const pkFields = itemConfig.pkFields || [itemConfig.idField];
+        return pkFields.map(key => {
+            let value = itemData[key];
+            if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}(T.*)?Z?$/)) {
+                value = formatDateForUrl(value); 
+            }
+            return value;
+        }).join('_');
+    }
+
+    /* --- Core API & Utility Functions (Simplified for Embedding) --- */
+
+    async function apiFetch(endpoint, options = {}) {
+        const url = `${API_BASE_URL}/${endpoint}`;
+        document.getElementById('loading-overlay').style.display = 'flex';
+        try {
+            const response = await fetch(url, options);
+            if (!response.ok) { throw new Error(`Server error: ${response.status}`); }
+            return response.json();
+        } catch (error) {
+            console.error(`Fetch error for ${url}:`, error);
+            alert(`Failed to load data: ${error.message}`);
+            return null;
+        } finally {
+            document.getElementById('loading-overlay').style.display = 'none';
+        }
+    }
+
+    async function getTableData(schema, table, filters = {}) {
+        const cacheKey = `${schema}.${table}_${JSON.stringify(filters)}`;
+        // Only use cache if no filters are applied, or if the exact filtered dataset is cached
+        if (Object.keys(filters).length === 0 && masterDataCache.itemData[cacheKey] && masterDataCache.itemSchema[cacheKey]) {
+            return { data: masterDataCache.itemData[cacheKey], schema: masterDataCache.itemSchema[cacheKey] };
+        }
+        
+        currentLoadingTable = `${schema}.${table}`;
+        
+        // Build the query string for data fetching
+        const queryParams = new URLSearchParams();
+        Object.keys(filters).forEach(key => queryParams.append(key, filters[key]));
+        const endpoint = `table/${schema}/${table}?${queryParams.toString()}`;
+
+        const [data, schemaData] = await Promise.all([
+            apiFetch(endpoint),
+            masterDataCache.itemSchema[`${schema}.${table}`] || apiFetch(`table/${schema}/${table}/schema`)
+        ]);
+        
+        currentLoadingTable = null;
+
+        if (data && schemaData) {
+            // Cache schema if it wasn't cached before
+            if (!masterDataCache.itemSchema[`${schema}.${table}`]) {
+                masterDataCache.itemSchema[`${schema}.${table}`] = schemaData;
+            }
+            // Cache data if no complex filters were applied (simple project_id filter is fine)
+            if (Object.keys(filters).length <= 2) { 
+                masterDataCache.itemData[cacheKey] = data;
+            }
+            return { data, schema: schemaData };
+        }
+        return { data: [], schema: [] };
+    }
+    
+    function filterSchemaFields(schema, pkFields) {
+        const excluded = new Set([
+            'attachment', 'password_hash', 'search_vector', 'geom', 'geom_4326',
+            'created_at', 'created_by', 'last_modified_at', 'last_modified_by',
+            'notes', 'description', 'title', 'tags', 'query_text', 'original_data', 'new_data'
+        ]);
+
+        return schema.filter(col => 
+            !excluded.has(col.column_name) && 
+            !pkFields.includes(col.column_name)
+        );
+    }
+    
+    function formatColumnName(columnName) {
+        return columnName.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+    }
+
+    function formatDateForUrl(dateString) {
+        if (!dateString) return '';
+        try {
+            const date = new Date(dateString);
+            return isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0];
+        } catch (e) { return ''; }
+    }
+
+
+    /* --- UI Handlers --- */
+
+    function initializePrintingPage() {
+        // Populate Item Type Dropdown
+        const itemTypeSelect = document.getElementById('item-type');
+        itemTypeSelect.innerHTML = '<option value="">-- Choose a type --</option>';
+        Object.keys(ITEM_TYPE_CONFIGS).forEach(key => {
+            const config = ITEM_TYPE_CONFIGS[key];
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = `${formatColumnName(key)} (${config.schema}.${config.table})`;
+            itemTypeSelect.appendChild(opt);
+        });
+
+        // Populate Label Size Presets
+        const labelSizeSelect = document.getElementById('label-size');
+        labelSizeSelect.innerHTML = '';
+        Object.keys(LABEL_SPECS).forEach(key => {
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = key.charAt(0).toUpperCase() + key.slice(1);
+            if (key !== 'custom') {
+                const spec = LABEL_SPECS[key];
+                opt.textContent += ` (${spec.w}x${spec.h}mm)`;
+            }
+            labelSizeSelect.appendChild(opt);
+        });
+        labelSizeSelect.value = 'herma-4389';
+
+
+        // Attach listeners
+        itemTypeSelect.addEventListener('change', handleItemTypeChange);
+        document.getElementById('generate-btn').addEventListener('click', generateLabels);
+        document.getElementById('print-btn').addEventListener('click', triggerPrint);
+        document.getElementById('csv-btn').addEventListener('click', generateHermaCsv);
+        document.getElementById('item-search').addEventListener('input', filterItemList);
+        document.getElementById('select-all-btn').addEventListener('click', () => toggleAllSelection(true));
+        document.getElementById('deselect-all-btn').addEventListener('click', () => toggleAllSelection(false));
+        document.getElementById('items-to-print').addEventListener('change', checkControlsState);
+        document.getElementById('extra-info-option-search').addEventListener('input', filterExtraInfoCheckboxes);
+        document.getElementById('label-size').addEventListener('change', handleLabelSizeChange);
+
+        // General Configuration change triggers label regeneration
+        ['labels-per-row', 'start-row', 'start-col', 'print-type', 'code-type', 'qr-embed-data', 'print-label-border', 
+         'label-width', 'label-height', 'label-gap-horizontal', 'label-gap-vertical', 'page-margin-top', 
+         'page-margin-bottom', 'page-margin-left', 'page-margin-right', 'label-font-size', 'code-data-field'].forEach(id => {
+            document.getElementById(id).addEventListener('change', generateLabels);
+        });
+        
+        checkControlsState();
+    }
+
+    async function handleItemTypeChange() {
+        const type = document.getElementById('item-type').value;
+        const config = ITEM_TYPE_CONFIGS[type];
+        
+        // Hide/Clear panels
+        document.getElementById('item-selection-panel').classList.add('hidden');
+        document.getElementById('field-selection-panel').classList.add('hidden');
+        document.getElementById('items-to-print').innerHTML = '<option disabled>Loading data...</option>';
+        document.getElementById('code-data-field').innerHTML = '';
+        
+        // Disable experiment filter if the selected item type is not linkable
+        const filterExperimentInput = document.getElementById('filter-experiment-id');
+        filterExperimentInput.disabled = !config || !config.hasExperimentLink;
+        if (!config || !config.hasExperimentLink) filterExperimentInput.value = '';
+        
+        if (!config) {
+            masterDataCache.currentItemSet = null;
+            checkControlsState();
+            return;
+        }
+
+        // Determine filters based on experiment ID input
+        const experimentId = filterExperimentInput.value.trim();
+        const filters = {};
+        if (experimentId && config.hasExperimentLink) {
+            // Use filter_experiment_id for tables with experiment_id column
+            if (config.schema === 'lab' && ['experiments', 'sampling', 'dissections', 'nanodrop', 'qubit', 'tapestation', 'gelelectrophoresis', 'pcr', 'qpcr', 'library', 'sequencing_run', 'datasets'].includes(config.table)) {
+                filters.filter_experiment_id = experimentId;
+            } 
+            // root_samples link via 'experiment_id'
+            else if (config.schema === 'lab' && config.table === 'root_samples') {
+                 filters.filter_experiment_id = experimentId;
+            }
+            // Other tables link via sample_id, which needs to be looked up via root_samples 
+            // The backend /table endpoint is smart enough to handle most transitive filters now if the column is present or view links are available.
+            // For simplicity in the frontend, we rely on the backend's (app_test.py) logic to handle transitive filtering.
+            // However, the backend code only supports direct filters (e.g., filter_sample_id for fish, tissue, etc.) or specific view/nested filters.
+            // We'll rely on the existing experiment_id filter in the backend (which is only implemented for tables *with* experiment_id).
+        }
+
+        // Load data and schema
+        const cacheKeyNoFilter = `${config.schema}.${config.table}`;
+        const schema = masterDataCache.itemSchema[cacheKeyNoFilter] || await apiFetch(`table/${config.schema}/${config.table}/schema`);
+        if (schema) masterDataCache.itemSchema[cacheKeyNoFilter] = schema;
+
+        // Fetch data with applied filters
+        const { data } = await getTableData(config.schema, config.table, filters);
+
+        if (!data || data.length === 0 || !schema) {
+            alert(`No data found for ${config.schema}.${config.table}${experimentId ? ` filtered by experiment ID "${experimentId}"` : ''}.`);
+            masterDataCache.currentItemSet = null;
+            checkControlsState();
+            return;
+        }
+
+        masterDataCache.currentItemSet = { type, data, schema };
+
+        // 1. Populate Code Data Field (PKs + primary unique ID fields)
+        const codeDataFieldSelect = document.getElementById('code-data-field');
+        const uniqueIDFieldOptions = filterSchemaFields(schema, []);
+        
+        const codeFieldOptions = [];
+        // Always include PKs first
+        config.pkFields.forEach(pk => {
+             codeFieldOptions.push({ key: pk, label: `${formatColumnName(pk)} (PK)` });
+        });
+        // Include other potential display/unique ID fields
+        uniqueIDFieldOptions.forEach(col => {
+             if (!config.pkFields.includes(col.column_name)) {
+                codeFieldOptions.push({ key: col.column_name, label: formatColumnName(col.column_name) });
+            }
+        });
+        
+        codeDataFieldSelect.innerHTML = codeFieldOptions.map(opt => 
+            `<option value="${opt.key}" ${opt.key === config.idField ? 'selected' : ''}>${opt.label}</option>`
+        ).join('');
+        
+        // 2. Populate Extra Info Checkboxes
+        const extraInfoContainer = document.getElementById('extra-info-options');
+        extraInfoContainer.innerHTML = '';
+
+        const extraInfoFields = filterSchemaFields(schema, config.pkFields).filter(col => 
+            col.column_name !== config.idField && col.column_name !== config.displayField
+        );
+        
+        extraInfoFields.forEach(col => {
+            const key = col.column_name;
+            const label = formatColumnName(key);
+            const isDefaultChecked = key.endsWith('date') || key.endsWith('_id') || key.endsWith('concentration') || key.endsWith('volume') || key.endsWith('name');
+
+            const checkboxDiv = document.createElement('label');
+            checkboxDiv.className = 'flex items-center p-1 hover:bg-gray-200 rounded-md';
+            checkboxDiv.innerHTML = `<input type="checkbox" data-key="${key}" class="mr-2 h-4 w-4 rounded" ${isDefaultChecked ? 'checked' : ''}><span class="capitalize">${label}</span>`;
+            extraInfoContainer.appendChild(checkboxDiv);
+        });
+        
+        // 3. Populate Selectable Items List
+        filterItemList();
+
+        // Show panels
+        document.getElementById('field-selection-panel').classList.remove('hidden');
+        document.getElementById('item-selection-panel').classList.remove('hidden');
+        
+        // Final check and generate initial preview
+        checkControlsState();
+        generateLabels();
+    }
+    
+    function handleLabelSizeChange() {
+        const sizeKey = document.getElementById('label-size').value;
+        const spec = LABEL_SPECS[sizeKey];
+        
+        const widthInput = document.getElementById('label-width');
+        const heightInput = document.getElementById('label-height');
+        const labelsPerRowInput = document.getElementById('labels-per-row');
+        const gapHInput = document.getElementById('label-gap-horizontal');
+        const gapVInput = document.getElementById('label-gap-vertical');
+        const marginTopInput = document.getElementById('page-margin-top');
+        const marginBottomInput = document.getElementById('page-margin-bottom');
+        const marginLeftInput = document.getElementById('page-margin-left');
+        const marginRightInput = document.getElementById('page-margin-right');
+
+        if (sizeKey === 'custom' || !spec) {
+             widthInput.disabled = false;
+             heightInput.disabled = false;
+             return;
+        }
+
+        // Apply preset values and disable inputs
+        widthInput.value = spec.w;
+        heightInput.value = spec.h;
+        labelsPerRowInput.value = spec.cols || 3;
+        gapHInput.value = spec.gapH || 0;
+        gapVInput.value = spec.gapV || 0;
+        marginTopInput.value = spec.marginTop || 10;
+        marginBottomInput.value = spec.marginTop || 10;
+        marginLeftInput.value = spec.marginLeft || 10;
+        marginRightInput.value = spec.marginLeft || 10;
+        
+        widthInput.disabled = true;
+        heightInput.disabled = true;
+        
+        generateLabels(); 
+    }
+    
+    function filterExtraInfoCheckboxes() {
+        const searchTerm = document.getElementById('extra-info-option-search').value.toLowerCase();
+        const container = document.getElementById('extra-info-options');
+        
+        // Filter the live DOM elements
+        Array.from(container.children).forEach(label => {
+            const input = label.querySelector('input');
+            const key = input.dataset.key;
+            const labelText = label.textContent.toLowerCase();
+            if (labelText.includes(searchTerm) || key.includes(searchTerm)) {
+                label.style.display = 'flex';
+            } else {
+                label.style.display = 'none';
+            }
+        });
+    }
+
+    function filterItemList() {
+        const searchInput = document.getElementById('item-search');
+        if (!masterDataCache.currentItemSet || searchInput.disabled) return;
+        
+        const searchTerm = searchInput.value.toLowerCase();
+        const { data, type: currentItemType } = masterDataCache.currentItemSet;
+        const itemConfig = ITEM_TYPE_CONFIGS[currentItemType];
+
+        currentFilteredItems = data.filter(item => {
+            const mainId = getCompositeId(item, itemConfig);
+            return (
+                String(mainId || '').toLowerCase().includes(searchTerm) ||
+                String(item[itemConfig.displayField] || '').toLowerCase().includes(searchTerm) ||
+                String(item.notes || '').toLowerCase().includes(searchTerm) ||
+                String(item.description || '').toLowerCase().includes(searchTerm) ||
+                String(item.title || '').toLowerCase().includes(searchTerm)
+            );
+        });
+        
+        populateItemList(currentFilteredItems);
+    }
+
+    function populateItemList(data) {
+        const select = document.getElementById('items-to-print');
+        const countDisplay = document.getElementById('item-count');
+        const { type: currentItemType } = masterDataCache.currentItemSet;
+        const itemConfig = ITEM_TYPE_CONFIGS[currentItemType];
+        
+        select.innerHTML = data.map(item => {
+            const mainId = getCompositeId(item, itemConfig);
+            let displayText = mainId;
+            // Display main ID and secondary display field, if available and different
+            if (item[itemConfig.displayField] && String(item[itemConfig.displayField]).toLowerCase() !== String(item[itemConfig.idField]).toLowerCase()) {
+                displayText += ` - ${item[itemConfig.displayField]}`;
+            }
+            return `<option value="${mainId}">${displayText}</option>`;
+        }).join('') || '<option disabled>No items found</option>';
+
+        countDisplay.textContent = data.length;
+    }
+
+    function toggleAllSelection(selectAll) {
+        const options = document.getElementById('items-to-print').options;
+        for (let i = 0; i < options.length; i++) { options[i].selected = selectAll; }
+        checkControlsState();
+        generateLabels(); 
+    }
+
+    function checkControlsState() {
+        const selectedCount = document.getElementById('items-to-print').selectedOptions.length;
+        const dataLoaded = masterDataCache.currentItemSet !== null;
+
+        const printAreaHasLabels = document.getElementById('print-area').querySelector('.label-ticket:not(.blank)') !== null;
+        
+        // Enable generate/csv button only if items are loaded and selected
+        document.getElementById('generate-btn').disabled = !dataLoaded || selectedCount === 0;
+        document.getElementById('csv-btn').disabled = !dataLoaded || selectedCount === 0;
+        
+        // Enable print button only if labels have been generated
+        document.getElementById('print-btn').disabled = !printAreaHasLabels;
+    }
+    
+    /* --- Label Generation --- */
+
+    async function generateLabels() {
+        if (!masterDataCache.currentItemSet) return;
+        
+        const printArea = document.getElementById('print-area');
+        printArea.innerHTML = '';
+        
+        const selectedOptions = Array.from(document.getElementById('items-to-print').selectedOptions);
+        if (selectedOptions.length === 0) {
+            printArea.innerHTML = '<div class="w-full flex items-center justify-center text-gray-500 h-48 col-span-full"><p>No items selected for printing.</p></div>';
+            checkControlsState();
+            return;
+        }
+
+        const { data: allData, type: itemType } = masterDataCache.currentItemSet;
+        const itemConfig = ITEM_TYPE_CONFIGS[itemType];
+
+        // Get currently selected extra fields for text content
+        const selectedExtraInfoKeys = Array.from(document.querySelectorAll('#extra-info-options input[type="checkbox"]:checked')).map(checkbox => checkbox.dataset.key);
+
+        // Map selected options back to full data records
+        const selectedItems = selectedOptions.map(opt => {
+            return allData.find(item => getCompositeId(item, itemConfig) === opt.value);
+        }).filter(Boolean);
+        
+        // Apply layout settings and blank labels
+        applyLayoutSettings();
+        const startRow = parseInt(document.getElementById('start-row').value) || 1;
+        const startCol = parseInt(document.getElementById('start-col').value) || 1;
+        const labelsPerRow = parseInt(document.getElementById('labels-per-row').value) || 3;
+        const blankLabels = Math.max(0, (startRow - 1) * labelsPerRow + (startCol - 1) - 1); // -1 because start_row/col are 1-based, not 0-based
+
+        printArea.style.setProperty('--label-cols', labelsPerRow);
+        for (let i = 0; i < blankLabels; i++) {
+            const blankTicket = document.createElement('div');
+            blankTicket.className = 'label-ticket blank';
+            printArea.appendChild(blankTicket);
+        }
+        
+        const codeType = document.getElementById('code-type').value;
+        const codeDataField = document.getElementById('code-data-field').value;
+        const printType = document.getElementById('print-type').value;
+        const qrShouldEmbed = document.getElementById('qr-embed-data').checked;
+        const printBorder = document.getElementById('print-label-border').checked;
+        const fontSize = document.getElementById('label-font-size').value + 'px';
+        const labelWidth = parseFloat(document.getElementById('label-width').value) * 3.779527559; // Convert mm to px (approx 3.78px/mm)
+        
+        printArea.style.setProperty('--label-font-size', fontSize);
+        printArea.style.setProperty('--label-width-px', `${labelWidth}px`);
+        
+
+        // Get QR/Barcode size based on height of the label (in mm)
+        const labelHeightMM = parseFloat(document.getElementById('label-height').value);
+        let codeSize = Math.max(20, Math.min(80, Math.round(labelHeightMM * 0.4 * 3.779527559 * 0.5))); // Code size is relative to available space
+
+        // Generate tickets
+        selectedItems.forEach(itemData => {
+            const ticket = document.createElement('div');
+            ticket.className = 'label-ticket';
+            if (printBorder) ticket.classList.add('print-border');
+            
+            const mainId = itemData[itemConfig.idField];
+            const compositePkValue = getCompositeId(itemData, itemConfig);
+
+            const codeValue = String(itemData[codeDataField] || compositePkValue);
+            
+            // --- Code Generation ---
+            if (printType === 'with-code') {
+                const codeContainer = document.createElement('div');
+                codeContainer.className = 'code-container';
+                
+                if (codeType === 'barcode') {
+                    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    codeContainer.appendChild(svg);
+                    
+                    const format = codeValue.length > 10 ? "CODE128" : "CODE39";
+                    // Barcode height is typically 30-50% of label height
+                    const barcodeHeight = Math.max(10, Math.round(labelHeightMM * 0.4)); 
+                    JsBarcode(svg, codeValue, { 
+                        format: format, 
+                        width: 1.5, 
+                        height: barcodeHeight, 
+                        displayValue: false, 
+                        margin: 2 
+                    });
+                } else { // QR Code
+                    const qrDrawDiv = document.createElement('div');
+                    codeContainer.appendChild(qrDrawDiv);
+
+                    let qrInput;
+                    if (qrShouldEmbed) {
+                         const extraData = selectedExtraInfoKeys.map(k => ({ 
+                             [k]: (k.includes('date') || k.includes('Date') ? formatDateForUrl(itemData[k]) : itemData[k])
+                         }));
+                         qrInput = JSON.stringify({ item: itemType, id: compositePkValue, data: extraData });
+                    } else {
+                        qrInput = codeValue;
+                    }
+                    
+                    new QRCode(qrDrawDiv, { 
+                        text: String(qrInput), 
+                        width: codeSize, 
+                        height: codeSize, 
+                        correctLevel: QRCode.CorrectLevel.M 
+                    });
+                }
+                ticket.appendChild(codeContainer);
+            }
+            
+            // --- Text Content ---
+            const textContainer = document.createElement('div');
+            textContainer.className = 'label-text';
+            let textContent = `<b>${formatColumnName(itemConfig.idField)}: ${mainId}</b>`;
+
+            selectedExtraInfoKeys.forEach(key => {
+                const val = itemData[key];
+                if (val != null && String(val).trim() !== '') {
+                    const formattedKey = formatColumnName(key);
+                    let displayVal = val;
+                    if (key.includes('date') || key.includes('Date')) { displayVal = formatDateForUrl(val); }
+                    else if (typeof val === 'object' && val !== null) { displayVal = JSON.stringify(val); }
+                    else if (String(displayVal).length > 25) { displayVal = String(displayVal).substring(0, 25) + '...'; }
+
+                    textContent += `<span><span class="info-key">${formattedKey}:</span> ${displayVal}</span>`;
+                }
+            });
+            textContainer.innerHTML = textContent;
+            ticket.appendChild(textContainer);
+            
+            printArea.appendChild(ticket);
+        });
+
+        checkControlsState();
+    }
+    
+    function applyLayoutSettings() {
+        // This function sets all CSS variables needed for both screen preview and print media styles
+        const printArea = document.getElementById('print-area');
+        
+        const labelWidth = parseFloat(document.getElementById('label-width').value);
+        const labelHeight = parseFloat(document.getElementById('label-height').value);
+        const gapH = parseFloat(document.getElementById('label-gap-horizontal').value);
+        const gapV = parseFloat(document.getElementById('label-gap-vertical').value);
+        const marginTop = parseFloat(document.getElementById('page-margin-top').value);
+        const marginBottom = parseFloat(document.getElementById('page-margin-bottom').value);
+        const marginLeft = parseFloat(document.getElementById('page-margin-left').value);
+        const marginRight = parseFloat(document.getElementById('page-margin-right').value);
+
+        // Set CSS variables for screen preview
+        printArea.style.setProperty('--label-width', `${labelWidth}mm`);
+        printArea.style.setProperty('--label-height', `${labelHeight}mm`);
+        printArea.style.setProperty('gap', `${gapV}mm ${gapH}mm`);
+
+        // Apply critical print styles
+        document.getElementById('dynamic-print-styles').innerHTML = `
+            @page { 
+                size: A4;
+                margin: ${marginTop}mm ${marginRight}mm ${marginBottom}mm ${marginLeft}mm;
+            }
+            .label-ticket {
+                width: ${labelWidth}mm;
+                min-height: ${labelHeight}mm;
+                height: ${labelHeight}mm;
+                font-size: ${document.getElementById('label-font-size').value}px !important;
+            }
+            .label-text b { font-size: calc(${document.getElementById('label-font-size').value}px + 1px) !important; }
+            #print-area-for-printing {
+                grid-template-columns: repeat(var(--label-cols), ${labelWidth}mm);
+                column-gap: ${gapH}mm;
+                row-gap: ${gapV}mm;
+            }
+        `;
+    }
+    
+    function triggerPrint() {
+        const printContainer = document.getElementById('print-container');
+        printContainer.innerHTML = '';
+        const printAreaForPrinting = document.createElement('div');
+        printAreaForPrinting.id = "print-area-for-printing";
+
+        const previewArea = document.getElementById('print-area');
+        
+        // Transfer dynamic styles (critical for print layout)
+        const dynamicStyles = document.getElementById('dynamic-print-styles').innerHTML;
+        printContainer.innerHTML = `<style>${dynamicStyles}</style>`;
+        
+        // Transfer layout properties (labels per row)
+        printAreaForPrinting.style.setProperty('--label-cols', previewArea.style.getPropertyValue('--label-cols'));
+
+        // Clone tickets to the print area
+        Array.from(previewArea.children).forEach(child => {
+            const clone = child.cloneNode(true);
+            // Ensure codes (SVG/Canvas) are properly redrawn or transferred to the clone for printing
+            // For now, assume cloning works fine for the print preview
+            printAreaForPrinting.appendChild(clone);
+        });
+
+        printContainer.appendChild(printAreaForPrinting);
+        
+        window.print();
+    }
+
+    async function generateHermaCsv() {
+        // ... (CSV generation logic - largely unchanged) ...
+        if (!masterDataCache.currentItemSet) { alert("No data set loaded."); return; }
+
+        const { data: allData, type: itemType, schema } = masterDataCache.currentItemSet;
+        const selectedOptions = Array.from(document.getElementById('items-to-print').selectedOptions);
+        if (selectedOptions.length === 0) { alert("Please select items to export."); return; }
+
+        const itemConfig = ITEM_TYPE_CONFIGS[itemType];
+        const selectedIds = new Set(selectedOptions.map(opt => opt.value));
+        const itemsToExport = allData.filter(item => selectedIds.has(getCompositeId(item, itemConfig)));
+        
+        // Use the fields selected by the user in the Extra Info panel + the Main ID field
+        const mainIdKey = document.getElementById('code-data-field').value;
+        const extraInfoKeysForCsv = Array.from(document.querySelectorAll('#extra-info-options input[type="checkbox"]:checked')).map(checkbox => checkbox.dataset.key);
+        
+        const allKeys = [...new Set([mainIdKey, ...extraInfoKeysForCsv])];
+        const headers = allKeys.map(key => formatColumnName(key));
+        
+        let csvContent = headers.join(';') + '\n';
+
+        itemsToExport.forEach(item => {
+            const row = [];
+            allKeys.forEach(key => {
+                let val = item[key];
+                
+                // Simplified type check from schema data
+                const colSchema = schema.find(col => col.column_name === key);
+
+                if (colSchema && (colSchema.data_type === 'date' || colSchema.data_type.includes('timestamp'))) {
+                    try { val = formatDateForUrl(val); } catch (e) { /* keep original */ }
+                } else if (typeof val === 'object' && val !== null) {
+                    val = JSON.stringify(val);
+                }
+                
+                row.push(escapeCsvField(val));
+            });
+            csvContent += row.join(';') + '\n';
+        });
+
+        // Use \uFEFF for BOM to ensure correct UTF-8 display in Excel
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        const today = new Date().toISOString().slice(0, 10);
+        link.setAttribute("download", `${itemType}_labels_export_${today}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
+    function escapeCsvField(field) {
+        if (field === null || field === undefined) { return ''; }
+        const stringField = String(field);
+        // Use semicolon (;) as delimiter and double quotes (") for escaping
+        if (/[";\n]/.test(stringField)) {
+            return `"${stringField.replace(/"/g, '""')}"`;
+        }
+        return stringField;
+    }
+
+</script>
+</body>
+</html>

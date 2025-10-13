@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resource Booking - TIFI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Base Styles - Professional Blue Palette */
+        :root {
+            --color-primary: #3b82f6; /* Blue-500 */
+            --color-primary-dark: #2563eb; /* Blue-600 */
+            --color-secondary: #10b981; /* Emerald-500 for success/available */
+        }
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; /* Slate-100 */ }
+        .sidebar { 
+            transition: width 0.3s ease; 
+            border-right: 1px solid #e2e8f0; 
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05); /* Subtle shadow for depth */
+        }
+        .sidebar-item { transition: all 0.2s ease; color: #475569; }
+        .sidebar-item.active { background-color: #e0f2fe; color: var(--color-primary-dark); font-weight: 600; border-left: 4px solid var(--color-primary); }
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        .card { 
+            background-color: white; 
+            border-radius: 1rem; /* Slightly larger border-radius */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* More pronounced, modern shadow */
+            border: 1px solid #e2e8f0;
+        }
+
+        /* Status Indicators */
+        .booking-status { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
+        .booking-status.available { background-color: var(--color-secondary); }
+        .booking-status.booked { background-color: #f59e0b; /* Amber for more neutral 'booked' */ }
+        .booking-status.maintenance { background-color: #ef4444; } /* Red for maintenance */
+        
+        /* Loading */
+        .loading-spinner { border: 4px solid rgba(0, 0, 0, 0.1); border-left-color: var(--color-primary); border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Calendar Styling */
+        .calendar-grid { 
+            display: grid; 
+            grid-template-columns: repeat(8, minmax(100px, 1fr)); 
+            gap: 1px; 
+            background-color: #e2e8f0; 
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        .calendar-header-cell, .calendar-time-cell, .calendar-day-cell { 
+            padding: 10px 5px; 
+            background-color: #fff; 
+            text-align: center; 
+            min-height: 40px; 
+        }
+        .calendar-header-cell { 
+            font-weight: 700; 
+            background-color: #f8fafc; 
+            color: #1e293b;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+        }
+        .calendar-time-cell { 
+            font-size: 0.875rem; 
+            color: #64748b; 
+            font-weight: 500;
+            background-color: #fefefe;
+            border-right: 1px solid #e2e8f0;
+        }
+        .calendar-day-cell { 
+            position: relative; 
+            cursor: pointer; 
+            transition: background-color 0.2s; 
+            min-height: 40px;
+        }
+        .calendar-day-cell:hover { background-color: #eff6ff; }
+        
+        /* Booking Entry */
+        .calendar-booking-entry {
+            color: white;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            line-height: 1.4;
+            margin: 2px 1px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            position: relative;
+            z-index: 10;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            transition: transform 0.1s;
+        }
+        .calendar-booking-entry:hover {
+            transform: scale(1.02);
+            z-index: 20;
+        }
+
+        /* Modal Styling */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); }
+        .modal-content { 
+            background-color: white; 
+            margin: 10vh auto; 
+            padding: 30px; 
+            border-radius: 12px; 
+            max-width: 550px; 
+            animation: fadeIn 0.3s;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+        .modal-close { color: #aaa; float: right; font-size: 32px; font-weight: 100; line-height: 1; transition: color 0.2s; }
+        .modal-close:hover, .modal-close:focus { color: #555; text-decoration: none; cursor: pointer; }
+        
+        /* IMPROVED: Custom Filter Style with Checkmark */
+        .selected-filter {
+          background-color: #dbeafe !important; /* Blue-200 */
+          border-left: 3px solid var(--color-primary);
+          padding-left: 5px; 
+        }
+
+        /* Floating Action Button */
+        #fab-new-booking {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            z-index: 50;
+            box-shadow: 0 10px 20px rgba(var(--color-primary-dark), 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="main-app" class="flex min-h-screen">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col z-20">
+            <div class="text-gray-800 text-3xl font-extrabold mb-10 mt-2 flex items-center shrink-0">
+                <i data-lucide="flask-conical" class="inline-block mr-3 text-blue-600 w-7 h-7"></i><span class="text-blue-600">TIFI LIMS</span>
+            </div>
+            <nav class="flex-grow space-y-3">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md "><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (ELN)</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+                <a href="booking.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Booking</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Tables</span></a>
+            </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-3 mb-2 border-t flex items-center text-gray-800"></div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-3 rounded-lg text-left text-red-500 hover:bg-red-50"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+        
+        <div id="main-content" class="ml-64 p-10 flex-grow">
+            <div class="flex justify-between items-start mb-8">
+                <div>
+                    <h1 class="text-4xl font-extrabold text-gray-900 flex items-center">
+                        <i data-lucide="calendar-check" class="w-8 h-8 mr-3 text-blue-600"></i>
+                        Resource Scheduling Hub
+                    </h1>
+                    <p class="mt-2 text-lg text-gray-600">Manage and book lab equipment and rooms efficiently.</p>
+                </div>
+                <button id="fab-new-booking" class="bg-blue-600 text-white p-4 rounded-full hover:bg-blue-700 transition-all font-semibold shadow-xl flex items-center">
+                    <i data-lucide="plus" class="w-6 h-6"></i>
+                    <span class="ml-2 hidden sm:inline">New Booking</span>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                <div class="lg:col-span-1">
+                    <div class="card p-6 h-full sticky top-8">
+                        <h2 class="text-xl font-bold text-gray-800 mb-6 flex items-center"><i data-lucide="filter" class="w-6 h-6 mr-3 text-blue-600"></i>Quick Filters</h2>
+                        
+                        <div class="mb-6 flex space-x-2 p-1 bg-gray-50 rounded-lg">
+                            <button class="flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-colors" data-resource-tab="all" id="tab-all">All</button>
+                            <button class="flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-colors" data-resource-tab="equipment" id="tab-equipment">Equipment</button>
+                            <button class="flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-colors" data-resource-tab="room" id="tab-room">Rooms</button>
+                        </div>
+                        
+                        <div class="mb-6 border-b pb-4">
+                            <h3 class="font-semibold text-lg text-gray-700 mb-3 flex items-center justify-between">
+                                <span><i data-lucide="tool" class="w-5 h-5 mr-2 text-green-600"></i>Resources</span>
+                                <span id="resource-count" class="text-sm font-medium text-blue-600"></span>
+                            </h3>
+                            <div class="mb-2">
+                                <input type="text" id="resource-search" placeholder="Search equipment/rooms..." 
+                                       class="w-full py-2 px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow">
+                            </div>
+                            <div id="resource-filter-list-container" class="space-y-1 text-sm text-gray-700 max-h-60 overflow-y-auto pr-1">
+                                <p class="text-center text-gray-500 p-4"><span class="loading-spinner mr-2"></span>Loading resources...</p>
+                            </div>
+                            <button id="show-all-resources" class="mt-3 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors hover:underline">Show All</button>
+                        </div>
+
+                        <div class="mb-4">
+                            <h3 class="font-semibold text-lg text-gray-700 mb-3 flex items-center justify-between">
+                                <span><i data-lucide="users" class="w-5 h-5 mr-2 text-purple-600"></i>Personnel</span>
+                                <span id="personnel-count" class="text-sm font-medium text-blue-600"></span>
+                            </h3>
+                            <div class="mb-2">
+                                <input type="text" id="person-search" placeholder="Search people..." 
+                                       class="w-full py-2 px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow">
+                            </div>
+                            <div id="person-filter-list-container" class="space-y-1 text-sm text-gray-700 max-h-60 overflow-y-auto pr-1">
+                                <p class="text-center text-gray-500 p-4"><span class="loading-spinner mr-2"></span>Loading personnel...</p>
+                            </div>
+                            <button id="show-all-personnel" class="mt-3 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors hover:underline">Show All</button>
+                        </div>
+                        
+                        <div class="mt-6 pt-4 border-t border-gray-200">
+                            <h3 class="font-semibold text-sm text-gray-700 mb-2">Status Legend</h3>
+                            <div class="flex items-center text-xs text-gray-600 mb-1">
+                                <span class="booking-status available" style="background-color: var(--color-secondary);"></span>Available
+                            </div>
+                            <div class="flex items-center text-xs text-gray-600 mb-1">
+                                <span class="booking-status booked" style="background-color: #f59e0b;"></span>Booked
+                            </div>
+                            <div class="flex items-center text-xs text-gray-600">
+                                <span class="booking-status maintenance" style="background-color: #ef4444;"></span>Maintenance
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="lg:col-span-3">
+                    <div class="card p-8 mb-8">
+                        <div class="flex items-center justify-between mb-6 border-b pb-4">
+                            <h2 class="text-2xl font-bold text-gray-800 flex items-center"><i data-lucide="calendar" class="w-6 h-6 mr-2 text-blue-600"></i>Weekly Schedule</h2>
+                            <div class="flex items-center space-x-1 bg-gray-50 p-1 rounded-lg">
+                                <button id="prev-month-btn" class="p-2 rounded-lg text-gray-500 hover:bg-gray-200 transition-colors" title="Previous Month"><i data-lucide="chevrons-left" class="w-5 h-5"></i></button>
+                                <button id="prev-week-btn" class="p-2 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors" title="Previous Week"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+                                <span id="current-period-display" class="font-bold text-base text-gray-800 self-center min-w-[150px] text-center px-2"></span>
+                                <button id="next-week-btn" class="p-2 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors" title="Next Week"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+                                <button id="next-month-btn" class="p-2 rounded-lg text-gray-500 hover:bg-gray-200 transition-colors" title="Next Month"><i data-lucide="chevrons-right" class="w-5 h-5"></i></button>
+                            </div>
+                        </div>
+                        
+                        <div id="calendar-view" class="overflow-x-auto">
+                            <p class="text-gray-500 text-center p-8"><span class="loading-spinner mr-2"></span>Loading calendar...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="card p-8" id="booking-form-section">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center"><i data-lucide="circle-plus" class="w-6 h-6 mr-2 text-blue-600"></i>Create New Reservation</h2>
+                        <form id="booking-form" class="space-y-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label for="resource-select" class="block text-sm font-semibold text-gray-700 mb-1">Resource</label>
+                                    <select id="resource-select" name="resource_id" required 
+                                            class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500 sm:text-base transition-colors">
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="booking-person" class="block text-sm font-semibold text-gray-700 mb-1">Book for Person</label>
+                                    <select id="booking-person" name="person_id" required 
+                                            class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500 sm:text-base transition-colors">
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label for="booking-start" class="block text-sm font-semibold text-gray-700 mb-1">Start Date & Time</label>
+                                    <input type="datetime-local" id="booking-start" name="start_time" required 
+                                           class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500 sm:text-base transition-shadow">
+                                </div>
+                                <div>
+                                    <label for="booking-end" class="block text-sm font-semibold text-gray-700 mb-1">End Date & Time</label>
+                                    <input type="datetime-local" id="booking-end" name="end_time" required 
+                                           class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500 sm:text-base transition-shadow">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label for="booking-project" class="block text-sm font-semibold text-gray-700 mb-1">Associated Project <span class="text-gray-400 font-normal">(Optional)</span></label>
+                                <select id="booking-project" name="project_id" 
+                                        class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500 sm:text-base transition-colors">
+                                </select>
+                            </div>
+                            <div>
+                                <label for="booking-notes" class="block text-sm font-semibold text-gray-700 mb-1">Notes / Purpose <span class="text-gray-400 font-normal">(Optional)</span></label>
+                                <textarea id="booking-notes" name="notes" rows="3" placeholder="Describe the purpose of your booking..."
+                                          class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500 sm:text-base transition-shadow"></textarea>
+                            </div>
+                            
+                            <button type="submit" id="submit-booking-btn" class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl">
+                                <i data-lucide="check-circle" class="w-5 h-5 inline-block mr-2"></i>Confirm Reservation
+                            </button>
+                            <div id="booking-status-message" class="mt-4 text-center text-sm font-medium"></div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="app-modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <div id="modal-content-area"></div>
+            <div id="modal-actions" class="mt-6 pt-4 border-t border-gray-100 flex justify-end space-x-3"></div> 
+        </div>
+    </div>
+
+    <template id="edit-modal-template">
+        <form id="edit-booking-form" class="space-y-4">
+            <div>
+                <label for="edit-booking-resource" class="block text-sm font-semibold text-gray-700 mb-1">Resource</label>
+                <input type="text" id="edit-booking-resource" disabled 
+                       class="mt-1 block w-full border-gray-200 rounded-lg shadow-inner bg-gray-50 p-3 sm:text-base text-gray-500">
+                <input type="hidden" id="edit-booking-id" name="booking_id">
+            </div>
+            <div>
+                <label for="edit-booking-person" class="block text-sm font-semibold text-gray-700 mb-1">Book for Person</label>
+                <select id="edit-booking-person" name="person_id" required 
+                        class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500 sm:text-base transition-colors"></select>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="edit-booking-start" class="block text-sm font-semibold text-gray-700 mb-1">Start Date & Time</label>
+                    <input type="datetime-local" id="edit-booking-start" name="start_time" required 
+                           class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500 sm:text-base transition-shadow">
+                </div>
+                <div>
+                    <label for="edit-booking-end" class="block text-sm font-semibold text-gray-700 mb-1">End Date & Time</label>
+                    <input type="datetime-local" id="edit-booking-end" name="end_time" required 
+                           class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500 sm:text-base transition-shadow">
+                </div>
+            </div>
+            <div>
+                <label for="edit-booking-project" class="block text-sm font-semibold text-gray-700 mb-1">Associated Project <span class="text-gray-400 font-normal">(Optional)</span></label>
+                <select id="edit-booking-project" name="project_id" 
+                        class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500 sm:text-base transition-colors"></select>
+            </div>
+            <div>
+                <label for="edit-booking-notes" class="block text-sm font-semibold text-gray-700 mb-1">Notes / Purpose <span class="text-gray-400 font-normal">(Optional)</span></label>
+                <textarea id="edit-booking-notes" name="notes" rows="3" placeholder="Describe the purpose of your booking..."
+                          class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500 sm:text-base transition-shadow"></textarea>
+            </div>
+            <button type="submit" class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-bold text-lg hover:bg-blue-700 transition-colors shadow-md">
+                <i data-lucide="save" class="w-5 h-5 inline-block mr-2"></i>Save Changes
+            </button>
+            <div id="edit-booking-status-message" class="mt-2 text-center text-sm font-medium"></div>
+        </form>
+    </template>
+    
+    <script>
+        const API_BASE_URL = '/mylims_demo/api';
+        let user;
+        let currentWeekStart;
+        let selectedResourceIds = [];
+        let selectedPersonIds = [];
+        let currentResourceTypeFilter = 'all'; 
+        const resourcesCache = {};
+        const bookingsCache = {};
+        const personnelCache = {};
+        const projectsCache = {};
+        const allResources = [];
+        const allPersonnel = [];
+        const allProjects = [];
+        const personColors = {};
+        
+        // --- Initialization and User Session ---
+        window.onload = () => {
+            if (sessionStorage.getItem('isLoggedIn') !== 'true') {
+                window.location.href = '/login.html';
+            } else {
+                user = JSON.parse(sessionStorage.getItem('user'));
+                if (!user || (!user.person_id && !user.contact_id && !user.customer_id)) {
+                    console.error("User session data is incomplete. Redirecting.");
+                    window.location.href = '/login.html';
+                } else {
+                    updateUserProfile();
+                    lucide.createIcons();
+                    document.getElementById('logout-button').addEventListener('click', async () => {
+                        await apiFetch('logout', { method: 'POST' });
+                        sessionStorage.clear();
+                        window.location.href = '/login.html';
+                    });
+                    initializeBookingPage();
+                }
+            }
+        };
+
+        function updateUserProfile() {
+            const userProfileDiv = document.getElementById('user-profile');
+            let userName = 'User', userInitial = '?', userColor = 'bg-gray-500';
+
+            if (user.person_id) {
+                userName = user.full_name || user.person_id;
+                userInitial = userName.charAt(0).toUpperCase();
+                userColor = 'bg-blue-500';
+            } else if (user.customer_id) {
+                userName = user.customer_name || `Customer ${user.customer_id}`;
+                userInitial = String(user.customer_id).charAt(0).toUpperCase();
+                userColor = 'bg-green-500';
+            } else if (user.contact_id) {
+                userName = user.full_name || `Contact ${user.contact_id}`;
+                userInitial = String(user.contact_id).charAt(0).toUpperCase();
+                userColor = 'bg-purple-500';
+            }
+
+            userProfileDiv.innerHTML = `
+                <div class="flex items-center">
+                    <span class="mr-3 p-3 ${userColor} text-white rounded-full text-xs font-bold w-8 h-8 flex items-center justify-center">${userInitial}</span>
+                    <div>
+                        <p class="font-semibold text-sm text-gray-800">${userName}</p>
+                        <p class="text-xs text-gray-500">LIMS User</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function apiFetch(endpoint, options = {}) {
+            const url = `${API_BASE_URL}/${endpoint}`;
+            const headers = new Headers();
+            if (options.method === 'POST' || options.method === 'PUT') {
+                headers.append('Content-Type', 'application/json');
+            }
+
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    headers: headers,
+                    body: options.body ? JSON.stringify(options.body) : undefined
+                });
+
+                if (response.status === 204) {
+                    return { success: true, message: 'Operation successful.' };
+                }
+
+                if (!response.ok) {
+                    let errorData;
+                    try {
+                        errorData = await response.json();
+                    } catch {
+                        errorData = { error: `Server error or bad response format. HTTP Status: ${response.status}` };
+                    }
+                    throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
+                }
+                
+                return await response.json();
+            } catch (error) {
+                console.error(`API Error on ${url}:`, error);
+                return { error: error.message };
+            }
+        }
+        
+        function hashStringToColor(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const hue = hash % 360;
+            const saturation = 70 + (hash % 10); 
+            const lightness = 40 + (hash % 10); 
+            return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+        }
+
+        // --- Core Booking Functions ---
+        async function initializeBookingPage() {
+            const today = new Date();
+            const dayOfWeek = today.getDay();
+            const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+            currentWeekStart = new Date(today.setDate(diff));
+
+            document.getElementById('fab-new-booking').addEventListener('click', () => {
+                document.getElementById('booking-form-section').scrollIntoView({ behavior: 'smooth' });
+            });
+            
+            await Promise.all([
+                fetchAndCacheAllResources(),
+                fetchAndCacheAllPersonnel(),
+                fetchAndCacheAllProjects()
+            ]);
+            
+            await fetchAndCacheAllBookings();
+
+            setupFormListeners();
+            setupFilterListeners();
+            setupCalendarNavigationListeners();
+            setupResourceTypeTabs();
+            lucide.createIcons();
+        }
+
+        async function fetchAndCacheAllResources() {
+            const resources = await apiFetch('table/lims/bookable_resource');
+            if (resources && !resources.error) {
+                allResources.length = 0;
+                allResources.push(...resources);
+                resources.forEach(res => {
+                    resourcesCache[res.resource_id] = res;
+                });
+                renderFilterLists();
+                populateResourceDropdown(allResources);
+            } else {
+                document.getElementById('resource-filter-list-container').innerHTML = `<p class="text-red-500 text-center p-4">Failed to load resources.</p>`;
+            }
+        }
+
+        async function fetchAndCacheAllPersonnel() {
+            const personnel = await apiFetch('table/lims/personal');
+            if (personnel && !personnel.error) {
+                allPersonnel.length = 0;
+                allPersonnel.push(...personnel);
+                personnel.forEach(p => {
+                    personnelCache[p.person_id] = p.full_name || p.person_id;
+                    personColors[p.person_id] = hashStringToColor(p.person_id + p.full_name);
+                });
+                renderFilterLists();
+                populatePersonDropdowns();
+            } else {
+                 document.getElementById('person-filter-list-container').innerHTML = `<p class="text-red-500 text-center p-4">Failed to load personnel.</p>`;
+            }
+        }
+
+        async function fetchAndCacheAllProjects() {
+            const projects = await apiFetch('table/lims/projects');
+            if (projects && !projects.error) {
+                allProjects.length = 0;
+                allProjects.push(...projects);
+                projects.forEach(p => {
+                    projectsCache[p.project_id] = p;
+                });
+                populateProjectsDropdown(allProjects);
+            }
+        }
+        
+        async function fetchAndCacheAllBookings() {
+            const weekEndDate = new Date(currentWeekStart);
+            weekEndDate.setDate(weekEndDate.getDate() + 7); 
+            
+            let queryParams = [];
+            queryParams.push(`filter_start_time_start=${currentWeekStart.toISOString().split('T')[0]}`);
+            queryParams.push(`filter_end_time_end=${weekEndDate.toISOString().split('T')[0]}`);
+
+            if (selectedResourceIds.length > 0) {
+                queryParams.push(`filter_resource_id=${selectedResourceIds.join(',')}`);
+            }
+            if (selectedPersonIds.length > 0) {
+                queryParams.push(`filter_person_id=${selectedPersonIds.join(',')}`);
+            }
+            
+            const queryString = queryParams.length > 0 ? '?' + queryParams.join('&') : '';
+            const bookings = await apiFetch(`table/lims/booking${queryString}`);
+            
+            if (bookings && !bookings.error) {
+                bookingsCache.currentWeek = bookings;
+            } else {
+                console.error("Failed to fetch bookings:", bookings.error);
+                bookingsCache.currentWeek = [];
+            }
+            renderCalendar();
+        }
+
+        // --- UI Rendering Functions ---
+        
+        function setupResourceTypeTabs() {
+             document.querySelectorAll('[data-resource-tab]').forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    document.querySelectorAll('[data-resource-tab]').forEach(t => {
+                        t.classList.remove('bg-white', 'shadow-sm', 'border', 'border-gray-200', 'text-gray-700');
+                        t.classList.add('text-gray-500');
+                    });
+
+                    e.target.classList.add('bg-white', 'shadow-sm', 'border', 'border-gray-200', 'text-gray-700');
+                    e.target.classList.remove('text-gray-500');
+
+                    currentResourceTypeFilter = e.target.dataset.resourceTab;
+                    // Reset resource selection when changing filter type
+                    selectedResourceIds = []; 
+                    renderFilterLists('resource');
+                    fetchAndCacheAllBookings(); // Refetch after filter change
+                });
+            });
+            // Ensure initial 'All Resources' tab is active
+            document.getElementById('tab-all').classList.add('bg-white', 'shadow-sm', 'border', 'border-gray-200', 'text-gray-700');
+            document.getElementById('tab-all').classList.remove('text-gray-500');
+        }
+
+        function renderFilterLists(filterType = 'all') {
+            const resourceListDiv = document.getElementById('resource-filter-list-container');
+            const personListDiv = document.getElementById('person-filter-list-container');
+            
+            // Function to render a list
+            const renderList = (data, listContainer, selectedIds, filterTerm, filterMode) => {
+                let filteredData = data.filter(item => 
+                    JSON.stringify(item).toLowerCase().includes(filterTerm)
+                );
+                
+                if (filterMode === 'resource' && currentResourceTypeFilter !== 'all') {
+                    filteredData = filteredData.filter(item => 
+                        item.resource_type?.toLowerCase() === currentResourceTypeFilter
+                    );
+                }
+
+                listContainer.innerHTML = '';
+                const displayData = listContainer.classList.contains('expanded') ? filteredData : filteredData.slice(0, 10);
+
+                if (displayData.length === 0) {
+                     listContainer.innerHTML = `<p class="text-center text-gray-500 p-4">No matching items found.</p>`;
+                     return;
+                }
+
+                displayData.forEach(item => {
+                    const id = item.resource_id || item.person_id;
+                    const name = item.resource_name || item.full_name;
+                    const type = item.resource_type || '';
+                    const isSelected = selectedIds.includes(String(id));
+                    const statusClass = item.notes?.toLowerCase().includes('maintenance') ? 'maintenance' : 'available';
+                    const color = item.person_id ? personColors[id] : undefined;
+                    const icon = item.resource_type?.toLowerCase() === 'room' ? 'door-open' : 'tool';
+                    const iconColor = item.resource_type?.toLowerCase() === 'room' ? 'text-indigo-500' : 'text-green-600';
+
+                    listContainer.innerHTML += `
+                        <div class="flex items-center p-2 rounded-lg cursor-pointer ${isSelected ? 'selected-filter' : 'hover:bg-gray-50'}" 
+                             data-filter-id="${id}" data-filter-type="${item.person_id ? 'person' : 'resource'}">
+                             
+                            ${item.person_id ? 
+                                `<span class="booking-status" style="background-color: ${color};"></span>` : 
+                                `<i data-lucide="${icon}" class="w-4 h-4 mr-3 ${iconColor}"></i>`
+                            }
+                            <span class="font-medium text-gray-700 truncate flex-grow">${name}</span>
+                            <span class="text-xs text-gray-500">${type}</span>
+                            ${isSelected ? 
+                                `<i data-lucide="check-circle" class="w-4 h-4 ml-2 text-blue-600 flex-shrink-0"></i>` : ''
+                            }
+                        </div>
+                    `;
+                });
+                 lucide.createIcons(); 
+            };
+            
+            // --- RESOURCE LIST RENDERING & COUNT UPDATE ---
+            const resourceSearchTerm = document.getElementById('resource-search').value.toLowerCase();
+            if (filterType === 'all' || filterType === 'resource') {
+                renderList(allResources, resourceListDiv, selectedResourceIds, resourceSearchTerm, 'resource');
+                const totalFiltered = allResources.filter(item => 
+                    JSON.stringify(item).toLowerCase().includes(resourceSearchTerm) && 
+                    (currentResourceTypeFilter === 'all' || item.resource_type?.toLowerCase() === currentResourceTypeFilter)
+                ).length;
+                
+                document.getElementById('resource-count').textContent = selectedResourceIds.length > 0 ? 
+                    `(${selectedResourceIds.length} selected)` : '';
+                document.getElementById('show-all-resources').style.display = totalFiltered > 10 ? 'block' : 'none';
+            }
+            
+            // --- PERSONNEL LIST RENDERING & COUNT UPDATE ---
+            const personSearchTerm = document.getElementById('person-search').value.toLowerCase();
+            if (filterType === 'all' || filterType === 'person') {
+                renderList(allPersonnel, personListDiv, selectedPersonIds, personSearchTerm, 'person');
+                const totalFiltered = allPersonnel.filter(item => 
+                    JSON.stringify(item).toLowerCase().includes(personSearchTerm)
+                ).length;
+                
+                document.getElementById('personnel-count').textContent = selectedPersonIds.length > 0 ? 
+                    `(${selectedPersonIds.length} selected)` : '';
+                document.getElementById('show-all-personnel').style.display = totalFiltered > 10 ? 'block' : 'none';
+            }
+        }
+        
+        function populateResourceDropdown(resources) {
+            const dropdown = document.getElementById('resource-select');
+            dropdown.innerHTML = '<option value="" disabled selected>-- Select a Resource --</option>';
+            resources.forEach(res => {
+                const option = document.createElement('option');
+                option.value = res.resource_id;
+                option.textContent = `${res.resource_name} (${res.resource_type})`;
+                dropdown.appendChild(option);
+            });
+        }
+
+        function populatePersonDropdowns() {
+            const dropdown = document.getElementById('booking-person');
+            dropdown.innerHTML = '';
+            
+            if (user.person_id) {
+                const currentUserOption = document.createElement('option');
+                currentUserOption.value = user.person_id;
+                currentUserOption.textContent = `Me (${user.full_name || user.person_id})`;
+                dropdown.appendChild(currentUserOption);
+            }
+            
+            allPersonnel.forEach(p => {
+                if (p.person_id === user.person_id) return;
+                const option = document.createElement('option');
+                option.value = p.person_id;
+                option.textContent = p.full_name || p.person_id;
+                dropdown.appendChild(option);
+            });
+            
+            if (user.person_id) {
+                dropdown.value = user.person_id;
+            }
+            
+            const editPersonDropdown = document.getElementById('edit-booking-person');
+            if (editPersonDropdown) {
+                editPersonDropdown.innerHTML = dropdown.innerHTML;
+            }
+        }
+
+        function populateProjectsDropdown(projects) {
+            const dropdown = document.getElementById('booking-project');
+            dropdown.innerHTML = '<option value="">-- No Project --</option>';
+            projects.forEach(p => {
+                const option = document.createElement('option');
+                option.value = p.project_id;
+                option.textContent = `${p.title} (${p.project_abrv})`;
+                dropdown.appendChild(option);
+            });
+            const editProjectDropdown = document.getElementById('edit-booking-project');
+            if (editProjectDropdown) {
+                editProjectDropdown.innerHTML = dropdown.innerHTML;
+            }
+        }
+
+        function renderCalendar() {
+            const calendarDiv = document.getElementById('calendar-view');
+            const today = new Date();
+            const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            const hours = Array.from({ length: 16 }, (_, i) => 6 + i); 
+
+            const firstDayOfWeek = new Date(currentWeekStart);
+            const weekEndDate = new Date(firstDayOfWeek);
+            weekEndDate.setDate(weekEndDate.getDate() + 6);
+            document.getElementById('current-period-display').textContent = 
+                `${firstDayOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${weekEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+            let html = `<div class="calendar-grid min-w-[768px]">`;
+            html += `<div class="calendar-header-cell">Time</div>`;
+            const datesInWeek = [];
+            for (let i = 0; i < 7; i++) {
+                const date = new Date(firstDayOfWeek);
+                date.setDate(date.getDate() + i);
+                datesInWeek.push(date);
+                const isToday = date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
+                html += `<div class="calendar-header-cell ${isToday ? 'bg-blue-50 border-b-2 border-blue-500' : ''}">${daysOfWeek[i]}<br><span class="text-sm font-normal">${date.getDate()}</span></div>`;
+            }
+            
+            hours.forEach(hour => {
+                const timeLabel = (hour % 12 === 0 ? 12 : hour % 12) + ':00 ' + (hour < 12 ? 'AM' : 'PM');
+                html += `<div class="calendar-time-cell">${timeLabel}</div>`;
+                
+                datesInWeek.forEach(date => {
+                    const cellDate = date.toISOString().split('T')[0];
+                    const cellStartTime = new Date(date);
+                    cellStartTime.setHours(hour, 0, 0, 0);
+                    const cellEndTime = new Date(date);
+                    cellEndTime.setHours(hour, 59, 59, 999);
+
+                    const filteredBookings = bookingsCache.currentWeek.filter(booking => {
+                        const bookingStart = new Date(booking.start_time);
+                        const bookingEnd = new Date(booking.end_time);
+                        return (bookingStart < cellEndTime && bookingEnd > cellStartTime);
+                    });
+                    
+                    const isBooked = filteredBookings.length > 0;
+                    const isPast = cellEndTime < today;
+                    const pastClass = isPast ? 'bg-gray-100 text-gray-400 opacity-70 cursor-not-allowed' : '';
+                    
+                    html += `<div class="calendar-day-cell ${pastClass}" data-date="${cellDate}" data-hour="${hour}">`;
+                    
+                    if (isBooked) {
+                        filteredBookings.forEach(booking => {
+                            const bookerName = personnelCache[booking.person_id] || booking.person_id;
+                            const resourceName = resourcesCache[booking.resource_id]?.resource_name || 'N/A';
+                            const personColor = personColors[booking.person_id] || '#6b7280';
+                            
+                            const displayProject = projectsCache[booking.project_id]?.project_abrv ? ` - ${projectsCache[booking.project_id].project_abrv}` : '';
+                            const displayText = `${resourceName}${displayProject}`;
+                            
+                            html += `<div class="calendar-booking-entry" 
+                                style="background-color: ${personColor};" 
+                                title="Booked by: ${bookerName}\nResource: ${resourceName}\nTime: ${new Date(booking.start_time).toLocaleTimeString()} - ${new Date(booking.end_time).toLocaleTimeString()}" 
+                                data-booking-id="${booking.booking_id}">
+                                ${displayText}
+                            </div>`;
+                        });
+                    }
+                    html += `</div>`;
+                });
+            });
+
+            html += `</div>`;
+            calendarDiv.innerHTML = html;
+            lucide.createIcons();
+            attachCalendarEventListeners();
+        }
+
+
+        // --- Event Listeners and Logic ---
+        function setupCalendarNavigationListeners() {
+            document.getElementById('prev-week-btn').addEventListener('click', () => {
+                currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+                fetchAndCacheAllBookings();
+            });
+
+            document.getElementById('next-week-btn').addEventListener('click', () => {
+                currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+                fetchAndCacheAllBookings();
+            });
+            
+            document.getElementById('prev-month-btn').addEventListener('click', () => {
+                currentWeekStart.setMonth(currentWeekStart.getMonth() - 1);
+                currentWeekStart.setDate(1);
+                const dayOfWeek = currentWeekStart.getDay();
+                const diff = currentWeekStart.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+                currentWeekStart.setDate(diff);
+                fetchAndCacheAllBookings();
+            });
+            
+            document.getElementById('next-month-btn').addEventListener('click', () => {
+                currentWeekStart.setMonth(currentWeekStart.getMonth() + 1);
+                currentWeekStart.setDate(1);
+                const dayOfWeek = currentWeekStart.getDay();
+                const diff = currentWeekStart.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+                currentWeekStart.setDate(diff);
+                fetchAndCacheAllBookings();
+            });
+        }
+        
+        function setupFilterListeners() {
+            const filterContainer = document.querySelector('.lg\\:col-span-1 .card');
+            filterContainer.addEventListener('click', (e) => {
+                const item = e.target.closest('[data-filter-id]');
+                if (!item) return;
+
+                const filterId = String(item.dataset.filterId);
+                const filterType = item.dataset.filterType; 
+                let filterArray = filterType === 'resource' ? selectedResourceIds : selectedPersonIds;
+
+                const index = filterArray.indexOf(filterId);
+                if (index > -1) {
+                    filterArray.splice(index, 1);
+                } else {
+                    filterArray.push(filterId);
+                }
+                
+                // NEW: If a resource is clicked, pre-select it in the booking form
+                if (filterType === 'resource') {
+                    document.getElementById('resource-select').value = filterId;
+                }
+
+                renderFilterLists();
+                fetchAndCacheAllBookings();
+            });
+            
+            document.getElementById('resource-search').addEventListener('input', () => renderFilterLists('resource'));
+            document.getElementById('person-search').addEventListener('input', () => renderFilterLists('person'));
+
+            document.getElementById('show-all-resources').addEventListener('click', (e) => {
+                const container = document.getElementById('resource-filter-list-container');
+                container.classList.toggle('expanded');
+                e.target.textContent = container.classList.contains('expanded') ? 'Show Less' : 'Show All';
+                renderFilterLists('resource');
+            });
+            document.getElementById('show-all-personnel').addEventListener('click', (e) => {
+                const container = document.getElementById('person-filter-list-container');
+                container.classList.toggle('expanded');
+                e.target.textContent = container.classList.contains('expanded') ? 'Show Less' : 'Show All';
+                renderFilterLists('person');
+            });
+        }
+
+        function attachCalendarEventListeners() {
+            document.querySelectorAll('.calendar-day-cell').forEach(cell => {
+                cell.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('opacity-70')) return;
+                    
+                    const bookingEntry = e.target.closest('.calendar-booking-entry');
+                    if (bookingEntry) {
+                        e.stopPropagation();
+                        showBookingDetails(bookingEntry.dataset.bookingId);
+                    } else {
+                        const date = cell.dataset.date;
+                        const hour = cell.dataset.hour;
+                        setFormTimes(date, hour);
+                        document.getElementById('booking-form-section').scrollIntoView({ behavior: 'smooth' });
+                    }
+                });
+            });
+        }
+
+        function setFormTimes(dateStr, hourStr) {
+            const startDateTime = new Date(dateStr + 'T' + String(hourStr).padStart(2, '0') + ':00:00');
+            const endDateTime = new Date(startDateTime);
+            endDateTime.setHours(endDateTime.getHours() + 1);
+
+            document.getElementById('booking-start').value = startDateTime.toISOString().slice(0, 16);
+            document.getElementById('booking-end').value = endDateTime.toISOString().slice(0, 16);
+            
+            document.getElementById('booking-status-message').innerHTML = '';
+        }
+
+        function setupFormListeners() {
+            document.getElementById('booking-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const form = e.target;
+                
+                const bookingData = {
+                    resource_id: form.elements['resource_id'].value,
+                    start_time: form.elements['start_time'].value,
+                    end_time: form.elements['end_time'].value,
+                    project_id: form.elements['project_id'].value || null,
+                    notes: form.elements['notes'].value || null,
+                    person_id: form.elements['person_id'].value || user.person_id
+                };
+                
+                const statusDiv = document.getElementById('booking-status-message');
+                statusDiv.innerHTML = `<p class="text-blue-600 font-semibold"><span class="loading-spinner mr-2"></span>Creating booking...</p>`;
+                
+                try {
+                    const result = await apiFetch('table/lims/booking', {
+                        method: 'POST',
+                        body: bookingData
+                    });
+
+                    if (result && result.error) {
+                        statusDiv.innerHTML = `<p class="text-red-500 font-semibold flex items-center"><i data-lucide="alert-triangle" class="w-5 h-5 mr-2"></i>Error: ${result.error}</p>`;
+                    } else {
+                        statusDiv.innerHTML = `<p class="text-green-600 font-bold flex items-center"><i data-lucide="check-circle" class="w-5 h-5 mr-2"></i>Booking created successfully!</p>`;
+                        form.reset();
+                         if (user.person_id) {
+                            form.elements['person_id'].value = user.person_id;
+                        }
+                        fetchAndCacheAllBookings();
+                    }
+                } catch (error) {
+                    console.error("Error adding document: ", error);
+                    statusDiv.innerHTML = `<p class="text-red-500 font-semibold flex items-center"><i data-lucide="alert-triangle" class="w-5 h-5 mr-2"></i>Error: ${error.message}</p>`;
+                }
+                 lucide.createIcons();
+            });
+        }
+        
+        // --- Modal Functions (Unchanged) ---
+        const appModal = document.getElementById('app-modal');
+        const modalContentArea = document.getElementById('modal-content-area');
+        const modalActions = document.getElementById('modal-actions');
+        
+        document.querySelector('.modal-close').addEventListener('click', () => {
+            appModal.style.display = 'none';
+        });
+        
+        window.onclick = (event) => {
+            if (event.target == appModal) {
+                appModal.style.display = 'none';
+            }
+        };
+
+        function showCustomModal(title, content, actions, existingForm = null) {
+            modalContentArea.innerHTML = '';
+            modalActions.innerHTML = '';
+
+            const titleElement = document.createElement('h3');
+            titleElement.className = "text-2xl font-bold text-gray-800 mb-4";
+            titleElement.textContent = title;
+            modalContentArea.appendChild(titleElement);
+            
+            if (existingForm) {
+                modalContentArea.appendChild(existingForm);
+            } else {
+                const contentElement = document.createElement('div');
+                contentElement.innerHTML = content;
+                modalContentArea.appendChild(contentElement);
+            }
+
+            actions.forEach(action => {
+                const btn = document.createElement('button');
+                btn.className = action.class || 'bg-gray-200 text-gray-800 py-2 px-4 rounded-lg font-semibold hover:bg-gray-300 transition-colors';
+                btn.innerHTML = action.text;
+                if (action.handler) {
+                    btn.addEventListener('click', action.handler);
+                }
+                modalActions.appendChild(btn);
+            });
+            appModal.style.display = 'block';
+            lucide.createIcons();
+        }
+
+        async function showBookingDetails(bookingId) {
+            const booking = bookingsCache.currentWeek.find(b => String(b.booking_id) === String(bookingId));
+            
+            if (!booking) {
+                showCustomModal('Booking Not Found', '<p class="text-red-500">Booking details not found.</p>', [{ text: 'Close', handler: () => appModal.style.display = 'none' }]);
+                return;
+            }
+
+            const resource = resourcesCache[booking.resource_id];
+            const bookerName = personnelCache[booking.person_id] || 'Unknown';
+            const project = projectsCache[booking.project_id]?.title || 'N/A';
+            const personColor = personColors[booking.person_id] || '#6b7280';
+            
+            const content = `
+                <div class="border-t border-b py-4 mb-4" style="border-left: 5px solid ${personColor}; padding-left: 15px;">
+                    <p class="text-lg font-bold text-gray-900">${resource?.resource_name || booking.resource_id}</p>
+                    <p class="text-sm text-gray-600">${resource?.resource_type || 'Resource'}</p>
+                </div>
+                <dl class="space-y-3 text-sm text-gray-800">
+                    <div class="flex"><i data-lucide="user" class="w-4 h-4 mr-2 text-blue-500"></i><strong>Booked by:</strong><span class="ml-2">${bookerName}</span></div>
+                    <div class="flex"><i data-lucide="clock" class="w-4 h-4 mr-2 text-blue-500"></i><strong>Start:</strong><span class="ml-2">${new Date(booking.start_time).toLocaleString()}</span></div>
+                    <div class="flex"><i data-lucide="clock-off" class="w-4 h-4 mr-2 text-blue-500"></i><strong>End:</strong><span class="ml-2">${new Date(booking.end_time).toLocaleString()}</span></div>
+                    <div class="flex"><i data-lucide="folder-kanban" class="w-4 h-4 mr-2 text-blue-500"></i><strong>Project:</strong><span class="ml-2">${project}</span></div>
+                    <div class="flex"><i data-lucide="clipboard-list" class="w-4 h-4 mr-2 text-blue-500"></i><strong>Notes:</strong><span class="ml-2">${booking.notes || 'N/A'}</span></div>
+                </dl>
+            `;
+            
+            const isMyBooking = (String(booking.person_id) === String(user.person_id));
+
+            const actions = [];
+            if (isMyBooking) {
+                actions.push({
+                    text: '<i data-lucide="pencil" class="w-4 h-4 inline-block mr-1"></i>Edit',
+                    class: 'bg-yellow-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-yellow-600 transition-colors',
+                    handler: () => openEditModal(booking)
+                });
+                actions.push({
+                    text: '<i data-lucide="trash-2" class="w-4 h-4 inline-block mr-1"></i>Delete',
+                    class: 'bg-red-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-red-600 transition-colors',
+                    handler: () => deleteBooking(bookingId)
+                });
+            }
+            actions.push({ text: 'Close', handler: () => appModal.style.display = 'none' });
+            
+            showCustomModal('Booking Details', content, actions);
+        }
+
+        function openEditModal(booking) {
+            const editModalForm = document.getElementById('edit-modal-template').content.cloneNode(true);
+            showCustomModal('Edit Booking', '', [{ text: 'Cancel', handler: () => appModal.style.display = 'none' }], editModalForm);
+
+            const editForm = document.getElementById('edit-booking-form');
+            const personDropdown = editForm.querySelector('#edit-booking-person');
+            const projectDropdown = editForm.querySelector('#edit-booking-project');
+
+            personDropdown.innerHTML = '';
+            if (user.person_id) {
+                const currentUserOption = document.createElement('option');
+                currentUserOption.value = user.person_id;
+                currentUserOption.textContent = `Me (${user.full_name || user.person_id})`;
+                personDropdown.appendChild(currentUserOption);
+            }
+            allPersonnel.forEach(p => {
+                if (p.person_id === user.person_id) return;
+                const option = document.createElement('option');
+                option.value = p.person_id;
+                option.textContent = p.full_name || p.person_id;
+                personDropdown.appendChild(option);
+            });
+
+            projectDropdown.innerHTML = '<option value="">-- No Project --</option>';
+            allProjects.forEach(p => {
+                const option = document.createElement('option');
+                option.value = p.project_id;
+                option.textContent = `${p.title} (${p.project_abrv})`;
+                projectDropdown.appendChild(option);
+            });
+
+            editForm.elements['edit-booking-id'].value = booking.booking_id;
+            editForm.elements['edit-booking-resource'].value = resourcesCache[booking.resource_id]?.resource_name || 'N/A';
+            editForm.elements['edit-booking-person'].value = booking.person_id;
+            editForm.elements['edit-booking-start'].value = new Date(booking.start_time).toISOString().slice(0, 16);
+            editForm.elements['edit-booking-end'].value = new Date(booking.end_time).toISOString().slice(0, 16);
+            editForm.elements['edit-booking-project'].value = booking.project_id;
+            editForm.elements['edit-booking-notes'].value = booking.notes || '';
+            
+            editForm.addEventListener('submit', submitEditForm);
+            lucide.createIcons();
+        }
+
+        async function submitEditForm(e) {
+            e.preventDefault();
+            const form = e.target;
+            const bookingId = form.elements['booking_id'].value;
+            
+            const bookingData = {
+                person_id: form.elements['person_id'].value,
+                start_time: form.elements['start_time'].value,
+                end_time: form.elements['end_time'].value,
+                project_id: form.elements['project_id'].value || null,
+                notes: form.elements['notes'].value || null
+            };
+            
+            const statusDiv = document.getElementById('edit-booking-status-message');
+            statusDiv.innerHTML = `<p class="text-blue-600 font-semibold"><span class="loading-spinner mr-2"></span>Saving changes...</p>`;
+
+            const result = await apiFetch(`table/lims/booking?booking_id=${bookingId}`, {
+                method: 'PUT',
+                body: bookingData
+            });
+
+            if (result && result.error) {
+                statusDiv.innerHTML = `<p class="text-red-500 font-semibold flex items-center"><i data-lucide="alert-triangle" class="w-5 h-5 mr-2"></i>Error: ${result.error}</p>`;
+            } else {
+                statusDiv.innerHTML = `<p class="text-green-600 font-bold flex items-center"><i data-lucide="check-circle" class="w-5 h-5 mr-2"></i>Booking updated successfully!</p>`;
+                setTimeout(() => {
+                    appModal.style.display = 'none';
+                    fetchAndCacheAllBookings();
+                }, 1000);
+            }
+             lucide.createIcons();
+        }
+        
+        async function deleteBooking(bookingId) {
+            showCustomModal('Confirm Deletion', '<p class="text-md text-gray-700">Are you sure you want to permanently delete this booking?</p>', [
+                {
+                    text: 'Cancel',
+                    class: 'bg-gray-200 text-gray-800 py-2 px-4 rounded-lg font-semibold hover:bg-gray-300 transition-colors',
+                    handler: () => showBookingDetails(bookingId)
+                },
+                {
+                    text: '<i data-lucide="x-circle" class="w-4 h-4 inline-block mr-1"></i>Delete Booking',
+                    class: 'bg-red-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-red-700 transition-colors',
+                    handler: async () => {
+                        modalActions.innerHTML = `<p class="text-red-600 font-semibold"><span class="loading-spinner mr-2"></span>Deleting...</p>`;
+                        const result = await apiFetch(`table/lims/booking?booking_id=${bookingId}`, { method: 'DELETE' });
+                        if (result && result.success) {
+                            showCustomModal('Success', '<p class="text-green-600 font-bold">Booking deleted successfully!</p>', [{ text: 'OK', handler: () => appModal.style.display = 'none' }]);
+                            fetchAndCacheAllBookings();
+                        } else {
+                            showCustomModal('Error', `<p class="text-red-500">Error deleting booking: ${result.error || 'Unknown error.'}</p>`, [{ text: 'OK', handler: () => appModal.style.display = 'none' }]);
+                        }
+                    }
+                }
+            ]);
+        }
+    </script>
+</body>
+</html>

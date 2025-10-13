@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporting - TIFI LIMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .sidebar { border-right: 1px solid #e2e8f0; height: 100vh; }
+        .sidebar-item { color: #475569; }
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        .tab-btn { padding: 0.5rem 1rem; font-weight: 500; color: #64748b; border-bottom: 2px solid transparent; }
+        .tab-btn.active { color: #4f46e5; border-bottom-color: #4f46e5; }
+        .report-section-title { font-size: 1.25rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 1rem; color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; }
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Custom scrollbar for preview */
+        #preview-body::-webkit-scrollbar { width: 8px; }
+        #preview-body::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; }
+        #preview-body { padding-bottom: 1rem; }
+
+        /* Report table improvements */
+        #report-table-preview th, #report-table-preview td {
+            padding: 8px 12px;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 150px;
+        }
+    </style>
+</head>
+<body>
+    <div id="main-app">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
+            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI LIMS</span></div>
+            <nav class="flex-grow space-y-2">
+                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md "><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (ELN)</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="planned_samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Planned Samples</span></a>
+                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+                <a href="reporting02.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-3" class="w-5 h-5 mr-3"></i><span>Reporting02</span></a>
+                <a href="booking.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Booking</span></a>
+                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Tables</span></a>
+           </nav>
+            <div class="mt-auto shrink-0">
+                <div id="user-profile" class="p-2 mb-2 border-t"></div>
+                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+            </div>
+        </div>
+        
+        <div id="main-content" class="ml-64 p-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-6">Reporting & Analytics</h1>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="card p-6 lg:col-span-1">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Report Generator</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="report-type" class="block text-sm font-medium text-gray-700">1. Select Report Type</label>
+                            <select id="report-type" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm">
+                                <option value="">-- Choose a report --</option>
+                                <optgroup label="LIMS Overviews (Views)">
+                                    <option value="lims.project_comprehensive_summary_view">Project Comprehensive Summary</option>
+                                    <option value="lims.project_financial_summary_view">Project Financial Summary</option>
+                                    <option value="lab.experiment_progress_overview_view">Experiment Progress Overview</option>
+                                    <option value="lims.reagent_status_view">Reagent Expiry Report</option>
+                                    <option value="lab.storage_occupancy_view">Storage Occupancy Report</option>
+                                    <option value="lab.storage_log_history_view">Storage Movement History</option>
+                                    <option value="bioinformatics.analysis_results_summary_view">Bioinformatics Results Summary</option>
+                                </optgroup>
+                                <optgroup label="Raw Table Data (Tables)">
+                                    <option value="lab.global_lims_view">Global LIMS View (Samples & Status)</option>
+                                    <option value="audit.log">System Audit Log</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div id="report-inputs-container">
+                            <div class="pt-4 flex justify-end">
+                                <button id="generate-preview-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center" disabled>
+                                    <i data-lucide="play" class="w-5 h-5 mr-2"></i>Select a report type
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card p-6 lg:col-span-2">
+                    <div class="flex border-b mb-4">
+                        <button id="tab-preview" class="tab-btn active">Preview</button>
+                        <button id="tab-history" class="tab-btn">History</button>
+                    </div>
+                    <div id="preview-content">
+                        <div class="text-center text-gray-500 mt-8">
+                            <i data-lucide="bar-chart-2" class="mx-auto h-12 w-12"></i>
+                            <p class="mt-2">Generate a report to see a preview here.</p>
+                        </div>
+                    </div>
+                    <div id="history-content" class="hidden">
+                            <div id="recent-reports-list" class="space-y-2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+
+    <script>
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') window.location.href = './login.html'; 
+        
+        const API_BASE_URL = '/api'; 
+        let masterCache = {}; 
+        let currentReportData = []; 
+        let currentReportHeaders = []; 
+        let currentReportTitle = 'LIMS Report';
+        let currentReportTableName = '';
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if(user) {
+                let userName = 'User';
+                if (user.full_name) userName = user.full_name;
+                else if (user.person_id) userName = user.person_id;
+                else if (user.customer_name) userName = user.customer_name;
+                else if (user.contact_id) userName = user.contact_id;
+                document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${userName}</p>`;
+            }
+            document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href = './login.html'; });
+            initializeReportingPage();
+        });
+
+        // --- API & DATA HANDLING ---
+        
+        async function apiFetch(endpoint, options = {}) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                
+                if (!response.ok) { 
+                    const errText = await response.text();
+                    try { 
+                        const errJson = JSON.parse(errText); 
+                        throw new Error(errJson.error || `API request failed with status ${response.status}`); 
+                    }
+                    catch { 
+                        throw new Error(errText || `API request failed with status ${response.status}`); 
+                    }
+                }
+                if (response.status === 204 || response.headers.get('content-length') === '0') return { success: true };
+                return response.json();
+            } catch (error) { 
+                console.error("API Error:", error); 
+                showToast(`API Error: ${error.message}`, 'error');
+                return { error: error.message }; 
+            }
+        }
+
+        async function getTableData(schema, tableName, filters = {}) {
+            const params = new URLSearchParams();
+            
+            // Convert filters object into URLSearchParams
+            Object.keys(filters).forEach(key => {
+                if (filters[key] !== 'all' && filters[key] !== null && filters[key] !== '') {
+                    // Map date filters to Flask's GE/LE format
+                    if (key === 'start_date_ge') params.append('filter_start_date_ge', filters[key]);
+                    else if (key === 'end_date_le') params.append('filter_end_date_le', filters[key]);
+                    else if (key.startsWith('filter_')) params.append(key, filters[key]);
+                    else params.append(`filter_${key}`, filters[key]);
+                }
+            });
+
+            const endpoint = `table/${schema}/${tableName}${params.toString() ? '?' + params.toString() : ''}`;
+            
+            // No caching with filters, always fetch live data
+            const data = await apiFetch(endpoint);
+            return data;
+        }
+
+        async function fetchReferenceData(tables) {
+            const fetchPromises = tables.map(t => {
+                const cacheKey = `${t.schema}.${t.table}`;
+                if (masterCache[cacheKey]) return Promise.resolve(masterCache[cacheKey]);
+                return getTableData(t.schema, t.table).then(data => {
+                    masterCache[cacheKey] = data;
+                    return data;
+                });
+            });
+            await Promise.all(fetchPromises);
+        }
+
+        // --- UTILITY HELPERS ---
+
+        function formatColumnName(columnName) {
+            return columnName.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            try {
+                const date = new Date(dateString);
+                if (dateString.includes('T') || dateString.includes(':')) {
+                    return date.toLocaleString('en-CA');
+                }
+                return date.toLocaleDateString('en-CA');
+            } catch (e) {
+                return dateString;
+            }
+        }
+        
+        function showToast(message, type = 'info') {
+            const toastContainer = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            const icon = type === 'success' ? 'check-circle' : (type === 'error' ? 'x-circle' : 'info');
+            toast.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5"></i><span class="toast-message">${message}</span>`;
+            toastContainer.appendChild(toast);
+            lucide.createIcons();
+            setTimeout(() => { toast.remove(); }, 3000);
+        }
+
+        function unparseCSV(data, headers) {
+            if (!data || data.length === 0) return '';
+            
+            const rows = data.map(obj => {
+                return headers.map(key => {
+                    let value = obj[key];
+                    if (value === null || value === undefined) return '';
+                    if (typeof value === 'object') return JSON.stringify(value);
+                    return String(value);
+                });
+            });
+
+            rows.unshift(headers.map(formatColumnName));
+            return PapaParse.unparse(rows, { header: false });
+        }
+
+
+        // --- UI & TABS ---
+        
+        function switchTab(tabName) {
+            const isPreview = tabName === 'preview';
+            document.getElementById('tab-preview').classList.toggle('active', isPreview);
+            document.getElementById('tab-history').classList.toggle('active', !isPreview);
+            document.getElementById('preview-content').classList.toggle('hidden', !isPreview);
+            document.getElementById('history-content').classList.toggle('hidden', isPreview);
+            if (tabName === 'history') {
+                renderReportHistory();
+            }
+        }
+
+        // --- DYNAMIC INPUT RENDERING ---
+        
+        function handleReportSelection() {
+            const reportType = document.getElementById('report-type').value;
+            const container = document.getElementById('report-inputs-container');
+            container.innerHTML = ''; 
+            
+            if (reportType === '') {
+                 container.innerHTML = `<div class="pt-4 flex justify-end"><button id="generate-preview-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center" disabled><i data-lucide="play" class="w-5 h-5 mr-2"></i>Select a report type</button></div>`;
+                 lucide.createIcons();
+                 return;
+            }
+
+            // Report type mapping to human-readable title (for PDF/History)
+            const typeToTitle = {
+                'lims.project_comprehensive_summary_view': 'Project Comprehensive Summary',
+                'lims.project_financial_summary_view': 'Project Financial Summary',
+                'lab.experiment_progress_overview_view': 'Experiment Progress Overview',
+                'lims.reagent_status_view': 'Reagent Expiry Report',
+                'lab.storage_occupancy_view': 'Storage Occupancy Report',
+                'lab.storage_log_history_view': 'Storage Movement History',
+                'bioinformatics.analysis_results_summary_view': 'Bioinformatics Results Summary',
+                'lab.global_lims_view': 'Global LIMS View',
+                'audit.log': 'System Audit Log'
+            };
+            currentReportTitle = typeToTitle[reportType] || formatColumnName(reportType.split('.')[1]);
+            currentReportTableName = reportType;
+            
+            const projects = masterCache['lims.projects'] || []; 
+            const statuses = masterCache['reference.status'] || [];
+
+            let dateLabel = "Creation/Start Date";
+            if (reportType.includes('reagent')) dateLabel = 'Reception Date';
+            else if (reportType.includes('audit')) dateLabel = 'Timestamp';
+
+            const inputsHtml = `
+                <div>
+                    <label for="project-filter" class="block text-sm font-medium text-gray-700">Filter by Project ID (Optional):</label>
+                    <select id="project-filter" class="w-full mt-1 p-2 border rounded-md">
+                        <option value="all">-- All Projects --</option>
+                        ${projects.map(p => `<option value="${p.project_id}">${p.title || p.project_id}</option>`).join('')}
+                    </select>
+                </div>
+                ${!reportType.includes('audit') && !reportType.includes('reagent') ? `
+                <div>
+                    <label for="status-filter" class="block text-sm font-medium text-gray-700">Filter by Status (Optional):</label>
+                    <select id="status-filter" class="w-full mt-1 p-2 border rounded-md">
+                        <option value="all">-- All Statuses --</option>
+                        ${statuses.map(s => `<option value="${s.status_id}">${s.status_id}</option>`).join('')}
+                    </select>
+                </div>` : ''}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="start-date-filter" class="block text-sm font-medium text-gray-700">Start ${dateLabel}</label>
+                        <input type="date" id="start-date-filter" class="w-full mt-1 p-2 border rounded-md">
+                    </div>
+                    <div>
+                        <label for="end-date-filter" class="block text-sm font-medium text-gray-700">End ${dateLabel}</label>
+                        <input type="date" id="end-date-filter" class="w-full mt-1 p-2 border rounded-md">
+                    </div>
+                </div>
+                <div class="pt-4 flex justify-end md:col-span-2">
+                    <button id="generate-preview-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center">
+                        <i data-lucide="play" class="w-5 h-5 mr-2"></i>Generate Preview
+                    </button>
+                </div>
+            `;
+            container.innerHTML = inputsHtml;
+            lucide.createIcons();
+            document.getElementById('generate-preview-btn').addEventListener('click', generateReportPreview);
+        }
+
+        // --- REPORT PREVIEW GENERATOR ---
+
+        async function generateReportPreview() {
+            const reportType = currentReportTableName;
+            const [schemaName, tableName] = reportType.split('.');
+            
+            // Gather filters dynamically
+            const filters = {};
+            const projectFilter = document.getElementById('project-filter').value;
+            if (projectFilter !== 'all') filters.project_id = projectFilter;
+
+            // Handle date filters dynamically
+            const startDate = document.getElementById('start-date-filter').value;
+            const endDate = document.getElementById('end-date-filter').value;
+            
+            // Map the generic date filter to the primary date field for the view/table
+            let dateFieldKey = '';
+            if (tableName.includes('project')) dateFieldKey = 'start_date';
+            else if (tableName.includes('experiment')) dateFieldKey = 'experiment_date';
+            else if (tableName.includes('sampling')) dateFieldKey = 'sampling_date';
+            else if (tableName.includes('reagent')) dateFieldKey = 'reception_date';
+            else if (tableName.includes('storage_log')) dateFieldKey = 'move_date';
+            else if (tableName.includes('analysis_runs')) dateFieldKey = 'run_date';
+            else if (tableName.includes('global_lims')) dateFieldKey = 'reception_date';
+            else if (tableName.includes('audit')) dateFieldKey = 'action_timestamp';
+
+            if (startDate) filters[`${dateFieldKey}_ge`] = startDate;
+            if (endDate) filters[`${dateFieldKey}_le`] = endDate;
+            
+            if (document.getElementById('status-filter')) {
+                const statusFilter = document.getElementById('status-filter').value;
+                if (statusFilter !== 'all') filters.status_id = statusFilter;
+            }
+
+            const loadingIndicator = document.getElementById('preview-content');
+            loadingIndicator.innerHTML = `<div class="text-center text-gray-500 mt-8"><i data-lucide="loader-2" class="animate-spin mx-auto h-12 w-12 text-blue-600"></i><p class="mt-2">Fetching data for ${currentReportTitle}...</p></div>`;
+            lucide.createIcons();
+            setDownloadButtonsDisabled(true);
+
+
+            let data = await getTableData(schemaName, tableName, filters);
+            
+            if (data.error || data.length === 0) {
+                const message = data.error ? `Error: ${data.error}` : 'No records found matching the criteria.';
+                loadingIndicator.innerHTML = `<p class="text-red-500 p-4">${message}</p>`;
+                return;
+            }
+
+            currentReportData = data;
+            
+            // Determine headers based on the first record (excluding binary/search vector fields)
+            const allKeys = Object.keys(data[0]);
+            const headers = allKeys.filter(key => 
+                !key.includes('password_hash') && 
+                !key.includes('search_vector') &&
+                !key.includes('attachment') &&
+                !key.includes('geom') &&
+                !key.includes('path')
+            );
+            currentReportHeaders = headers;
+
+            // --- Render Report Preview ---
+            const reportMetadataHtml = renderObjectDetails({ 
+                'Report Title': currentReportTitle,
+                'Generated By': (masterCache['lims.personal'] || []).find(p => p.person_id === sessionStorage.getItem('user_id'))?.full_name || sessionStorage.getItem('user_id') || 'System',
+                'Date Generated': new Date().toLocaleString(),
+                'Total Records': data.length,
+                'Applied Filters': JSON.stringify(filters) 
+            }, ['Report Title', 'Generated By', 'Date Generated', 'Total Records', 'Applied Filters']);
+
+            const tableHtml = renderHtmlTable(headers, data);
+
+            loadingIndicator.innerHTML = `
+                <div id="report-output" class="p-2">
+                    <div id="report-metadata" class="mb-6">${reportMetadataHtml}</div>
+                    <h4 class="report-section-title">Tabular Data Preview (${data.length} Records)</h4>
+                    <div id="report-table-container-dynamic" class="overflow-x-auto">
+                        ${tableHtml}
+                    </div>
+                </div>
+            `;
+            setDownloadButtonsDisabled(false);
+            
+            // Re-bind download listeners for dynamically created buttons
+            document.getElementById('report-inputs-container').querySelector('#generate-preview-btn').removeEventListener('click', generateReportPreview);
+            document.getElementById('report-inputs-container').querySelector('#generate-preview-btn').addEventListener('click', generateReportPreview);
+            document.getElementById('download-pdf-btn').removeEventListener('click', exportReportPdf);
+            document.getElementById('download-pdf-btn').addEventListener('click', exportReportPdf);
+            document.getElementById('download-csv-btn').removeEventListener('click', exportReportData);
+            document.getElementById('download-csv-btn').addEventListener('click', exportReportData);
+            
+            saveReportToHistory(currentReportTitle, currentReportTableName, filters);
+            showToast(`Report '${currentReportTitle}' loaded successfully.`, 'success');
+        }
+
+        // --- HTML RENDERING FOR PREVIEW ---
+
+        function renderHtmlTable(headers, data) {
+            // 1. Render Headers
+            const headHtml = headers.map(h => 
+                `<th class="p-2 text-left font-medium">${formatColumnName(h)}</th>`
+            ).join('');
+
+            // 2. Render Body
+            const bodyHtml = data.map(row => {
+                let rowHtml = '<tr>';
+                headers.forEach(key => {
+                    let value = row[key];
+                    if (value === null || value === undefined) {
+                        value = 'N/A';
+                    } else if (key.includes('date') && typeof value === 'string') {
+                        value = formatDate(value);
+                    } else if (typeof value === 'object') {
+                         value = `<span title="${JSON.stringify(value, null, 2)}">${JSON.stringify(value).substring(0, 50)}...</span>`; // Truncate and show tooltip
+                    }
+                    rowHtml += `<td class="p-2">${value}</td>`;
+                });
+                rowHtml += '</tr>';
+                return rowHtml;
+            }).join('');
+
+            return `<table id="report-table-preview" class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-100"><tr>${headHtml}</tr></thead>
+                        <tbody class="divide-y">${bodyHtml}</tbody>
+                    </table>`;
+        }
+
+        function renderObjectDetails(obj, keysToDisplay = Object.keys(obj)) {
+            let html = '<dl class="space-y-2 text-sm">';
+            for (const key of keysToDisplay) {
+                const value = obj[key];
+                if (value === null || value === undefined || value === 'N/A') continue;
+
+                const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                let formattedValue = value;
+
+                if ((key.toLowerCase().includes('date') || key.toLowerCase().includes('timestamp')) && value) {
+                    formattedValue = formatDate(value);
+                } else if (typeof value === 'object' && value !== null) {
+                    formattedValue = JSON.stringify(value);
+                }
+
+                html += `<div class="grid grid-cols-3 gap-2 py-1 border-b border-gray-100"><dt class="font-medium text-gray-500 col-span-1">${formattedKey}</dt><dd class="text-gray-900 col-span-2">${formattedValue}</dd></div>`;
+            }
+            html += '</dl>';
+            return html;
+        }
+
+
+        // --- PDF and Export Functions ---
+        
+        function setDownloadButtonsDisabled(disabled) {
+            // Re-target the buttons based on the location of the new buttons
+            const actionsContainer = document.querySelector('.flex.space-x-3');
+            const downloadCsvBtn = actionsContainer ? actionsContainer.querySelector('#download-csv-btn') : null;
+            const downloadPdfBtn = actionsContainer ? actionsContainer.querySelector('#download-pdf-btn') : null;
+
+            if (downloadCsvBtn) downloadCsvBtn.disabled = disabled;
+            if (downloadPdfBtn) downloadPdfBtn.disabled = disabled;
+        }
+
+        function exportReportData() {
+            if (currentReportData.length === 0) {
+                showToast("No data to export.", "error");
+                return;
+            }
+            
+            const csv = unparseCSV(currentReportData, currentReportHeaders);
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${currentReportTitle.replace(/\s/g, '_')}_RawData.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            
+            showToast("Raw Data (CSV) downloaded successfully!", "success");
+        }
+
+        function exportReportPdf() {
+            if (currentReportData.length === 0) {
+                showToast("No data to export.", "error");
+                return;
+            }
+            showToast("Generating PDF report...", "info");
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('l', 'mm', 'a4'); // Landscape A4, dimensions in mm
+
+            const tableElement = document.getElementById('report-table-container-dynamic');
+            const metadataElement = document.getElementById('report-metadata');
+            
+            let finalY = 20;
+
+            // 1. Add Metadata Section
+            doc.setFontSize(18);
+            doc.text(currentReportTitle, 14, finalY);
+            finalY += 10;
+            
+            // Capture metadata div as image/canvas to handle complex HTML
+            html2canvas(metadataElement, { scale: 2, useCORS: true, logging: false }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const imgWidth = 270; // Width in mm for A4 landscape
+                const imgHeight = (canvas.height * imgWidth) / canvas.width / (doc.internal.scaleFactor);
+
+                doc.addImage(imgData, 'PNG', 14, finalY, imgWidth, imgHeight);
+                finalY += imgHeight + 10;
+
+                // 2. Add Tabular Data Section
+                doc.setFontSize(14);
+                doc.text("Tabular Data Preview", 14, finalY);
+                finalY += 5;
+
+                const head = [currentReportHeaders.map(formatColumnName)];
+                const body = currentReportData.map(row => {
+                    return currentReportHeaders.map(key => {
+                        let value = row[key];
+                        if (value === null || value === undefined) return 'N/A';
+                        if (typeof value === 'object') return JSON.stringify(value).substring(0, 100) + (JSON.stringify(value).length > 100 ? '...' : '');
+                        if (key.includes('date') && typeof value === 'string') {
+                            try { return new Date(value).toLocaleDateString('en-CA'); } catch (e) { return String(value); }
+                        }
+                        return String(value);
+                    });
+                });
+                
+                doc.autoTable({
+                    head: head,
+                    body: body,
+                    startY: finalY,
+                    theme: 'striped',
+                    headStyles: { 
+                        fillColor: [79, 70, 229], 
+                        textColor: 255, 
+                        fontSize: 7,
+                        fontStyle: 'bold'
+                    },
+                    styles: {
+                        fontSize: 6,
+                        cellPadding: 1,
+                        halign: 'left',
+                        valign: 'middle'
+                    },
+                    margin: { left: 14, right: 14 },
+                    didDrawPage: function (data) {
+                        doc.setFontSize(7);
+                        doc.text("Page " + doc.internal.getNumberOfPages(), doc.internal.pageSize.width - 20, doc.internal.pageSize.height - 5);
+                    }
+                });
+
+                doc.save(`${currentReportTitle.replace(/\s/g, '_')}_Report.pdf`);
+                showToast("PDF report generated successfully!", "success");
+            });
+        }
+
+
+        // --- HISTORY LOGIC ---
+
+        function saveReportToHistory(title, type, params) {
+            let history = JSON.parse(localStorage.getItem('reportHistory')) || [];
+            const newReport = { title, type, params, date: new Date().toISOString() };
+            history.unshift(newReport);
+            history = history.slice(0, 10);
+            localStorage.setItem('reportHistory', JSON.stringify(history));
+            renderReportHistory();
+        }
+
+        function renderReportHistory() {
+            const history = JSON.parse(localStorage.getItem('reportHistory')) || [];
+            const container = document.getElementById('recent-reports-list');
+            if (history.length === 0) {
+                container.innerHTML = `<div class="text-center text-gray-500 mt-8"><i data-lucide="history" class="mx-auto h-12 w-12"></i><p class="mt-2">No reports generated yet.</p></div>`;
+                lucide.createIcons();
+                return;
+            }
+            container.innerHTML = history.map(h => `
+                <div class="p-3 rounded-md hover:bg-gray-100 flex justify-between items-center">
+                    <div>
+                        <p class="font-semibold">${h.title}</p>
+                        <p class="text-xs text-gray-500">${new Date(h.date).toLocaleString()}</p>
+                    </div>
+                    <button class="rerun-btn bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold py-1 px-2 rounded" data-report='${JSON.stringify(h)}'>Re-run</button>
+                </div>
+            `).join('');
+            lucide.createIcons();
+            document.querySelectorAll('.rerun-btn').forEach(btn => btn.addEventListener('click', async (e) => {
+                const report = JSON.parse(e.target.dataset.report);
+                
+                // 1. Set Report Type
+                document.getElementById('report-type').value = report.type;
+                handleReportSelection(); // Re-render inputs
+
+                await new Promise(resolve => setTimeout(resolve, 50));
+                
+                // 2. Set Filters
+                const filters = report.params;
+                document.getElementById('project-filter').value = filters.project_id || 'all';
+
+                if (document.getElementById('status-filter')) {
+                    document.getElementById('status-filter').value = filters.status_id || 'all';
+                }
+                
+                // Map complex date keys back to simple input IDs
+                const startDateKey = Object.keys(filters).find(k => k.endsWith('_ge'));
+                const endDateKey = Object.keys(filters).find(k => k.endsWith('_le'));
+
+                if (startDateKey) document.getElementById('start-date-filter').value = filters[startDateKey];
+                if (endDateKey) document.getElementById('end-date-filter').value = filters[endDateKey];
+
+                // 3. Re-run
+                const generateButton = document.getElementById('generate-preview-btn');
+                if (generateButton) generateButton.click();
+            }));
+        }
+
+
+        // --- INITIALIZATION ---
+
+        function initializeReportingPage() {
+            fetchReferenceData([
+                { schema: 'lims', table: 'projects' }, 
+                { schema: 'reference', table: 'status' }
+            ]).then(() => {
+                console.log("Initial reference data pre-cached.");
+                renderReportHistory();
+                handleReportSelection();
+            }).catch(error => {
+                document.getElementById('preview-content').innerHTML = `<div class="text-red-500 text-center mt-8"><i data-lucide="alert-triangle" class="mx-auto h-12 w-12"></i><p class="mt-2">Failed to load reference data. Cannot initialize report generator.</p></div>`;
+                lucide.createIcons();
+            });
+            
+            document.getElementById('report-type').addEventListener('change', handleReportSelection);
+            document.getElementById('tab-preview').addEventListener('click', () => switchTab('preview'));
+            document.getElementById('tab-history').addEventListener('click', () => switchTab('history'));
+            document.getElementById('generate-preview-btn').addEventListener('click', generateReportPreview);
+        }
+    </script>
+</body>
+</html>
