@@ -15,7 +15,7 @@ load_dotenv()
 
 DB_HOST: str = os.getenv('DB_HOST', '0.0.0.0')
 DB_NAME: str = os.getenv('DB_NAME', 'mylims')
-DB_USER: str = os.getenv('DB_USER', 'kasmi')
+DB_USER: str = os.getenv('DB_USER', 'BioDiv')
 DB_PASS: str = os.getenv('DB_PASS', 'password')
 SECRET_KEY: str = os.getenv('SECRET_KEY', 'a_very_secret_key_for_session_management_and_security')
 
