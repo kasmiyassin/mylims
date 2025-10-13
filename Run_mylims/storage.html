@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
         /* Base body styles using Inter font and light background */
         body {
@@ -264,10 +265,10 @@
                 <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
                 <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md "><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
                 <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (ELN)</span></a>
-                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
                 <a href="planned_samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Planned Samples</span></a>
                 <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
-                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
                 <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
                 <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
                 <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
@@ -324,7 +325,7 @@
         }
 
         const API_BASE_URL = '/mylims/api';
-        let storageCache = { rooms: [], storageUnits: [] };
+        let storageCache = { rooms: [], storageUnits: [], roomOccupancy: new Map() };
         let allItemsCache = []; // Consolidated cache for all storable items
         let currentActiveTab = 'tab-inventory'; // Default active tab
 
@@ -340,7 +341,6 @@
         // For 'Storage Samples (Drag & Drop)' tab
         let dragDropCurrentStorageId = null;
 
-        // FIX: Added 'lims.primers' to the list of storable tables
         const storableItemTables = [
             { schema: 'lab', table: 'root_samples', idColumn: 'sample_id', pk: ['sample_id', 'sample_creation_date'] },
             { schema: 'lab', table: 'fish', idColumn: 'sample_id', pk: ['sample_id', 'creation_date'] },
@@ -353,14 +353,14 @@
             { schema: 'lab', table: 'pcr', idColumn: 'pcr_id', pk: ['pcr_id', 'creation_date'] },
             { schema: 'lims', table: 'reagents', idColumn: 'reagent_id', pk: 'reagent_id' },
             { schema: 'lims', table: 'inventory_items', idColumn: 'item_id', pk: 'item_id' },
-            { schema: 'lims', table: 'primers', idColumn: 'primer_id', pk: 'primer_id' } // <-- FIX APPLIED
+            { schema: 'lims', table: 'primers', idColumn: 'primer_id', pk: 'primer_id' }
         ];
 
         const typeColorMap = {
             'root_samples': 'bg-blue-600', 'fish': 'bg-blue-500', 'tissue': 'bg-green-500', 'dna': 'bg-purple-500',
             'rna': 'bg-pink-500', 'water': 'bg-cyan-500', 'sediments': 'bg-amber-500',
             'library': 'bg-indigo-500', 'pcr': 'bg-red-500', 'reagents': 'bg-slate-500',
-            'inventory_items': 'bg-gray-700', 'primers': 'bg-orange-500', 'default': 'bg-gray-400' // Added color for primers
+            'inventory_items': 'bg-gray-700', 'primers': 'bg-orange-500', 'default': 'bg-gray-400'
         };
 
 
@@ -494,6 +494,25 @@
             storageCache.storageUnits = (storageData && !storageData.error) ? storageData : [];
             allItemsCache = allItemArrays.flat().filter(item => item && item.id);
 
+            // Calculate room occupancy for the explorer view
+            const roomOccupancy = new Map();
+            storageCache.storageUnits.forEach(unit => {
+                if (!roomOccupancy.has(unit.room_id)) {
+                    roomOccupancy.set(unit.room_id, { totalUnits: 0, unitsWithItems: 0 });
+                }
+                const stats = roomOccupancy.get(unit.room_id);
+                stats.totalUnits++;
+            });
+            allItemsCache.forEach(item => {
+                if (item.storage_id) {
+                    const unit = storageCache.storageUnits.find(s => s.storage_id === item.storage_id);
+                    if (unit && roomOccupancy.has(unit.room_id)) {
+                        roomOccupancy.get(unit.room_id).unitsWithItems++;
+                    }
+                }
+            });
+            storageCache.roomOccupancy = roomOccupancy;
+            
             showToast('Storage data loaded!', 'success');
             renderTabContent(currentActiveTab);
         }
@@ -540,7 +559,7 @@
                 
                 // For primers, use the sequence + target gene if available
                 if (item.type === 'primers') {
-                    classification = `${item.id} (${item.target_gene_id || 'N/A'}) - FWD: ${item.primer_sequence_fwd.substring(0, 10)}...`;
+                    classification = `${item.id} (${item.target_gene_id || 'N/A'}) - FWD: ${item.primer_sequence_fwd ? item.primer_sequence_fwd.substring(0, 10) + '...' : 'N/A'}`;
                 }
 
                 return {
@@ -826,7 +845,7 @@
         function renderStorageExplorer() {
             const explorerHtml = `
                 <nav id="breadcrumb" class="flex items-center space-x-2 text-sm text-gray-500 mb-6"></nav>
-                <div id="explorer-container-content" class="card p-6">
+                <div id="explorer-container-content" class="card p-6 min-h-[60vh]">
                     <div class="text-center text-gray-500"><i data-lucide="archive-search" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a Room to begin exploration</p></div>
                 </div>
             `;
@@ -847,18 +866,89 @@
 
         function renderRoomsExplorer() {
             const container = document.getElementById('explorer-container-content');
-            container.innerHTML = `<h2 class="text-2xl font-bold mb-4">Select a Room</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                ${storageCache.rooms.map(room => `<div class="item-card card p-6 text-center cursor-pointer" onclick="renderFreezersExplorer('${room.room_id}')"><i data-lucide="building-2" class="mx-auto h-12 w-12 text-gray-500"></i><p class="mt-2 font-semibold">${room.description || room.room_id}</p></div>`).join('')}</div>`;
+            const unitsByRoom = storageCache.storageUnits.reduce((acc, unit) => {
+                acc[unit.room_id] = acc[unit.room_id] || [];
+                acc[unit.room_id].push(unit.storage_id);
+                return acc;
+            }, {});
+            
+            const occupiedRoomIds = [...new Set(storageCache.storageUnits
+                .filter(u => allItemsCache.some(i => i.storage_id === u.storage_id))
+                .map(u => u.room_id)
+            )];
+
+            const roomsWithUnits = storageCache.rooms.filter(r => unitsByRoom[r.room_id]);
+            const roomsWithoutUnits = storageCache.rooms.filter(r => !unitsByRoom[r.room_id]);
+            
+            let occupiedRoomsHtml = '';
+            let emptyRoomsHtml = '';
+
+            // Render rooms with at least one unit (and show if occupied)
+            roomsWithUnits.forEach(room => {
+                const isOccupied = occupiedRoomIds.includes(room.room_id);
+                const unitCount = unitsByRoom[room.room_id].length;
+                const color = isOccupied ? 'text-green-600' : 'text-blue-500';
+                const statusText = isOccupied ? 'Items Stored' : 'Empty Units';
+
+                occupiedRoomsHtml += `
+                    <div class="item-card card p-6 text-center cursor-pointer" onclick="renderFreezersExplorer('${room.room_id}')">
+                        <i data-lucide="building-2" class="mx-auto h-12 w-12 ${color}"></i>
+                        <p class="mt-2 font-semibold">${room.description || room.room_id}</p>
+                        <p class="text-sm text-gray-500">${unitCount} Unit${unitCount !== 1 ? 's' : ''} | ${statusText}</p>
+                    </div>
+                `;
+            });
+            
+            // Render rooms without any units defined
+            roomsWithoutUnits.forEach(room => {
+                emptyRoomsHtml += `
+                    <div class="item-card card p-6 text-center opacity-60 cursor-default">
+                        <i data-lucide="building-2" class="mx-auto h-12 w-12 text-gray-400"></i>
+                        <p class="mt-2 font-semibold">${room.description || room.room_id}</p>
+                        <p class="text-sm text-gray-500">No storage units defined</p>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = `
+                <h2 class="text-2xl font-bold mb-4">Rooms with Storage Units (${roomsWithUnits.length})</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    ${occupiedRoomsHtml || '<p class="text-gray-500">No rooms with storage units defined.</p>'}
+                </div>
+                <h2 class="text-2xl font-bold mb-4 mt-8 border-t pt-4">Other Rooms (${roomsWithoutUnits.length})</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    ${emptyRoomsHtml || '<p class="text-gray-500">All available rooms are listed above.</p>'}
+                </div>
+            `;
+            
             lucide.createIcons();
             updateBreadcrumbExplorer({});
         }
 
         function renderFreezersExplorer(roomId) {
             const room = storageCache.rooms.find(r => r.room_id === roomId);
-            const freezers = [...new Set(storageCache.storageUnits.filter(s => s.room_id === roomId).map(s => s.freezer))];
+            const unitsInRoom = storageCache.storageUnits.filter(s => s.room_id === roomId);
+            const freezers = [...new Set(unitsInRoom.map(s => s.freezer))];
+            
+            // Calculate item count per freezer
+            const freezerItemCounts = unitsInRoom.reduce((acc, unit) => {
+                const itemCount = allItemsCache.filter(item => item.storage_id === unit.storage_id).length;
+                acc[unit.freezer] = (acc[unit.freezer] || 0) + itemCount;
+                return acc;
+            }, {});
+
             const container = document.getElementById('explorer-container-content');
             container.innerHTML = `<h2 class="text-2xl font-bold mb-4">Select a Unit in ${room.description || room.room_id}</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                ${freezers.sort().map(freezer => `<div class="item-card card p-6 text-center cursor-pointer" onclick="renderBoxesExplorer('${roomId}', '${freezer}')"><i data-lucide="snowflake" class="mx-auto h-12 w-12 text-blue-500"></i><p class="mt-2 font-semibold">${freezer}</p></div>`).join('')}</div>`;
+                ${freezers.sort().map(freezer => {
+                    const itemCount = freezerItemCounts[freezer];
+                    const color = itemCount > 0 ? 'text-red-500' : 'text-blue-500';
+                    const statusText = itemCount > 0 ? `${itemCount} item${itemCount !== 1 ? 's' : ''} stored` : 'Empty';
+                    return `<div class="item-card card p-6 text-center cursor-pointer" onclick="renderBoxesExplorer('${roomId}', '${freezer}')">
+                        <i data-lucide="snowflake" class="mx-auto h-12 w-12 ${color}"></i>
+                        <p class="mt-2 font-semibold">${freezer}</p>
+                        <p class="text-sm text-gray-500">${statusText}</p>
+                    </div>`;
+                }).join('')}</div>`;
             lucide.createIcons();
             updateBreadcrumbExplorer({ room });
         }
@@ -866,38 +956,59 @@
         function renderBoxesExplorer(roomId, freezerId) {
             const room = storageCache.rooms.find(r => r.room_id === roomId);
             const boxes = storageCache.storageUnits.filter(s => s.room_id === roomId && s.freezer === freezerId);
+            
+            // Calculate item count per box
+            const boxItemCounts = boxes.reduce((acc, box) => {
+                acc[box.storage_id] = allItemsCache.filter(item => item.storage_id === box.storage_id).length;
+                return acc;
+            }, {});
+
             const container = document.getElementById('explorer-container-content');
             container.innerHTML = `<h2 class="text-2xl font-bold mb-4">Select a Box in ${freezerId}</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                ${boxes.sort((a, b) => a.box.localeCompare(b.box)).map(box => `<div class="item-card card p-6 text-center cursor-pointer" onclick="renderBoxContentsExplorer('${box.storage_id}')"><i data-lucide="archive" class="mx-auto h-12 w-12 text-green-600"></i><p class="mt-2 font-semibold">${box.box}</p><p class="text-sm text-gray-500">${box.storage_id}</p></div>`).join('')}</div>`;
+                ${boxes.sort((a, b) => a.box.localeCompare(b.box)).map(box => {
+                    const itemCount = boxItemCounts[box.storage_id];
+                    const color = itemCount > 0 ? 'text-green-600' : 'text-gray-500';
+                    const statusText = itemCount > 0 ? `${itemCount} item${itemCount !== 1 ? 's' : ''}` : 'Empty';
+                    return `<div class="item-card card p-6 text-center cursor-pointer" onclick="renderBoxContentsExplorer('${box.storage_id}')">
+                        <i data-lucide="archive" class="mx-auto h-12 w-12 ${color}"></i>
+                        <p class="mt-2 font-semibold">${box.box}</p>
+                        <p class="text-sm text-gray-500">${box.storage_id} (${statusText})</p>
+                    </div>`;
+                }).join('')}</div>`;
             lucide.createIcons();
             updateBreadcrumbExplorer({ room, freezer: freezerId });
         }
 
-        function renderBoxContentsExplorer(storageId) {
+        // Overridden version of renderBoxContentsExplorer to allow a custom container ID
+        function renderBoxContentsExplorer(storageId, targetContainerId = 'explorer-container-content') {
+            dragDropCurrentStorageId = storageId;
             const box = storageCache.storageUnits.find(s => s.storage_id === storageId);
             const room = storageCache.rooms.find(r => r.room_id === box.room_id);
             const itemsInBox = allItemsCache.filter(s => s.storage_id === storageId);
-            const container = document.getElementById('explorer-container-content');
+            const container = document.getElementById(targetContainerId);
 
             const boxX = box.box_size_x || 10;
             const boxY = box.box_size_y || 10;
             const gridSize = boxX * boxY;
 
-            container.innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div class="lg:col-span-2">
-                    <h2 class="text-xl font-bold mb-2">Box Layout: ${box.box}</h2>
-                    <div id="box-grid-explorer" class="box-grid p-2 bg-gray-200 rounded-lg" style="grid-template-columns: repeat(${boxX}, minmax(0, 1fr));">
+            // Map items to their positions for fast lookup
+            const itemMap = new Map(itemsInBox.map(item => [item.storage_position, item]));
+
+            container.innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full">
+                <div class="lg:col-span-2 h-full">
+                    <h2 class="text-xl font-bold mb-4">Box Layout: ${box.box} (${boxX} x ${boxY})</h2>
+                    <div id="box-grid-explorer" class="box-grid p-2 bg-gray-200 rounded-lg overflow-y-auto" style="grid-template-columns: repeat(${boxX}, minmax(0, 1fr)); max-height: 80vh;">
                         ${Array.from({ length: gridSize }, (_, i) => i + 1).map(cellNum => {
                             const rowNum = Math.ceil(cellNum / boxX);
                             const colNum = ((cellNum - 1) % boxX) + 1;
                             const colLetter = convertNumberToAlphabet(colNum);
                             const alphanumericPosition = `${colLetter}_${rowNum}`;
 
-                            const item = itemsInBox.find(i => i.storage_position === alphanumericPosition);
+                            const item = itemMap.get(alphanumericPosition);
                             const colorClass = item ? (typeColorMap[item.type] || typeColorMap['default']) : 'empty';
                             let mainInfo = item ? (item.id || item.reagent_complete_name || item.item_name || item.primer_id) : '';
                             return `<div class="box-cell ${item ? 'occupied ' + colorClass : 'empty'}"
-                                     title="Position: ${alphanumericPosition}${item ? `&#013;ID: ${item.id}&#013;Type: ${item.type}` : ''}"
+                                     title="Position: ${alphanumericPosition}${item ? `\nID: ${item.id}\nType: ${item.type}\nPos: ${item.storage_position}` : ''}"
                                      onclick="${item ? `showItemDetailsModalBoxView(this, '${item.id}', '${item.type}', '${JSON.stringify(item.pk).replace(/"/g, '&quot;')}', '${item.type}', '${storageId}')` : `showAssignItemModalBoxView('${storageId}', '${alphanumericPosition}')`}">
                                      <span class="cell-position-label">${alphanumericPosition}</span>
                                      <div class="cell-main-info">${mainInfo}</div>
@@ -905,137 +1016,21 @@
                         }).join('')}
                     </div>
                 </div>
-                <div class="lg:col-span-1">
+                <div class="lg:col-span-1 h-full">
                     <div id="item-details-panel-explorer" class="card p-6 sticky top-8">
                         <div class="text-center text-gray-500"><i data-lucide="mouse-pointer-square" class="mx-auto h-12 w-12"></i><p class="mt-2">Select an item to see details</p></div>
                     </div>
                 </div>
             </div>`;
-            updateBreadcrumbExplorer({ room, freezer: box.freezer, box });
+            
+            // Only update the breadcrumb if we are in the original Explorer tab
+            if (targetContainerId === 'explorer-container-content') {
+                 updateBreadcrumbExplorer({ room, freezer: box.freezer, box });
+            }
             lucide.createIcons();
         }
-
-        async function showItemDetailsModalBoxView(element, itemId, itemType, pkValueJson, sourceTable, currentStorageId) {
-             const pkValue = JSON.parse(pkValueJson);
-             const item = allItemsCache.find(i => i.id === itemId && i.type === itemType);
-             if (!item) { showToast('Item details not found.', 'error'); return; }
-
-             const itemConfig = storableItemTables.find(t => t.table === itemType);
-             const itemDetails = await apiFetch(`table/${itemConfig.schema}/${itemConfig.table}?${buildPkQueryString(itemConfig, pkValue)}`);
-             if (itemDetails.error) { showToast('Failed to fetch item details.', 'error'); return; }
-
-             const fullItemData = itemDetails[0];
-
-             let detailsHTMLContent = '';
-             const ignoreKeys = ['pk', 'table', 'type', 'storage_id', 'storage_position', 'attachment', 'attachment_link', 'box_size_x', 'box_size_y', 'notes', 'created_at', 'created_by', 'last_modified_at', 'last_modified_by', 'password_hash', 'search_vector'];
-
-             for (const key in fullItemData) {
-                 if (fullItemData[key] !== null && fullItemData[key] !== undefined && String(fullItemData[key]).trim() !== '' && !ignoreKeys.includes(key)) {
-                     const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                     let displayValue = fullItemData[key];
-                     if (key.includes('date') && typeof displayValue === 'string') {
-                         try { displayValue = new Date(displayValue).toLocaleDateString('en-CA'); } catch (e) {}
-                     } else if (typeof displayValue === 'object') {
-                         displayValue = JSON.stringify(displayValue, null, 2);
-                     }
-                     detailsHTMLContent += `<p><strong>${formattedKey}:</strong> ${displayValue}</p>`;
-                 }
-             }
-
-             const modalHtml = `<div class="modal-overlay fixed inset-0 flex items-center justify-center"><div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl"><div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold">Item Details: ${fullItemData.id}</h2><button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl leading-none">&times;</button></div><div class="space-y-2 text-gray-700 max-h-96 overflow-y-auto custom-scroll"><p><strong>Type:</strong> ${itemType}</p><p><strong>Location:</strong> ${item.storage_id || 'N/A'} / Pos: ${item.storage_position || 'N/A'}</p><hr class="my-3">${detailsHTMLContent}</div><div class="pt-6 flex justify-end gap-3"><button onclick="unassignItemBoxView('${JSON.stringify(item.pk).replace(/"/g, '&quot;')}', '${item.type}', '${currentStorageId}')" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Unassign Item</button><button id="close-modal-btn-bottom" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg">Close</button></div></div></div>`;
-             const { closeModal } = showModal(modalHtml);
-             document.getElementById('close-modal-btn-bottom').addEventListener('click', closeModal);
-         }
-
-
-        // Simplified functions for the new combined flow
-        function renderStorageBoxView() {
-            // This entire function was mostly empty/placeholder in the fetched file. 
-            // Since it's a structural element, I'll keep it concise for now.
-            const tabContentDiv = document.getElementById('tab-content');
-            tabContentDiv.innerHTML = `<div class="card p-6 text-center text-gray-500">
-                <i data-lucide="archive-search" class="mx-auto h-12 w-12"></i>
-                <p class="mt-2">This tab is currently under construction. Please use the Storage Explorer or Inventory for full functionality.</p>
-            </div>`;
-        }
-
-        // Renamed from showAssignItemModalBoxView to align with new logic
-        async function showAssignItemModalBoxView(storageId, position) {
-            const unassignedItems = allItemsCache.filter(s => !s.storage_id);
-            unassignedItems.sort((a, b) => a.id.localeCompare(b.id));
-
-            const modalHtml = `
-                <div class="modal-overlay fixed inset-0 flex items-center justify-center">
-                    <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-lg">
-                        <div class="flex justify-between items-center mb-4">
-                            <h2 class="text-2xl font-bold">Assign Item to ${storageId} (Pos: ${position})</h2>
-                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl leading-none">&times;</button>
-                        </div>
-                        <form id="assign-item-form-boxview">
-                            <label for="item-to-assign-boxview" class="block text-sm font-medium text-gray-700">Select an unassigned item:</label>
-                            <select id="item-to-assign-boxview" required class="w-full mt-1 p-2 border rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                                <option value="">-- Select an Item --</option>
-                                ${unassignedItems.map(s => `<option value="${JSON.stringify(s.pk).replace(/"/g, '&quot;')}" data-sourcetable="${s.type}">${s.id} (${s.type})</option>`).join('')}
-                            </select>
-                            <div class="pt-4 flex justify-end">
-                                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Assign</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>`;
-            const { closeModal } = showModal(modalHtml);
-
-            document.getElementById('assign-item-form-boxview').onsubmit = async (e) => {
-                e.preventDefault();
-                const selectElement = document.getElementById('item-to-assign-boxview');
-                const selectedOption = selectElement.options[selectElement.selectedIndex];
-                const pkValue = JSON.parse(selectedOption.value);
-                const sourceTable = selectedOption.dataset.sourcetable;
-                const itemId = selectedOption.dataset.itemid;
-
-                if (!pkValue || !sourceTable) { showToast('Please select a valid item.', 'error'); return; }
-
-                const itemConfig = storableItemTables.find(t => t.table.toLowerCase() === sourceTable.toLowerCase());
-                const payload = { storage_id: storageId, storage_position: position };
-
-                const result = await apiFetch(`table/${itemConfig.schema}/${itemConfig.table}?${buildPkQueryString(itemConfig, pkValue)}`, { method: 'PUT', body: payload });
-                if (result && !result.error) {
-                    showToast(`Item ${itemId} assigned successfully!`, 'success');
-                    closeModal();
-                    await initializeStoragePage();
-                    // Re-render the box contents after successful assignment
-                    renderBoxContentsExplorer(storageId);
-                } else {
-                    showToast('Failed to assign storage: ' + (result ? result.error : 'Unknown error'), 'error');
-                }
-            };
-        }
-
-        async function unassignItemBoxView(pkValueJson, sourceTable, currentStorageId) {
-             const pkValue = JSON.parse(pkValueJson);
-             if (!confirm(`Are you sure you want to remove this item from its storage position?`)) return;
-             const itemConfig = storableItemTables.find(t => t.table === sourceTable);
-             if (!itemConfig) {
-                 showToast(`Configuration error: No rules found for table ${sourceTable}`, 'error');
-                 return;
-             }
-             const payload = { storage_id: null, storage_position: null };
-             const result = await apiFetch(`table/${itemConfig.schema}/${sourceTable}?${buildPkQueryString(itemConfig, pkValue)}`, { method: 'PUT', body: payload });
-             if (result && !result.error) {
-                 showToast('Item unassigned successfully!', 'success');
-                 // Re-render the box contents and close the modal (assuming this function is called from the modal)
-                 const modalContainer = document.getElementById('modal-container');
-                 if(modalContainer.querySelector('.modal-content')) {
-                     modalContainer.querySelector('.modal-content').classList.remove('open');
-                     setTimeout(() => modalContainer.innerHTML = '', 300);
-                 }
-                 await initializeStoragePage();
-                 renderBoxContentsExplorer(currentStorageId);
-             } else {
-                 showToast('Failed to unassign item: ' + (result ? result.error : 'Unknown error'), 'error');
-             }
-         }
-
+        
+        // --- Drag and Drop Functions (Kept intact) ---
 
         function renderStorageSamplesDragDrop() {
             dragDropCurrentStorageId = null;
@@ -1122,6 +1117,9 @@
             const boxY = box.box_size_y || 10;
             const gridSize = boxX * boxY;
 
+            // Map items to their positions for fast lookup
+            const itemMap = new Map(itemsInBox.map(item => [item.storage_position, item]));
+
             container.innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div class="lg:col-span-3">
                     <h2 class="text-xl font-bold mb-4">Box Layout: ${box.box} (${boxX} x ${boxY})</h2>
@@ -1132,15 +1130,15 @@
                             const colLetter = convertNumberToAlphabet(colNum);
                             const alphanumericPosition = `${colLetter}_${rowNum}`;
 
-                            const item = itemsInBox.find(i => i.storage_position === alphanumericPosition);
+                            const item = itemMap.get(alphanumericPosition);
                             const colorClass = item ? (typeColorMap[item.type] || typeColorMap['default']) : 'empty';
                             let mainInfo = item ? (item.id || item.reagent_complete_name || item.item_name || item.primer_id) : '';
                             return `<div class="box-grid-cell-draggable ${item ? 'occupied ' + colorClass : 'empty'}"
                                      id="dragdrop-pos-${alphanumericPosition}"
-                                     onclick="${item ? `showItemDetailsPanelDragDrop(this, '${item.id}', '${item.type}', '${JSON.stringify(item.pk).replace(/"/g, '&quot;')}', '${item.type}', '${storageId}')` : `showToast('Drag an item here to assign it.', 'info')`}"
+                                     onclick="${item ? `showItemDetailsModalBoxView(this, '${item.id}', '${item.type}', '${JSON.stringify(item.pk).replace(/"/g, '&quot;')}', '${item.type}', '${storageId}')` : `showToast('Drag an item here to assign it.', 'info')`}"
                                      data-position="${alphanumericPosition}"
                                      draggable="${!!item}"
-                                     data-item-info='${item ? `${JSON.stringify(item.pk)}|${item.type}` : ''}'>
+                                     data-item-info='${item ? `${JSON.stringify(item.pk).replace(/"/g, '&quot;')}|${item.type}` : ''}'>
                                      <span class="font-bold text-sm">${alphanumericPosition}</span>
                                      ${item ? `<span class="truncate text-xs w-full">${mainInfo}</span><span class="truncate text-xs w-full font-medium">${item.type}</span>` : ''}
                                  </div>`;
@@ -1220,6 +1218,188 @@
             });
         }
 
+        async function showItemDetailsModalBoxView(element, itemId, itemType, pkValueJson, sourceTable, currentStorageId) {
+             const pkValue = JSON.parse(pkValueJson);
+             const item = allItemsCache.find(i => i.id === itemId && i.type === itemType);
+             if (!item) { showToast('Item details not found.', 'error'); return; }
+
+             const itemConfig = storableItemTables.find(t => t.table === itemType);
+             const itemDetails = await apiFetch(`table/${itemConfig.schema}/${itemConfig.table}?${buildPkQueryString(itemConfig, pkValue)}`);
+             if (itemDetails.error || itemDetails.length === 0) { showToast('Failed to fetch item details.', 'error'); return; }
+
+             const fullItemData = itemDetails[0];
+
+             let detailsHTMLContent = '';
+             const ignoreKeys = ['pk', 'table', 'type', 'storage_id', 'storage_position', 'attachment', 'attachment_link', 'box_size_x', 'box_size_y', 'notes', 'created_at', 'created_by', 'last_modified_at', 'last_modified_by', 'password_hash', 'search_vector'];
+
+             for (const key in fullItemData) {
+                 if (fullItemData[key] !== null && fullItemData[key] !== undefined && String(fullItemData[key]).trim() !== '' && !ignoreKeys.includes(key)) {
+                     const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                     let displayValue = fullItemData[key];
+                     if (key.includes('date') && typeof displayValue === 'string') {
+                         try { displayValue = new Date(displayValue).toLocaleDateString('en-CA'); } catch (e) {}
+                     } else if (typeof displayValue === 'object') {
+                         displayValue = JSON.stringify(displayValue, null, 2);
+                     }
+                     detailsHTMLContent += `<p><strong>${formattedKey}:</strong> ${displayValue}</p>`;
+                 }
+             }
+
+             const modalHtml = `<div class="modal-overlay fixed inset-0 flex items-center justify-center"><div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl"><div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold">Item Details: ${item.id}</h2><button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl leading-none">&times;</button></div><div class="space-y-2 text-gray-700 max-h-96 overflow-y-auto custom-scroll"><p><strong>Type:</strong> ${itemType}</p><p><strong>Location:</strong> ${item.storage_id || 'N/A'} / Pos: ${item.storage_position || 'N/A'}</p><hr class="my-3">${detailsHTMLContent}</div><div class="pt-6 flex justify-end gap-3"><button onclick="unassignItemBoxView('${JSON.stringify(item.pk).replace(/"/g, '&quot;')}', '${item.type}', '${currentStorageId}')" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Unassign Item</button><button id="close-modal-btn-bottom" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg">Close</button></div></div></div>`;
+             const { closeModal } = showModal(modalHtml);
+             document.getElementById('close-modal-btn-bottom').addEventListener('click', closeModal);
+         }
+
+
+        // --- New Storage Box View Implementation ---
+        function renderStorageBoxView() {
+            const tabContentDiv = document.getElementById('tab-content');
+
+            const allRooms = storageCache.rooms.sort((a, b) => a.room_id.localeCompare(b.room_id));
+            const allStorageIds = storageCache.storageUnits;
+
+            const html = `
+                <div class="card p-6">
+                    <h2 class="text-2xl font-bold mb-4">Select Box for Graphical Management</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Room</label>
+                            <select id="box-view-room" class="filter-select w-full mt-1">
+                                <option value="">Select Room</option>
+                                ${allRooms.map(r => `<option value="${r.room_id}">${r.room_id} (${r.description || 'N/A'})</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Unit/Freezer</label>
+                            <select id="box-view-freezer" class="filter-select w-full mt-1" disabled>
+                                <option value="">Select Unit</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700">Box</label>
+                            <select id="box-view-box" class="filter-select w-full mt-1" disabled>
+                                <option value="">Select Box to View</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div id="box-view-content-area" class="mt-6 min-h-[50vh]">
+                        <div class="text-center p-8 text-gray-500">
+                            <i data-lucide="archive-search" class="mx-auto h-12 w-12"></i>
+                            <p class="mt-2">Select a Box from the dropdowns above to display its contents and layout.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            tabContentDiv.innerHTML = html;
+            lucide.createIcons();
+
+            const roomSelect = document.getElementById('box-view-room');
+            const freezerSelect = document.getElementById('box-view-freezer');
+            const boxSelect = document.getElementById('box-view-box');
+            const contentArea = document.getElementById('box-view-content-area');
+
+            // 1. Handle Room Selection
+            roomSelect.addEventListener('change', () => {
+                const selectedRoomId = roomSelect.value;
+                freezerSelect.innerHTML = '<option value="">Select Unit</option>';
+                boxSelect.innerHTML = '<option value="">Select Box to View</option>';
+                freezerSelect.disabled = true;
+                boxSelect.disabled = true;
+                contentArea.innerHTML = `<div class="text-center p-8 text-gray-500"><i data-lucide="archive-search" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a Box from the dropdowns above to display its contents and layout.</p></div>`;
+                
+                if (selectedRoomId) {
+                    const freezers = [...new Set(allStorageIds.filter(s => s.room_id === selectedRoomId).map(s => s.freezer))];
+                    freezers.sort().forEach(f => freezerSelect.innerHTML += `<option value="${f}">${f}</option>`);
+                    freezerSelect.disabled = false;
+                }
+                lucide.createIcons();
+            });
+
+            // 2. Handle Freezer Selection
+            freezerSelect.addEventListener('change', () => {
+                const selectedRoomId = roomSelect.value;
+                const selectedFreezer = freezerSelect.value;
+                boxSelect.innerHTML = '<option value="">Select Box to View</option>';
+                boxSelect.disabled = true;
+                contentArea.innerHTML = `<div class="text-center p-8 text-gray-500"><i data-lucide="archive-search" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a Box from the dropdowns above to display its contents and layout.</p></div>`;
+
+                if (selectedFreezer) {
+                    const boxes = allStorageIds.filter(s => s.room_id === selectedRoomId && s.freezer === selectedFreezer);
+                    boxes.sort((a, b) => a.box.localeCompare(b.box)).forEach(b => boxSelect.innerHTML += `<option value="${b.storage_id}">${b.box} (${b.storage_id})</option>`);
+                    boxSelect.disabled = false;
+                }
+                lucide.createIcons();
+            });
+
+            // 3. Handle Box Selection (Triggers the explorer render)
+            boxSelect.addEventListener('change', () => {
+                const selectedStorageId = boxSelect.value;
+                if (selectedStorageId) {
+                    // Reuse the excellent graphical rendering function from the Explorer tab
+                    contentArea.innerHTML = `<div class="p-8 text-center"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Loading box layout...</div>`;
+                    lucide.createIcons();
+                    // Pass the storageId to the specific rendering function
+                    renderBoxContentsExplorer(selectedStorageId, 'box-view-content-area'); // Pass target ID
+                } else {
+                    contentArea.innerHTML = `<div class="text-center p-8 text-gray-500"><i data-lucide="archive-search" class="mx-auto h-12 w-12"></i><p class="mt-2">Select a Box from the dropdowns above to display its contents and layout.</p></div>`;
+                    lucide.createIcons();
+                }
+            });
+        }
+        
+        // Overridden version of renderBoxContentsExplorer to allow a custom container ID
+        function renderBoxContentsExplorer(storageId, targetContainerId = 'explorer-container-content') {
+            dragDropCurrentStorageId = storageId;
+            const box = storageCache.storageUnits.find(s => s.storage_id === storageId);
+            const room = storageCache.rooms.find(r => r.room_id === box.room_id);
+            const itemsInBox = allItemsCache.filter(s => s.storage_id === storageId);
+            const container = document.getElementById(targetContainerId);
+
+            const boxX = box.box_size_x || 10;
+            const boxY = box.box_size_y || 10;
+            const gridSize = boxX * boxY;
+
+            // Map items to their positions for fast lookup
+            const itemMap = new Map(itemsInBox.map(item => [item.storage_position, item]));
+
+            container.innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full">
+                <div class="lg:col-span-2 h-full">
+                    <h2 class="text-xl font-bold mb-4">Box Layout: ${box.box} (${boxX} x ${boxY})</h2>
+                    <div id="box-grid-explorer" class="box-grid p-2 bg-gray-200 rounded-lg overflow-y-auto" style="grid-template-columns: repeat(${boxX}, minmax(0, 1fr)); max-height: 80vh;">
+                        ${Array.from({ length: gridSize }, (_, i) => i + 1).map(cellNum => {
+                            const rowNum = Math.ceil(cellNum / boxX);
+                            const colNum = ((cellNum - 1) % boxX) + 1;
+                            const colLetter = convertNumberToAlphabet(colNum);
+                            const alphanumericPosition = `${colLetter}_${rowNum}`;
+
+                            const item = itemMap.get(alphanumericPosition);
+                            const colorClass = item ? (typeColorMap[item.type] || typeColorMap['default']) : 'empty';
+                            let mainInfo = item ? (item.id || item.reagent_complete_name || item.item_name || item.primer_id) : '';
+                            return `<div class="box-cell ${item ? 'occupied ' + colorClass : 'empty'}"
+                                     title="Position: ${alphanumericPosition}${item ? `\nID: ${item.id}\nType: ${item.type}\nPos: ${item.storage_position}` : ''}"
+                                     onclick="${item ? `showItemDetailsModalBoxView(this, '${item.id}', '${item.type}', '${JSON.stringify(item.pk).replace(/"/g, '&quot;')}', '${item.type}', '${storageId}')` : `showAssignItemModalBoxView('${storageId}', '${alphanumericPosition}')`}">
+                                     <span class="cell-position-label">${alphanumericPosition}</span>
+                                     <div class="cell-main-info">${mainInfo}</div>
+                                 </div>`;
+                        }).join('')}
+                    </div>
+                </div>
+                <div class="lg:col-span-1 h-full">
+                    <div id="item-details-panel-explorer" class="card p-6 sticky top-8">
+                        <div class="text-center text-gray-500"><i data-lucide="mouse-pointer-square" class="mx-auto h-12 w-12"></i><p class="mt-2">Select an item to see details</p></div>
+                    </div>
+                </div>
+            </div>`;
+            
+            // Only update the breadcrumb if we are in the original Explorer tab
+            if (targetContainerId === 'explorer-container-content') {
+                 updateBreadcrumbExplorer({ room, freezer: box.freezer, box });
+            }
+            lucide.createIcons();
+        }
+
+        // --- New Storage Unit Modal Logic ---
         async function showNewStorageModal() {
             const rooms = storageCache.rooms;
             const roomOptions = rooms && rooms.length > 0 ? rooms.map(r => `<option value="${r.room_id}">${r.description ? `${r.room_id} - ${r.description}` : r.room_id}</option>`).join('') : '';
@@ -1257,7 +1437,7 @@
                                 <input type="text" id="etage" name="etage" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                             </div>
                             <div>
-                                <label for="temperature_c" class="block text-sm font-medium text-gray-700">Temperature (�C)</label>
+                                <label for="temperature_c" class="block text-sm font-medium text-gray-700">Temperature (°C)</label>
                                 <input type="number" step="0.1" id="temperature_c" name="temperature_c" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                             </div>
                             <div>
