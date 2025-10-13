@@ -177,6 +177,7 @@ CREATE TABLE IF NOT EXISTS "lims"."personal" (
     "person_id" text PRIMARY KEY,
     "salutation" text,
     "full_name" text,
+    "organization" text,
     "room" text,
     "telephone" text,
     "mail" text UNIQUE,
@@ -208,6 +209,7 @@ CREATE TABLE IF NOT EXISTS "lims"."customers" (
     "salutation" text,
     "customer_name" text NOT NULL,
     "customer_abrv" text UNIQUE NOT NULL,
+    "organization" text,
     "address" text,
     "mail" text,
     "phone" text,
@@ -540,9 +542,10 @@ CREATE TABLE "lab"."sampling" (
     "customer_id" integer REFERENCES "lims"."customers"("customer_id"),
     "experiment_id" text,
     "experiment_date" date,
+    "latitude" numeric,
+    "longitude" numeric,
     "geom" geometry(Point, 4326),
-    "fishing_start_geom" geometry(Point, 4326),
-    "fishing_end_geom" geometry(Point, 4326),
+    "fishing_geom" geometry(Geometry, 4326),
     "location_name" text,
     "depth_m" numeric,
     "start_at" time,
@@ -648,11 +651,15 @@ CREATE TABLE "lab"."sampling_abiotic_data" (
 CREATE TABLE IF NOT EXISTS "lab"."reservation_samples" (
     "reservation_sample_id" text NOT NULL,
     "project_id" text REFERENCES "lims"."projects"("project_id"),
+    "customer_id" integer REFERENCES "lims"."customers"("customer_id"),
     "sampling_id" text,
     "sampling_date" date,
     "sample_type_id" text NOT NULL REFERENCES "reference"."samples_type"("sample_type_id"),
     "planned_collection_date" date,
+    "transport" text,
+    "conservation" text,
     "status_id" text REFERENCES "reference"."status"("status_id") DEFAULT 'Planned',
+    "other_info" text,
     "tags" text,
     "notes" text,
     "attachment" bytea,
@@ -1246,12 +1253,12 @@ CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_FishingData" (
     "fishing_year" integer,
     "fishing_start_time" time,
     "fishing_end_time" time,
-    "original_easting" numeric,
-    "original_northing" numeric,
-    "original_latitude" numeric,
-    "original_longitude" numeric,
-    "original_srid" integer,
-    "geom_4326" geometry(Point, 4326),
+    "original_Lat" numeric,
+    "original_Lon" numeric,
+    "original_projection" Text,
+    "latitude" numeric,
+    "longitude" numeric,
+    "geom" geometry(Point, 4326),
     "location_description" text,
     "water_body_name" text,
     "water_body_code" text,
@@ -1291,6 +1298,7 @@ CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_FishingData" (
 CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_FishCatch" (
     "fish_catch_id" serial PRIMARY KEY,
     "fishing_record_id" integer NOT NULL,
+    "SamplingID" Text,
     "fishing_record_date" date NOT NULL,
     "taxon_id" text REFERENCES "reference"."taxon"("taxon_id"),
     "scientific_name_raw" text,
@@ -1337,38 +1345,79 @@ CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_Mail" (
     FOREIGN KEY ("fishing_record_id", "fishing_record_date") REFERENCES "projects"."ProjectWanderfische_FishingData"("fishing_record_id", "record_date")
 );
 
-CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_Conversation" (
-    "conversation_id" serial PRIMARY KEY,
-    "fishing_record_id" integer,
-    "fishing_record_date" date,
-    "topic" text NOT NULL,
-    "started_at" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "last_updated_at" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+-- -- =========================================
+-- Bookable tables 
+-- -- =========================================
+
+-- lims.bookable_resource Table
+CREATE TABLE IF NOT EXISTS "lims"."bookable_resource" (
+    "resource_id" text PRIMARY KEY,
+    "resource_name" text NOT NULL,
+    "resource_type" text NOT NULL, -- e.g., Centrifuge, PCR machine, Bench area
+    "room_id" text REFERENCES "reference"."room"("room_id"),
+    "equipment_id" text,
+    "capacity" integer DEFAULT 1, -- The number of people/bookings this resource can handle simultaneously
     "tags" text,
     "notes" text,
-    "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    "created_by" text,
-    "last_modified_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    "last_modified_by" text,
-    FOREIGN KEY ("fishing_record_id", "fishing_record_date") REFERENCES "projects"."ProjectWanderfische_FishingData"("fishing_record_id", "record_date")
+    "attachment" bytea,
+    "attachment_link" text
 );
 
--- NEW TABLE: To store individual messages within a conversation.
-CREATE TABLE IF NOT EXISTS "projects"."ProjectWanderfische_ChatMessage" (
-    "message_id" serial PRIMARY KEY,
-    "conversation_id" integer NOT NULL REFERENCES "projects"."ProjectWanderfische_Conversation"("conversation_id"),
-    "sender_person_id" text REFERENCES "lims"."personal"("person_id"),
-    "sender_contact_id" text REFERENCES "lims"."external_contacts"("contact_id"),
-    "message_text" text NOT NULL,
-    "sent_at" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+--  lims.booking Table
+CREATE TABLE IF NOT EXISTS "lims"."booking" (
+    "booking_id" bigserial PRIMARY KEY,
+    "resource_id" text NOT NULL REFERENCES "lims"."bookable_resource"("resource_id"),
+    "person_id" text NOT NULL,
+    "start_time" timestamptz NOT NULL,
+    "end_time" timestamptz NOT NULL,
+    "project_id" text REFERENCES "lims"."projects"("project_id"),
     "tags" text,
     "notes" text,
     "attachment" bytea,
     "attachment_link" text,
     "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    "created_by" text,
-    CONSTRAINT chk_sender_not_null CHECK (sender_person_id IS NOT NULL OR sender_contact_id IS NOT NULL)
+    CONSTRAINT chk_booking_time CHECK ("start_time" < "end_time")
 );
+
+
+-- Check Constraint for Concurrent Bookings
+-- to prevent overbooking based on the capacity of a resource. 
+-- Function to check for booking conflicts
+CREATE OR REPLACE FUNCTION "lims".check_booking_capacity()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_capacity INTEGER;
+    v_concurrent_bookings INTEGER;
+BEGIN
+    -- Get the capacity of the resource being booked
+    SELECT capacity INTO v_capacity FROM "lims"."bookable_resource" WHERE resource_id = NEW.resource_id;
+
+    -- Count existing, non-conflicting bookings for this resource
+    SELECT COUNT(*) INTO v_concurrent_bookings
+    FROM "lims"."booking"
+    WHERE
+        resource_id = NEW.resource_id
+        AND booking_id != NEW.booking_id -- Exclude the new or updated row itself
+        AND (
+            (NEW.start_time, NEW.end_time) OVERLAPS (start_time, end_time)
+        );
+
+    -- Check if the new booking exceeds the resource's capacity
+    IF v_concurrent_bookings >= v_capacity THEN
+        RAISE EXCEPTION 'This resource is already fully booked for the requested time slot. Capacity: %, Current Bookings: %', v_capacity, v_concurrent_bookings;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to enforce the capacity check before inserting or updating a booking
+CREATE TRIGGER trg_check_booking_capacity BEFORE INSERT OR UPDATE ON "lims"."booking"
+FOR EACH ROW EXECUTE FUNCTION "lims".check_booking_capacity();
+
+
 
 
 -- -- =========================================
@@ -1487,12 +1536,12 @@ BEGIN
         SELECT p."project_abrv" INTO project_abrv
         FROM "lims"."projects" p
         WHERE p."project_id" = NEW.project_id;
-        id_prefix := v_sample_type_abrv || sample_year || project_abrv;
+        id_prefix := v_sample_type_abrv || sample_year || project_abrv || '_' ;
     ELSIF NEW.customer_id IS NOT NULL THEN
         SELECT c."customer_abrv" INTO customer_abrv
         FROM "lims"."customers" c
         WHERE c."customer_id" = NEW.customer_id;
-        id_prefix := v_sample_type_abrv || sample_year || customer_abrv;
+        id_prefix := v_sample_type_abrv || sample_year || customer_abrv || '_' ;
     ELSE
         RAISE EXCEPTION 'Cannot generate root sample ID: Missing project_id and customer_id.';
     END IF;
@@ -1567,39 +1616,31 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- F04. COORDINATE TRANSFORMATION FUNCTION
-CREATE OR REPLACE FUNCTION "projects".transform_coordinates_to_wgs84(
-    p_easting numeric,
-    p_northing numeric,
-    p_latitude numeric,
-    p_longitude numeric,
-    p_original_srid integer
-)
-RETURNS geometry(Point, 4326) AS $$
+-- F04_GENERIC: Creates a PostGIS Point geometry from Latitude and Longitude (SRID 4326 assumed)
+CREATE OR REPLACE FUNCTION "public".populate_geom_from_lat_lon()
+RETURNS TRIGGER AS $$
 DECLARE
-    temp_geom geometry;
+    v_latitude numeric;
+    v_longitude numeric;
 BEGIN
-    IF p_original_srid = 4326 AND p_longitude IS NOT NULL AND p_latitude IS NOT NULL THEN
-        temp_geom := ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326);
-    ELSIF p_easting IS NOT NULL AND p_northing IS NOT NULL AND p_original_srid IS NOT NULL AND p_original_srid != 4326 THEN
-        BEGIN
-            temp_geom := ST_Transform(ST_SetSRID(ST_MakePoint(p_easting, p_northing), p_original_srid), 4326);
-        EXCEPTION
-            WHEN OTHERS THEN
-                RAISE WARNING 'SRID % is not defined or transformation failed for coordinates (%, %). Returning NULL.', p_original_srid, p_easting, p_northing;
-                RETURN NULL;
-        END;
+    -- Directly read latitude and longitude values from the NEW record
+    v_latitude := NEW.latitude;
+    v_longitude := NEW.longitude;
+
+    IF v_latitude IS NOT NULL AND v_longitude IS NOT NULL AND v_latitude BETWEEN -90 AND 90 AND v_longitude BETWEEN -180 AND 180 THEN
+        -- Create a Point geometry from (Longitude, Latitude) and set SRID to 4326 (WGS 84)
+        -- *** Use direct assignment to NEW.geom ***
+        NEW.geom := ST_SetSRID(ST_MakePoint(v_longitude, v_latitude), 4326);
     ELSE
-        RETURN NULL;
+        -- If coordinates are invalid or NULL, directly set 'geom' to NULL
+        -- *** Use direct assignment to NEW.geom ***
+        NEW.geom := NULL;
     END IF;
 
-    IF temp_geom IS NOT NULL AND ST_GeometryType(temp_geom) = 'ST_Point' THEN
-        RETURN temp_geom;
-    ELSE
-        RAISE WARNING 'Transformed geometry is not a valid POINT type. Returning NULL.';
-        RETURN NULL;
-    END IF;
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
 
 -- F05. RLS POLICY HELPER FUNCTION
 CREATE OR REPLACE FUNCTION "lims".is_member_of_project(p_project_id text)
@@ -1660,7 +1701,7 @@ BEGIN
     sampling_year := TO_CHAR(COALESCE(NEW.sampling_date, CURRENT_DATE), 'YY');
     SELECT COALESCE(e.ecosystem_abrv, 'UNK') INTO ecosystem_abrv FROM "reference"."ecosystem" e WHERE e.ecosystem_id = NEW.ecosystem_id;
     SELECT COALESCE(r.region_abrv, 'UNK') INTO region_abrv FROM "reference"."region" r WHERE r.region_id = NEW.region_id;
-    id_prefix := sampling_year || ecosystem_abrv || region_abrv;
+    id_prefix := sampling_year || ecosystem_abrv || region_abrv || '_' ;
     SELECT COALESCE(MAX(SUBSTRING("sampling_id" FROM LENGTH(id_prefix) + 1)::INTEGER), 0) INTO next_serial FROM "lab"."sampling" WHERE "sampling_id" LIKE id_prefix || '%';
     NEW.sampling_id := id_prefix || LPAD((next_serial + 1)::TEXT, 3, '0');
     RETURN NEW;
@@ -1895,8 +1936,6 @@ ALTER TABLE "lab"."root_samples" ADD COLUMN IF NOT EXISTS "sample_search_vector"
 ALTER TABLE "projects"."ProjectWanderfische_FishingData" ADD COLUMN IF NOT EXISTS "fishing_data_search_vector" tsvector;
 ALTER TABLE "projects"."ProjectWanderfische_FishCatch" ADD COLUMN IF NOT EXISTS "fish_catch_search_vector" tsvector;
 ALTER TABLE "projects"."ProjectWanderfische_Mail" ADD COLUMN IF NOT EXISTS "mail_search_vector" tsvector;
-ALTER TABLE "projects"."ProjectWanderfische_Conversation" ADD COLUMN IF NOT EXISTS "conversation_search_vector" tsvector;
-ALTER TABLE "projects"."ProjectWanderfische_ChatMessage" ADD COLUMN IF NOT EXISTS "chat_message_search_vector" tsvector;
 ALTER TABLE "lab"."storage" ADD COLUMN IF NOT EXISTS "storage_search_vector" tsvector;
 ALTER TABLE "bioinformatics"."analysis_pipelines" ADD COLUMN IF NOT EXISTS "pipeline_search_vector" tsvector;
 ALTER TABLE "bioinformatics"."analysis_runs" ADD COLUMN IF NOT EXISTS "runs_search_vector" tsvector;
@@ -2233,20 +2272,12 @@ CREATE TRIGGER trg_set_edna_assignment_date BEFORE INSERT ON "bioinformatics"."e
 
 
 -- 12.3. Triggers for other logic
-CREATE OR REPLACE FUNCTION "projects".populate_fishing_geom_4326_trigger()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.geom_4326 := "projects".transform_coordinates_to_wgs84(
-        NEW.original_easting,
-        NEW.original_northing,
-        NEW.original_latitude,
-        NEW.original_longitude,
-        NEW.original_srid
-    );
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-CREATE TRIGGER trg_populate_geom_4326 BEFORE INSERT OR UPDATE ON "projects"."ProjectWanderfische_FishingData" FOR EACH ROW EXECUTE FUNCTION "projects".populate_fishing_geom_4326_trigger();
+-- CREATE TRIGGER trg_populate_geom_4326 BEFORE INSERT OR UPDATE ON "projects"."ProjectWanderfische_FishingData" FOR EACH ROW EXECUTE FUNCTION "projects".populate_fishing_geom_4326_trigger();
+CREATE TRIGGER trg_auto_geom_sampling BEFORE INSERT OR UPDATE OF "latitude", "longitude" ON "lab"."sampling"
+FOR EACH ROW EXECUTE FUNCTION "public".populate_geom_from_lat_lon();
+CREATE TRIGGER trg_auto_geom_wanderfische BEFORE INSERT OR UPDATE OF "latitude", "longitude" ON "projects"."ProjectWanderfische_FishingData"
+FOR EACH ROW EXECUTE FUNCTION "public".populate_geom_from_lat_lon();
+
 CREATE TRIGGER trg_update_taxon_path BEFORE INSERT OR UPDATE ON "reference"."taxon" FOR EACH ROW EXECUTE FUNCTION "reference".update_taxon_ltree_path_for_row();
 CREATE TRIGGER trg_update_status_dissection AFTER INSERT ON "lab"."dissections" FOR EACH ROW EXECUTE FUNCTION "lab".update_sample_status();
 CREATE TRIGGER trg_update_status_nanodrop AFTER INSERT ON "lab"."nanodrop" FOR EACH ROW EXECUTE FUNCTION "lab".update_sample_status();
@@ -2352,8 +2383,6 @@ CREATE TRIGGER audit_trigger_assignments AFTER INSERT OR UPDATE OR DELETE ON "bi
 CREATE TRIGGER audit_trigger_proj_fishingdata AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_FishingData" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
 CREATE TRIGGER audit_trigger_proj_fishcatch AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_FishCatch" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
 CREATE TRIGGER audit_trigger_proj_mail AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_Mail" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_proj_conversation AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_Conversation" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
-CREATE TRIGGER audit_trigger_proj_chatmessage AFTER INSERT OR UPDATE OR DELETE ON "projects"."ProjectWanderfische_ChatMessage" FOR EACH ROW EXECUTE FUNCTION "audit"."if_modified_func"();
 
 -- 12.6. Triggers for Full-Text Search
 CREATE TRIGGER trg_update_personal_search BEFORE INSERT OR UPDATE ON "lims"."personal" FOR EACH ROW EXECUTE FUNCTION "lims".update_personal_search_vector_func();
@@ -2371,8 +2400,6 @@ CREATE TRIGGER trg_update_sample_search BEFORE INSERT OR UPDATE ON "lab"."root_s
 CREATE TRIGGER trg_update_fishing_data_search BEFORE INSERT OR UPDATE ON "projects"."ProjectWanderfische_FishingData" FOR EACH ROW EXECUTE FUNCTION "projects".update_fishing_data_search_vector_func();
 CREATE TRIGGER trg_update_fish_catch_search BEFORE INSERT OR UPDATE ON "projects"."ProjectWanderfische_FishCatch" FOR EACH ROW EXECUTE FUNCTION "projects".update_fish_catch_search_vector_func();
 CREATE TRIGGER trg_update_mail_search BEFORE INSERT OR UPDATE ON "projects"."ProjectWanderfische_Mail" FOR EACH ROW EXECUTE FUNCTION "projects".update_mail_search_vector_func();
-CREATE TRIGGER trg_update_conversation_search BEFORE INSERT OR UPDATE ON "projects"."ProjectWanderfische_Conversation" FOR EACH ROW EXECUTE FUNCTION "projects".update_conversation_search_vector_func();
-CREATE TRIGGER trg_update_chat_message_search BEFORE INSERT OR UPDATE ON "projects"."ProjectWanderfische_ChatMessage" FOR EACH ROW EXECUTE FUNCTION "projects".update_chat_message_search_vector_func();
 CREATE TRIGGER trg_update_storage_search BEFORE INSERT OR UPDATE ON "lab"."storage" FOR EACH ROW EXECUTE FUNCTION "lab".update_storage_search_vector_func();
 CREATE TRIGGER trg_update_pipeline_search BEFORE INSERT OR UPDATE ON "bioinformatics"."analysis_pipelines" FOR EACH ROW EXECUTE FUNCTION "bioinformatics".update_pipeline_search_vector_func();
 CREATE TRIGGER trg_update_runs_search BEFORE INSERT OR UPDATE ON "bioinformatics"."analysis_runs" FOR EACH ROW EXECUTE FUNCTION "bioinformatics".update_runs_search_vector_func();
@@ -2487,13 +2514,10 @@ CREATE INDEX IF NOT EXISTS idx_edna_assignments_taxon_id ON "bioinformatics"."ed
 CREATE INDEX IF NOT EXISTS idx_wander_fishingdata_id_date ON "projects"."ProjectWanderfische_FishingData" ("fishing_record_id", "record_date");
 CREATE INDEX IF NOT EXISTS idx_wander_fishingdata_agency_id ON "projects"."ProjectWanderfische_FishingData" ("agency_id");
 CREATE INDEX IF NOT EXISTS idx_wander_fishingdata_project_id ON "projects"."ProjectWanderfische_FishingData" ("project_id");
-CREATE INDEX IF NOT EXISTS idx_wander_fishingdata_geom ON "projects"."ProjectWanderfische_FishingData" USING GIST ("geom_4326");
 CREATE INDEX IF NOT EXISTS idx_wander_fishcatch_fishing_id_date ON "projects"."ProjectWanderfische_FishCatch" ("fishing_record_id", "fishing_record_date");
 CREATE INDEX IF NOT EXISTS idx_wander_fishcatch_taxon_id ON "projects"."ProjectWanderfische_FishCatch" ("taxon_id");
 CREATE INDEX IF NOT EXISTS idx_wander_mail_fishing_id_date ON "projects"."ProjectWanderfische_Mail" ("fishing_record_id", "fishing_record_date");
 CREATE INDEX IF NOT EXISTS idx_wander_mail_sender_id ON "projects"."ProjectWanderfische_Mail" ("sender_person_id");
-CREATE INDEX IF NOT EXISTS idx_wander_conversation_fishing_id_date ON "projects"."ProjectWanderfische_Conversation" ("fishing_record_id", "fishing_record_date");
-CREATE INDEX IF NOT EXISTS idx_wander_chatmessage_conversation_id ON "projects"."ProjectWanderfische_ChatMessage" ("conversation_id");
 
 
 -- -- =========================================
@@ -2689,10 +2713,7 @@ SELECT
     s.location_name,
     ST_X(s.geom) AS sampling_longitude,
     ST_Y(s.geom) AS sampling_latitude,
-    ST_X(s.fishing_start_geom) AS fishing_start_longitude,
-    ST_Y(s.fishing_start_geom) AS fishing_start_latitude,
-    ST_X(s.fishing_end_geom) AS fishing_end_longitude,
-    ST_Y(s.fishing_end_geom) AS fishing_end_latitude,
+    ST_X(s.fishing_geom) AS fishing_geom,
     s.depth_m,
     s.fishing_method,
     s.gear_type,
@@ -3162,8 +3183,6 @@ ALTER TABLE "bioinformatics"."analysis_pipelines" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "projects"."ProjectWanderfische_FishingData" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "projects"."ProjectWanderfische_FishCatch" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "projects"."ProjectWanderfische_Mail" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "projects"."ProjectWanderfische_Conversation" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "projects"."ProjectWanderfische_ChatMessage" ENABLE ROW LEVEL SECURITY;
 
 -- Policy Definitions
 -- Public/Shared tables (all authenticated users can see)
@@ -3199,8 +3218,6 @@ CREATE POLICY edna_assignments_rls_policy ON "bioinformatics"."edna_assignments"
 CREATE POLICY wander_fishingdata_policy ON "projects"."ProjectWanderfische_FishingData" USING ("lims".is_member_of_project(project_id));
 CREATE POLICY wander_fishcatch_policy ON "projects"."ProjectWanderfische_FishCatch" USING (EXISTS (SELECT 1 FROM "projects"."ProjectWanderfische_FishingData" fd WHERE fd.fishing_record_id = "ProjectWanderfische_FishCatch".fishing_record_id AND fd.record_date = "ProjectWanderfische_FishCatch".fishing_record_date AND "lims".is_member_of_project(fd.project_id)));
 CREATE POLICY wander_mail_policy ON "projects"."ProjectWanderfische_Mail" USING (EXISTS (SELECT 1 FROM "projects"."ProjectWanderfische_FishingData" fd WHERE fd.fishing_record_id = "ProjectWanderfische_Mail".fishing_record_id AND fd.record_date = "ProjectWanderfische_Mail".fishing_record_date AND "lims".is_member_of_project(fd.project_id)));
-CREATE POLICY wander_conversation_policy ON "projects"."ProjectWanderfische_Conversation" USING (EXISTS (SELECT 1 FROM "projects"."ProjectWanderfische_FishingData" fd WHERE fd.fishing_record_id = "ProjectWanderfische_Conversation".fishing_record_id AND fd.record_date = "ProjectWanderfische_Conversation".fishing_record_date AND "lims".is_member_of_project(fd.project_id)));
-CREATE POLICY wander_chatmessage_policy ON "projects"."ProjectWanderfische_ChatMessage" USING (EXISTS (SELECT 1 FROM "projects"."ProjectWanderfische_Conversation" conv JOIN "projects"."ProjectWanderfische_FishingData" fd ON conv.fishing_record_id = fd.fishing_record_id AND conv.fishing_record_date = fd.record_date WHERE conv.conversation_id = "ProjectWanderfische_ChatMessage".conversation_id AND "lims".is_member_of_project(fd.project_id)));
 
 
 -- -- =========================================
@@ -3271,76 +3288,12 @@ END $$;
 
 
 
--- ####################################
--- Great booking schema
--- ####################################
-
--- lims.bookable_resource Table
-CREATE TABLE IF NOT EXISTS "lims"."bookable_resource" (
-    "resource_id" text PRIMARY KEY,
-    "resource_name" text NOT NULL,
-    "resource_type" text NOT NULL, -- e.g., Centrifuge, PCR machine, Bench area
-    "room_id" text REFERENCES "reference"."room"("room_id"),
-    "equipment_id" text,
-    "capacity" integer DEFAULT 1, -- The number of people/bookings this resource can handle simultaneously
-    "tags" text,
-    "notes" text,
-    "attachment" bytea,
-    "attachment_link" text
-);
 
 
---  lims.booking Table
-CREATE TABLE IF NOT EXISTS "lims"."booking" (
-    "booking_id" bigserial PRIMARY KEY,
-    "resource_id" text NOT NULL REFERENCES "lims"."bookable_resource"("resource_id"),
-    "person_id" text NOT NULL,
-    "start_time" timestamptz NOT NULL,
-    "end_time" timestamptz NOT NULL,
-    "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "tags" text,
-    "notes" text,
-    "attachment" bytea,
-    "attachment_link" text,
-    "created_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT chk_booking_time CHECK ("start_time" < "end_time")
-);
 
 
--- Check Constraint for Concurrent Bookings
--- to prevent overbooking based on the capacity of a resource. 
--- Function to check for booking conflicts
-CREATE OR REPLACE FUNCTION "lims".check_booking_capacity()
-RETURNS TRIGGER AS $$
-DECLARE
-    v_capacity INTEGER;
-    v_concurrent_bookings INTEGER;
-BEGIN
-    -- Get the capacity of the resource being booked
-    SELECT capacity INTO v_capacity FROM "lims"."bookable_resource" WHERE resource_id = NEW.resource_id;
 
-    -- Count existing, non-conflicting bookings for this resource
-    SELECT COUNT(*) INTO v_concurrent_bookings
-    FROM "lims"."booking"
-    WHERE
-        resource_id = NEW.resource_id
-        AND booking_id != NEW.booking_id -- Exclude the new or updated row itself
-        AND (
-            (NEW.start_time, NEW.end_time) OVERLAPS (start_time, end_time)
-        );
 
-    -- Check if the new booking exceeds the resource's capacity
-    IF v_concurrent_bookings >= v_capacity THEN
-        RAISE EXCEPTION 'This resource is already fully booked for the requested time slot. Capacity: %, Current Bookings: %', v_capacity, v_concurrent_bookings;
-    END IF;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger to enforce the capacity check before inserting or updating a booking
-CREATE TRIGGER trg_check_booking_capacity BEFORE INSERT OR UPDATE ON "lims"."booking"
-FOR EACH ROW EXECUTE FUNCTION "lims".check_booking_capacity();
 
 
 
@@ -3425,6 +3378,7 @@ SET "lims.current_person_id" = 'jane.doe';
 
 DO $$ BEGIN
     INSERT INTO "reference"."status" ("status_id", "notes") VALUES
+    ('Active', 'The action or item is planned but not started.'),
     ('Planned', 'The action or item is planned but not started.'),
     ('Received', 'The item has been received and is ready for use.'),
     ('In Progress', 'The work on this item is currently in progress.'),
@@ -3444,11 +3398,16 @@ DO $$ BEGIN
     ('On Hold', 'The process is temporarily paused.');
 
     INSERT INTO "reference"."room" ("room_id", "etage", "address", "institute", "city", "country") VALUES
-    ('R101', '1st Floor', '123 Ocean Blvd', 'Marine Research Institute', 'Bremerhaven', 'Germany'),
+    ('R237', '2st Floor', 'Herwigstr 31', 'TI-FI', 'Bremerhaven', 'Germany'),
+    ('R', '2st Floor', 'Herwigstr 31', 'TI-FI', 'Bremerhaven', 'Germany'),
+    ('R', '2st Floor', 'Herwigstr 31', 'TI-FI', 'Bremerhaven', 'Germany'),
+    ('R', '2st Floor', 'Herwigstr 31', 'TI-FI', 'Bremerhaven', 'Germany'),
+    ('R', '2st Floor', 'Herwigstr 31', 'TI-FI', 'Bremerhaven', 'Germany'),
+    ('R', '2st Floor', 'Herwigstr 31', 'TI-FI', 'Bremerhaven', 'Germany'),
     ('R202', '2nd Floor', '123 Ocean Blvd', 'Marine Research Institute', 'Bremerhaven', 'Germany');
 
     INSERT INTO "reference"."vessel" ("vessel_id", "vessel_name", "belong_to") VALUES
-    ('RV_Meteor', 'Research Vessel Meteor', 'DFG'),
+    ('RV_', 'Research Vessel Meteor', 'DFG'),
     ('RV_Sonne', 'Research Vessel Sonne', 'BMF');
 
     INSERT INTO "reference"."region" ("region_id", "region_abrv", "parent_region", "rank", "path") VALUES
@@ -3594,6 +3553,463 @@ DO $$ BEGIN
     ('Ethanol', 'Ethanol 99.5%', 'Chemicals', 'liter');
 
     INSERT INTO "lims"."orders" ("fi_order_nr", "item_id", "category_id", "order_date", "price", "quantity", "project_id", "supplier_id", "status_id") VALUES
+    ('PO_AG24_001', 'QIAampDNA', 'Kits', '2024-02-15', 500.00, 1, 'Proj_AquaGen', 'Qiagen', 'Completed'),
+    ('PO_BM25_001', 'Ethanol', 'Chemicals', '2025-04-05', 50.00, 1, 'Proj_BioMon', 'Sigma-Aldrich', 'Received');
+
+    INSERT INTO "lims"."reagents" ("reagent_id", "reagent_complete_name", "category_id", "lot", "storage_id", "storage_position", "quantity_available", "quantity_unit_id", "reception_date", "expire_date", "order_id", "project_id", "status_id") VALUES
+    ('QIAamp_LotA', 'QIAamp DNA Mini Kit, Lot A', 'Kits', 'LotA123', 'S_R101_F1_B1', 1, 50, 'gram', '2024-03-01', '2025-03-01', 'PO_AG24_001', 'Proj_AquaGen', 'Received'),
+    ('Ethanol_LotB', 'Ethanol 99.5%, Lot B', 'Chemicals', 'LotB456', 'S_R202_F2_B2', 1, 10, 'liter', '2025-04-10', '2026-04-10', 'PO_BM25_001', 'Proj_BioMon', 'Received');
+
+    INSERT INTO "lims"."equipment" ("equipment_id", "equipment_name", "room_id", "lot") VALUES
+    ('Qubit_3', 'Qubit 3 Fluorometer', 'R101', 'LOTA123'),
+    ('Nanodrop_2000', 'Nanodrop 2000 Spectrophotometer', 'R101', 'LOTB456');
+
+    INSERT INTO "lims"."permits" ("permit_id", "permit_number", "issuing_authority", "valid_from", "valid_to", "reference") VALUES
+    ('Permit-12345', 'DE-BW-12345', 'State Environmental Agency', '2025-01-01', '2025-12-31', 'Fishing permit for Baltic Sea');
+
+
+    INSERT INTO "lims"."publications" ("publication_id", "publication_type_id", "title", "journal", "doi", "date_publication", "first_author_person_id", "project_id") VALUES
+    ('Pub-2025-001', 'Journal_Article', 'Genetic Diversity of Cod in the North Sea', 'Journal of Marine Science', '10.1016/j.jmarsys.2025.103756', '2025-07-20', 'john.smith', 'Proj_AquaGen');
+END $$;
+-- ------------------------------------------------------------------------------------------------------------------
+
+-- ======================================================================
+-- 3. LAB SCHEMA - WORKFLOW DATA
+-- ======================================================================
+
+DO $$
+DECLARE
+    sampling_id_val text;
+    sample_id_w text;
+    sample_id_s text;
+    sample_id_f text;
+    sample_id_t text;
+BEGIN
+    -- 3.1 lab.sampling
+    INSERT INTO "lab"."sampling" ("sampling_date", "project_id", "cruise_id", "region_id", "ecosystem_id", "vessel_id", "depth_m", "location_name", "fishing_method", "total_catch_quantity_kg", "total_catch_quantity_fish", "status_id") VALUES
+    ('2025-05-01', 'Proj_BioMon', 'CRUISE_Blt25', 'BalticSea', 'Estuary', 'RV_Sonne', 15.5, 'Coastal Area 1', 'Netting', 25.5, 120, 'In Progress'),
+    ('2025-06-05', 'Proj_BioMon', 'CRUISE_Blt25', 'BalticSea', 'Marine', 'RV_Sonne', 30.0, 'Open Sea 2', 'Trawling', 50.0, 80, 'Planned');
+
+    SELECT "sampling_id" INTO sampling_id_val FROM "lab"."sampling" WHERE "location_name" = 'Coastal Area 1' LIMIT 1;
+
+    -- 3.2 lab.experiments
+    INSERT INTO "lab"."experiments" ("experiment_id", "experiment_date", "experiment_title", "aim", "method", "sop_id", "person_id", "status_id") VALUES
+    ('Exp_eDNA_001', '2025-08-20', 'eDNA Extraction from Water Samples', 'Extract high-quality DNA for sequencing.', 'Standard phenol-chloroform extraction.', 'SOP_DNA_Ext_v1', 'jane.doe', 'In Progress'),
+    ('Exp_qPCR_002', '2025-08-21', 'qPCR for Species Identification', 'Quantify specific fish DNA from eDNA samples.', 'qPCR with species-specific primers.', 'SOP_Lib_Prep_v1', 'peter.jones', 'In Progress');
+
+    -- 3.3 lab.root_samples
+    INSERT INTO "lab"."root_samples" ("sample_type_id", "project_id", "sample_creation_date", "sampling_id", "sampler_person_id", "status_id") VALUES
+    ('Water', 'Proj_BioMon', '2025-05-01', sampling_id_val,  'jane.doe', 'Received'),
+    ('Sediment', 'Proj_BioMon', '2025-05-01', sampling_id_val,  'jane.doe', 'Received');
+
+    SELECT "sample_id" INTO sample_id_w FROM "lab"."root_samples" WHERE "sample_type_id" = 'Water' AND "sample_creation_date" = '2025-05-01' LIMIT 1;
+    SELECT "sample_id" INTO sample_id_s FROM "lab"."root_samples" WHERE "sample_type_id" = 'Sediment' AND "sample_creation_date" = '2025-05-01' LIMIT 1;
+
+    INSERT INTO "lab"."root_samples" ("sample_type_id", "project_id", "sample_creation_date", "sampling_id", "sampler_person_id", "status_id") VALUES
+    ('Fish', 'Proj_BioMon', '2025-05-01', sampling_id_val,  'jane.doe', 'Received');
+    SELECT "sample_id" INTO sample_id_f FROM "lab"."root_samples" WHERE "sample_type_id" = 'Fish' AND "sample_creation_date" = '2025-05-01' LIMIT 1;
+
+    INSERT INTO "lab"."root_samples" ("sample_type_id", "project_id", "parent_sample_id", "sample_creation_date") VALUES
+    ('Tissue', 'Proj_BioMon', sample_id_f, '2025-05-01');
+    SELECT "sample_id" INTO sample_id_t FROM "lab"."root_samples" WHERE "sample_type_id" = 'Tissue' AND "sample_creation_date" = '2025-05-01' ORDER BY "sample_id" DESC LIMIT 1;
+
+    -- 3.4 lab.dna
+    INSERT INTO "lab"."dna" ("sample_id", "volume_ul", "concentration_ng_ul", "extraction_method", "extraction_date", "batch_id", "status_id") VALUES
+    (sample_id_w, 50, 25.5, 'Phenol-Chloroform', '2025-08-20', 'Batch_DNA_Ext_001', 'Received'),
+    (sample_id_t, 100, 50.0, 'CTAB', '2025-08-20', 'Batch_DNA_Ext_001', 'Received');
+
+    -- 3.5 lab.rna
+    INSERT INTO "lab"."rna" ("sample_id", "volume_ul", "concentration_ng_ul", "extraction_method", "extraction_date", "kit", "status_id") VALUES
+    (sample_id_t, 40, 30.2, 'Trizol', '2025-08-21', 'RNA Kit', 'Received');
+
+    -- 3.6 lab.qubit
+    INSERT INTO "lab"."qubit" ("sample_id", "experiment_id",  "qubit_tube_conc", "tube_unit_id", "qubit_original_sample_conc", "original_sample_unit_id", "person_id", "status_id") VALUES
+    (sample_id_w, 'Exp_eDNA_001', 2.0, 'ng_ul', 100.0, 'ng_ul', 'peter.jones', 'Qubit QC');
+
+    -- 3.7 lab.nanodrop
+    INSERT INTO "lab"."nanodrop" ("sample_id", "experiment_id",  "nanodrop_concentration", "concentration_unit_id", "a260_280", "a260_230", "person_id", "status_id") VALUES
+    (sample_id_w, 'Exp_eDNA_001',  2.1, 'ng_ul', 1.85, 2.15, 'peter.jones', 'Nanodrop QC');
+
+    -- 3.8 lab.gelelectrophoresis
+    INSERT INTO "lab"."gelelectrophoresis" ("gelelectrophoresis_id", "sample_id", "experiment_id", "experiment_date", "position", "ladder", "voltage", "band_size_bp", "gel_type", "run_time_minutes", "person_id", "status_id") VALUES
+    ('Gel-001', sample_id_w,  'Exp_eDNA_001', '2025-08-20', 'A1', '1kb Ladder', 100, 500, 'Agarose 1%', 45, 'peter.jones', 'Completed');
+
+    -- 3.9 lab.pcr
+    INSERT INTO "lab"."pcr" ("pcr_id", "pcr_date", "sample_id", "primer_id", "person_id", "kit", "storage_id", "project_id", "status_id") VALUES
+    ('pcr25_001', '2025-08-21', sample_id_w,  '16S_V4_F', 'jane.doe', 'PCR Master Mix', 'S_R101_F1_B1', 'Proj_BioMon', 'PCR Done');
+
+    -- 3.10 lab.library
+    INSERT INTO "lab"."library" ("library_id", "experiment_id", "experiment_date", "sample_id", "library_name", "person_id", "library_prep_kit", "index_sequence", "project_id", "status_id") VALUES
+    ('Lib_eDNA_001', 'Exp_eDNA_001', '2025-08-20', sample_id_w,  'eDNA_Lib_1', 'john.smith', 'Nextera XT', 'GATTACA', 'Proj_BioMon', 'Library Prep');
+
+    -- 3.11 lab.sequencing_run
+    INSERT INTO "lab"."sequencing_run" ("sequencing_run_id", "experiment_id", "experiment_date", "library_id", "prep_date", "sample_id", "person_id", "sequencer", "flow_cell_id", "total_reads", "project_id", "status_id") VALUES
+    ('RS25_001', 'Exp_eDNA_001', '2025-08-20', 'Lib_eDNA_001', '2025-08-20', sample_id_w,  'john.smith', 'MiSeq', 'FC-A1', 15000000, 'Proj_BioMon', 'Sequencing Done');
+
+    -- 3.12 lab.datasets
+    INSERT INTO "lab"."datasets" ("dataset_id", "sample_id", "source_type", "ecosystem_id", "experiment_id", "experiment_date", "reception_date", "status_id", "storage_path") VALUES
+    ('Z25S25Bio_001', sample_id_w,  'Sequencing', 'Estuary', 'Exp_eDNA_001', '2025-08-20', '2025-08-21', 'Received', '/data/proj/biomon/raw_seq_data');
+
+    -- 3.13 lab.storage_log
+    INSERT INTO "lab"."storage_log" ("sample_id", "storage_id", "person_id", "status_id", "storage_position", "notes") VALUES
+    (sample_id_w,  'S_R101_F1_B1', 'jane.doe', 'Received', 'A1', 'Initial storage location after reception.');
+
+    -- 3.14 lab.fishing
+    INSERT INTO "lab"."fishing" ("sampling_id",  "taxon_id", "catch_kg") VALUES
+    (sampling_id_val, 'Gadus_morhua', 15.2);
+
+    -- 3.15 lab.individual_catch_catch
+    INSERT INTO "lab"."individual_catch_catch" ("sampling_id", "taxon_id", "SL_mm", "weight_g", "sex") VALUES
+    (sampling_id_val, 'Gadus_morhua', 350, 450, 'Male'),
+    (sampling_id_val,  'Gadus_morhua', 420, 600, 'Female');
+
+    -- 3.16 lab.sampling_abiotic_data
+    INSERT INTO "lab"."sampling_abiotic_data" ("sampling_id", "temperature_sampling_depth_c", "salinity", "salinity_unit_id", "oxygen", "oxygen_unit_id") VALUES
+    (sampling_id_val,  12.5, 28.5, 'PSU', 8.2, 'mg_L');
+
+    -- 3.17 lab.dissections
+    INSERT INTO "lab"."dissections" ("dissection_id", "person_id", "sample_id", "project_id", "experiment_id", "experiment_date", "gonad_weight_g", "liver_weight_g", "status_id") VALUES
+    ('S25BioMon003_d1', 'jane.doe', sample_id_f,  'Proj_BioMon', 'Exp_eDNA_001', '2025-08-20', 55.2, 85.1, 'Completed');
+
+    -- 3.18 lab.seq_dataset
+    INSERT INTO "lab"."seq_dataset" ("data_seq_id", "sample_id", "sequencing_run_id", "sequencer", "total_reads", "raw_data_path", "status_id", "project_id", "notes", "data_seq_date") VALUES
+    ('S25BioM_W_RS001', sample_id_w,  'RS25_001', 'MiSeq', 15000000, '/data/raw_seq/S25BioMon001', 'Completed', 'Proj_BioMon', 'eDNA sequencing dataset from water sample', '2025-08-20');
+
+    -- 3.19 lab.otoliths
+   INSERT INTO "lab"."otoliths" ("sample_id", "reader_person_id", "side", "age_reading_years", "project_id", "status_id") VALUES
+    (sample_id_f, 'john.smith', 'left', 2.5, 'Proj_BioMon', 'Completed');
+
+    -- 3.20 lab.tapestation
+    INSERT INTO "lab"."tapestation" ("tapestation_id", "sample_id", "experiment_id", "experiment_date", "position", "kit", "person_id", "status_id") VALUES
+    ('Tapes-001', sample_id_w, 'Exp_eDNA_001', '2025-08-20', '1', 'DNA ScreenTape', 'peter.jones', 'Completed');
+
+    -- 3.21 lab.water
+    INSERT INTO "lab"."water" ("sample_id", "volume_L", "filter", "depth_m", "sampling_method", "conservation_buffer", "status_id") VALUES
+    (sample_id_w,  500, '0.45 um', 15.5, 'Niskin Bottle', 'Ethanol', 'Received');
+
+    -- 3.22 lab.sediments
+    INSERT INTO "lab"."sediments" ("sample_id", "volume", "volume_unit_id", "depth_m", "sampling_method", "conservation_buffer", "status_id") VALUES
+    (sample_id_s,  100, 'milliliter', 15.5, 'Box Corer', 'DMSO', 'Received');
+
+END $$;
+-- ------------------------------------------------------------------------------------------------------------------
+
+-- ======================================================================
+-- 4. BIOINFORMATICS SCHEMA
+-- ======================================================================
+
+DO $$
+DECLARE
+    sample_id_w text;
+    sample_id_s text;
+    run_id_val text;
+BEGIN
+    SELECT "sample_id" INTO sample_id_w FROM "lab"."root_samples" WHERE "sample_type_id" = 'Water' AND "sample_creation_date" = '2025-05-01' LIMIT 1;
+    SELECT "sample_id" INTO sample_id_s FROM "lab"."root_samples" WHERE "sample_type_id" = 'Sediment' AND "sample_creation_date" = '2025-05-01' LIMIT 1;
+    
+    INSERT INTO "bioinformatics"."analysis_pipelines" ("pipeline_name", "version", "repository_link", "experiment_id", "experiment_date", "status_id") VALUES
+    ('eDNA_Metabarcoding_Pipeline', '1.0', 'https://github.com/my/pipeline', 'Exp_eDNA_001', '2025-08-20', 'Completed');
+
+--    INSERT INTO "bioinformatics"."analysis_runs" ("run_id", "run_date", "pipeline_id", "sequencing_id", "sequencing_date", "person_id", "reference_db_id", "final_output_path", "experiment_id", "experiment_date", "status_id") VALUES
+--    ('BI25_ar001', '2025-08-21', (SELECT "pipeline_id" FROM "bioinformatics"."analysis_pipelines" WHERE "pipeline_name" = 'eDNA_Metabarcoding_Pipeline'), 'RS25_001', '2025-08-20', 'peter.jones', (SELECT "db_id" FROM "reference"."reference_databases" WHERE "db_name" = 'NCBI RefSeq'), '/data/proj/biomon/analysis/run1', 'Exp_eDNA_001', '2025-08-21', 'Completed');
+
+--    SELECT "run_id" INTO run_id_val FROM "bioinformatics"."analysis_runs" WHERE "sequencing_id" = 'RS25_001' AND "run_date" = '2025-08-21' LIMIT 1;
+
+--    INSERT INTO "bioinformatics"."edna_assignments" ("assignment_id", "assignment_date", "run_id", "sample_id", "sample_creation_date", "taxon_id", "read_count", "confidence", "experiment_id", "experiment_date", "status_id") VALUES
+--    ('BI25_S25Bio_001', '2025-08-21', run_id_val, sample_id_w, '2025-05-01', 'Gadus_morhua', 1500, 0.95, 'Exp_eDNA_001', '2025-08-21', 'Completed'),
+--    ('BI25_S25Bio_002', '2025-08-21', run_id_val, sample_id_s, '2025-05-01', 'Bacteria_Unclassified', 5000, 0.70, 'Exp_eDNA_001', '2025-08-21', 'Completed');
+END $$;
+-- ------------------------------------------------------------------------------------------------------------------
+
+-- ======================================================================
+-- 5. PROJECTS SCHEMA - WANDERFISCHE PROJECT
+-- ======================================================================
+
+DO $$
+DECLARE
+    wander_fishing_id integer;
+    wander_conv_id integer;
+BEGIN
+    INSERT INTO "projects"."ProjectWanderfische_FishingData" ("agency_id", "project_id", "agency_record_id", "record_date", "location_description", "water_body_name", "water_body_type", "catchment_area", "original_latitude", "original_longitude", "original_srid", "created_by") VALUES
+    ('fisheries_agency', 'Proj_AquaGen', 'SFA_Rec_2024_001', '2024-06-01', 'Elbe Estuary Site A', 'Elbe', 'Estuary', 'Elbe', 53.9, 8.8, 4326, 'jane.doe');
+    SELECT "fishing_record_id" INTO wander_fishing_id FROM "projects"."ProjectWanderfische_FishingData" WHERE "agency_record_id" = 'SFA_Rec_2024_001';
+
+    INSERT INTO "projects"."ProjectWanderfische_FishCatch" ("fishing_record_id", "fishing_record_date", "taxon_id", "scientific_name_raw", "german_name_raw", "total_count", "adult_count", "notes") VALUES
+    (wander_fishing_id, '2024-06-01', 'Gadus_morhua', 'Gadus morhua', 'Kabeljau', 5, 3, 'All adult fish were tagged.'),
+    (wander_fishing_id, '2024-06-01', 'Gadus_morhua', 'Gadus morhua', 'Kabeljau', 2, 0, 'Juveniles found in the catch.');
+
+    INSERT INTO "projects"."ProjectWanderfische_Mail" ("fishing_record_id", "fishing_record_date", "sender_person_id", "recipient_contact_id", "subject", "body", "sent_at") VALUES
+    (wander_fishing_id, '2024-06-01', 'jane.doe', 'fisheries_agency', 'Data request for Elbe sampling', 'Hi, we are requesting raw data for the Elbe Estuary project.', '2024-06-05 10:00:00+02');
+
+END $$;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+INSERT INTO "reference"."samples_type" ("sample_type_id", "sample_type_abrv", "rank") VALUES
+    ('Fish', 'F', 'Biological'),
+    ('Tissue', 'T', 'Biological'),
+    ('Otolith', 'Ot', 'Biological'),
+    ('Scale', 'Sc', 'Biological'),
+    ('Spines', 'Sp', 'Biological'), 
+    ('Blood', 'Bl', 'Biological'),
+    ('Water', 'W', 'Environmental'),
+    ('Sediment', 'S', 'Environmental'),
+    ('DNA', 'D', 'Molecular'),
+    ('RNA', 'R', 'Molecular'),
+    ('PCR', 'Pcr', 'Molecular'),
+    ('Library', 'Lib', 'Molecular'),
+    ('Sequencing', 'Seq', 'Molecular'),
+    ('Control', 'Ctr', 'Quality Control'),
+    ('Dataset', 'Z', 'Bioinformatics');
+
+
+INSERT INTO "reference"."status" ("status_id", "notes") VALUES
+    ('Active', 'The action or item is planned but not started.'),
+    ('Planned', 'The action or item is planned but not started.'),
+    ('Received', 'The item has been received and is ready for use.'),
+    ('In Progress', 'The work on this item is currently in progress.'),
+    ('Completed', 'The process has been successfully completed.'),
+    ('Dissection', 'The sample has undergone dissection.'),
+    ('Otoliths_Reading', 'The sample has undergone dissection.'),
+    ('Nanodrop QC', 'The sample has been checked with Nanodrop for quality control.'),
+    ('Qubit QC', 'The sample has been checked with Qubit for quality control.'),
+    ('Tapestation QC', 'The sample has been checked with Tapestation for quality control.'),
+    ('PCR Done', 'The Polymerase Chain Reaction step is completed.'),
+    ('qPCR Done', 'The quantitative PCR step is completed.'),
+    ('Library Prep', 'The sequencing library has been prepared.'),
+    ('Sequencing Done', 'The sequencing run is completed.'),
+    ('Bioinformatics Done', 'The bioinformatics analysis is completed.'),
+    ('Archived', 'The item is stored for long-term retention.'),
+    ('Destroyed', 'The item has been destroyed and is no longer available.'),
+    ('On Hold', 'The process is temporarily paused.');
+
+INSERT INTO "reference"."vessel" ("vessel_id", "vessel_name", "belong_to") VALUES
+    ('WHIII', 'Walther Herwig III', 'BLE'),
+    ('Solea', 'Solea', 'BLE'),
+    ('Clupea', 'Clupea', 'BLE'),
+    ('Belone', 'Belone', 'BLE'),
+    ('Krabbe', 'Krabbe', 'BLE');
+
+
+INSERT INTO "reference"."category" ("category_id", "notes", "tags") VALUES
+    ('Consumables', 'General lab materials, disposables, non-reagents.', 'inventory; general; labware'),
+    ('Kits', 'Commercial, multi-component reagent packages for specific molecular protocols (e.g., extraction, library prep).', 'inventory; molecular; assay'),
+    ('Chemicals', 'Standard chemical compounds, buffers, solvents, and bulk solutions.', 'inventory; bulk; reagent'),
+    ('Samples', 'Biological samples of origin (used primarily for classification, but included here for completeness).', 'inventory; biological'),
+    ('Enzymes', 'Biological catalysts essential for molecular processes (e.g., Polymerases, Reverse Transcriptase, Ligases).', 'inventory; molecular; reagent; enzyme'),
+    ('Primers', 'Short oligonucleotide sequences for PCR, qPCR, and sequencing primers/probes.', 'inventory; molecular; oligo'),
+    ('Standards', 'Calibrated materials, ladders, or known concentration controls used for QC and quantification (e.g., DNA ladder, Qubit standard).', 'inventory; qc; calibration'),
+    ('Plastics', 'Specialized plasticware, including PCR plates, strip tubes, deep-well plates, and consumables.', 'inventory; consumables; specialized'),
+    ('Media', 'Prepared liquid or solid growth media, buffers, and culture solutions.', 'inventory; reagent; culture'),
+    ('EquipmentParts', 'Replacement parts, accessories, or consumables specific to lab equipment (e.g., fuses, lamp, Nanodrop pedestal).', 'inventory; maintenance; spares');
+
+INSERT INTO "reference"."gene" ("gene_id", "tags", "notes") VALUES
+    ('16S rRNA', 'universal; prokaryotic; bacteria; archaea', 'Small ribosomal subunit (SSU) marker; the primary gene for prokaryotic taxonomy and metabarcoding (e.g., V3-V4 region).'),
+    ('18S rRNA', 'universal; eukaryotic; fungi; protists', 'Small ribosomal subunit (SSU) marker; the primary gene for eukaryotic taxonomy and metabarcoding.'),
+    ('28S rRNA', 'universal; eukaryotic; lsu', 'Large ribosomal subunit (LSU) marker; slower evolving region used for deeper eukaryotic phylogeny.'),
+    ('5.8S rRNA', 'eukaryotic; ribosomal', 'Ribosomal gene located between ITS1 and ITS2; used in ITS region analysis.'),
+    ('ITS', 'universal; fungi; metazoa', 'Internal Transcribed Spacer region; the primary fungal barcoding marker (ITS1 and ITS2 are sub-regions).'),
+    ('ITS1', 'universal; fungi; metazoa', 'Internal Transcribed Spacer 1 region.'),
+    ('ITS2', 'universal; fungi; metazoa', 'Internal Transcribed Spacer 2 region.'),
+    ('rpoB', 'housekeeping; bacteria; phylogeny', 'RNA polymerase beta subunit; used as a phylogenetic marker in bacteria.'),
+    ('gyrB', 'housekeeping; bacteria; phylogeny', 'DNA gyrase subunit B; used as a phylogenetic marker in bacteria.'),
+    ('COI', 'metazoa; fish; animal; barcoding', 'Cytochrome Oxidase Subunit I; the standard barcoding marker for animals (Folmer region is common).'),
+    ('12S rRNA', 'vertebrate; fish; eDNA', 'Mitochondrial small ribosomal subunit; the most common marker for fish eDNA metabarcoding (e.g., MiFish region).'),
+    ('16S', 'metazoa; invertebrate; mitochondrial', 'Mitochondrial large ribosomal subunit; widely used for invertebrate and metazoan metabarcoding.'),
+    ('CytB', 'vertebrate; fish; eDNA', 'Cytochrome B gene; a frequently used mitochondrial marker for fish and other vertebrates.'),
+    ('CR', 'mitochondrial; population', 'Control Region (D-Loop); highly variable region used for population genetics studies.'),
+    ('ND1', 'mitochondrial; nadh', 'NADH dehydrogenase subunit 1.'),
+    ('ND4', 'mitochondrial; nadh', 'NADH dehydrogenase subunit 4.'),
+    ('ATP6', 'mitochondrial; atpase', 'ATPase subunit 6.'),
+    ('COII', 'mitochondrial; metazoa', 'Cytochrome Oxidase Subunit II.'),
+    ('rbcL', 'plant; algae; plastid; carbon_fixation', 'RuBisCO large subunit; standard marker for plants and autotrophic algae (also a C-cycle functional gene).'),
+    ('matK', 'plant; plastid', 'Maturase K gene; a widely used plastid marker for plant taxonomy and barcoding.'),
+    ('trnH-psbA', 'plant; algae; intergenic', 'Intergenic spacer region used for plant and algal diversity.'),
+    ('atpB', 'plant; atpase', 'Chloroplast ATPase subunit B gene.'),
+    ('rpoC1', 'plant; plastid', 'RNA polymerase subunit C1 gene.'),
+    ('psbA', 'plant; photosystem', 'Photosystem II protein D1 gene.'),
+    ('23S rRNA', 'algae; plastid', 'Large ribosomal subunit plastid marker; used for microalgae metabarcoding.'),
+    ('nifH', 'functional; nitrogen_fixation', 'Nitrogenase reductase; primary marker for nitrogen fixation (converting N2 to NH3).'),
+    ('nifK', 'functional; nitrogen_fixation', 'Nitrogenase alpha subunit.'),
+    ('nifD', 'functional; nitrogen_fixation', 'Nitrogenase alpha subunit.'),
+    ('amoA', 'functional; nitrification; archaea; bacteria', 'Ammonia monooxygenase subunit A; marker for aerobic ammonia oxidation.'),
+    ('nirK', 'functional; denitrification', 'Nitrite Reductase (Cu-containing); involved in converting NO2- to NO.'),
+    ('nirS', 'functional; denitrification', 'Nitrite Reductase (Cytochrome cd1-containing); involved in converting NO2- to NO.'),
+    ('nosZ', 'functional; denitrification', 'Nitrous Oxide Reductase; performs the final step of denitrification (N2O to N2).'),
+    ('narG', 'functional; nitrate_reduction', 'Dissimilatory Nitrate Reductase subunit G (membrane-bound); converts NO3- to NO2-.'),
+    ('narH', 'functional; nitrate_reduction', 'Dissimilatory Nitrate Reductase subunit H (membrane-bound).'),
+    ('nxrB', 'functional; nitrification', 'Nitrite oxidoreductase subunit B; marker for nitrite-oxidizing bacteria.'),
+    ('napA', 'functional; nitrate_reduction', 'Periplasmic Nitrate Reductase subunit A.'),
+    ('pmoA', 'functional; methane_oxidation', 'Particulate methane monooxygenase subunit A; marker for aerobic methane oxidation.'),
+    ('mcrA', 'functional; methanogenesis', 'Methyl-Coenzyme M Reductase subunit A; marker for methanogenesis (methane production).'),
+    ('fmoA', 'functional; photosynthesis; bacteria', 'Bacteriochlorophyll-a-protein; marker for anoxygenic photosynthesis.'),
+    ('accA', 'functional; carbon_fixation', 'Acetyl-CoA carboxylase.'),
+    ('porA', 'functional; carbon_fixation', 'Pyruvate-ferredoxin oxidoreductase subunit A.'),
+    ('cbbL', 'functional; carbon_fixation', 'RuBisCO large subunit (Form I), marker for Calvin cycle C fixation.'),
+    ('cbbM', 'functional; carbon_fixation', 'RuBisCO large subunit (Form II), marker for Calvin cycle C fixation.'),
+    ('dsrA', 'functional; sulfate_reduction', 'Dissimilatory sulfite reductase subunit A; marker for sulfate reduction.'),
+    ('dsrB', 'functional; sulfate_reduction', 'Dissimilatory sulfite reductase subunit B.'),
+    ('aprA', 'functional; sulfur_oxidation_reduction', 'APS reductase subunit A; involved in both sulfur oxidation and reduction.'),
+    ('soxB', 'functional; sulfur_oxidation', 'Sulfate thioesterase; marker for thiosulfate oxidation.'),
+    ('phoX', 'functional; phosphorus_cycling', 'Alkaline phosphatase; involved in organic phosphorus assimilation.'),
+    ('chiA', 'functional; degradation; chitin', 'Chitinase; marker for chitin degradation.'),
+    ('celA', 'functional; degradation; cellulose', 'Cellulase; marker for cellulose degradation.'),
+    ('lipA', 'functional; degradation; lipid', 'Lipase; marker for lipid degradation.'),
+    ('amyA', 'functional; degradation; starch', 'Amylase; marker for starch degradation.'),
+    ('glnA', 'functional; assimilation', 'Glutamine synthetase; marker for ammonium assimilation.'),
+    ('ureC', 'functional; degradation; urea', 'Urease subunit C; involved in urea hydrolysis.');
+
+
+
+INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "unit_type", "parent_unit_id", "conversion_factor_to_parent") VALUES
+    ('m', 'meter', 'm', 'Length', NULL, 1),
+    ('km', 'kilometer', 'km', 'Length', 'm', 1000),
+    ('cm', 'centimeter', 'cm', 'Length', 'm', 0.01),
+    ('mm', 'millimeter', 'mm', 'Length', 'm', 0.001),
+    ('kg', 'kilogram', 'kg', 'Mass', NULL, 1),
+    ('g', 'gram', 'g', 'Mass', 'kg', 0.001),
+    ('l', 'liter', 'L', 'Volume', NULL, 1),
+    ('ml', 'milliliter', 'ml', 'Volume', 'l', 0.001),
+    ('ul', 'microliter', 'ul', 'Volume', 'ml', 0.001),
+    ('ng', 'nanogram', 'ng', 'Mass', 'kg', 0.000000001),
+    ('ng_ul', 'nanogram per microliter', 'ng/ul', 'Concentration', NULL, NULL),
+    ('ug', 'microgram', 'ug', 'Mass', 'kg', 0.000001),
+    ('ug_L', 'microgram per liter', 'ug/L', 'Concentration', NULL, NULL),
+    ('C', 'Degree Celsius', '°C', 'Temperature', NULL, NULL),
+    ('PSU', 'Practical Salinity Units', 'PSU', 'Salinity', NULL, NULL),
+    ('mg_L', 'milligram per liter', 'mg/L', 'Concentration', NULL, NULL),
+    ('NTU', 'Nephelometric Turbidity Units', 'NTU', 'Turbidity', NULL, NULL),
+    ('umol_m2s', 'micromoles per square meter per second', 'umol/(m²s)', 'Irradiance', NULL, NULL),
+    ('m_s', 'meters per second', 'm/s', 'Velocity', NULL, NULL),
+    ('hPa', 'Hectopascal', 'hPa', 'Pressure', NULL, NULL),
+    ('s', 'second', 's', 'Time', NULL, NULL),
+    ('min', 'Minute', 'min', 'Time', 's', 60),
+	('h', 'hour', 'h', 'Time', 'min', 60),
+    ('d', 'Day', 'd', 'Time', 'h', 24);
+
+INSERT INTO "reference"."reference_databases" ("db_name", "db_version", "last_updated_date") VALUES
+    ('NCBI RefSeq', '2025-01', '2025-01-15'),
+    ('BOLD', '4.0.0', '2024-11-20'),
+    ('GTDB', 'R207', '2025-02-10');
+
+
+INSERT INTO "lab"."storage" ("storage_id", "room_id", "freezer", "etage", "temperature_c", "box", "box_size_x", "box_size_y") VALUES
+    ('S_R101_F1_B1', 'R247', 'Freezer 1', '2nd Floor', -80, 'Box 1', 10, 10);
+
+INSERT INTO "lims"."primers" (
+    "primer_id", 
+    "target_gene_id", 
+    "primer_sequence_fwd", 
+    "primer_sequence_rev", 
+    "probe", 
+    "reference", 
+    "storage_id", 
+    "storage_position", 
+    "tags", 
+    "notes"
+) VALUES
+    -- 1. FISH eDNA MARKERS (12S rRNA - Most Common)
+    -- MiFish-U (Universal Fish)
+    ('MiFish_U_F', '12S rRNA', 'GTCGGTAAAACTCGTGCCAGC', 'CATAGTGGGGTATCTAATCCCAGTTTG', NULL, 'Miya et al. 2015', 'S_R101_F1_B1', 'A1', 'fish; edna; 12s; universal', 'Standard universal primer set for fish eDNA metabarcoding.'),
+    ('MiFish_U_R', '12S rRNA', 'CATAGTGGGGTATCTAATCCCAGTTTG', 'GTCGGTAAAACTCGTGCCAGC', NULL, 'Miya et al. 2015', 'S_R101_F1_B1', 'A2', 'fish; edna; 12s; universal', 'Standard universal primer set for fish eDNA metabarcoding.'),
+    
+    -- Teleo (Teleostomi - Vertebrate Fish)
+    ('Teleo_F', '12S rRNA', 'AAACTCGTGCCAGCCACC', 'GGGTATCTAATCCCAGTTTG', NULL, 'Valentini et al. 2016', 'S_R101_F1_B1', 'B1', 'fish; edna; 12s; vertebrate', 'Targeting a shorter 12S fragment for teleost identification.'),
+    ('Teleo_R', '12S rRNA', 'GGGTATCTAATCCCAGTTTG', 'AAACTCGTGCCAGCCACC', NULL, 'Valentini et al. 2016', 'S_R101_F1_B1', 'B2', 'fish; edna; 12s; vertebrate', 'Targeting a shorter 12S fragment for teleost identification.'),
+    
+    -- 2. UNIVERSAL & INVERTEBRATE MARKERS (COI & 16S)
+    -- Folmer Primers (Standard COI Barcoding)
+    ('COI_Folmer_F', 'COI', 'GGTCAACAAATCATAAAGATATTGG', 'TAAACTTCAGGGTGACCAAAAAATCA', NULL, 'Folmer et al. 1994', 'S_R101_F1_B1', 'C1', 'metazoa; barcoding; coi', 'Standard set for full-length COI amplification.'),
+    ('COI_Folmer_R', 'COI', 'TAAACTTCAGGGTGACCAAAAAATCA', 'GGTCAACAAATCATAAAGATATTGG', NULL, 'Folmer et al. 1994', 'S_R101_F1_B1', 'C2', 'metazoa; barcoding; coi', 'Standard set for full-length COI amplification.'),
+    
+    -- Leray Primers (COI Metabarcoding)
+    ('COI_Leray_F', 'COI', 'GGWACWGGWTGAACWGTWTAYCCYCC', 'TAAACTTCAGGGTGACCAAAAAATCA', NULL, 'Leray et al. 2013', 'S_R101_F1_B1', 'C3', 'metazoa; edna; metabarcoding; coi', 'Degenerate set for short COI metabarcoding fragment.'),
+    ('COI_Leray_R', 'COI', 'TAAACTTCAGGGTGACCAAAAAATCA', 'GGWACWGGWTGAACWGTWTAYCCYCC', NULL, 'Leray et al. 2013', 'S_R101_F1_B1', 'C4', 'metazoa; edna; metabarcoding; coi', 'Degenerate set for short COI metabarcoding fragment.'),
+    
+    -- 16S rRNA Universal (Mitochondrial)
+    ('16S_Vert_F', '16S', 'CCTTTTGCATCATGATTTAGC', 'CAGGTGGCTGCTTTTAGGC', NULL, 'Berry et al. 2017', 'S_R101_F1_B1', 'D1', 'vertebrate; 16s; edna', 'Targeting vertebrate mitochondrial 16S region for eDNA.'),
+    ('16S_Vert_R', '16S', 'CAGGTGGCTGCTTTTAGGC', 'CCTTTTGCATCATGATTTAGC', NULL, 'Berry et al. 2017', 'S_R101_F1_B1', 'D2', 'vertebrate; 16s; edna', 'Targeting vertebrate mitochondrial 16S region for eDNA.'),
+    
+    -- 4. FUNGI & PROTISTS MARKERS
+    -- ITS Fungi (Universal Fungi)
+    ('ITS1F', 'ITS', 'CTTGGTCATTTAGAGGAAGTAA', 'GCTGCGTTCTTCATCGATGC', NULL, 'Gardes & Bruns 1993', 'S_R101_F1_B1', 'F1', 'fungi; its; metabarcoding', 'Standard Fungal primer targeting the ITS1 region.'),
+    ('ITS2R', 'ITS', 'GCTGCGTTCTTCATCGATGC', 'CTTGGTCATTTAGAGGAAGTAA', NULL, 'White et al. 1990', 'S_R101_F1_B1', 'F2', 'fungi; its; metabarcoding', 'Standard Fungal primer targeting the ITS2 region.'),
+    
+    -- 18S rRNA (Protist V4)
+    ('18S_V4_F', '18S rRNA', 'CCAGCASCYGCGGTAATTCC', 'ACTTTCGTTCTTGATYRA', NULL, 'Stoeck et al. 2010', 'S_R101_F1_B1', 'G1', 'eukaryote; protist; 18s', 'Targeting the hypervariable V4 region of 18S for protists.'),
+    ('18S_V4_R', '18S rRNA', 'ACTTTCGTTCTTGATYRA', 'CCAGCASCYGCGGTAATTCC', NULL, 'Stoeck et al. 2010', 'S_R101_F1_B1', 'G2', 'eukaryote; protist; 18s', 'Targeting the hypervariable V4 region of 18S for protists.'),
+    -- 6. QPCR ASSAY (Species-Specific Example)
+    -- Gadus morhua (Atlantic Cod) - Example Species-Specific Assay
+    ('GM_12S_Probe_F', '12S rRNA', 'TGGGCGATACTAGTAGGAT', 'TGTCCGCATCCACTTCA', 'FAM-TGGCGATCTACAGTAGGAT-BHQ1', 'Species-specific', 'S_R101_F1_B1', 'A1', 'fish; qpcr; gadus_morhua', 'qPCR assay for Atlantic Cod species detection (12S region).'),
+    ('GM_12S_Probe_R', '12S rRNA', 'TGTCCGCATCCACTTCA', 'TGGGCGATACTAGTAGGAT', 'FAM-TGGCGATCTACAGTAGGAT-BHQ1', 'Species-specific', 'S_R101_F1_B1', 'A2', 'fish; qpcr; gadus_morhua', 'qPCR assay for Atlantic Cod species detection (12S region).'),
+    
+    -- Esociformes (Northern Pike) - Example Species-Specific Assay
+    ('EL_CytB_F', 'CytB', 'TCCTTTTGAGGCGCTACAGT', 'GGAATGCGAAGAATCGTGTT', NULL, 'Specific Assay', 'S_R101_F1_B1', 'B1', 'fish; pcr; esox_lucius', 'CytB marker for Northern Pike confirmation.');
+
+
+INSERT INTO "lims"."batch" ("batch_id", "batch_name") VALUES
+    ('Batch_DNA_Ext_001', 'Batch 1 for DNA Extraction'),
+    ('Batch_Lib_Prep_002', 'Batch 2 for Library Preparation');
+
+INSERT INTO "lims"."sop" ("sop_id", "title", "sop_id_origin", "version", "author_person_id", "date_realise", "sop_protocol") VALUES
+    ('SOP_DNA_Ext_v1', 'DNA Extraction from Fish Tissue', 'DNA_Ext_v1', '1', 'peter.jones', '2024-03-01', 'Detailed protocol for DNA extraction using a commercial kit.'),
+    ('SOP_Lib_Prep_v1', 'Library Preparation for Illumina Sequencing', 'Lib_Prep_v1', '1', 'jane.doe', '2024-04-10', 'Step-by-step guide for preparing sequencing libraries.');
+
+INSERT INTO "lims"."batch_steps" ("step_id", "batch_id", "step_number", "step_name", "sop_id", "status_id") VALUES
+    ('Batch_DNA_Ext_001_1', 'Batch_DNA_Ext_001', 1, 'Sample Lysis', 'SOP_DNA_Ext_v1', 'Completed'),
+    ('Batch_DNA_Ext_001_2', 'Batch_DNA_Ext_001', 2, 'DNA Purification', 'SOP_DNA_Ext_v1', 'In Progress');
+
+
+INSERT INTO "lims"."publication_type" ("publication_type_id", "notes") VALUES
+    ('Journal_Article', 'Peer-reviewed journal publication'),
+    ('Conference_Abstract', 'Abstract from a conference proceeding'),
+    ('Thesis', 'Academic thesis (e.g., PhD, Master)');
+
+INSERT INTO "lims"."suppliers" ("supplier_id", "supplier_name", "contact_person", "mail") VALUES
+    ('Qiagen', 'Qiagen GmbH', 'Contact Qiagen', 'sales@qiagen.com'),
+    ('Sigma-Aldrich', 'Sigma-Aldrich', 'Contact Aldrich', 'info@sigma-aldrich.com');
+
+INSERT INTO "lims"."inventory_items" ("item_id", "item_name", "category_id", "unit_id") VALUES
+    ('QIAampDNA', 'QIAamp DNA Mini Kit', 'Kits', NULL),
+    ('Ethanol', 'Ethanol 99.5%', 'Chemicals', 'liter');
+
+INSERT INTO "lims"."orders" ("fi_order_nr", "item_id", "category_id", "order_date", "price", "quantity", "project_id", "supplier_id", "status_id") VALUES
     ('PO_AG24_001', 'QIAampDNA', 'Kits', '2024-02-15', 500.00, 1, 'Proj_AquaGen', 'Qiagen', 'Completed'),
     ('PO_BM25_001', 'Ethanol', 'Chemicals', '2025-04-05', 50.00, 1, 'Proj_BioMon', 'Sigma-Aldrich', 'Received');
 
