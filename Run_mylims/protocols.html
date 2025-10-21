@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Protocols - TIFI LIMS</title>
+    <title>Protocols - TIFI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -190,6 +190,7 @@
                 <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md "><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
                 <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (ELN)</span></a>
                 <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+                <a href="planned_samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Planned Samples</span></a>
                 <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
                 <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
                 <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
@@ -336,7 +337,7 @@
             window.location.href = './login.html';
         }
         
-        const API_BASE_URL = '/mylims/api'; // Corrected API_BASE_URL to match app_test.py
+        const API_BASE_URL = '/mylims/api';
         let quill;
         let allExperiments = [];
         let filteredAndSortedExperiments = [];
@@ -345,6 +346,7 @@
         let currentRunDetails = null; // Stores the parsed 'protocol_run_details' JSONB data
         let currentSortColumn = 'experiment_id';    
         let currentSortDirection = 'asc';
+        let masterCache = {}; // Cache for shared lookup data (CRITICAL for performance fix)
 
         // Helper function to format date for input fields (YYYY-MM-DD)
         const formatDateForInput = (dateString) => {
@@ -425,13 +427,32 @@
         }
 
         async function loadAllExperiments() {
-            // Fetch all experiments to populate the dropdown
-            const result = await apiFetch('table/lab/experiments');
-            if (result.error) {
-                showAlert('Error fetching experiments: ' + result.error, 'error');
+            // 1. Fetch necessary lookup data (Projects, Persons) ONCE
+            const [projectsData, experimentsData, allLinks] = await Promise.all([
+                apiFetch('table/lims/projects'),
+                // 2. Fetch ALL experiments 
+                apiFetch('table/lab/experiments'),
+                // 3. Fetch ALL project-experiment linkage data (CRITICAL for performance fix)
+                apiFetch('table/lab/experiments_projects') 
+            ]);
+
+            if (experimentsData.error) {
+                showAlert('Error fetching experiments: ' + experimentsData.error, 'error');
                 return;
             }
-            allExperiments = result;
+            if (projectsData.error) {
+                console.error("Error fetching projects for lookup:", projectsData.error);
+            }
+            if (allLinks.error) {
+                console.error("Error fetching experiment links for lookup:", allLinks.error);
+            }
+
+            // Cache for quick lookups
+            masterCache.projectMap = new Map((projectsData && !projectsData.error) ? projectsData.map(p => [p.project_id, p.title || p.project_abrv]) : []);
+            masterCache.allExperimentProjects = (allLinks && !allLinks.error) ? allLinks : [];
+            
+            allExperiments = experimentsData;
+            
             applyExperimentFiltersAndSort();
         }
 
@@ -452,25 +473,26 @@
                 let valA = a[sortColumn];
                 let valB = b[sortColumn];
                 
+                // Null/Undefined checks
+                if (valA === null || valA === undefined) return sortDirection === 'asc' ? 1 : -1;
+                if (valB === null || valB === undefined) return sortDirection === 'asc' ? -1 : 1;
+                
+                let comparison = 0;
+                
                 if (sortColumn === 'experiment_date') {
                     const dateA = new Date(valA);
                     const dateB = new Date(valB);
-                    if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) return 0;
-                    return sortDirection === 'asc' ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
-                } else if (sortColumn === 'experiment_id') {
-                    const numA = parseInt(String(valA).replace(/\D/g, '') || '0');
-                    const numB = parseInt(String(valB).replace(/\D/g, '') || '0');
-                    const stringA = String(valA).replace(/\d/g, '');
-                    const stringB = String(valB).replace(/\d/g, '');
-                    if (stringA === stringB) {
-                        return sortDirection === 'asc' ? numA - numB : numB - numA;
-                    }
-                    return sortDirection === 'asc' ? stringA.localeCompare(stringB) : stringB.localeCompare(stringA);
-                } else {
-                    const stringA = String(valA || '').toLowerCase();
-                    const stringB = String(valB || '').toLowerCase();
-                    return sortDirection === 'asc' ? stringA.localeCompare(stringB) : stringB.localeCompare(stringA);
+                    comparison = dateA.getTime() - dateB.getTime();
+                    if (isNaN(comparison)) comparison = 0;
+                } 
+                // Simplified alphanumeric sort (relies on string comparison)
+                else {
+                    const stringA = String(valA).toLowerCase();
+                    const stringB = String(valB).toLowerCase();
+                    comparison = stringA.localeCompare(stringB);
                 }
+                
+                return sortDirection === 'asc' ? comparison : -comparison;
             });
 
             renderExperimentSelectOptions();
@@ -479,6 +501,10 @@
         async function renderExperimentSelectOptions() {
             const selectElement = document.getElementById('experiment-select');
             selectElement.innerHTML = '';
+            
+            // Get cached maps (CRITICAL for performance fix)
+            const projectMap = masterCache.projectMap || new Map();
+            const allLinks = masterCache.allExperimentProjects || [];
 
             if (filteredAndSortedExperiments.length === 0) {
                 selectElement.innerHTML = '<option value="">No matching experiments found</option>';
@@ -486,25 +512,27 @@
                 return;
             }
             
-            // Fetch all projects to build a project title lookup map
-            const projectsData = await apiFetch('table/lims/projects');
-            const projectMap = new Map();
-            if (projectsData && !projectsData.error) {
-                projectsData.forEach(p => projectMap.set(p.project_id, p.title || p.project_abrv));
-            }
+            // Build a map of ExperimentID_Date -> [ProjectTitles] from cached data
+            const expProjectMap = new Map();
+            allLinks.forEach(link => {
+                 const key = `${link.experiment_id}_${formatDateForInput(link.experiment_date)}`;
+                 const projectTitle = projectMap.get(link.project_id) || link.project_id;
+                 if (!expProjectMap.has(key)) {
+                     expProjectMap.set(key, []);
+                 }
+                 expProjectMap.get(key).push(projectTitle);
+            });
+
 
             for (const exp of filteredAndSortedExperiments) {
+                const expDateFormatted = formatDateForInput(exp.experiment_date);
                 const option = document.createElement('option');
                 
-                // Fetch linked projects for the selected experiment to display in the dropdown
-                let projectTitles = 'N/A';
-                const linkedProjects = await apiFetch(`table/lab/experiments_projects?filter_experiment_id=${exp.experiment_id}&filter_experiment_date=${formatDateForInput(exp.experiment_date)}`);
-                if (linkedProjects && !linkedProjects.error && linkedProjects.length > 0) {
-                    const titles = linkedProjects.map(lp => projectMap.get(lp.project_id) || lp.project_id);
-                    projectTitles = titles.join(', ');
-                }
-
-                option.value = JSON.stringify({ experiment_id: exp.experiment_id, experiment_date: formatDateForInput(exp.experiment_date) });    
+                // Use the cached/pre-filtered data instead of fetching inside the loop
+                const key = `${exp.experiment_id}_${expDateFormatted}`;
+                const projectTitles = expProjectMap.get(key)?.join(', ') || 'N/A';
+                
+                option.value = JSON.stringify({ experiment_id: exp.experiment_id, experiment_date: expDateFormatted });    
                 option.textContent = `${exp.experiment_id} - ${exp.experiment_title || 'N/A'} (Projects: ${projectTitles})`;    
                 selectElement.appendChild(option);
             }
@@ -562,19 +590,17 @@
                 return;
             }
 
-            // Fetch linked projects for the selected experiment to display
+            // --- CRITICAL FIX: Use the already calculated project titles from the dropdown rendering ---
+            // Find the option element to get the pre-calculated project titles
+            const selectElement = document.getElementById('experiment-select');
+            const selectedOption = Array.from(selectElement.options).find(opt => opt.value === jsonStringOfCompositeKey);
             let linkedProjectTitles = 'N/A';
-            const linkedProjects = await apiFetch(`table/lab/experiments_projects?filter_experiment_id=${selectedExperiment.experiment_id}&filter_experiment_date=${formatDateForInput(selectedExperiment.experiment_date)}`);
-            if (linkedProjects && !linkedProjects.error && linkedProjects.length > 0) {
-                const projectIds = linkedProjects.map(lp => lp.project_id);
-                const projectsData = await apiFetch('table/lims/projects');
-                const projectMap = new Map();
-                if (projectsData && !projectsData.error) {
-                    projectsData.forEach(p => projectMap.set(p.project_id, p.title || p.project_abrv));
-                }
-                const matchingProjectTitles = projectIds.map(pId => projectMap.get(pId) || pId);
-                linkedProjectTitles = matchingProjectTitles.join(', ');
+            if (selectedOption) {
+                // Extract project titles from the option text (e.g., 'ExpID - Title (Projects: Title1, Title2)')
+                const match = selectedOption.textContent.match(/\(Projects: (.*)\)$/);
+                linkedProjectTitles = match ? match[1] : 'N/A';
             }
+            // --- END CRITICAL FIX ---
 
 
             // Update displayed experiment details
@@ -709,10 +735,6 @@
             } else {
                 data.protocol_run_details = JSON.stringify({}); // Initialize as empty JSON object string
             }
-            // If a sop_id is associated with the selected experiment, include it
-           // if (selectedExperiment.sop_id) {
-           //     data.sop_id = selectedExperiment.sop_id;
-           // }
 
             let result;
             if (currentProtocolRun && currentProtocolRun.protocol_run_id) {    

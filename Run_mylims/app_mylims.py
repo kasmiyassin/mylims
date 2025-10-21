@@ -150,6 +150,34 @@ VIEW_TO_BASE_TABLE_MAPPING: Dict[str, str] = {
 }
 
 
+# --- NEW: Safe Date Parsing Utility ---
+def safe_date_parse(date_str: str) -> Optional[date]:
+    """Safely converts a string to a date object, handling YYYY-MM-DD and basic date parts."""
+    if not date_str or not isinstance(date_str, str):
+        return None
+    
+    try:
+        # 1. Try parsing YYYY-MM-DD (standard format from frontend inputs/CSV)
+        return datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        pass
+    
+    try:
+        # 2. Try parsing just the date part if it contains a timestamp (YYYY-MM-DDTHH:MM)
+        if 'T' in date_str:
+            date_part = date_str.split('T')[0]
+            return datetime.strptime(date_part, '%Y-%m-%d').date()
+    except ValueError:
+        pass
+        
+    try:
+        # 3. Try Python's isoformat parser for clean date strings
+        return date.fromisoformat(date_str)
+    except (ValueError, TypeError):
+        print(f"Warning: Failed to parse date string '{date_str}' in safe_date_parse.")
+        return None
+
+
 def get_db_connection():
     """Establishes and returns a new database connection."""
     try:
@@ -717,10 +745,7 @@ def get_table_data(schema: str, table: str):
         
         def parse_date_filter(date_str):
             """Helper to parse date strings into date objects."""
-            try:
-                return datetime.strptime(date_str, '%Y-%m-%d').date()
-            except (ValueError, TypeError):
-                return None
+            return safe_date_parse(date_str)
         
         def parse_datetime_filter(dt_str):
             """Helper to parse datetime strings into datetime objects."""
@@ -1032,11 +1057,9 @@ def create_record(schema: str, table: str):
             elif column_types.get(k) == 'boolean':
                 filtered_data[k] = str(v).lower() in ['true', 'on']
             elif column_types.get(k) == 'date' and isinstance(v, str) and v:
-                try:
-                    filtered_data[k] = datetime.strptime(v, '%Y-%m-%d').date()
-                except ValueError:
-                    print(f"WARNING: Invalid date format for column '{k}'. Storing as None. Value: {v}")
-                    filtered_data[k] = None
+                filtered_data[k] = safe_date_parse(v) # <-- USE SAFE PARSE UTILITY
+                if filtered_data[k] is None and v is not None:
+                     print(f"WARNING: Invalid date format for column '{k}'. Storing as None. Value: {v}")
             else:
                 filtered_data[k] = v
             
@@ -1128,9 +1151,8 @@ def update_record(schema: str, table: str):
                 return jsonify({"error": f"Missing primary key component: {pk_col}"}), 400
             
             if column_types.get(pk_col) == 'date':
-                try:
-                    pk_values_from_request[pk_col] = datetime.strptime(pk_val, '%Y-%m-%d').date()
-                except (ValueError, TypeError):
+                pk_values_from_request[pk_col] = safe_date_parse(pk_val) # <-- USE SAFE PARSE UTILITY
+                if pk_values_from_request[pk_col] is None and pk_val is not None:
                     pk_values_from_request[pk_col] = pk_val
             else:
                 pk_values_from_request[pk_col] = pk_val
@@ -1181,11 +1203,12 @@ def update_record(schema: str, table: str):
                 set_clauses.append(f'"{key}" = %s')
                 values.append(str(val).lower() in ['true', 'on'])
             elif column_types.get(key) == 'date' and isinstance(val, str) and val:
-                try:
+                date_obj = safe_date_parse(val) # <-- USE SAFE PARSE UTILITY
+                if date_obj is not None:
                     set_clauses.append(f'"{key}" = %s')
-                    values.append(datetime.strptime(val, '%Y-%m-%d').date())
-                except ValueError:
-                    print(f"WARNING: Invalid date format for column '{key}'. Skipping update for this field.")
+                    values.append(date_obj)
+                else:
+                    print(f"WARNING: Invalid date format for column '{key}'. Skipping update for this field. Value: {val}")
                     continue
             elif column_types.get(key) == 'timestamp with time zone' and isinstance(val, str) and val:
                 try:
@@ -1208,12 +1231,9 @@ def update_record(schema: str, table: str):
             pk_where_clauses.append(f'"{pk_col}" = %s')
             pk_val = pk_values_from_request[pk_col]
             if column_types.get(pk_col) == 'date' and pk_val is not None:
-                # Need to ensure that PK date strings are converted back to date objects for comparison
+                # Need to ensure that PK date objects are compared correctly
                 if isinstance(pk_val, str):
-                    try:
-                        pk_where_values.append(datetime.strptime(pk_val, '%Y-%m-%d').date())
-                    except ValueError:
-                        pk_where_values.append(pk_val) # Fallback to string if date conversion fails
+                    pk_where_values.append(safe_date_parse(pk_val)) # <-- USE SAFE PARSE UTILITY
                 else:
                     pk_where_values.append(pk_val)
             else:
@@ -1266,10 +1286,7 @@ def delete_record(schema: str, table: str):
                 if col_name in column_types:
                     where_clauses.append(f'"{col_name}" = %s')
                     if column_types.get(col_name) == 'date':
-                        try:
-                            pk_values_for_query.append(datetime.strptime(val, '%Y-%m-%d').date())
-                        except ValueError:
-                            pk_values_for_query.append(val)
+                        pk_values_for_query.append(safe_date_parse(val)) # <-- USE SAFE PARSE UTILITY
                     else:
                         pk_values_for_query.append(val)
                 else:
@@ -1285,10 +1302,7 @@ def delete_record(schema: str, table: str):
                     return jsonify({"error": f"Missing primary key component for deletion: {pk_col}"}), 400
                 
                 if column_types.get(pk_col) == 'date' and pk_val is not None:
-                    try:
-                        pk_val = datetime.strptime(pk_val, '%Y-%m-%d').date();
-                    except ValueError:
-                        pass
+                    pk_val = safe_date_parse(pk_val) # <-- USE SAFE PARSE UTILITY
 
                 where_clauses.append(f'"{pk_col}" = %s')
                 pk_values_for_query.append(pk_val)
@@ -1360,12 +1374,10 @@ def batch_upload(schema: str, table: str):
                                 filtered_record[k] = None
                         elif column_types.get(k) == 'boolean':
                             filtered_record[k] = str(v).lower() in ['true', 'on']
-                        elif column_types.get(k) == 'date' and isinstance(v, str) and v: # <-- FIX: Handle date string
-                            try:
-                                filtered_record[k] = datetime.strptime(v, '%Y-%m-%d').date()
-                            except ValueError:
+                        elif column_types.get(k) == 'date' and isinstance(v, str) and v:
+                            filtered_record[k] = safe_date_parse(v) # <-- USE SAFE PARSE UTILITY
+                            if filtered_record[k] is None and v is not None:
                                 print(f"WARNING: Invalid date format for column '{k}'. Storing as None. Value: {v}")
-                                filtered_record[k] = None
                         else:
                             filtered_record[k] = v
                     
@@ -1457,11 +1469,9 @@ def batch_upload(schema: str, table: str):
                         elif column_types.get(k) == 'boolean':
                             filtered_record[k] = str(v).lower() in ['true', 'on']
                         elif column_types.get(k) == 'date' and isinstance(v, str) and v:
-                            try:
-                                filtered_record[k] = datetime.strptime(v, '%Y-%m-%d').date()
-                            except ValueError:
+                            filtered_record[k] = safe_date_parse(v) # <-- USE SAFE PARSE UTILITY
+                            if filtered_record[k] is None and v is not None:
                                 print(f"WARNING: Invalid date format for column '{k}'. Storing as None. Value: {v}")
-                                filtered_record[k] = None
                         else:
                             filtered_record[k] = v
 
@@ -1493,6 +1503,7 @@ def batch_upload(schema: str, table: str):
                 conn.commit()
         
         else:
+            # --- GENERIC BATCH INSERTION LOGIC (FIXED) ---
             if not records:
                 return jsonify({"success": True, "inserted_rows": 0}), 200
 
@@ -1505,47 +1516,47 @@ def batch_upload(schema: str, table: str):
                     return jsonify({"error": "All records in batch must have the same set of columns for batch insertion."}), 400
 
                 temp_record = record.copy()
-                if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
-                   (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
-                   (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
-                    if 'password' in temp_record and temp_record['password']:
-                        hashed_password = bcrypt.hashpw(temp_record['password'].encode('utf-8'), bcrypt.gensalt())
-                        temp_record['password_hash'] = hashed_password.decode('utf-8')
-                    temp_record.pop('password', None)
                 
-                if 'attachment' in temp_record and temp_record['attachment'] == '':
-                    temp_record['attachment'] = None
-                elif 'attachment' in temp_record and isinstance(temp_record['attachment'], str):
-                    try:
-                        temp_record['attachment'] = base64.b64decode(temp_record['attachment'])
-                    except Exception as e:
-                        print(f"  Warning: Could not decode base64 attachment for record: {e}")
-                        temp_record['attachment'] = None
-                elif 'attachment' in temp_record and isinstance(temp_record['attachment'], dict) and not temp_record['attachment']:
-                    temp_record['attachment'] = None
-
-                if 'attachment_link' in temp_record and temp_record['attachment_link'] == '':
-                    temp_record['attachment_link'] = None
-
+                # Apply data transformations and type conversions
                 for k, v in temp_record.items():
-                    if column_types.get(k) == 'jsonb' and isinstance(v, str):
+                    if v == '':
+                        temp_record[k] = None
+                        continue
+
+                    col_type = column_types.get(k)
+                    if col_type == 'jsonb' and isinstance(v, str):
                         try:
                             temp_record[k] = json.loads(v)
                         except json.JSONDecodeError:
                             print(f"WARNING: Invalid JSON for column '{k}'. Storing as None. Value: {v}")
                             temp_record[k] = None
-                    elif column_types.get(k) == 'boolean':
+                    elif col_type == 'boolean':
                         temp_record[k] = str(v).lower() in ['true', 'on']
-                    elif column_types.get(k) == 'date' and isinstance(v, str) and v:
-                        try:
-                            temp_record[k] = datetime.strptime(v, '%Y-%m-%d').date()
-                        except ValueError:
+                    elif col_type == 'date':
+                        temp_record[k] = safe_date_parse(v) # <-- USE SAFE PARSE UTILITY
+                        if temp_record[k] is None and v is not None:
                             print(f"WARNING: Invalid date format for column '{k}'. Storing as None. Value: {v}")
+                    elif col_type in ['integer', 'bigint', 'numeric']:
+                         try:
+                             # Handle floats coming as strings for numeric fields
+                             temp_record[k] = float(v) if col_type == 'numeric' else int(v)
+                         except ValueError:
+                             temp_record[k] = None
+                    # Handle binary/base64 attachment outside of initial loop structure for safety
+                    # This logic should be placed after all standard key-value conversions
+                    # The `psycopg2.extras.execute_values` cannot handle file uploads directly, 
+                    # so we assume base64 encoded strings for 'attachment' if applicable.
+                    elif k == 'attachment' and isinstance(v, str):
+                        try:
+                            temp_record[k] = base64.b64decode(v)
+                        except Exception as e:
+                            print(f"WARNING: Could not decode base64 attachment for record: {e}")
                             temp_record[k] = None
+                    # Fallback or pass-through for other types
                     else:
                         temp_record[k] = v
 
-                processed_records_for_insertion.append({k: (v if v != '' else None) for k, v in temp_record.items()})
+                processed_records_for_insertion.append(temp_record)
 
             columns = list(processed_records_for_insertion[0].keys())
             column_names = ', '.join([f'"{col}"' for col in columns])
@@ -1554,14 +1565,14 @@ def batch_upload(schema: str, table: str):
             for record_data in processed_records_for_insertion:
                 row = []
                 for col in columns:
-                    val = record_data.get(col)
-                    row.append(val)
+                    row.append(record_data.get(col))
                 data_tuples.append(tuple(row))
 
             query_template = f"INSERT INTO \"{actual_schema}\".\"{actual_table}\" ({column_names}) VALUES %s"
             
             with conn.cursor() as cur:
                 print(f"Executing batch_upload query: {query_template} with {len(data_tuples)} records.")
+                # This function efficiently executes the batch insert
                 psycopg2.extras.execute_values(cur, query_template, data_tuples)
                 conn.commit()
             inserted_count = len(records)
@@ -1612,6 +1623,7 @@ def batch_update(schema: str, table: str):
                     print(f"  Warning: Skipping record in batch update due to missing primary key(s): {record_data}")
                     continue
                 
+                # Process update fields
                 for key, val in update_fields.items():
                     if key == 'attachment_link' and val == '':
                         set_clauses_parts.append(f'"{key}" = %s')
@@ -1628,11 +1640,12 @@ def batch_update(schema: str, table: str):
                         set_clauses_parts.append(f'"{key}" = %s')
                         set_values.append(str(val).lower() in ['true', 'on'])
                     elif column_types.get(key) == 'date' and isinstance(val, str) and val:
-                        try:
+                        date_obj = safe_date_parse(val) # <-- USE SAFE PARSE UTILITY
+                        if date_obj is not None:
                             set_clauses_parts.append(f'"{key}" = %s')
-                            set_values.append(datetime.strptime(val, '%Y-%m-%d').date())
-                        except ValueError:
-                            print(f"WARNING: Invalid date format for column '{key}'. Skipping update for this field.")
+                            set_values.append(date_obj)
+                        else:
+                            print(f"WARNING: Invalid date format for column '{key}'. Skipping update for this field. Value: {val}")
                             continue
                     else:
                         set_clauses_parts.append(f'"{key}" = %s')
@@ -1642,13 +1655,16 @@ def batch_update(schema: str, table: str):
                     print(f"  Warning: Skipping record in batch update as no update fields provided: {record_data}")
                     continue
 
+                # Process PK fields for WHERE clause
                 for pk_col in pk_columns:
                     pk_where_clauses_parts.append(f'"{pk_col}" = %s')
                     pk_val = pk_fields[pk_col]
+                    
+                    # Fix date parsing for PKs in WHERE clause
                     if column_types.get(pk_col) == 'date' and pk_val is not None:
-                        try:
-                            pk_where_values.append(datetime.strptime(str(pk_val), '%Y-%m-%d').date())
-                        except ValueError:
+                        if isinstance(pk_val, str):
+                            pk_where_values.append(safe_date_parse(pk_val)) # <-- USE SAFE PARSE UTILITY
+                        else:
                             pk_where_values.append(pk_val)
                     else:
                         pk_where_values.append(pk_val)
