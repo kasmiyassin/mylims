@@ -1003,6 +1003,44 @@ def create_record(schema: str, table: str):
 
         if not data and not files:
             return jsonify({"error": "No data provided"}), 400
+        
+        # --- CRITICAL FIX: Handle potential malformed input data structure ---
+        # The original error suggests keys were concatenated. If this occurs,
+        # the payload data dictionary will contain a single key that is a long string 
+        # of concatenated column names (e.g., 'col1;col2;col3'). This block attempts to correct it.
+        
+        # First, we need to check if the issue is still present before attempting the fix,
+        # as accessing data.keys() on a bad dict raises an error on the client side.
+        try:
+            if len(data) == 1 and isinstance(list(data.keys())[0], str) and ';' in list(data.keys())[0]:
+                print("WARNING: Detected malformed single-key JSON payload. Attempting to parse manually.")
+                malformed_key = list(data.keys())[0]
+                malformed_value = data[malformed_key]
+
+                # Attempt to split keys and values, assuming they match order and delimiter (';')
+                col_names = [k.strip() for k in malformed_key.split(';') if k.strip()]
+                # Check for empty string values in the malformed payload. The log shows: 'project_id01;;;;...'
+                # This needs careful splitting that preserves empty strings.
+                
+                # Split the values string without filtering out empty strings immediately
+                # Use split(';') directly, then clean up the individual elements later during filtering/type casting
+                raw_col_values = malformed_value.split(';')
+
+                # Check if the number of column names matches the number of column values
+                if len(col_names) == len(raw_col_values) and len(col_names) > 1:
+                    new_data = dict(zip(col_names, raw_col_values))
+                    # Overwrite the potentially bad data with the corrected data
+                    data = new_data
+                    print(f"Manually parsed data successfully into {len(data)} key/value pairs.")
+                else:
+                    # Log failure to manually parse but proceed, as some payloads might be fine
+                    print(f"ERROR: Manual parsing failed due to mismatch in key/value count ({len(col_names)} keys vs {len(raw_col_values)} values). Proceeding with original data.")
+        except Exception as e:
+            print(f"CRITICAL PARSING ERROR in create_record: {e}")
+            # If accessing data.keys() itself fails, we must proceed with the original (likely empty or malformed) data.
+            # We don't re-raise here as the subsequent filter loop will catch the empty/bad data and the try-except at the end handles rollback.
+
+        # --- END CRITICAL FIX ---
             
         if 'attachment' in files and files['attachment'].filename != '':
             data['attachment'] = psycopg2.Binary(files['attachment'].read())
@@ -1099,12 +1137,12 @@ def create_record(schema: str, table: str):
             schema=sql.Identifier(actual_schema),
             table=sql.Identifier(actual_table),
             cols=sql.SQL(', ').join(col_identifiers),
-            values=sql.SQL(', ').join(sql.Placeholder() * len(values))
+            values=sql.SQL(', ').join([sql.Placeholder()] * len(values)) # Use Placeholder for safe parameter substitution
         )
         # --- END FIX ---
         
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            # print(f"Executing POST query (SQL): {insert_query.as_string(conn)} with values: {values}")
+            print(f"Executing POST query (SQL): {insert_query.as_string(conn)} with values: {values}")
             cur.execute(insert_query, values)
             new_record = cur.fetchone()
             
@@ -1130,7 +1168,13 @@ def create_record(schema: str, table: str):
                             cur.execute(
                                 'SELECT "sample_creation_date" FROM "lab"."root_samples" WHERE "sample_id" = %s;', (sample_id,)
                             )
-                            sample_creation_date = cur.fetchone()['sample_creation_date'] 
+                            # Fetch one or none. Handle the case where no sample is found.
+                            sample_creation_row = cur.fetchone()
+                            if sample_creation_row is None:
+                                print(f"  Warning: Root sample ID {sample_id} not found. Skipping link.")
+                                continue
+
+                            sample_creation_date = sample_creation_row['sample_creation_date'] 
                             cur.execute(
                                 'INSERT INTO "lab"."experiments_samples" ("experiment_id", "experiment_date", "sample_id", "sample_creation_date") VALUES (%s, %s, %s, %s);',
                                 (experiment_id, experiment_date, sample_id, sample_creation_date)
@@ -1462,7 +1506,7 @@ def batch_upload(schema: str, table: str):
                         schema=sql.Identifier(actual_schema),
                         table=sql.Identifier(actual_table),
                         cols=sql.SQL(', ').join(col_identifiers),
-                        values=sql.SQL(', ').join(sql.Placeholder() * len(values))
+                        values=sql.SQL(', ').join([sql.Placeholder()] * len(values)) # Use Placeholder list
                     )
                     # --- END FIX ---
                     
@@ -1490,7 +1534,12 @@ def batch_upload(schema: str, table: str):
                                         cur.execute(
                                             'SELECT "sample_creation_date" FROM "lab"."root_samples" WHERE "sample_id" = %s;', (sample_id,)
                                         )
-                                        sample_creation_date = cur.fetchone()['sample_creation_date'] 
+                                        sample_creation_row = cur.fetchone()
+                                        if sample_creation_row is None:
+                                            print(f"  Warning: Root sample ID {sample_id} not found during batch link. Skipping link.")
+                                            continue
+                                            
+                                        sample_creation_date = sample_creation_row['sample_creation_date'] 
                                         cur.execute(
                                             'INSERT INTO "lab"."experiments_samples" ("experiment_id", "experiment_date", "sample_id", "sample_creation_date") VALUES (%s, %s, %s, %s);',
                                             (experiment_id, experiment_date, sample_id, sample_creation_date)
@@ -1645,7 +1694,7 @@ def batch_update(schema: str, table: str):
                              set_values.append(None)
                     else:
                         set_clauses_parts.append(f'"{key}" = %s')
-                        set_values.append(None if val == '' else val)
+                        values.append(None if val == '' else val)
                 
                 if not set_clauses_parts:
                     print(f"  Warning: Skipping record in batch update as no update fields provided: {record_data}")
