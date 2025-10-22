@@ -9,6 +9,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
+        /* Base styles */
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
         .sidebar { border-right: 1px solid #e2e8f0; }
         .sidebar-item { color: #475569; }
@@ -567,8 +568,6 @@
                         return String(r[key]) === String(pkValues[key]);
                     });
                 });
-                // FIX: Removed the second argument (targetTableForEdit) so specificTable is null,
-                // which correctly sets isEditing=true inside showCreateEditModal.
                 if (record) showCreateEditModal(record); 
                 else showToast("Record not found for editing.", "error");
             }));
@@ -971,7 +970,7 @@
 
         async function showCreateEditModal(record = null, specificTable = null) {
             console.log("Showing create/edit modal. Record:", record, "Specific Table:", specificTable);
-            const isEditing = record !== null && !specificTable; // This logic relies on specificTable only being passed for *new* child records/new entries, or for explicitly editing the current table if we fix the caller.
+            const isEditing = record !== null && !specificTable; 
             const targetTableName = specificTable || currentTableName; 
             const [schemaName, tableName] = targetTableName.split('.');
 
@@ -1179,7 +1178,7 @@
                         return;
                     } else if (col.column_name.includes('cruise_id') && cruises) {
                         refData = cruises; displayKey = 'cruise_id';
-                    } else if (col.column_name.includes('species_id') && taxon) {
+                    } else if (col.column_name.includes('taxon_id') && taxon) {
                         refData = taxon; displayKey = 'en_name';
                     } else if (col.column_name.includes('unit_id') && units) {
                         refData = units; displayKey = 'unit_abbreviation';
@@ -1391,7 +1390,7 @@
                 return newRow;
             });
 
-            statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Performing bulk update on ${recordsToModifyCleaned.length} records...</p>`;
+            statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Performing bulk update on ${recordsToModifyCleaned.length} records in ${currentTableName}...</p>`;
             lucide.createIcons();
 
             const [schemaName, tableName] = currentTableName.split('.');
@@ -1401,11 +1400,12 @@
             });
 
             if (result && result.success) {
-                showToast(`Successfully updated ${result.updated_rows} records!`, "success");
+                showToast(`Successfully updated ${result.updated_rows} records in ${tableName}!`, "success");
                 loadAndRenderTable(currentTableName);
                 setTimeout(closeModal, 2000);
             } else {
                 showToast(`Bulk modify failed: ${result ? result.error : 'Unknown error'}`, "error");
+                statusDiv.innerHTML = `<p class="text-red-500">Bulk modify failed: ${result ? result.error : 'Unknown error'}</p>`;
             }
             lucide.createIcons();
         }
@@ -1427,8 +1427,10 @@
                 return;
             }
 
-            let headers = pkColumns;
+            // 1. Start with Primary Key columns (mandatory for update)
+            let headers = [...pkColumns];
             
+            // 2. Add common editable columns, excluding auto-generated, binary, or system fields
             const commonEditableColumns = schema.filter(col => 
                 !pkColumns.includes(col.column_name) && 
                 !col.column_name.includes('attachment') && 
@@ -1436,13 +1438,19 @@
                 !col.column_name.includes('search_vector') &&
                 !col.column_name.includes('geom') && 
                 !col.column_name.includes('created_at') &&
-                !(col.column_default && col.column_default.includes('nextval'))
+                !col.column_name.includes('creation_date') && 
+                !col.column_name.includes('last_modified_at') &&
+                !(col.column_default && (col.column_default.includes('nextval') || col.column_default.includes('uuid_generate')))
             ).map(col => col.column_name);
 
+            // Merge and ensure uniqueness, preserving the order of PKs first
             headers = [...new Set([...headers, ...commonEditableColumns])];
 
             console.log("Bulk Modify Template Headers:", headers);
-            const csv = unparseCSV([headers], { header: false });
+            // Create a row of example data placeholders 
+            const exampleRow = headers.map(h => pkColumns.includes(h) ? `PK_VALUE_DO_NOT_CHANGE_FOR_${h.toUpperCase()}` : 'NEW_VALUE_OR_LEAVE_BLANK_TO_SKIP');
+            
+            const csv = unparseCSV([headers, exampleRow], { header: false });
             
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
@@ -1547,7 +1555,7 @@
                                 <i data-lucide="download" class="w-5 h-5 mr-2"></i>Download Template
                             </button>
                             <button id="upload-csv-btn" class="w-1/2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center shadow hover:shadow-lg transition-all">
-                                <i data-lucide="upload" class="w-5 h-5 mr-2"></i>Bulk CSV Upload
+                                <i data-lucide="upload" class="w-5 h-5 mr-2"></i>Perform Bulk Upload
                             </button>
                         </div>
                         <div id="upload-status" class="mt-4 text-center text-sm"></div>
@@ -1577,6 +1585,8 @@
                     complete: async (results) => {
                         if (results.errors.length) {
                             showToast(`CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}`, "error");
+                            statusDiv.innerHTML = `<p class="text-red-500">CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}</p>`;
+                            lucide.createIcons();
                             return;
                         }
                         if (!results.data.length) {
@@ -1592,7 +1602,7 @@
                             return newRow;
                         });
 
-                        statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Uploading ${recordsToUpload.length} records...</p>`;
+                        statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Uploading ${recordsToUpload.length} records to ${currentTableName}... </p>`;
                         lucide.createIcons();
 
                         const [schemaName, tableName] = currentTableName.split('.');
@@ -1602,11 +1612,12 @@
                         });
 
                         if (result && result.success) {
-                            showToast(`Successfully uploaded ${result.inserted_rows} records!`, "success");
+                            showToast(`Successfully uploaded ${result.inserted_rows} records to ${tableName}!`, "success");
                             loadAndRenderTable(currentTableName);
                             setTimeout(closeModal, 2000);
                         } else {
                             showToast(`Bulk upload failed: ${result ? result.error : 'Unknown error'}`, "error");
+                            statusDiv.innerHTML = `<p class="text-red-500">Bulk upload failed: ${result ? result.error : 'Unknown error'}</p>`;
                         }
                         lucide.createIcons();
                     }
@@ -1670,7 +1681,6 @@
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(link.href);
-            console.log("CSV template download initiated.");
             showToast("Template downloaded successfully!", "success");
         }
 
@@ -1682,8 +1692,8 @@
             populateDynamicTableSelect();
             loadAndRenderTable(currentTableName); 
 
-            // Button Listeners
-            document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal(null, 'lab.root_samples'));
+            // **CRITICAL FIX: Ensure all buttons use the currentTableName variable set by the dropdown.**
+            document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal(null, currentTableName));
             document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal);
             document.getElementById('bulk-modify-btn').addEventListener('click', showBulkModifyModal);
             document.getElementById('download-template-general-btn').addEventListener('click', () => downloadCsvTemplate(currentTableName));

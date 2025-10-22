@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# --- Configuration ---
 DB_HOST: str = os.getenv('DB_HOST', '0.0.0.0')
 DB_NAME: str = os.getenv('DB_NAME', 'demo_lims')
 DB_USER: str = os.getenv('DB_USER', 'kasmi')
@@ -21,15 +22,15 @@ SECRET_KEY: str = os.getenv('SECRET_KEY', 'a_very_secret_key_for_session_managem
 
 STATIC_FOLDER: str = '.'
 FLASK_ENV: str = os.getenv('FLASK_ENV', 'production')
-API_PREFIX: str = os.getenv('API_PREFIX', '/api') # Changed to /mylims/api to match frontend
+# API_PREFIX must match the frontend configuration
+API_PREFIX: str = os.getenv('API_PREFIX', '/api') 
 
 app = Flask(__name__, static_folder=STATIC_FOLDER)
 app.secret_key = SECRET_KEY
 CORS(app, supports_credentials=True)
 
 # --- Primary Key Mapping ---
-# IMPORTANT: This list has been updated to include all tables from MyLims_v4.sql, 
-# especially the new booking tables: lims.bookable_resource and lims.booking.
+# Maps (schema, table) to its primary key column(s).
 PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     ('reference', 'status'): 'status_id',
     ('reference', 'room'): 'room_id',
@@ -107,7 +108,7 @@ PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     
     ('audit', 'log'): 'id',
 
-    # Views
+    # Views (using the base table PK) - important for editing on views
     ('lims', 'project_summary_view'): 'project_id',
     ('lab', 'sample_type_counts_view'): 'sample_type_id',
     ('lab', 'storage_occupancy_view'): 'storage_id',
@@ -150,6 +151,33 @@ VIEW_TO_BASE_TABLE_MAPPING: Dict[str, str] = {
 }
 
 
+# --- Utility Functions ---
+def safe_date_parse(date_str: str) -> Optional[date]:
+    """Safely converts a string to a date object, handling YYYY-MM-DD and basic date parts."""
+    if not date_str or not isinstance(date_str, str):
+        return None
+    
+    try:
+        # 1. Try parsing YYYY-MM-DD (standard format from frontend inputs/CSV)
+        return datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        pass
+    
+    try:
+        # 2. Try parsing just the date part if it contains a timestamp (YYYY-MM-DDTHH:MM)
+        if 'T' in date_str:
+            date_part = date_str.split('T')[0]
+            return datetime.strptime(date_part, '%Y-%m-%d').date()
+    except ValueError:
+        pass
+        
+    try:
+        # 3. Try Python's isoformat parser for clean date strings
+        return date.fromisoformat(date_str)
+    except (ValueError, TypeError):
+        print(f"Warning: Failed to parse date string '{date_str}' in safe_date_parse.")
+        return None
+
 def get_db_connection():
     """Establishes and returns a new database connection."""
     try:
@@ -164,17 +192,16 @@ def get_db_connection():
 def before_request_func():
     """
     Establishes a database connection for the request and sets RLS context.
-    The 'kasmi' user is a superuser and bypasses RLS policies.
     """
     g.db_conn = get_db_connection()
-    person_id_to_set = str(session.get('user_id', '')) # Ensure it's a string for consistency
+    person_id_to_set = str(session.get('user_id', '')) 
 
     try:
         with g.db_conn.cursor() as cur:
-            # Set the RLS context (already present)
+            # Set the RLS context
             cur.execute("SELECT set_config('lims.current_person_id', %s, FALSE)", (person_id_to_set,))
             
-            # --- NEW: Set a separate variable for Auditing ---
+            # Set a separate variable for Auditing
             cur.execute("SELECT set_config('audit.logged_in_user', %s, FALSE)", (person_id_to_set,))
             
             g.db_conn.commit()
@@ -216,7 +243,7 @@ def transform_row_for_json(row: Dict[str, Any]) -> Dict[str, Any]:
             new_row[key] = base64.b64encode(value).decode('utf-8')
         elif isinstance(value, time):
             new_row[key] = str(value)
-        elif isinstance(value, datetime) or isinstance(value, date): # Corrected to use date from datetime import
+        elif isinstance(value, datetime) or isinstance(value, date):
             new_row[key] = value.isoformat()
         elif isinstance(value, dict) and 'type' in value and 'coordinates' in value:
             new_row[key] = value
@@ -248,8 +275,9 @@ def _resolve_table_casing(conn, requested_schema: str, requested_table: str) -> 
                 _resolved_names_cache[cache_key] = (actual_schema, actual_table, table_type)
                 return actual_schema, actual_table, table_type
             
+            # Check for views/materialized views
             query_views = """
-                SELECT table_schema, table_name
+                SELECT table_schema, table_name, 'VIEW'
                 FROM information_schema.views
                 WHERE lower(table_schema) = lower(%s) AND lower(table_name) = lower(%s)
                 LIMIT 1;
@@ -257,8 +285,7 @@ def _resolve_table_casing(conn, requested_schema: str, requested_table: str) -> 
             cur.execute(query_views, (requested_schema, requested_table))
             result_view = cur.fetchone()
             if result_view:
-                actual_schema, actual_table = result_view[0], result_view[1]
-                table_type = 'VIEW'
+                actual_schema, actual_table, table_type = result_view[0], result_view[1], result_view[2]
                 _resolved_names_cache[cache_key] = (actual_schema, actual_table, table_type)
                 return actual_schema, actual_table, table_type
             
@@ -339,7 +366,6 @@ def login_user():
             user_personal = cur.fetchone()
 
             if user_personal and user_personal.get('password_hash'):
-                # bcrypt.checkpw requires bytes, so we encode the password
                 if bcrypt.checkpw(password.encode('utf-8'), user_personal['password_hash'].encode('utf-8')):
                     session['user_id'] = user_personal['person_id']
                     session['user_type'] = 'personal'
@@ -354,7 +380,6 @@ def login_user():
 
             if user_customer and user_customer.get('password_hash'):
                 if bcrypt.checkpw(password.encode('utf-8'), user_customer['password_hash'].encode('utf-8')):
-                    # FIX: Convert customer_id (INT) to STRING for RLS context consistency
                     session['user_id'] = str(user_customer['customer_id']) 
                     session['user_type'] = 'customer'
                     session['is_admin'] = False
@@ -428,7 +453,7 @@ def global_search(search_term: str):
             (search_pattern, search_pattern, search_pattern)
         ),
         "reagents": (
-            'SELECT reagent_id, reagent_complete_name, lot FROM "lims"."reagents" WHERE "reagent_search_vector" @@ {ts_query_func} OR "reagent_id" ILIKE %s OR "reagent_complete_name" ILIKE %s OR "lot" ILIKE %s LIMIT 5',
+            f'SELECT reagent_id, reagent_complete_name, lot FROM "lims"."reagents" WHERE "reagent_search_vector" @@ {ts_query_func} OR "reagent_id" ILIKE %s OR "reagent_complete_name" ILIKE %s OR "lot" ILIKE %s LIMIT 5',
             (search_term, search_pattern, search_pattern, search_pattern)
         ),
         "personal": (
@@ -450,7 +475,9 @@ def global_search(search_term: str):
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             for key, (query, params) in queries.items():
                 try:
-                    cur.execute(query, params)
+                    # Inject ts_query_func into the query string before execution
+                    final_query = query.replace('{ts_query_func}', ts_query_func)
+                    cur.execute(final_query, params)
                     results[key] = [transform_row_for_json(row) for row in cur.fetchall()]
                 except Exception as inner_e:
                     print(f"Error executing search for {key}: {inner_e}")
@@ -717,17 +744,19 @@ def get_table_data(schema: str, table: str):
         
         def parse_date_filter(date_str):
             """Helper to parse date strings into date objects."""
-            try:
-                return datetime.strptime(date_str, '%Y-%m-%d').date()
-            except (ValueError, TypeError):
-                return None
+            return safe_date_parse(date_str)
         
         def parse_datetime_filter(dt_str):
             """Helper to parse datetime strings into datetime objects."""
             try:
-                return datetime.fromisoformat(dt_str)
+                # Handle YYYY-MM-DDTHH:MM format from HTML input
+                return datetime.strptime(dt_str, '%Y-%m-%dT%H:%M')
             except (ValueError, TypeError):
-                return None
+                # Fallback to ISO format parsing
+                try:
+                    return datetime.fromisoformat(dt_str)
+                except (ValueError, TypeError):
+                    return None
 
 
         if actual_table.lower() == 'booking':
@@ -995,7 +1024,6 @@ def create_record(schema: str, table: str):
         # --- Root Sample Logic (Fix for missing project_id/customer_id) ---
         if actual_schema.lower() == 'lab' and actual_table.lower() == 'root_samples':
             if data.get('parent_sample_id') is None and data.get('project_id') is None and data.get('customer_id') is None:
-                # Set a known project_id for the ID function to work if neither is provided
                 print("WARNING: Missing project_id/customer_id for new root sample. Using PROJ_FALLBACK.")
                 data['project_id'] = 'Proj_BioMon' # Assuming 'Proj_BioMon' exists and is accessible
         # --- END Root Sample Logic ---
@@ -1006,7 +1034,15 @@ def create_record(schema: str, table: str):
             sample_ids_str = data.pop('sample_ids', None)
         elif actual_schema.lower() == 'lims' and actual_table.lower() == 'projects':
             if 'linked_person_ids' in data:
-                linked_person_ids = [p.strip() for p in data.pop('linked_person_ids', '').split(';') if p.strip()]
+                # Handle linked_person_ids if coming from a non-form data POST (like bulk upload where it's included in the JSON body)
+                linked_person_ids_raw = data.pop('linked_person_ids', '')
+                if isinstance(linked_person_ids_raw, str):
+                    linked_person_ids = [p.strip() for p in linked_person_ids_raw.split(';') if p.strip()]
+                elif isinstance(linked_person_ids_raw, list):
+                    linked_person_ids = linked_person_ids_raw
+                else:
+                    linked_person_ids = []
+
 
         filtered_data = {}
         for k, v in data.items():
@@ -1032,32 +1068,50 @@ def create_record(schema: str, table: str):
             elif column_types.get(k) == 'boolean':
                 filtered_data[k] = str(v).lower() in ['true', 'on']
             elif column_types.get(k) == 'date' and isinstance(v, str) and v:
-                try:
-                    filtered_data[k] = datetime.strptime(v, '%Y-%m-%d').date()
-                except ValueError:
-                    print(f"WARNING: Invalid date format for column '{k}'. Storing as None. Value: {v}")
-                    filtered_data[k] = None
+                filtered_data[k] = safe_date_parse(v) 
+                if filtered_data[k] is None and v is not None:
+                     print(f"WARNING: Invalid date format for column '{k}'. Storing as None. Value: {v}")
+            elif column_types.get(k) == 'geometry' and isinstance(v, str) and v:
+                 # Special handling for WKT/GeoJSON string input
+                 if v.upper().startswith('POINT(') and v.upper().endswith(')'):
+                     filtered_data[k] = v # Pass WKT directly
+                 else:
+                     # Attempt to parse as GeoJSON just in case, otherwise treat as invalid string
+                     try:
+                         json.loads(v)
+                         filtered_data[k] = v # Assume GeoJSON string is valid
+                     except json.JSONDecodeError:
+                         filtered_data[k] = None
             else:
                 filtered_data[k] = v
             
         columns = filtered_data.keys()
         values = [filtered_data[col] for col in columns]
         
-        column_names = ', '.join([f'"{col}"' for col in columns])
-        value_placeholders = ', '.join(['%s'] * len(values))
+        # --- FIX: Use SQL module for safe, correct column and value insertion ---
         
-        query = f'INSERT INTO "{actual_schema}"."{actual_table}" ({column_names}) VALUES ({value_placeholders}) RETURNING *;'
+        # 1. Prepare identifiers (column names)
+        # Using sql.Identifier() ensures correct quoting and prevents SQL injection
+        col_identifiers = [sql.Identifier(col) for col in columns]
+
+        # 2. Prepare value placeholders and build the query
+        insert_query = sql.SQL('INSERT INTO {schema}.{table} ({cols}) VALUES ({values}) RETURNING *').format(
+            schema=sql.Identifier(actual_schema),
+            table=sql.Identifier(actual_table),
+            cols=sql.SQL(', ').join(col_identifiers),
+            values=sql.SQL(', ').join(sql.Placeholder() * len(values))
+        )
+        # --- END FIX ---
         
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            print(f"Executing POST query: {query} with values: {values}")
-            cur.execute(query, values)
+            # print(f"Executing POST query (SQL): {insert_query.as_string(conn)} with values: {values}")
+            cur.execute(insert_query, values)
             new_record = cur.fetchone()
             
             if actual_schema.lower() == 'lab' and actual_table.lower() == 'experiments' and new_record:
                 experiment_id = new_record['experiment_id']
-                experiment_date = new_record['experiment_date'] # Date object
+                experiment_date = new_record['experiment_date'] 
                 
-                # --- Link Projects ---
                 if project_ids_str:
                     project_list = [p.strip() for p in project_ids_str.split(';') if p.strip()]
                     for project_id in project_list:
@@ -1069,7 +1123,6 @@ def create_record(schema: str, table: str):
                         except Exception as e:
                             print(f"  Warning: Could not link project {project_id} to experiment {experiment_id}: {e}")
 
-                # --- Link Samples ---
                 if sample_ids_str:
                     sample_list = [s.strip() for s in sample_ids_str.split(';') if s.strip()]
                     for sample_id in sample_list:
@@ -1077,7 +1130,7 @@ def create_record(schema: str, table: str):
                             cur.execute(
                                 'SELECT "sample_creation_date" FROM "lab"."root_samples" WHERE "sample_id" = %s;', (sample_id,)
                             )
-                            sample_creation_date = cur.fetchone()['sample_creation_date'] # Date object
+                            sample_creation_date = cur.fetchone()['sample_creation_date'] 
                             cur.execute(
                                 'INSERT INTO "lab"."experiments_samples" ("experiment_id", "experiment_date", "sample_id", "sample_creation_date") VALUES (%s, %s, %s, %s);',
                                 (experiment_id, experiment_date, sample_id, sample_creation_date)
@@ -1090,8 +1143,8 @@ def create_record(schema: str, table: str):
                 for person_id in linked_person_ids:
                     try:
                         cur.execute(
-                            'INSERT INTO "lims"."project_persons" ("project_id", "person_id") VALUES (%s, %s);',
-                            (project_id, person_id)
+                            'INSERT INTO "lims"."project_persons" ("project_id", "person_id", "link_date") VALUES (%s, %s, %s);',
+                            (project_id, person_id, date.today())
                         )
                         print(f"  Linked person {person_id} to new project {project_id}")
                     except Exception as e:
@@ -1102,7 +1155,10 @@ def create_record(schema: str, table: str):
     except Exception as e:    
         if conn:
             conn.rollback()
+        # Log the actual raw error message from psycopg2
+        import traceback
         print(f"Error creating record in {schema}.{table}: {e}")
+        print(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
             
 @app.route(f'{API_PREFIX}/table/<string:schema>/<string:table>', methods=['PUT'])
@@ -1128,9 +1184,8 @@ def update_record(schema: str, table: str):
                 return jsonify({"error": f"Missing primary key component: {pk_col}"}), 400
             
             if column_types.get(pk_col) == 'date':
-                try:
-                    pk_values_from_request[pk_col] = datetime.strptime(pk_val, '%Y-%m-%d').date()
-                except (ValueError, TypeError):
+                pk_values_from_request[pk_col] = safe_date_parse(pk_val) 
+                if pk_values_from_request[pk_col] is None and pk_val is not None:
                     pk_values_from_request[pk_col] = pk_val
             else:
                 pk_values_from_request[pk_col] = pk_val
@@ -1169,6 +1224,20 @@ def update_record(schema: str, table: str):
             elif key == 'attachment_link' and val == '':
                 set_clauses.append(f'"{key}" = %s')
                 values.append(None)
+            elif key == 'attachment': # Handle attachment data if passed in non-form data (e.g. bulk update)
+                 if isinstance(val, str) and val.startswith('data:'):
+                    try:
+                        # Attempt to decode base64 data
+                        base64_data = val.split(',')[1]
+                        set_clauses.append(f'"{key}" = %s')
+                        values.append(psycopg2.Binary(base64.b64decode(base64_data)))
+                    except Exception as e:
+                        print(f"WARNING: Could not decode base64 attachment for column '{key}'. Storing as None. Error: {e}")
+                        set_clauses.append(f'"{key}" = %s')
+                        values.append(None)
+                 else:
+                    set_clauses.append(f'"{key}" = %s')
+                    values.append(None if val == '' else val)
             elif column_types.get(key) == 'jsonb' and isinstance(val, str):
                 try:
                     set_clauses.append(f'"{key}" = %s')
@@ -1181,16 +1250,17 @@ def update_record(schema: str, table: str):
                 set_clauses.append(f'"{key}" = %s')
                 values.append(str(val).lower() in ['true', 'on'])
             elif column_types.get(key) == 'date' and isinstance(val, str) and val:
-                try:
+                date_obj = safe_date_parse(val) 
+                if date_obj is not None:
                     set_clauses.append(f'"{key}" = %s')
-                    values.append(datetime.strptime(val, '%Y-%m-%d').date())
-                except ValueError:
-                    print(f"WARNING: Invalid date format for column '{key}'. Skipping update for this field.")
+                    values.append(date_obj)
+                else:
+                    print(f"WARNING: Invalid date format for column '{key}'. Skipping update for this field. Value: {val}")
                     continue
             elif column_types.get(key) == 'timestamp with time zone' and isinstance(val, str) and val:
                 try:
-                    # Parse local datetime string from HTML and assume it's in the client's timezone, 
                     set_clauses.append(f'"{key}" = %s')
+                    # Parse local datetime string from HTML and assume it's in the client's timezone, 
                     values.append(datetime.strptime(val, '%Y-%m-%dT%H:%M'))
                 except ValueError:
                     print(f"WARNING: Invalid datetime format for column '{key}'. Skipping update for this field.")
@@ -1208,12 +1278,8 @@ def update_record(schema: str, table: str):
             pk_where_clauses.append(f'"{pk_col}" = %s')
             pk_val = pk_values_from_request[pk_col]
             if column_types.get(pk_col) == 'date' and pk_val is not None:
-                # Need to ensure that PK date strings are converted back to date objects for comparison
                 if isinstance(pk_val, str):
-                    try:
-                        pk_where_values.append(datetime.strptime(pk_val, '%Y-%m-%d').date())
-                    except ValueError:
-                        pk_where_values.append(pk_val) # Fallback to string if date conversion fails
+                    pk_where_values.append(safe_date_parse(pk_val)) 
                 else:
                     pk_where_values.append(pk_val)
             else:
@@ -1266,10 +1332,7 @@ def delete_record(schema: str, table: str):
                 if col_name in column_types:
                     where_clauses.append(f'"{col_name}" = %s')
                     if column_types.get(col_name) == 'date':
-                        try:
-                            pk_values_for_query.append(datetime.strptime(val, '%Y-%m-%d').date())
-                        except ValueError:
-                            pk_values_for_query.append(val)
+                        pk_values_for_query.append(safe_date_parse(val)) 
                     else:
                         pk_values_for_query.append(val)
                 else:
@@ -1285,10 +1348,7 @@ def delete_record(schema: str, table: str):
                     return jsonify({"error": f"Missing primary key component for deletion: {pk_col}"}), 400
                 
                 if column_types.get(pk_col) == 'date' and pk_val is not None:
-                    try:
-                        pk_val = datetime.strptime(pk_val, '%Y-%m-%d').date();
-                    except ValueError:
-                        pass
+                    pk_val = safe_date_parse(pk_val) 
 
                 where_clauses.append(f'"{pk_col}" = %s')
                 pk_values_for_query.append(pk_val)
@@ -1299,7 +1359,6 @@ def delete_record(schema: str, table: str):
             print(f"Executing DELETE query: {query} with params: {pk_values_for_query}")
             cur.execute(query, pk_values_for_query)
             
-            # Use cur.rowcount for mass deletion, cur.fetchone() for single deletion check
             if mass_delete_params:
                 deleted_count = cur.rowcount
                 conn.commit()
@@ -1342,11 +1401,16 @@ def batch_upload(schema: str, table: str):
 
         inserted_count = 0
         
-        if actual_schema.lower() == 'lab' and actual_table.lower() == 'experiments':
+        # --- Handle Special Tables with Linking Logic (Iterative Insertion) ---
+        if (actual_schema.lower() == 'lab' and actual_table.lower() == 'experiments') or \
+           (actual_schema.lower() == 'lims' and actual_table.lower() == 'projects'):
+            
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 for record_data in records:
-                    project_ids_str = record_data.pop('project_ids', None)
-                    sample_ids_str = record_data.pop('sample_ids', None)
+                    # Extract special fields before general processing
+                    project_ids_str = record_data.pop('project_ids', None) # For lab.experiments
+                    sample_ids_str = record_data.pop('sample_ids', None)   # For lab.experiments
+                    linked_person_ids_str = record_data.pop('linked_person_ids', None) # For lims.projects
 
                     filtered_record = {}
                     for k, v in record_data.items():
@@ -1356,20 +1420,31 @@ def batch_upload(schema: str, table: str):
                             try:
                                 filtered_record[k] = json.loads(v)
                             except json.JSONDecodeError:
-                                print(f"WARNING: Invalid JSON for column '{k}' during batch upload. Storing as None. Value: {v}")
                                 filtered_record[k] = None
                         elif column_types.get(k) == 'boolean':
                             filtered_record[k] = str(v).lower() in ['true', 'on']
-                        elif column_types.get(k) == 'date' and isinstance(v, str) and v: # <-- FIX: Handle date string
+                        elif column_types.get(k) == 'date' and isinstance(v, str) and v:
+                            filtered_record[k] = safe_date_parse(v)
+                            if filtered_record[k] is None and v is not None:
+                                print(f"WARNING: Invalid date format for column '{k}' in batch. Storing as None. Value: {v}")
+                        # Handle base64 encoded attachments if provided as string
+                        elif k == 'attachment' and isinstance(v, str) and (v.startswith('data:')):
                             try:
-                                filtered_record[k] = datetime.strptime(v, '%Y-%m-%d').date()
-                            except ValueError:
-                                print(f"WARNING: Invalid date format for column '{k}'. Storing as None. Value: {v}")
+                                base64_data = v.split(',')[1]
+                                filtered_record[k] = psycopg2.Binary(base64.b64decode(base64_data))
+                            except Exception as e:
+                                print(f"WARNING: Could not decode base64 attachment for column '{k}' in batch. Storing as None. Error: {e}")
                                 filtered_record[k] = None
+                        elif column_types.get(k) in ['integer', 'bigint', 'numeric'] and v is not None:
+                             try:
+                                 # Convert all numeric strings to float/int
+                                 filtered_record[k] = float(v) if column_types.get(k) == 'numeric' else int(v)
+                             except ValueError:
+                                 filtered_record[k] = None
                         else:
                             filtered_record[k] = v
-                    
-                    # Password/Attachment handling (copied from original, ensuring consistency)
+
+                    # Final check for password hashing on user tables (though rarely bulk uploaded)
                     if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
                        (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
                        (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
@@ -1377,175 +1452,102 @@ def batch_upload(schema: str, table: str):
                             hashed_password = bcrypt.hashpw(filtered_record['password'].encode('utf-8'), bcrypt.gensalt())
                             filtered_record['password_hash'] = hashed_password.decode('utf-8')
                         filtered_record.pop('password', None)
-                    
-                    if 'attachment' in filtered_record and filtered_record['attachment'] == '':
-                        filtered_record['attachment'] = None
-                    elif 'attachment' in filtered_record and isinstance(filtered_record['attachment'], str):
-                            try:
-                                filtered_record['attachment'] = base64.b64decode(filtered_record['attachment'])
-                            except Exception as e:
-                                print(f"  Warning: Could not decode base64 attachment for record: {e}")
-                                filtered_record['attachment'] = None
-                    elif 'attachment' in filtered_record and isinstance(filtered_record['attachment'], dict) and not filtered_record['attachment']:
-                        filtered_record['attachment'] = None
-
-                    if 'attachment_link' in filtered_record and filtered_record['attachment_link'] == '':
-                        filtered_record['attachment_link'] = None
                             
                     columns = filtered_record.keys()
                     values = [filtered_record[col] for col in columns]
 
-                    column_names = ', '.join([f'"{col}"' for col in columns])
-                    value_placeholders = ', '.join(['%s'] * len(values))
-                    
-                    insert_query = f'INSERT INTO "{actual_schema}"."{actual_table}" ({column_names}) VALUES ({value_placeholders}) RETURNING *;'
+                    # --- FIX: Use SQL module for safe, correct column and value insertion ---
+                    col_identifiers = [sql.Identifier(col) for col in columns]
+                    insert_query = sql.SQL('INSERT INTO {schema}.{table} ({cols}) VALUES ({values}) RETURNING *').format(
+                        schema=sql.Identifier(actual_schema),
+                        table=sql.Identifier(actual_table),
+                        cols=sql.SQL(', ').join(col_identifiers),
+                        values=sql.SQL(', ').join(sql.Placeholder() * len(values))
+                    )
+                    # --- END FIX ---
                     
                     try:
                         cur.execute(insert_query, values)
                         new_record = cur.fetchone()
                         if new_record:
                             inserted_count += 1
+                            
+                            if actual_table.lower() == 'experiments':
+                                experiment_id = new_record['experiment_id']
+                                experiment_date = new_record['experiment_date'] 
 
-                            experiment_id = new_record['experiment_id']
-                            # FIX: Use the actual returned date object for linking
-                            experiment_date = new_record['experiment_date'] 
-
-                            if project_ids_str:
-                                project_list = [p.strip() for p in project_ids_str.split(';') if p.strip()]
-                                for project_id in project_list:
-                                    try:
+                                if project_ids_str:
+                                    project_list = [p.strip() for p in project_ids_str.split(';') if p.strip()]
+                                    for project_id in project_list:
                                         cur.execute(
                                             'INSERT INTO "lab"."experiments_projects" ("experiment_id", "experiment_date", "project_id") VALUES (%s, %s, %s);',
-                                            (experiment_id, experiment_date, project_id) # <-- FIX: Pass date object
+                                            (experiment_id, experiment_date, project_id)
                                         )
-                                    except Exception as e:
-                                        print(f"  Warning: Could not link project {project_id} to experiment {experiment_id} during batch upload: {e}")
 
-                            if sample_ids_str:
-                                sample_list = [s.strip() for s in sample_ids_str.split(';') if s.strip()]
-                                for sample_id in sample_list:
-                                    try:
+                                if sample_ids_str:
+                                    sample_list = [s.strip() for s in sample_ids_str.split(';') if s.strip()]
+                                    for sample_id in sample_list:
                                         cur.execute(
                                             'SELECT "sample_creation_date" FROM "lab"."root_samples" WHERE "sample_id" = %s;', (sample_id,)
                                         )
-                                        sample_creation_date = cur.fetchone()['sample_creation_date'] # Date object
+                                        sample_creation_date = cur.fetchone()['sample_creation_date'] 
                                         cur.execute(
                                             'INSERT INTO "lab"."experiments_samples" ("experiment_id", "experiment_date", "sample_id", "sample_creation_date") VALUES (%s, %s, %s, %s);',
-                                            (experiment_id, experiment_date, sample_id, sample_creation_date) # <-- FIX: Pass date objects
+                                            (experiment_id, experiment_date, sample_id, sample_creation_date)
                                         )
-                                    except Exception as e:
-                                        print(f"  Warning: Could not link sample {sample_id} to experiment {experiment_id}: {e}")
+
+                            elif actual_table.lower() == 'projects' and linked_person_ids_str:
+                                project_id = new_record['project_id']
+                                person_list = [p.strip() for p in linked_person_ids_str.split(';') if p.strip()]
+                                for person_id in person_list:
+                                    cur.execute(
+                                        'INSERT INTO "lims"."project_persons" ("project_id", "person_id", "link_date") VALUES (%s, %s, %s);',
+                                        (project_id, person_id, date.today())
+                                    )
+
                     except Exception as e:
                         print(f"Error inserting individual record in batch for {actual_schema}.{actual_table}: {e}")
                 conn.commit()
         
-        elif actual_schema.lower() == 'lims' and actual_table.lower() == 'projects':
-            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                for record_data in records:
-                    linked_person_ids_str = record_data.pop('linked_person_ids', None)
-
-                    filtered_record = {}
-                    for k, v in record_data.items():
-                        if v == '':
-                            filtered_record[k] = None
-                        elif column_types.get(k) == 'jsonb' and isinstance(v, str):
-                            try:
-                                filtered_record[k] = json.loads(v)
-                            except json.JSONDecodeError:
-                                print(f"WARNING: Invalid JSON for column '{k}' during batch upload. Storing as None. Value: {v}")
-                                filtered_record[k] = None
-                        elif column_types.get(k) == 'boolean':
-                            filtered_record[k] = str(v).lower() in ['true', 'on']
-                        elif column_types.get(k) == 'date' and isinstance(v, str) and v:
-                            try:
-                                filtered_record[k] = datetime.strptime(v, '%Y-%m-%d').date()
-                            except ValueError:
-                                print(f"WARNING: Invalid date format for column '{k}'. Storing as None. Value: {v}")
-                                filtered_record[k] = None
-                        else:
-                            filtered_record[k] = v
-
-                    columns = filtered_record.keys()
-                    values = [filtered_record[col] for col in columns]
-                    column_names = ', '.join([f'"{col}"' for col in columns])
-                    value_placeholders = ', '.join(['%s'] * len(values))
-                    insert_query = f'INSERT INTO "{actual_schema}"."{actual_table}" ({column_names}) VALUES ({value_placeholders}) RETURNING *;'
-
-                    try:
-                        cur.execute(insert_query, values)
-                        new_project = cur.fetchone()
-                        if new_project:
-                            inserted_count += 1
-
-                            if linked_person_ids_str:
-                                project_id = new_project['project_id']
-                                person_list = [p.strip() for p in linked_person_ids_str.split(';') if p.strip()]
-                                for person_id in person_list:
-                                    try:
-                                        cur.execute(
-                                            'INSERT INTO "lims"."project_persons" ("project_id", "person_id") VALUES (%s, %s);',
-                                            (project_id, person_id)
-                                        )
-                                    except Exception as e:
-                                        print(f"  Warning: Could not link person {person_id} to project {project_id} during batch upload: {e}")
-                    except Exception as e:
-                        print(f"Error inserting individual project record in batch: {e}")
-                conn.commit()
-        
         else:
-            if not records:
-                return jsonify({"success": True, "inserted_rows": 0}), 200
-
+            # --- GENERIC BATCH INSERTION LOGIC (Using execute_values for performance) ---
             first_record_keys = list(records[0].keys())
             processed_records_for_insertion = []
 
             for record in records:
-                if set(record.keys()) != set(first_record_keys):
-                    conn.rollback()
-                    return jsonify({"error": "All records in batch must have the same set of columns for batch insertion."}), 400
-
                 temp_record = record.copy()
-                if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
-                   (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
-                   (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
-                    if 'password' in temp_record and temp_record['password']:
-                        hashed_password = bcrypt.hashpw(temp_record['password'].encode('utf-8'), bcrypt.gensalt())
-                        temp_record['password_hash'] = hashed_password.decode('utf-8')
-                    temp_record.pop('password', None)
                 
-                if 'attachment' in temp_record and temp_record['attachment'] == '':
-                    temp_record['attachment'] = None
-                elif 'attachment' in temp_record and isinstance(temp_record['attachment'], str):
-                    try:
-                        temp_record['attachment'] = base64.b64decode(temp_record['attachment'])
-                    except Exception as e:
-                        print(f"  Warning: Could not decode base64 attachment for record: {e}")
-                        temp_record['attachment'] = None
-                elif 'attachment' in temp_record and isinstance(temp_record['attachment'], dict) and not temp_record['attachment']:
-                    temp_record['attachment'] = None
-
-                if 'attachment_link' in temp_record and temp_record['attachment_link'] == '':
-                    temp_record['attachment_link'] = None
-
+                # Apply data transformations and type conversions
                 for k, v in temp_record.items():
-                    if column_types.get(k) == 'jsonb' and isinstance(v, str):
+                    if v == '':
+                        temp_record[k] = None
+                        continue
+
+                    col_type = column_types.get(k)
+                    if col_type == 'jsonb' and isinstance(v, str):
                         try:
                             temp_record[k] = json.loads(v)
                         except json.JSONDecodeError:
-                            print(f"WARNING: Invalid JSON for column '{k}'. Storing as None. Value: {v}")
                             temp_record[k] = None
-                    elif column_types.get(k) == 'boolean':
+                    elif col_type == 'boolean':
                         temp_record[k] = str(v).lower() in ['true', 'on']
-                    elif column_types.get(k) == 'date' and isinstance(v, str) and v:
+                    elif col_type == 'date':
+                        temp_record[k] = safe_date_parse(v)
+                    elif col_type in ['integer', 'bigint', 'numeric']:
+                         try:
+                             temp_record[k] = float(v) if col_type == 'numeric' else int(v)
+                         except ValueError:
+                             temp_record[k] = None
+                    elif k == 'attachment' and isinstance(v, str) and v.startswith('data:'):
                         try:
-                            temp_record[k] = datetime.strptime(v, '%Y-%m-%d').date()
-                        except ValueError:
-                            print(f"WARNING: Invalid date format for column '{k}'. Storing as None. Value: {v}")
+                            base64_data = v.split(',')[1]
+                            temp_record[k] = psycopg2.Binary(base64.b64decode(base64_data))
+                        except Exception:
                             temp_record[k] = None
                     else:
                         temp_record[k] = v
 
-                processed_records_for_insertion.append({k: (v if v != '' else None) for k, v in temp_record.items()})
+                processed_records_for_insertion.append(temp_record)
 
             columns = list(processed_records_for_insertion[0].keys())
             column_names = ', '.join([f'"{col}"' for col in columns])
@@ -1554,8 +1556,7 @@ def batch_upload(schema: str, table: str):
             for record_data in processed_records_for_insertion:
                 row = []
                 for col in columns:
-                    val = record_data.get(col)
-                    row.append(val)
+                    row.append(record_data.get(col))
                 data_tuples.append(tuple(row))
 
             query_template = f"INSERT INTO \"{actual_schema}\".\"{actual_table}\" ({column_names}) VALUES %s"
@@ -1612,6 +1613,7 @@ def batch_update(schema: str, table: str):
                     print(f"  Warning: Skipping record in batch update due to missing primary key(s): {record_data}")
                     continue
                 
+                # Process update fields
                 for key, val in update_fields.items():
                     if key == 'attachment_link' and val == '':
                         set_clauses_parts.append(f'"{key}" = %s')
@@ -1621,19 +1623,26 @@ def batch_update(schema: str, table: str):
                             set_clauses_parts.append(f'"{key}" = %s')
                             set_values.append(json.loads(val))
                         except json.JSONDecodeError:
-                            print(f"WARNING: Invalid JSON for column '{key}'. Storing as None. Value: {val}")
                             set_clauses_parts.append(f'"{key}" = %s')
                             set_values.append(None)
                     elif column_types.get(key) == 'boolean':
                         set_clauses_parts.append(f'"{key}" = %s')
                         set_values.append(str(val).lower() in ['true', 'on'])
                     elif column_types.get(key) == 'date' and isinstance(val, str) and val:
-                        try:
+                        date_obj = safe_date_parse(val) 
+                        if date_obj is not None:
                             set_clauses_parts.append(f'"{key}" = %s')
-                            set_values.append(datetime.strptime(val, '%Y-%m-%d').date())
-                        except ValueError:
-                            print(f"WARNING: Invalid date format for column '{key}'. Skipping update for this field.")
+                            set_values.append(date_obj)
+                        else:
                             continue
+                    elif column_types.get(key) in ['integer', 'bigint', 'numeric'] and val is not None:
+                         try:
+                             # Convert all numeric strings to float/int
+                             set_clauses_parts.append(f'"{key}" = %s')
+                             set_values.append(float(val) if column_types.get(key) == 'numeric' else int(val))
+                         except ValueError:
+                             set_clauses_parts.append(f'"{key}" = %s')
+                             set_values.append(None)
                     else:
                         set_clauses_parts.append(f'"{key}" = %s')
                         set_values.append(None if val == '' else val)
@@ -1642,13 +1651,16 @@ def batch_update(schema: str, table: str):
                     print(f"  Warning: Skipping record in batch update as no update fields provided: {record_data}")
                     continue
 
+                # Process PK fields for WHERE clause
                 for pk_col in pk_columns:
                     pk_where_clauses_parts.append(f'"{pk_col}" = %s')
                     pk_val = pk_fields[pk_col]
+                    
+                    # Fix date parsing for PKs in WHERE clause
                     if column_types.get(pk_col) == 'date' and pk_val is not None:
-                        try:
-                            pk_where_values.append(datetime.strptime(str(pk_val), '%Y-%m-%d').date())
-                        except ValueError:
+                        if isinstance(pk_val, str):
+                            pk_where_values.append(safe_date_parse(pk_val))
+                        else:
                             pk_where_values.append(pk_val)
                     else:
                         pk_where_values.append(pk_val)
