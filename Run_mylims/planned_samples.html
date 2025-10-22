@@ -7,7 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
         /* Base styles */
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
@@ -210,6 +209,50 @@
                 }).join(delimiter);
             }).join(newline);
         }
+
+        // Custom lightweight CSV parser function (replacing PapaParse for bulk upload/modify)
+        function parseCSVToJSON(csvText) {
+            const lines = csvText.split(/\r\n|\n/);
+            const headers = lines[0].split(',').map(header => header.trim());
+            const records = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const currentLine = lines[i].trim();
+                if (currentLine === "") continue;
+
+                // Simple split that works for basic LIMS data assuming no quoted delimiters
+                const data = currentLine.split(',').map(item => item.trim());
+                if (data.length !== headers.length) {
+                    console.warn(`Skipping line ${i + 1}: Column count mismatch. Expected ${headers.length}, got ${data.length}`);
+                    continue; 
+                }
+
+                const record = {};
+                for (let j = 0; j < headers.length; j++) {
+                    const header = headers[j];
+                    let value = data[j];
+                    // Unquote simple quoted values (e.g., "value" -> value)
+                    if (value.startsWith('"') && value.endsWith('"')) {
+                        value = value.substring(1, value.length - 1);
+                    }
+                    record[header] = value;
+                }
+                records.push(record);
+            }
+            return records;
+        }
+
+        // Helper to read file as text asynchronously
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(e);
+                reader.readAsText(file);
+            });
+        }
+        // --- END CSV Utility ---
+
 
         // --- AUTH & GLOBAL STATE ---
         if (sessionStorage.getItem('isLoggedIn') !== 'true') {
@@ -1201,7 +1244,7 @@
             `;
             const { closeModal } = showModal(modalHTML);
 
-            document.getElementById('upload-csv-btn').addEventListener('click', () => {
+            document.getElementById('upload-csv-btn').addEventListener('click', async () => {
                 const fileInput = document.getElementById('csv-file-input');
                 const statusDiv = document.getElementById('upload-status');
                 const file = fileInput.files[0];
@@ -1211,41 +1254,46 @@
                 statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Processing CSV...</p>`;
                 lucide.createIcons();
 
-                PapaParse.parse(file, {
-                    header: true,
-                    skipEmptyLines: true,
-                    complete: async (results) => {
-                        if (results.errors.length) { showToast(`CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}`, "error"); return; }
-                        if (!results.data.length) { showToast("No data found in CSV.", "error"); return; }
+                let recordsToUpload = [];
+                try {
+                    const fileContent = await readFileAsText(file);
+                    recordsToUpload = parseCSVToJSON(fileContent);
 
-                        const recordsToUpload = results.data.map(row => {
-                            const newRow = {};
-                            for (const key in row) {
-                                newRow[key] = row[key] === '' ? null : row[key];
-                            }
-                            return newRow;
-                        });
-
-                        statusDiv.innerHTML = `<p class="text-blue-500">Uploading ${recordsToUpload.length} reservations...</p>`;
-                        lucide.createIcons();
-
-                        const [schemaName, tableName] = TARGET_TABLE.split('.');
-                        
-                        const result = await apiFetch(`table/${schemaName}/${tableName}/batch_upload`, {
-                            method: 'POST',
-                            body: recordsToUpload
-                        });
-
-                        if (result && result.success) {
-                            showToast(`Successfully uploaded ${result.inserted_rows} reservations!`, "success");
-                            loadAndRenderTable(TARGET_TABLE);
-                            setTimeout(closeModal, 2000);
-                        } else {
-                            showToast(`Bulk upload failed: ${result ? result.error : 'Unknown error'}`, "error");
-                        }
-                        lucide.createIcons();
+                    if (!recordsToUpload.length) {
+                        statusDiv.innerHTML = `<p class="text-red-500">No data found in CSV after parsing.</p>`;
+                        return;
                     }
+                } catch (error) {
+                    statusDiv.innerHTML = `<p class="text-red-500">Error parsing CSV: ${error.message}</p>`;
+                    return;
+                }
+                
+                const recordsToUploadCleaned = recordsToUpload.map(row => {
+                    const newRow = {};
+                    for (const key in row) {
+                        newRow[key] = row[key] === '' ? null : row[key];
+                    }
+                    return newRow;
                 });
+
+                statusDiv.innerHTML = `<p class="text-blue-500">Uploading ${recordsToUploadCleaned.length} reservations...</p>`;
+                lucide.createIcons();
+
+                const [schemaName, tableName] = TARGET_TABLE.split('.');
+                
+                const result = await apiFetch(`table/${schemaName}/${tableName}/batch_upload`, {
+                    method: 'POST',
+                    body: recordsToUploadCleaned
+                });
+
+                if (result && result.success) {
+                    showToast(`Successfully uploaded ${result.inserted_rows} reservations!`, "success");
+                    loadAndRenderTable(TARGET_TABLE);
+                    setTimeout(closeModal, 2000);
+                } else {
+                    showToast(`Bulk upload failed: ${result ? result.error : 'Unknown error'}`, "error");
+                }
+                lucide.createIcons();
             });
         }
 

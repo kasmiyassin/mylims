@@ -7,7 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
         .sidebar { border-right: 1px solid #e2e8f0; }
@@ -172,7 +171,7 @@
     </div>
 
     <script>
-        // --- Custom CSV Unparse Function (replaces PapaParse.unparse for this specific use case) ---
+        // --- Custom CSV Utility Functions (replaces PapaParse) ---
         function unparseCSV(data, options) {
             options = options || {};
             const delimiter = options.delimiter || ',';
@@ -198,6 +197,50 @@
                 }).join(delimiter);
             }).join(newline);
         }
+        
+        // Custom lightweight CSV parser function (replacing PapaParse for bulk upload/modify)
+        function parseCSVToJSON(csvText) {
+            const lines = csvText.split(/\r\n|\n/);
+            const headers = lines[0].split(',').map(header => header.trim());
+            const records = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const currentLine = lines[i].trim();
+                if (currentLine === "") continue;
+
+                // Simple split that works for basic LIMS data assuming no quoted delimiters
+                const data = currentLine.split(',').map(item => item.trim());
+                if (data.length !== headers.length) {
+                    console.warn(`Skipping line ${i + 1}: Column count mismatch. Expected ${headers.length}, got ${data.length}`);
+                    continue; 
+                }
+
+                const record = {};
+                for (let j = 0; j < headers.length; j++) {
+                    const header = headers[j];
+                    let value = data[j];
+                    // Unquote simple quoted values (e.g., "value" -> value)
+                    if (value.startsWith('"') && value.endsWith('"')) {
+                        value = value.substring(1, value.length - 1);
+                    }
+                    record[header] = value;
+                }
+                records.push(record);
+            }
+            return records;
+        }
+
+        // Helper to read file as text asynchronously
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(e);
+                reader.readAsText(file);
+            });
+        }
+        // --- END CSV Utility ---
+
 
         // --- AUTH & SETUP ---
         if (sessionStorage.getItem('isLoggedIn') !== 'true') {
@@ -533,8 +576,6 @@
                         { name: 'lab.fishing', pkCols: ['fishing_id', 'sampling_date'] },
                         { name: 'lab.individual_catch_catch', pkCols: ['individual_catch_id', 'sampling_date'] },
                         { name: 'lab.sampling_abiotic_data', pkCols: ['sampling_id', 'creation_date'] },
-                        // Need to check for lab.root_samples and lab.reservation_samples too, but those links might be mandatory.
-                        // For safety, we only delete data tables explicitly requested by the user.
                     ];
 
                     let allChildrenDeleted = true;
@@ -545,7 +586,7 @@
                             // Determine filter parameters based on linking fields
                             let filterParams = new URLSearchParams();
                             if (childTable.name.includes('sampling_abiotic_data')) {
-                                // sampling_abiotic_data uses sampling_id and creation_date (no explicit sampling_date filter needed if joined by ID)
+                                // sampling_abiotic_data uses sampling_id
                                 filterParams.append('filter_sampling_id', samplingId);
                             } else {
                                 // Other tables link via both sampling_id and sampling_date
@@ -984,8 +1025,12 @@
                 } else if (colSchema && colSchema.data_type === 'time' && value) {
                     const dt = new Date(`2000-01-01T${value}`);
                     value = isNaN(dt.getTime()) ? 'N/A' : dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                } else if (colSchema && colSchema.column_name.includes('geom') && typeof value === 'object' && value !== null && value.type === 'Point' && Array.isArray(value.coordinates)) {
-                    value = `Lon: ${value.coordinates[0].toFixed(3)}, Lat: ${value.coordinates[1].toFixed(3)}`;
+                } else if (colSchema && colSchema.column_name.includes('geom') && typeof value === 'object' && value !== null) {
+                    if (value.type === 'Point' && Array.isArray(value.coordinates)) {
+                        value = `Lon: ${value.coordinates[0].toFixed(3)}, Lat: ${value.coordinates[1].toFixed(3)}`;
+                    } else {
+                        value = 'GeoJSON Object';
+                    }
                 } else if (typeof value === 'object' && value !== null) {
                     value = `<pre class="bg-gray-100 p-1 text-xs rounded overflow-x-auto">${JSON.stringify(value, null, 2)}</pre>`;
                 } else if (value.toString().startsWith('http')) {
@@ -1030,7 +1075,7 @@
 
 
             const [persons, statuses, cruises, vessels, regions, ecosystems, customers, units, sample_types, projects] = await Promise.all([ 
-                getReferenceData('personal', 'lims'), // Corrected to lims.personal
+                getReferenceData('personal', 'lims'),
                 getReferenceData('status', 'reference'),
                 getReferenceData('cruises', 'lims'),
                 getReferenceData('vessel', 'reference'),
@@ -1213,7 +1258,7 @@
                 let jsonParseError = false;
 
                 formData.forEach((value, key) => {
-                    if (jsonParseError) return; // Stop processing on first JSON error
+                    if (jsonParseError) return;
                     
                     const colSchema = targetTableSchema.find(s => s.column_name === key);
                     
@@ -1225,12 +1270,10 @@
                         body[key] = formElement.querySelector(`[name="${key}"]`).checked; 
                     } 
                     
-                    // *** CRUCIAL FIX: GeoJSON/JSONB Handling ***
+                    // GeoJSON/JSONB Handling
                     else if (colSchema && (colSchema.column_name === 'geom' || colSchema.column_name === 'fishing_geom' || colSchema.data_type === 'jsonb')) {
                          try {
-                             // 1. Validate the GeoJSON/JSONB string syntax client-side
                              if (value !== '') JSON.parse(value); 
-                             // 2. Assign the raw string value (Python backend will handle the cast)
                              body[key] = value === '' ? null : value;
                          } catch (jsonError) {
                              alert(`Invalid GeoJSON/JSONB for ${formatColumnName(key)}: ${jsonError.message}`);
@@ -1238,7 +1281,6 @@
                              body[key] = null;
                          }
                     } 
-                    // *** END CRUCIAL FIX ***
                     
                     else if (colSchema && colSchema.data_type === 'text[]') {
                         // Convert semicolon separated string into a Python list
@@ -1258,12 +1300,10 @@
                 if (hasFileSelected) {
                     const formDataWithFile = new FormData();
                     for (const key in body) {
-                        // If we encounter a field that is a GeoJSON/JSONB string, append it as a string
-                        if (typeof body[key] === 'string' && (key === 'geom' || key === 'fishing_geom' || targetTableSchema.find(s => s.column_name === key)?.data_type === 'jsonb')) {
+                        const isJsonField = (key === 'geom' || key === 'fishing_geom' || targetTableSchema.find(s => s.column_name === key)?.data_type === 'jsonb');
+                        
+                        if (isJsonField) {
                              formDataWithFile.append(key, body[key]);
-                        } else if (typeof body[key] === 'object' && body[key] !== null) {
-                            // This path should be rare if all types are handled, but kept for safety.
-                            formDataWithFile.append(key, JSON.stringify(body[key]));
                         } else if (body[key] !== null) {
                             formDataWithFile.append(key, body[key]);
                         }
@@ -1322,7 +1362,6 @@
         }
 
         async function showBulkUploadModal() {
-            // ... (Bulk Upload Modal logic remains the same)
              const modalHTML = `
                 <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
                     <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl transform transition-all -translate-y-10 opacity-0">
@@ -1368,61 +1407,59 @@
                 statusDiv.innerHTML = `<p class="text-blue-500">Processing CSV...</p>`;
                 lucide.createIcons();
 
-                PapaParse.parse(file, {
-                    header: true,
-                    skipEmptyLines: true,
-                    complete: async (results) => {
-                        if (results.errors.length) {
-                            statusDiv.innerHTML = `<p class="text-red-500">CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}</p>`;
-                            uploadBtn.disabled = false;
-                            uploadBtnText.textContent = 'Upload CSV';
-                            uploadSpinner.classList.add('hidden');
-                            return;
-                        }
-                        if (!results.data.length) {
-                            statusDiv.innerHTML = `<p class="text-red-500">No data found in CSV.</p>`;
-                            uploadBtn.disabled = false;
-                            uploadBtnText.textContent = 'Upload CSV';
-                            uploadSpinner.classList.add('hidden');
-                            return;
-                        }
+                let recordsToUpload = [];
+                try {
+                    const fileContent = await readFileAsText(file);
+                    recordsToUpload = parseCSVToJSON(fileContent);
 
-                        const recordsToUpload = results.data.map(row => {
-                            const newRow = {};
-                            for (const key in row) {
-                                newRow[key] = row[key] === '' ? null : row[key];
-                            }
-                            return newRow;
-                        });
-
-                        statusDiv.innerHTML = `<p class="text-blue-500">Uploading ${recordsToUpload.length} records...</p>`;
-                        lucide.createIcons();
-
-                        const [schemaName, tableName] = currentTableName.split('.');
-                        const result = await apiFetch(`table/${schemaName}/${tableName}/batch_upload`, {
-                            method: 'POST',
-                            body: recordsToUpload
-                        });
-
+                    if (!recordsToUpload.length) {
+                        statusDiv.innerHTML = `<p class="text-red-500">No data found in CSV after parsing.</p>`;
                         uploadBtn.disabled = false;
                         uploadBtnText.textContent = 'Upload CSV';
                         uploadSpinner.classList.add('hidden');
-
-                        if (result && result.success) {
-                            statusDiv.innerHTML = `<p class="text-green-600">Successfully uploaded ${result.inserted_rows} records!</p>`;
-                            loadAndRenderTable(currentTableName);
-                            setTimeout(closeModal, 2000);
-                        } else {
-                            statusDiv.innerHTML = `<p class="text-red-500">Bulk upload failed: ${result ? result.error : 'Unknown error'}</p>`;
-                        }
-                        lucide.createIcons();
+                        return;
                     }
+                } catch (error) {
+                    statusDiv.innerHTML = `<p class="text-red-500">Error parsing CSV: ${error.message}</p>`;
+                    uploadBtn.disabled = false;
+                    uploadBtnText.textContent = 'Upload CSV';
+                    uploadSpinner.classList.add('hidden');
+                    return;
+                }
+                
+                recordsToUpload = recordsToUpload.map(row => {
+                    const newRow = {};
+                    for (const key in row) {
+                        newRow[key] = row[key] === '' ? null : row[key];
+                    }
+                    return newRow;
                 });
+
+                statusDiv.innerHTML = `<p class="text-blue-500">Uploading ${recordsToUpload.length} records...</p>`;
+                lucide.createIcons();
+
+                const [schemaName, tableName] = currentTableName.split('.');
+                const result = await apiFetch(`table/${schemaName}/${tableName}/batch_upload`, {
+                    method: 'POST',
+                    body: recordsToUpload
+                });
+
+                uploadBtn.disabled = false;
+                uploadBtnText.textContent = 'Upload CSV';
+                uploadSpinner.classList.add('hidden');
+
+                if (result && result.success) {
+                    statusDiv.innerHTML = `<p class="text-green-600">Successfully uploaded ${result.inserted_rows} records!</p>`;
+                    loadAndRenderTable(currentTableName);
+                    setTimeout(closeModal, 2000);
+                } else {
+                    statusDiv.innerHTML = `<p class="text-red-500">Bulk upload failed: ${result ? result.error : 'Unknown error'}</p>`;
+                }
+                lucide.createIcons();
             });
         }
 
         async function downloadCsvTemplate(fullTableName) {
-            // ... (Download CSV Template logic remains the same)
             console.log("downloadCsvTemplate called for:", fullTableName);
             if (!fullTableName) {
                 alert("Please select a table to download its template.");
@@ -1473,7 +1510,6 @@
         }
 
         async function showBulkModifyModal() {
-            // ... (Bulk Modify Modal logic remains the same)
              const modalHTML = `
                 <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center">
                     <div class="modal-content bg-white rounded-lg shadow-2xl p-8 w-full max-w-xl transform transition-all -translate-y-10 opacity-0">
@@ -1520,78 +1556,46 @@
                 statusDiv.innerHTML = `<p class="text-blue-500">Processing file...</p>`;
                 lucide.createIcons();
 
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    let recordsToModify = [];
-                    try {
-                        if (file.type === 'application/json') {
-                            recordsToModify = JSON.parse(e.target.result);
-                            if (!Array.isArray(recordsToModify)) {
-                                throw new Error("JSON file must contain an array of objects.");
-                            }
-                        } else if (file.type === 'text/csv') {
-                            const parseResult = PapaParse.parse(e.target.result, { header: true, skipEmptyLines: true });
-                            if (parseResult.errors.length) {
-                                throw new Error(`CSV parsing errors: ${parseResult.errors.map(err => err.message).join(', ')}`);
-                            }
-                            recordsToModify = parseResult.data;
-                        } else {
-                            throw new Error("Unsupported file type. Please upload a CSV or JSON file.");
-                        }
+                let recordsToModify = [];
+                try {
+                    const fileContent = await readFileAsText(file);
 
+                    if (file.type.includes('json') || file.name.endsWith('.json')) {
+                        recordsToModify = JSON.parse(fileContent);
+                        if (!Array.isArray(recordsToModify)) {
+                            throw new Error("JSON file must contain an array of objects.");
+                        }
+                    } else if (file.type.includes('csv') || file.name.endsWith('.csv')) {
+                        recordsToModify = parseCSVToJSON(fileContent);
                         if (!recordsToModify.length) {
-                            statusDiv.innerHTML = `<p class="text-red-500">No records found in the file.</p>`;
-                            modifyBtn.disabled = false;
-                            modifyBtnText.textContent = 'Perform Bulk Modify';
-                            modifySpinner.classList.add('hidden');
-                            return;
+                             throw new Error("CSV parsed successfully but contains no data records.");
                         }
-
-                        const recordsToModifyCleaned = recordsToModify.map(row => {
-                            const newRow = {};
-                            for (const key in row) {
-                                newRow[key] = row[key] === '' ? null : row[key];
-                            }
-                            return newRow;
-                        });
-
-                        statusDiv.innerHTML = `<p class="text-blue-500">Performing bulk update on ${recordsToModifyCleaned.length} records...</p>`;
-                        lucide.createIcons();
-
-                        const [schemaName, tableName] = currentTableName.split('.');
-                        const result = await apiFetch(`table/${schemaName}/${tableName}/batch_update`, {
-                            method: 'PUT',
-                            body: recordsToModifyCleaned
-                        });
-
-                        modifyBtn.disabled = false;
-                        modifyBtnText.textContent = 'Perform Bulk Modify';
-                        modifySpinner.classList.add('hidden');
-
-                        if (result && result.success) {
-                            statusDiv.innerHTML = `<p class="text-green-600">Successfully updated ${result.updated_rows} records!</p>`;
-                            loadAndRenderTable(currentTableName);
-                            setTimeout(closeModal, 2000);
-                        } else {
-                            statusDiv.innerHTML = `<p class="text-red-500">Bulk modify failed: ${result ? result.error : 'Unknown error'}</p>`;
-                        }
-                        lucide.createIcons();
-
-                    } catch (error) {
-                        console.error("Bulk modify file processing error:", error);
-                        statusDiv.innerHTML = `<p class="text-red-500">Error processing file: ${error.message}</p>`;
-                        modifyBtn.disabled = false;
-                        modifyBtnText.textContent = 'Perform Bulk Modify';
-                        modifySpinner.classList.add('hidden');
-                        lucide.createIcons();
+                    } else {
+                        throw new Error("Unsupported file type. Please upload a CSV or JSON file.");
                     }
-                };
-                reader.readAsText(file);
+
+                    if (!recordsToModify.length) {
+                        statusDiv.innerHTML = `<p class="text-red-500">No records found in the file.</p>`;
+                        modifyBtn.disabled = false;
+                        modifyBtnText.textContent = 'Perform Bulk Modify';
+                        modifySpinner.classList.add('hidden');
+                        return;
+                    }
+
+                    await processBulkModifyRecords(recordsToModify, statusDiv, closeModal);
+
+                } catch (error) {
+                    console.error("Bulk modify file processing error:", error);
+                    statusDiv.innerHTML = `<p class="text-red-500">Error processing file: ${error.message}</p>`;
+                    modifyBtn.disabled = false;
+                    modifyBtnText.textContent = 'Perform Bulk Modify';
+                    modifySpinner.classList.add('hidden');
+                    lucide.createIcons();
+                }
             });
         }
 
         async function downloadBulkModifyTemplate(fullTableName) {
-            // ... (Download Bulk Modify Template logic remains the same)
             console.log("downloadBulkModifyTemplate called for:", fullTableName);
             if (!fullTableName) {
                 alert("Please select a table to download its bulk modify template.");
@@ -1600,7 +1604,7 @@
 
             const [schemaName, tableName] = fullTableName.split('.');
             const schema = await getTableSchema(schemaName, tableName);
-            const pkColumns = await getPrimaryKeysForTable(schemaName, tableName); // Use getPrimaryKeysForTable
+            const pkColumns = await getPrimaryKeysForTable(schemaName, tableName);
 
             if (!schema || schema.error) {
                 console.error("Failed to fetch table schema for template:", schema ? schema.error : 'Unknown error');
@@ -1675,7 +1679,6 @@
             const samplingTables = await getAllSamplingTables();
             
             select.innerHTML = '<option value="">-- Select Related Table --</option>';
-            // Add lab.sampling as the first explicit option if it's not the current default
             
             // Create map for better display names
             const tableNamesMap = {
