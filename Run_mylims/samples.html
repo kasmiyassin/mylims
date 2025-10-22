@@ -7,7 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
         /* Base styles */
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
@@ -223,6 +222,48 @@
             }).join(newline);
         }
 
+        // Custom lightweight CSV parser function (replacing PapaParse)
+        function parseCSVToJSON(csvText) {
+            const lines = csvText.split(/\r\n|\n/);
+            const headers = lines[0].split(',').map(header => header.trim());
+            const records = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const currentLine = lines[i].trim();
+                if (currentLine === "") continue;
+
+                // Simple split that works for basic LIMS data assuming no quoted delimiters
+                const data = currentLine.split(',').map(item => item.trim());
+                if (data.length !== headers.length) {
+                    console.warn(`Skipping line ${i + 1}: Column count mismatch. Expected ${headers.length}, got ${data.length}`);
+                    continue; 
+                }
+
+                const record = {};
+                for (let j = 0; j < headers.length; j++) {
+                    const header = headers[j];
+                    let value = data[j];
+                    // Unquote simple quoted values (e.g., "value" -> value)
+                    if (value.startsWith('"') && value.endsWith('"')) {
+                        value = value.substring(1, value.length - 1);
+                    }
+                    record[header] = value;
+                }
+                records.push(record);
+            }
+            return records;
+        }
+
+        // Helper to read file as text asynchronously
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(e);
+                reader.readAsText(file);
+            });
+        }
+        
         // --- Auth Check ---
         if (sessionStorage.getItem('isLoggedIn') !== 'true') {
             localStorage.setItem('redirectUrl', window.location.href);
@@ -1166,7 +1207,7 @@
                         refData = samplingEvents; 
                         displayKey = 'sampling_id';
                         optionsHtml = `<option value="">-- Select ${label} --</option>`;
-                        optionsHtml += refData.map(item => `<option value="${item.sampling_id}" ${value == item.sampling_id ? 'selected' : ''}>${item.sampling_id} (${item.location_name || 'N/A'})</option>`).join('');
+                        optionsHtml += refData.map(item => `<option value="${item.sampling_id}" ${String(value) === String(item.sampling_id) ? 'selected' : ''}>${item.sampling_id} (${item.location_name || 'N/A'})</option>`).join('');
                         
                         formFieldsHtml += `
                             <div class="${isReadOnlyField ? 'opacity-70' : ''}">
@@ -1491,7 +1532,7 @@
             document.getElementById('download-bulk-modify-template-btn-modal').addEventListener('click', () => downloadBulkModifyTemplate(currentTableName));
 
 
-            document.getElementById('perform-bulk-modify-btn').addEventListener('click', () => {
+            document.getElementById('perform-bulk-modify-btn').addEventListener('click', async () => {
                 const fileInput = document.getElementById('bulk-modify-file-input');
                 const statusDiv = document.getElementById('modify-status');
                 const file = fileInput.files[0];
@@ -1503,40 +1544,32 @@
 
                 statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Processing file...</p>`;
                 lucide.createIcons();
+                
+                let recordsToModify = [];
+                try {
+                    const fileContent = await readFileAsText(file);
 
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    let recordsToModify = [];
-                    try {
-                        if (file.type.includes('json') || file.name.endsWith('.json')) {
-                            recordsToModify = JSON.parse(e.target.result);
-                            if (!Array.isArray(recordsToModify)) {
-                                throw new Error("JSON file must contain an array of objects.");
-                            }
-                        } else if (file.type.includes('csv') || file.name.endsWith('.csv')) {
-                            const parseResult = PapaParse.parse(e.target.result, { header: true, skipEmptyLines: true });
-                            if (parseResult.errors.length) {
-                                throw new Error(`CSV parsing errors: ${parseResult.errors.map(err => err.message).join(', ')}`);
-                            }
-                            recordsToModify = parseResult.data;
-                        } else {
-                            throw new Error("Unsupported file type. Please upload a CSV or JSON file.");
+                    if (file.type.includes('json') || file.name.endsWith('.json')) {
+                        recordsToModify = JSON.parse(fileContent);
+                        if (!Array.isArray(recordsToModify)) {
+                            throw new Error("JSON file must contain an array of objects.");
                         }
-
+                    } else if (file.type.includes('csv') || file.name.endsWith('.csv')) {
+                        recordsToModify = parseCSVToJSON(fileContent);
                         if (!recordsToModify.length) {
-                            showToast("No records found in the file.", "error");
-                            return;
+                             throw new Error("CSV parsed successfully but contains no data records.");
                         }
-
-                        await processBulkModifyRecords(recordsToModify, statusDiv, closeModal);
-
-                    } catch (error) {
-                        console.error("Bulk modify file processing error:", error);
-                        statusDiv.innerHTML = `<p class="text-red-500">Error processing file: ${error.message}</p>`;
-                        lucide.createIcons();
+                    } else {
+                        throw new Error("Unsupported file type. Please upload a CSV or JSON file.");
                     }
-                };
-                reader.readAsText(file);
+                    
+                    await processBulkModifyRecords(recordsToModify, statusDiv, closeModal);
+
+                } catch (error) {
+                    console.error("Bulk modify file processing error:", error);
+                    statusDiv.innerHTML = `<p class="text-red-500">Error processing file: ${error.message}</p>`;
+                    lucide.createIcons();
+                }
             });
         }
 
@@ -1566,7 +1599,7 @@
 
             document.getElementById('download-csv-template-btn-modal').addEventListener('click', () => downloadCsvTemplate(currentTableName));
 
-            document.getElementById('upload-csv-btn').addEventListener('click', () => {
+            document.getElementById('upload-csv-btn').addEventListener('click', async () => {
                 const fileInput = document.getElementById('csv-file-input');
                 const statusDiv = document.getElementById('upload-status');
                 const file = fileInput.files[0];
@@ -1579,49 +1612,48 @@
                 statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Processing CSV...</p>`;
                 lucide.createIcons();
 
-                PapaParse.parse(file, {
-                    header: true,
-                    skipEmptyLines: true,
-                    complete: async (results) => {
-                        if (results.errors.length) {
-                            showToast(`CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}`, "error");
-                            statusDiv.innerHTML = `<p class="text-red-500">CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}</p>`;
-                            lucide.createIcons();
-                            return;
-                        }
-                        if (!results.data.length) {
-                            showToast("No data found in CSV.", "error");
-                            return;
-                        }
+                let recordsToUpload = [];
+                try {
+                    const fileContent = await readFileAsText(file);
+                    recordsToUpload = parseCSVToJSON(fileContent);
 
-                        const recordsToUpload = results.data.map(row => {
-                            const newRow = {};
-                            for (const key in row) {
-                                newRow[key] = row[key] === '' ? null : row[key];
-                            }
-                            return newRow;
-                        });
-
-                        statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Uploading ${recordsToUpload.length} records to ${currentTableName}... </p>`;
-                        lucide.createIcons();
-
-                        const [schemaName, tableName] = currentTableName.split('.');
-                        const result = await apiFetch(`table/${schemaName}/${tableName}/batch_upload`, {
-                            method: 'POST',
-                            body: recordsToUpload
-                        });
-
-                        if (result && result.success) {
-                            showToast(`Successfully uploaded ${result.inserted_rows} records to ${tableName}!`, "success");
-                            loadAndRenderTable(currentTableName);
-                            setTimeout(closeModal, 2000);
-                        } else {
-                            showToast(`Bulk upload failed: ${result ? result.error : 'Unknown error'}`, "error");
-                            statusDiv.innerHTML = `<p class="text-red-500">Bulk upload failed: ${result ? result.error : 'Unknown error'}</p>`;
-                        }
-                        lucide.createIcons();
+                    if (!recordsToUpload.length) {
+                        statusDiv.innerHTML = `<p class="text-red-500">No data found in CSV after parsing.</p>`;
+                        return;
                     }
+                } catch (error) {
+                    statusDiv.innerHTML = `<p class="text-red-500">Error parsing CSV: ${error.message}</p>`;
+                    return;
+                }
+                
+                // Final preparation for upload
+                recordsToUpload = recordsToUpload.map(row => {
+                    const newRow = {};
+                    for (const key in row) {
+                        // Clean up values: empty string to null (handled by backend)
+                        newRow[key] = row[key] === '' ? null : row[key];
+                    }
+                    return newRow;
                 });
+
+                statusDiv.innerHTML = `<p class="text-blue-500"><i data-lucide="loader-2" class="animate-spin inline-block mr-2"></i>Uploading ${recordsToUpload.length} records to ${currentTableName}... </p>`;
+                lucide.createIcons();
+
+                const [schemaName, tableName] = currentTableName.split('.');
+                const result = await apiFetch(`table/${schemaName}/${tableName}/batch_upload`, {
+                    method: 'POST',
+                    body: recordsToUpload // Send full array as JSON body
+                });
+
+                if (result && result.success) {
+                    showToast(`Successfully uploaded ${result.inserted_rows} records to ${tableName}!`, "success");
+                    loadAndRenderTable(currentTableName);
+                    setTimeout(closeModal, 2000);
+                } else {
+                    showToast(`Bulk upload failed: ${result ? result.error : 'Unknown error'}`, "error");
+                    statusDiv.innerHTML = `<p class="text-red-500">Bulk upload failed: ${result ? result.error : 'Unknown error'}</p>`;
+                }
+                lucide.createIcons();
             });
         }
 
