@@ -32,7 +32,6 @@
                 <i data-lucide="flask-conical" class="inline-block mr-2 text-blue-600"></i><span>TIFI LIMS</span>
             </div>
             <nav class="flex-grow space-y-2">
-                <!-- Links to all major pages -->
                 <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
                 <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
                 <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
@@ -66,7 +65,6 @@
                 </div>
 
                 <div id="profile-container" class="hidden space-y-8">
-                    <!-- Profile Details Card -->
                     <div class="card p-6">
                         <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Account Information</h2>
                         <form id="profile-form" class="space-y-4">
@@ -81,7 +79,6 @@
                                 </div>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <!-- Enhanced Fields -->
                                 <div>
                                     <label for="status_id" class="block text-sm font-semibold text-gray-700">Status</label>
                                     <input type="text" id="status_id" name="status_id" readonly class="mt-1 block w-full p-2 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed">
@@ -90,8 +87,7 @@
                                     <label for="join_date" class="block text-sm font-semibold text-gray-700">Join Date</label>
                                     <input type="text" id="join_date" name="join_date" readonly class="mt-1 block w-full p-2 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed">
                                 </div>
-                                <!-- End Enhanced Fields -->
-                            </div>
+                                </div>
 
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
@@ -114,7 +110,6 @@
                                 </div>
                             </div>
                             
-                            <!-- Additional Fields for Notes/Tags -->
                             <div>
                                 <label for="tags" class="block text-sm font-semibold text-gray-700">Tags (Semicolon-separated)</label>
                                 <input type="text" id="tags" name="tags" class="mt-1 block w-full p-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500">
@@ -123,8 +118,6 @@
                                 <label for="notes" class="block text-sm font-semibold text-gray-700">Notes</label>
                                 <textarea id="notes" name="notes" rows="3" class="mt-1 block w-full p-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500"></textarea>
                             </div>
-                            <!-- End Additional Fields -->
-                            
                             <button type="submit" id="save-profile-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center transition-colors">
                                 <i data-lucide="save" class="w-5 h-5 mr-2"></i> Save Profile Details
                             </button>
@@ -132,17 +125,16 @@
                         </form>
                     </div>
 
-                    <!-- Password Change Card -->
                     <div class="card p-6">
                         <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Change Password</h2>
                         <form id="password-form" class="space-y-4">
                             <div>
-                                <label for="new_password" class="block text-sm font-semibold text-gray-700">New Password</label>
-                                <input type="password" id="new_password" name="password" required class="mt-1 block w-full p-2 border border-gray-300 rounded-lg focus:border-red-500 focus:ring-red-500">
+                                <label for="new_password" class="block text-sm font-semibold text-gray-700">New Password (min. 8 chars)</label>
+                                <input type="password" id="new_password" name="new_password" required minlength="8" class="mt-1 block w-full p-2 border border-gray-300 rounded-lg focus:border-red-500 focus:ring-red-500">
                             </div>
                             <div>
                                 <label for="confirm_password" class="block text-sm font-semibold text-gray-700">Confirm New Password</label>
-                                <input type="password" id="confirm_password" required class="mt-1 block w-full p-2 border border-gray-300 rounded-lg focus:border-red-500 focus:ring-red-500">
+                                <input type="password" id="confirm_password" required minlength="8" class="mt-1 block w-full p-2 border border-gray-300 rounded-lg focus:border-red-500 focus:ring-red-500">
                             </div>
                             <button type="submit" id="change-password-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center transition-colors">
                                 <i data-lucide="lock" class="w-5 h-5 mr-2"></i> Change Password
@@ -150,6 +142,43 @@
                             <p id="password-message" class="text-center text-sm font-medium"></p>
                         </form>
                     </div>
+                    
+                    <div class="card p-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2 flex items-center">
+                            <i data-lucide="folder-kanban" class="w-5 h-5 mr-2 text-blue-600"></i> My Active Projects & Roles
+                        </h2>
+                        <div id="my-projects-list" class="space-y-3">
+                            <p class="text-gray-500 text-sm">Loading projects...</p>
+                        </div>
+                    </div>
+
+                    <div class="card p-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2 flex items-center">
+                            <i data-lucide="flask-round" class="w-5 h-5 mr-2 text-green-600"></i> My Recent Experiments (Last 10)
+                        </h2>
+                        <div id="my-experiments-list" class="space-y-3">
+                            <p class="text-gray-500 text-sm">Loading experiments...</p>
+                        </div>
+                    </div>
+
+                    <div class="card p-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2 flex items-center">
+                            <i data-lucide="beaker" class="w-5 h-5 mr-2 text-purple-600"></i> My Recent Samples (Last 5)
+                        </h2>
+                        <div id="my-samples-list" class="space-y-3">
+                            <p class="text-gray-500 text-sm">Loading samples...</p>
+                        </div>
+                    </div>
+
+                    <div class="card p-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2 flex items-center">
+                            <i data-lucide="package-open" class="w-5 h-5 mr-2 text-red-600"></i> My Reagents (Near Expiry / 30 Days)
+                        </h2>
+                        <div id="my-reagents-list" class="space-y-3">
+                            <p class="text-gray-500 text-sm">Loading reagents...</p>
+                        </div>
+                    </div>
+                    
                 </div>
 
             </div>
@@ -178,7 +207,7 @@
         } else if (USER_TYPE === 'customer') {
             TARGET_TABLE = 'lims.customers';
             USER_PK_KEY = 'customer_id';
-            USER_ID = USER_SESSION_DATA.customer_id; // Note: customer_id is typically an integer
+            USER_ID = USER_SESSION_DATA.customer_id; 
         } else if (USER_TYPE === 'external_contact') {
             TARGET_TABLE = 'lims.external_contacts';
             USER_PK_KEY = 'contact_id';
@@ -193,20 +222,35 @@
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
             const icon = type === 'success' ? 'check-circle' : (type === 'error' ? 'x-circle' : 'info');
-            toast.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5"></i><span class="toast-message">${message}</span>`;
+            toast.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 mr-2"></i><span class="toast-message">${message}</span>`;
             toastContainer.appendChild(toast);
             lucide.createIcons();
             
             setTimeout(() => { toast.remove(); }, 3000);
         }
 
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('en-CA');
+            } catch (e) {
+                return 'N/A';
+            }
+        }
+        
         async function apiFetch(endpoint, options = {}) {
             try {
+                const isPasswordChange = endpoint.includes('/user/change-password');
+                const isJson = isPasswordChange || !(options.body instanceof FormData);
+
                 const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
                     ...options,
-                    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-                    // Fix: Check if body is FormData (for file uploads if we were using it here) before stringifying
-                    body: options.body instanceof FormData ? options.body : (options.body ? JSON.stringify(options.body) : undefined)
+                    headers: { 
+                        ...(isJson ? {'Content-Type': 'application/json'} : {}), 
+                        ...(options.headers || {}) 
+                    },
+                    body: isJson && options.body && typeof options.body !== 'string' ? JSON.stringify(options.body) : options.body
                 });
 
                 if (!response.ok) {
@@ -224,6 +268,13 @@
         
         // --- Profile Management Functions ---
 
+        function showMessage(text, isSuccess) {
+            const messageDiv = document.getElementById('password-message');
+            const type = isSuccess ? 'success' : 'error';
+            messageDiv.innerHTML = `<span class="text-${isSuccess ? 'green' : 'red'}-600 font-bold">${text}</span>`;
+            showToast(text, type);
+        }
+
         async function fetchProfileData() {
             if (!USER_ID || !TARGET_TABLE) {
                 document.getElementById('loading-area').innerHTML = `<p class="text-red-600">Error: User session data is incomplete or unsupported.</p>`;
@@ -231,13 +282,21 @@
             }
 
             const [schema, data] = TARGET_TABLE.split('.');
-            const endpoint = `table/${schema}/${data}?${USER_PK_KEY}=${USER_ID}`;
+            const endpoint = `table/${schema}/${data}?filter_${USER_PK_KEY}=${USER_ID}`; 
             
             const result = await apiFetch(endpoint);
 
             if (result && !result.error && result.length > 0) {
                 const profile = result[0];
                 renderProfileForm(profile);
+                
+                // --- NEW FEATURE CALLS ---
+                fetchMyProjects();
+                fetchMyRecentExperiments();
+                fetchMyRecentSamples();
+                fetchNearExpiryReagents();
+                // --- END NEW FEATURE CALLS ---
+                
             } else {
                 document.getElementById('loading-area').innerHTML = `<p class="text-red-600">Error loading profile: ${result?.error || 'Record not found.'}</p>`;
             }
@@ -249,17 +308,12 @@
 
             const form = document.getElementById('profile-form');
 
-            // Set User ID and Type
             document.getElementById('person_id').value = profile[USER_PK_KEY] || USER_ID;
             document.getElementById('user_type').value = USER_TYPE;
 
-            // Display Enhanced Fields (Read-only)
-            // Note: These fields are only likely available in lims.personal, otherwise they remain hidden
             document.getElementById('status_id').value = profile.status_id || 'N/A';
-            // Assuming 'creation_date' or similar exists for joining, defaulting to a placeholder
-            document.getElementById('join_date').value = profile.creation_date ? new Date(profile.creation_date).toLocaleDateString('en-CA') : 'N/A';
+            document.getElementById('join_date').value = profile.creation_date ? formatDate(profile.creation_date) : 'N/A';
             
-            // Fill editable fields based on the table structure
             const editableFields = ['full_name', 'mail', 'telephone', 'room', 'customer_name', 'phone', 'address', 'tags', 'notes'];
 
             editableFields.forEach(field => {
@@ -267,22 +321,19 @@
                 if (input) {
                     if (profile[field] !== undefined) {
                         input.value = profile[field] || '';
-                        input.name = field; // Ensure input has the correct name attribute for PUT request
+                        input.name = field; 
                     } else {
-                         // Hide field if it doesn't apply to this user type's table (e.g., hiding 'room' for customers)
                         input.closest('div').classList.add('hidden');
                     }
                 }
             });
             
-            // Handle textarea separately
             const notesTextarea = document.getElementById('notes');
             if(notesTextarea && profile.notes !== undefined) {
                 notesTextarea.value = profile.notes || '';
             } else if (notesTextarea) {
                 notesTextarea.closest('div').classList.add('hidden');
             }
-
 
             form.onsubmit = handleProfileSubmit;
             document.getElementById('password-form').onsubmit = handlePasswordSubmit;
@@ -295,20 +346,16 @@
             const messageDiv = document.getElementById('profile-message');
             messageDiv.innerHTML = `<div class="loading-spinner"></div> Saving...`;
             
-            // Collect payload manually, ignoring hidden/readonly fields
             const payload = {};
             const formData = new FormData(form);
             
             for (let [key, value] of formData.entries()) {
                  const element = form.elements[key];
-                 // Check if element exists, is not hidden (or if it is a textarea/input), and is not readonly
                  if (element && element.closest('div') && !element.closest('div').classList.contains('hidden') && !element.readOnly && element.type !== 'submit') {
-                    // Normalize empty strings to null for database
                     payload[key] = value.trim() === '' ? null : value.trim();
                  }
             }
             
-            // Ensure payload includes only necessary fields for the update 
             const [schema, data] = TARGET_TABLE.split('.');
             const queryString = `${USER_PK_KEY}=${USER_ID}`;
             const endpoint = `table/${schema}/${data}?${queryString}`;
@@ -316,7 +363,6 @@
             const result = await apiFetch(endpoint, { method: 'PUT', body: payload });
 
             if (result && !result.error) {
-                // Update session storage with new details (if successfully saved)
                 let updatedSession = JSON.parse(sessionStorage.getItem('user'));
                 updatedSession = { ...updatedSession, ...payload };
                 sessionStorage.setItem('user', JSON.stringify(updatedSession));
@@ -333,43 +379,235 @@
         async function handlePasswordSubmit(e) {
             e.preventDefault();
             const form = e.target;
-            const newPassword = form.elements['password'].value;
+            const newPassword = form.elements['new_password'].value;
             const confirmPassword = form.elements['confirm_password'].value;
             const messageDiv = document.getElementById('password-message');
             messageDiv.innerHTML = '';
-
+            
             if (newPassword !== confirmPassword) {
-                messageDiv.innerHTML = `<span class="text-red-600 font-bold">Error: Passwords do not match.</span>`;
+                showMessage("Error: Passwords do not match.", false);
                 return;
             }
-            if (newPassword.length < 6) {
-                messageDiv.innerHTML = `<span class="text-red-600 font-bold">Error: Password must be at least 6 characters long.</span>`;
+            if (newPassword.length < 8) { 
+                showMessage("Error: Password must be at least 8 characters long.", false);
                 return;
             }
 
             messageDiv.innerHTML = `<div class="loading-spinner"></div> Changing password...`;
             
-            const [schema, data] = TARGET_TABLE.split('.');
-            const queryString = `${USER_PK_KEY}=${USER_ID}`;
-            const endpoint = `table/${schema}/${data}?${queryString}`;
+            const endpoint = 'user/change-password';
+            const payload = { new_password: newPassword }; 
+
+            try {
+                const result = await apiFetch(endpoint, { method: 'POST', body: payload });
+
+                if (result && result.success) {
+                    showMessage("Password updated successfully! Redirecting to login...", true);
+                    form.reset(); 
+
+                    sessionStorage.clear();
+                    localStorage.removeItem('redirectUrl');
+                    
+                    setTimeout(() => {
+                        window.location.href = './login.html';
+                    }, 1500); 
+                    
+                } else {
+                    const errorMessage = result?.error || 'Password update failed. Check console.';
+                    messageDiv.innerHTML = `<span class="text-red-600 font-bold">Error: ${errorMessage}</span>`;
+                    showToast(errorMessage, "error");
+                }
+            } catch (error) {
+                messageDiv.innerHTML = `<span class="text-red-600 font-bold">Error: Network failure during password change.</span>`;
+                showToast("Network failure during password change.", "error");
+            }
+            lucide.createIcons();
+        }
+        
+        // --- NEW FEATURE FUNCTIONS ---
+        
+        async function fetchMyProjects() {
+            const projectsDiv = document.getElementById('my-projects-list');
+            projectsDiv.innerHTML = `<p class="text-gray-500 text-sm"><div class="loading-spinner"></div> Loading projects...</p>`;
             
-            // Payload only needs the 'password' field. The Flask backend handles hashing it into 'password_hash'.
-            const payload = { password: newPassword }; 
+            if (USER_TYPE !== 'personal' && USER_TYPE !== 'admin' && USER_TYPE !== 'superadmin') {
+                projectsDiv.innerHTML = `<p class="text-gray-500 text-sm">Project membership data is primarily available for internal personnel.</p>`;
+                return;
+            }
 
-            const result = await apiFetch(endpoint, { method: 'PUT', body: payload });
+            try {
+                const piProjects = await apiFetch(`table/lims/projects?filter_pi_person_id=${USER_ID}&filter_status_id=In Progress,Planned`);
+                const memberProjects = await apiFetch(`table/lims/project_persons?filter_person_id=${USER_ID}`);
+                
+                let allProjects = {};
 
-            if (result && !result.error) {
-                messageDiv.innerHTML = `<span class="text-green-600 font-bold">Password changed successfully!</span>`;
-                showToast("Password changed successfully!", "success");
-                form.reset();
-            } else {
-                messageDiv.innerHTML = `<span class="text-red-600 font-bold">Error: ${result?.error || 'Password update failed.'}</span>`;
-                showToast("Password update failed.", "error");
+                if (piProjects && !piProjects.error) {
+                    piProjects.forEach(p => {
+                        allProjects[p.project_id] = { 
+                            ...p, 
+                            role: allProjects[p.project_id] ? `${allProjects[p.project_id].role}, PI` : 'PI' 
+                        };
+                    });
+                }
+                
+                if (memberProjects && !memberProjects.error) {
+                    const newMemberProjects = memberProjects.filter(mp => !allProjects[mp.project_id]);
+                    for (const mp of newMemberProjects) {
+                         const projectDetails = await apiFetch(`table/lims/projects?project_id=${mp.project_id}`);
+                         if (projectDetails && projectDetails.length > 0) {
+                             allProjects[mp.project_id] = {
+                                 ...projectDetails[0],
+                                 role: mp.role || 'Member'
+                             };
+                         }
+                     }
+
+                    memberProjects.forEach(mp => {
+                        if (allProjects[mp.project_id]) {
+                            if (mp.role && !allProjects[mp.project_id].role.includes(mp.role)) {
+                                allProjects[mp.project_id].role += `, ${mp.role}`;
+                            } else if (!allProjects[mp.project_id].role) {
+                                 allProjects[mp.project_id].role = mp.role || 'Member';
+                            }
+                        }
+                    });
+                }
+                
+                const finalProjects = Object.values(allProjects).filter(p => p.status_id === 'In Progress' || p.status_id === 'Planned');
+
+                if (finalProjects.length === 0) {
+                    projectsDiv.innerHTML = `<p class="text-gray-500 text-sm">You are not currently active on any projects.</p>`;
+                    return;
+                }
+
+                let html = finalProjects.map(p => `
+                    <div class="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                        <p class="font-semibold text-gray-800">${p.project_id}: ${p.title}</p>
+                        <p class="text-sm text-gray-700">Role(s): <span class="font-medium text-blue-800">${p.role}</span></p>
+                        <p class="text-xs text-gray-600">Status: ${p.status_id} | Start: ${formatDate(p.start_date)}</p>
+                    </div>
+                `).join('');
+
+                projectsDiv.innerHTML = html;
+            } catch (error) {
+                projectsDiv.innerHTML = `<p class="text-red-600 text-sm">Error loading projects: ${error.message}</p>`;
             }
             lucide.createIcons();
         }
 
+        async function fetchMyRecentExperiments() {
+            const experimentsDiv = document.getElementById('my-experiments-list');
+            experimentsDiv.innerHTML = `<p class="text-gray-500 text-sm"><div class="loading-spinner"></div> Loading experiments...</p>`;
 
+            if (USER_TYPE !== 'personal' && USER_TYPE !== 'admin' && USER_TYPE !== 'superadmin') {
+                experimentsDiv.innerHTML = `<p class="text-gray-500 text-sm">Experiment data is primarily available for internal personnel.</p>`;
+                return;
+            }
+
+            try {
+                // Fetch up to 10 latest experiments, ordered by date descending.
+                const recentExperiments = await apiFetch(`table/lab/experiments?filter_person_id=${USER_ID}&order_by=experiment_date&order_direction=DESC&limit=10`);
+
+                if (recentExperiments && !recentExperiments.error) {
+                    if (recentExperiments.length === 0) {
+                        experimentsDiv.innerHTML = `<p class="text-gray-500 text-sm">You have not recorded any experiments recently.</p>`;
+                        return;
+                    }
+
+                    let html = recentExperiments.map(e => `
+                        <div class="p-3 bg-green-50 border border-green-200 rounded-md">
+                            <p class="font-semibold text-gray-800">${e.experiment_id}: ${e.experiment_title || 'No Title'}</p>
+                            <p class="text-sm text-gray-700">Date: ${formatDate(e.experiment_date)} | Status: <span class="font-medium text-green-800">${e.status_id}</span></p>
+                            <p class="text-xs text-gray-600">Aim: ${e.aim ? e.aim.substring(0, 80) + (e.aim.length > 80 ? '...' : '') : 'N/A'}</p>
+                        </div>
+                    `).join('');
+
+                    experimentsDiv.innerHTML = html;
+                } else {
+                    experimentsDiv.innerHTML = `<p class="text-red-600 text-sm">Error loading experiments: ${recentExperiments?.error || 'Failed to fetch data.'}</p>`;
+                }
+            } catch (error) {
+                experimentsDiv.innerHTML = `<p class="text-red-600 text-sm">Error loading experiments: ${error.message}</p>`;
+            }
+            lucide.createIcons();
+        }
+
+        async function fetchMyRecentSamples() {
+            const samplesDiv = document.getElementById('my-samples-list');
+            samplesDiv.innerHTML = `<p class="text-gray-500 text-sm"><div class="loading-spinner"></div> Loading samples...</p>`;
+
+            if (USER_TYPE !== 'personal' && USER_TYPE !== 'admin' && USER_TYPE !== 'superadmin') {
+                samplesDiv.innerHTML = `<p class="text-gray-500 text-sm">Sample tracking is primarily for internal personnel.</p>`;
+                return;
+            }
+
+            try {
+                // Fetch up to 5 latest samples received by the user
+                const recentSamples = await apiFetch(`table/lab/root_samples?filter_receiver_person_id=${USER_ID}&order_by=reception_date&order_direction=DESC&limit=5`);
+                
+                if (recentSamples && !recentSamples.error) {
+                    if (recentSamples.length === 0) {
+                        samplesDiv.innerHTML = `<p class="text-gray-500 text-sm">You have not recently received any samples.</p>`;
+                        return;
+                    }
+
+                    let html = recentSamples.map(s => `
+                        <div class="p-3 bg-purple-50 border border-purple-200 rounded-md">
+                            <p class="font-semibold text-gray-800">${s.sample_id}: ${s.external_name || 'No External Name'}</p>
+                            <p class="text-sm text-gray-700">Type: ${s.sample_type_id} | Project: ${s.project_id || 'N/A'}</p>
+                            <p class="text-xs text-gray-600">Status: <span class="font-medium text-purple-800">${s.status_id}</span> | Received: ${formatDate(s.reception_date)}</p>
+                        </div>
+                    `).join('');
+
+                    samplesDiv.innerHTML = html;
+                } else {
+                    samplesDiv.innerHTML = `<p class="text-red-600 text-sm">Error loading samples: ${recentSamples?.error || 'Failed to fetch data.'}</p>`;
+                }
+            } catch (error) {
+                samplesDiv.innerHTML = `<p class="text-red-600 text-sm">Error loading samples: ${error.message}</p>`;
+            }
+            lucide.createIcons();
+        }
+
+        async function fetchNearExpiryReagents() {
+            const reagentsDiv = document.getElementById('my-reagents-list');
+            reagentsDiv.innerHTML = `<p class="text-gray-500 text-sm"><div class="loading-spinner"></div> Loading reagents...</p>`;
+            
+            if (USER_TYPE !== 'personal' && USER_TYPE !== 'admin' && USER_TYPE !== 'superadmin') {
+                reagentsDiv.innerHTML = `<p class="text-gray-500 text-sm">Reagent data is primarily available for internal personnel.</p>`;
+                return;
+            }
+
+            const endpoint = `table/lims/reagent_status_view?filter_expire_date_within_30_days=true`;
+
+            try {
+                const nearExpiryReagents = await apiFetch(endpoint);
+
+                if (nearExpiryReagents && !nearExpiryReagents.error) {
+                    
+                    if (nearExpiryReagents.length === 0) {
+                        reagentsDiv.innerHTML = `<p class="text-gray-500 text-sm">No reagents associated with your projects are expiring soon.</p>`;
+                        return;
+                    }
+
+                    let html = nearExpiryReagents.map(r => `
+                        <div class="p-3 ${r.days_until_expiry < 7 ? 'bg-red-100 border-red-400' : 'bg-yellow-50 border-yellow-300'} rounded-md">
+                            <p class="font-semibold text-gray-800">${r.reagent_id}: ${r.reagent_complete_name}</p>
+                            <p class="text-sm text-gray-700">Lot: ${r.lot} | Expires: <span class="font-medium text-red-800">${formatDate(r.expire_date)}</span></p>
+                            <p class="text-xs text-gray-600">Project: ${r.project_id || 'N/A'} | Days Left: ${r.days_until_expiry}</p>
+                        </div>
+                    `).join('');
+
+                    reagentsDiv.innerHTML = html;
+                } else {
+                    reagentsDiv.innerHTML = `<p class="text-red-600 text-sm">Error loading reagents: ${nearExpiryReagents?.error || 'Failed to fetch data.'}</p>`;
+                }
+            } catch (error) {
+                reagentsDiv.innerHTML = `<p class="text-red-600 text-sm">Error loading reagents: ${error.message}</p>`;
+            }
+            lucide.createIcons();
+        }
+        
         // --- Initialize on load ---
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
