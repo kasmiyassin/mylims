@@ -14,10 +14,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- Configuration ---
+# Main LIMS Database (mylims)
 DB_HOST: str = os.getenv('DB_HOST', '0.0.0.0')
 DB_NAME: str = os.getenv('DB_NAME', 'mylims')
-DB_USER: str = os.getenv('DB_USER', 'web_admin')
+DB_USER: str = os.getenv('DB_USER', 'kamsi')
 DB_PASS: str = os.getenv('DB_PASS', 'password')
+
+# Secondary Authentication Database (musr)
+AUTH_DB_HOST: str = os.getenv('AUTH_DB_HOST', '0.0.0.0')
+AUTH_DB_NAME: str = os.getenv('AUTH_DB_NAME', 'musr')
+AUTH_DB_USER: str = os.getenv('AUTH_DB_USER', 'kasmi')
+AUTH_DB_PASS: str = os.getenv('AUTH_DB_PASS', 'password')
+
 SECRET_KEY: str = os.getenv('SECRET_KEY', 'a_very_secret_key_for_session_management_and_security')
 
 STATIC_FOLDER: str = '.'
@@ -179,14 +187,25 @@ def safe_date_parse(date_str: str) -> Optional[date]:
         return None
 
 def get_db_connection():
-    """Establishes and returns a new database connection."""
+    """Establishes and returns a new database connection to mylims."""
     try:
         conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
         conn.autocommit = False
         return conn
     except psycopg2.OperationalError as e:
-        print(f"FATAL: Could not connect to database at {DB_HOST}. Error: {e}")
+        print(f"FATAL: Could not connect to LIMS database at {DB_HOST}. Error: {e}")
         raise
+
+# NEW: Connection for the separate authentication database
+def get_auth_db_connection():
+    """Establishes and returns a new database connection to musr."""
+    try:
+        conn = psycopg2.connect(host=AUTH_DB_HOST, database=AUTH_DB_NAME, user=AUTH_DB_USER, password=AUTH_DB_PASS)
+        conn.autocommit = True  # Read-only or simple select is fine with autocommit
+        return conn
+    except psycopg2.OperationalError as e:
+        print(f"FATAL: Could not connect to AUTH database at {AUTH_DB_HOST}. Error: {e}")
+        return None
 
 @app.before_request
 def before_request_func():
@@ -335,7 +354,9 @@ def _get_column_types(conn, schema: str, table: str) -> Dict[str, str]:
 @app.route(f'{API_PREFIX}/login', methods=['POST'])
 def login_user():
     """
-    Handles user login across different user tables, including special cases for superadmins.
+    Handles user login by:
+    1. Checking the external 'musr' database for password validity.
+    2. If valid, checking the 'mylims' database to determine user type and retrieve user details.
     """
     data = request.get_json()
     username = data.get('username')
@@ -344,7 +365,7 @@ def login_user():
     if not username or not password:
         return jsonify({"error": "Missing username or password"}), 400
 
-    # Special hardcoded superadmin login for 'TIFI' and 'kasmi'
+    # --- 1. SPECIAL ADMIN LOGIN (Hardcoded) ---
     if username == 'TIFI' and password == 'password':
         session['user_id'] = 'TIFI'
         session['user_type'] = 'admin'
@@ -357,52 +378,99 @@ def login_user():
         session['is_admin'] = True
         return jsonify({"success": True, "user": {"full_name": "Kasmi Superadmin", "person_id": "kasmi"}, "user_type": "superadmin"}), 200
 
-    conn = g.db_conn
+    # --- 2. AUTHENTICATION (Check against the external 'musr' database) ---
+    auth_conn = get_auth_db_connection()
+    if not auth_conn:
+        return jsonify({"error": "Authentication system unavailable. Please contact the administrator."}), 503
+
+    password_hash = None
     try:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            # First, try to log in as a regular lab member
-            query_personal = 'SELECT person_id, full_name, password_hash, mail, room, telephone FROM "lims"."personal" WHERE person_id = %s OR mail = %s;'
+        with auth_conn.cursor() as cur:
+            # Query the external authentication table
+            query_auth = 'SELECT pswd_hash FROM aaa.lg_fi WHERE login = %s;'
+            cur.execute(query_auth, (username,))
+            auth_record = cur.fetchone()
+            if auth_record:
+                password_hash = auth_record[0]
+        auth_conn.close()
+    except Exception as e:
+        print(f"Authentication DB error for {username}: {e}")
+        if auth_conn and not auth_conn.closed:
+            auth_conn.close()
+        return jsonify({"error": "An internal error occurred during authentication setup."}), 500
+
+    if not password_hash:
+        return jsonify({"error": "Invalid credentials: User not found."}), 401
+    
+    # Password verification using bcrypt
+    try:
+        if not bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8')):
+            return jsonify({"error": "Invalid credentials: Password mismatch."}), 401
+    except ValueError as e:
+        print(f"Bcrypt hash error for user {username}: {e}")
+        return jsonify({"error": "Authentication failed: Corrupted or invalid password hash stored."}), 500
+
+
+    # Authentication successful! Proceed to identify user type in mylims DB.
+    
+    # --- 3. AUTHORIZATION (Identify user type in 'mylims' database) ---
+    mylims_conn = g.db_conn
+    user_info = None
+    user_type = None
+    user_id = None
+
+    try:
+        with mylims_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # 3.1 Try to log in as a regular lab member (using person_id or mail as login)
+            # NOTE: Removed 'password_hash' from SELECT since it's no longer used for login check
+            query_personal = 'SELECT person_id, full_name, mail, room, telephone, organization FROM "lims"."personal" WHERE person_id = %s OR mail = %s;'
             cur.execute(query_personal, (username, username))
             user_personal = cur.fetchone()
 
-            if user_personal and user_personal.get('password_hash'):
-                if bcrypt.checkpw(password.encode('utf-8'), user_personal['password_hash'].encode('utf-8')):
-                    session['user_id'] = user_personal['person_id']
-                    session['user_type'] = 'personal'
-                    session['is_admin'] = False
-                    user_personal.pop('password_hash', None)
-                    return jsonify({"success": True, "user": user_personal, "user_type": "personal"}), 200
+            if user_personal:
+                user_info = user_personal
+                user_type = 'personal'
+                user_id = user_personal['person_id']
 
-            # Then, try to log in as a customer
-            query_customers = 'SELECT customer_id, customer_name, mail, password_hash, phone, address FROM "lims"."customers" WHERE mail = %s;'
-            cur.execute(query_customers, (username,))
-            user_customer = cur.fetchone()
+            # 3.2 Try to log in as a customer (using mail as login)
+            if not user_info:
+                # NOTE: Removed 'password_hash' from SELECT since it's no longer used for login check
+                query_customers = 'SELECT customer_id, customer_name, mail, phone, address, organization FROM "lims"."customers" WHERE mail = %s;'
+                cur.execute(query_customers, (username,))
+                user_customer = cur.fetchone()
 
-            if user_customer and user_customer.get('password_hash'):
-                if bcrypt.checkpw(password.encode('utf-8'), user_customer['password_hash'].encode('utf-8')):
-                    session['user_id'] = str(user_customer['customer_id']) 
-                    session['user_type'] = 'customer'
-                    session['is_admin'] = False
-                    user_customer.pop('password_hash', None)
-                    return jsonify({"success": True, "user": user_customer, "user_type": "customer"}), 200
+                if user_customer:
+                    user_info = user_customer
+                    user_type = 'customer'
+                    user_id = str(user_customer['customer_id'])
 
-            # Finally, try to log in as an external contact
-            query_external_contacts = 'SELECT contact_id, full_name, mail, password_hash, telephone, organization, address FROM "lims"."external_contacts" WHERE mail = %s;'
-            cur.execute(query_external_contacts, (username,))
-            user_external = cur.fetchone()
+            # 3.3 Try to log in as an external contact (using mail as login)
+            if not user_info:
+                # NOTE: Removed 'password_hash' from SELECT since it's no longer used for login check
+                query_external_contacts = 'SELECT contact_id, full_name, mail, telephone, organization, address FROM "lims"."external_contacts" WHERE mail = %s;'
+                cur.execute(query_external_contacts, (username,))
+                user_external = cur.fetchone()
 
-            if user_external and user_external.get('password_hash'):
-                if bcrypt.checkpw(password.encode('utf-8'), user_external['password_hash'].encode('utf-8')):
-                    session['user_id'] = user_external['contact_id']
-                    session['user_type'] = 'external_contact'
-                    session['is_admin'] = False
-                    user_external.pop('password_hash', None)
-                    return jsonify({"success": True, "user": user_external, "user_type": "external_contact"}), 200
+                if user_external:
+                    user_info = user_external
+                    user_type = 'external_contact'
+                    user_id = user_external['contact_id']
 
-            return jsonify({"error": "Invalid credentials"}), 401
+            if not user_info:
+                # User authenticated but no corresponding LIMS user record found (sync issue)
+                return jsonify({"error": "User successfully authenticated but LIMS profile not found. Contact LIMS support."}), 401
+
     except Exception as e:
-        print(f"Login error for {username}: {e}")
-        return jsonify({"error": "An internal server error occurred during login."}), 500
+        print(f"LIMS DB lookup error for {username}: {e}")
+        return jsonify({"error": "An internal server error occurred during LIMS profile lookup."}), 500
+    
+    # --- 4. SESSION CREATION ---
+    session['user_id'] = user_id
+    session['user_type'] = user_type
+    # Only internal staff are considered 'admin' for most purposes
+    session['is_admin'] = (user_type == 'personal') 
+    
+    return jsonify({"success": True, "user": user_info, "user_type": user_type}), 200
 
 
 @app.route(f'{API_PREFIX}/logout', methods=['POST'])
@@ -1021,7 +1089,8 @@ def _parse_malformed_input(data: Dict[str, Any]) -> Dict[str, Any]:
 def create_record(schema: str, table: str):
     """
     Creates a new record in the specified table.
-    Handles file uploads, password hashing, and special linked records (e.g., projects and persons).
+    Handles file uploads and special linked records (e.g., projects and persons).
+    NOTE: Password hashing is entirely removed from this function as per the requirement.
     """
     conn = g.db_conn
     try:
@@ -1052,13 +1121,14 @@ def create_record(schema: str, table: str):
         elif 'attachment' in data and (data['attachment'] == '' or (isinstance(data['attachment'], dict) and not data['attachment'])):
             data['attachment'] = None
             
+        # --- REMOVED PASSWORD HASHING LOGIC FOR USER TABLES ---
         if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
-            if 'password' in data and data['password']:
-                hashed_password = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt())
-                data['password_hash'] = hashed_password.decode('utf-8')
+            # Ensure no password related fields are inserted/updated by accident
             data.pop('password', None)
+            data.pop('password_hash', None)
+        # --- END REMOVAL ---
             
         project_ids_str = None
         sample_ids_str = None
@@ -1131,10 +1201,7 @@ def create_record(schema: str, table: str):
         columns = filtered_data.keys()
         values = [filtered_data[col] for col in columns]
         
-        # --- FIX: Use SQL module for safe, correct column and value insertion ---
-        
         # 1. Prepare identifiers (column names)
-        # Using sql.Identifier() ensures correct quoting and prevents SQL injection
         col_identifiers = [sql.Identifier(col) for col in columns]
 
         # 2. Prepare value placeholders and build the query
@@ -1142,9 +1209,8 @@ def create_record(schema: str, table: str):
             schema=sql.Identifier(actual_schema),
             table=sql.Identifier(actual_table),
             cols=sql.SQL(', ').join(col_identifiers),
-            values=sql.SQL(', ').join([sql.Placeholder()] * len(values)) # Use Placeholder for safe parameter substitution
+            values=sql.SQL(', ').join([sql.Placeholder()] * len(values))
         )
-        # --- END FIX ---
         
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             print(f"Executing POST query (SQL): {insert_query.as_string(conn)} with values: {values}")
@@ -1214,7 +1280,8 @@ def create_record(schema: str, table: str):
 def update_record(schema: str, table: str):
     """
     Updates an existing record in the specified table identified by its primary key(s).
-    Handles file uploads, password hashing, and ignores special linked records.
+    Handles file uploads.
+    NOTE: Password hashing is entirely removed from this function as per the requirement.
     """
     conn = g.db_conn
     try:
@@ -1258,13 +1325,14 @@ def update_record(schema: str, table: str):
         set_clauses: List[str] = []
         values: List[Any] = []
         
+        # --- REMOVED PASSWORD HASHING LOGIC FOR USER TABLES ---
         if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
-            if 'password' in data and data['password']:
-                hashed_password = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt())
-                data['password_hash'] = hashed_password.decode('utf-8')
+            # Ensure no password related fields are inserted/updated by accident
             data.pop('password', None)
+            data.pop('password_hash', None)
+        # --- END REMOVAL ---
             
         for key, val in data.items():
             if key in pk_columns or key in ['project_ids', 'sample_ids', 'linked_person_ids']:
@@ -1437,6 +1505,7 @@ def batch_upload(schema: str, table: str):
     """
     Handles bulk insertion of records from a list of dictionaries (e.g., from CSV/JSON upload).
     Supports special linking logic for experiments/projects/samples and projects/persons.
+    NOTE: Password hashing is entirely removed from this function as per the requirement.
     """
     conn = g.db_conn
     try:
@@ -1499,14 +1568,14 @@ def batch_upload(schema: str, table: str):
                         else:
                             filtered_record[k] = v
 
-                    # Final check for password hashing on user tables (though rarely bulk uploaded)
+                    # --- REMOVED PASSWORD HASHING LOGIC FOR USER TABLES ---
                     if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
                        (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
                        (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
-                        if 'password' in filtered_record and filtered_record['password']:
-                            hashed_password = bcrypt.hashpw(filtered_record['password'].encode('utf-8'), bcrypt.gensalt())
-                            filtered_record['password_hash'] = hashed_password.decode('utf-8')
+                        # Ensure no password related fields are inserted/updated by accident
                         filtered_record.pop('password', None)
+                        filtered_record.pop('password_hash', None)
+                    # --- END REMOVAL ---
                             
                     columns = filtered_record.keys()
                     values = [filtered_record[col] for col in columns]
@@ -1672,6 +1741,7 @@ def batch_update(schema: str, table: str):
     Performs a bulk update of records.
     Expects a JSON array of objects, where each object contains primary key(s)
     and fields to update.
+    NOTE: Password hashing is entirely removed from this function as per the requirement.
     """
     conn = g.db_conn
     try:
@@ -1735,6 +1805,15 @@ def batch_update(schema: str, table: str):
                     print(f"  Warning: Skipping record in batch update due to missing primary key(s): {pk_fields} in {record_data}")
                     continue
                 
+                # --- REMOVED PASSWORD HASHING LOGIC FOR USER TABLES ---
+                if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
+                   (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
+                   (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
+                    # Ensure no password related fields are inserted/updated by accident
+                    update_fields.pop('password', None)
+                    update_fields.pop('password_hash', None)
+                # --- END REMOVAL ---
+
                 # Process update fields
                 for key, val in update_fields.items():
                     
