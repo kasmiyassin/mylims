@@ -11,7 +11,7 @@ import psycopg2
 from psycopg2 import sql, extras
 from dotenv import load_dotenv
 
-load_dotenv()
+#load_dotenv("my.env")
 
 # --- Configuration ---
 # Main LIMS Database (mylims)
