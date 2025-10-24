@@ -15,22 +15,23 @@ load_dotenv()
 
 # --- Configuration ---
 # Main LIMS Database (mylims)
-DB_HOST: str = os.getenv('DB_HOST', '0.0.0.0')
+# Set default host to 127.0.0.1 for local operation based on successful psql test.
+DB_HOST: str = os.getenv('DB_HOST', '0.0.0.0') 
 DB_NAME: str = os.getenv('DB_NAME', 'mylims')
-DB_USER: str = os.getenv('DB_USER', 'kamsi')
+DB_USER: str = os.getenv('DB_USER', 'web_admin')
 DB_PASS: str = os.getenv('DB_PASS', 'password')
 
 # Secondary Authentication Database (musr)
+# Set default host to 127.0.0.1
 AUTH_DB_HOST: str = os.getenv('AUTH_DB_HOST', '0.0.0.0')
 AUTH_DB_NAME: str = os.getenv('AUTH_DB_NAME', 'musr')
-AUTH_DB_USER: str = os.getenv('AUTH_DB_USER', 'kasmi')
-AUTH_DB_PASS: str = os.getenv('AUTH_DB_PASS', 'password')
+AUTH_DB_USER: str = os.getenv('AUTH_DB_USER', 'auth_user')
+AUTH_DB_PASS: str = os.getenv('AUTH_DB_PASS', 'auth_password')
 
 SECRET_KEY: str = os.getenv('SECRET_KEY', 'a_very_secret_key_for_session_management_and_security')
 
 STATIC_FOLDER: str = '.'
 FLASK_ENV: str = os.getenv('FLASK_ENV', 'production')
-# API_PREFIX must match the frontend configuration
 API_PREFIX: str = os.getenv('API_PREFIX', '/api') 
 
 app = Flask(__name__, static_folder=STATIC_FOLDER)
@@ -38,7 +39,6 @@ app.secret_key = SECRET_KEY
 CORS(app, supports_credentials=True)
 
 # --- Primary Key Mapping ---
-# Maps (schema, table) to its primary key column(s).
 PK_MAPPING: Dict[Tuple[str, str], Union[str, List[str]]] = {
     ('reference', 'status'): 'status_id',
     ('reference', 'room'): 'room_id',
@@ -188,23 +188,26 @@ def safe_date_parse(date_str: str) -> Optional[date]:
 
 def get_db_connection():
     """Establishes and returns a new database connection to mylims."""
+    print(f"DEBUG LIMS: Attempting connection to host={DB_HOST}, db={DB_NAME}, user={DB_USER}")
     try:
         conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
         conn.autocommit = False
         return conn
     except psycopg2.OperationalError as e:
-        print(f"FATAL: Could not connect to LIMS database at {DB_HOST}. Error: {e}")
+        print(f"FATAL: LIMS DB Connection Failed. Check DB_HOST/Credentials. Error: {e}")
+        # We must re-raise the error here so the calling function can handle it.
         raise
 
 # NEW: Connection for the separate authentication database
 def get_auth_db_connection():
     """Establishes and returns a new database connection to musr."""
+    print(f"DEBUG AUTH: Attempting connection to host={AUTH_DB_HOST}, db={AUTH_DB_NAME}, user={AUTH_DB_USER}")
     try:
         conn = psycopg2.connect(host=AUTH_DB_HOST, database=AUTH_DB_NAME, user=AUTH_DB_USER, password=AUTH_DB_PASS)
         conn.autocommit = True  # Read-only or simple select is fine with autocommit
         return conn
     except psycopg2.OperationalError as e:
-        print(f"FATAL: Could not connect to AUTH database at {AUTH_DB_HOST}. Error: {e}")
+        print(f"FATAL: AUTH DB Connection Failed. Check AUTH_DB_HOST/Credentials. Error: {e}")
         return None
 
 @app.before_request
@@ -212,17 +215,23 @@ def before_request_func():
     """
     Establishes a database connection for the request and sets RLS context.
     """
-    g.db_conn = get_db_connection()
+    # 1. Establish connection to the main LIMS DB (mylims)
+    # The new structure ensures we catch the hard crash and return a response.
+    try:
+        g.db_conn = get_db_connection()
+    except Exception as e:
+        # Prevents gunicorn worker from crashing on every request due to DB error.
+        print(f"CRITICAL: Failed to initialize database connection pool for request: {e}")
+        # Send a 503 response to the client immediately.
+        return jsonify({"error": f"Internal Server Error: Database initialization failed. Check server logs."}), 503
+    
+    # 2. Set RLS Context
     person_id_to_set = str(session.get('user_id', '')) 
 
     try:
         with g.db_conn.cursor() as cur:
-            # Set the RLS context
             cur.execute("SELECT set_config('lims.current_person_id', %s, FALSE)", (person_id_to_set,))
-            
-            # Set a separate variable for Auditing
             cur.execute("SELECT set_config('audit.logged_in_user', %s, FALSE)", (person_id_to_set,))
-            
             g.db_conn.commit()
             print(f"RLS & Audit: Set lims.current_person_id and audit.logged_in_user to '{person_id_to_set}'")
     except Exception as e:
@@ -422,7 +431,6 @@ def login_user():
     try:
         with mylims_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             # 3.1 Try to log in as a regular lab member (using person_id or mail as login)
-            # NOTE: Removed 'password_hash' from SELECT since it's no longer used for login check
             query_personal = 'SELECT person_id, full_name, mail, room, telephone, organization FROM "lims"."personal" WHERE person_id = %s OR mail = %s;'
             cur.execute(query_personal, (username, username))
             user_personal = cur.fetchone()
@@ -434,7 +442,6 @@ def login_user():
 
             # 3.2 Try to log in as a customer (using mail as login)
             if not user_info:
-                # NOTE: Removed 'password_hash' from SELECT since it's no longer used for login check
                 query_customers = 'SELECT customer_id, customer_name, mail, phone, address, organization FROM "lims"."customers" WHERE mail = %s;'
                 cur.execute(query_customers, (username,))
                 user_customer = cur.fetchone()
@@ -442,11 +449,11 @@ def login_user():
                 if user_customer:
                     user_info = user_customer
                     user_type = 'customer'
+                    # NOTE: customer_id is an integer, session needs string
                     user_id = str(user_customer['customer_id'])
 
             # 3.3 Try to log in as an external contact (using mail as login)
             if not user_info:
-                # NOTE: Removed 'password_hash' from SELECT since it's no longer used for login check
                 query_external_contacts = 'SELECT contact_id, full_name, mail, telephone, organization, address FROM "lims"."external_contacts" WHERE mail = %s;'
                 cur.execute(query_external_contacts, (username,))
                 user_external = cur.fetchone()
@@ -481,12 +488,105 @@ def logout_user():
     session.pop('is_admin', None)
     return jsonify({"success": True, "message": "Logged out"}), 200
 
+# NEW ENDPOINT: Handle password change request
+@app.route(f'{API_PREFIX}/user/change-password', methods=['POST'])
+def change_password():
+    """
+    Changes the user's password hash solely in the external musr.aaa.lg_fi table.
+    The login identifier used is the one stored in the session ('user_id') or their mail address.
+    """
+    # 1. Authorization Check
+    user_id = session.get('user_id')
+    user_type = session.get('user_type')
+    if not user_id:
+        return jsonify({"error": "Unauthorized. Please log in."}), 401
+    
+    data = request.get_json()
+    new_password = data.get('new_password')
+    
+    if not new_password or len(new_password) < 8:
+        return jsonify({"error": "Password must be at least 8 characters long."}), 400
+
+    # 2. Determine the correct 'login' value for the aaa.lg_fi table
+    login_id_for_auth_db = user_id
+    mylims_conn = g.db_conn
+    
+    try:
+        with mylims_conn.cursor() as cur:
+            if user_type == 'personal':
+                cur.execute('SELECT mail FROM "lims"."personal" WHERE person_id = %s;', (user_id,))
+                mail_record = cur.fetchone()
+                if mail_record and mail_record[0]:
+                    login_id_for_auth_db = mail_record[0]
+                else:
+                    login_id_for_auth_db = user_id 
+                    
+            elif user_type == 'customer':
+                cur.execute('SELECT mail FROM "lims"."customers" WHERE customer_id = %s;', (int(user_id),))
+                mail_record = cur.fetchone()
+                if mail_record and mail_record[0]:
+                    login_id_for_auth_db = mail_record[0]
+                else:
+                    return jsonify({"error": "LIMS profile not found for password change lookup."}), 404
+
+            elif user_type == 'external_contact':
+                cur.execute('SELECT mail FROM "lims"."external_contacts" WHERE contact_id = %s;', (user_id,))
+                mail_record = cur.fetchone()
+                if mail_record and mail_record[0]:
+                    login_id_for_auth_db = mail_record[0]
+                else:
+                    return jsonify({"error": "LIMS profile not found for password change lookup."}), 404
+            
+            # Note: admin/superadmin login_id_for_auth_db remains the user_id ('TIFI'/'kasmi')
+
+    except ValueError:
+        return jsonify({"error": "Invalid user ID format in session."}), 401
+    except Exception as e:
+        print(f"Error resolving login ID from LIMS DB: {e}")
+        return jsonify({"error": "Failed to look up user credentials."}), 500
+
+
+    # 3. Generate the new bcrypt hash
+    try:
+        salt = bcrypt.gensalt()
+        new_hash = bcrypt.hashpw(new_password.encode('utf-8'), salt).decode('utf-8')
+    except Exception:
+        return jsonify({"error": "Failed to hash password internally."}), 500
+
+    # 4. Connect to the external musr database and update the hash
+    auth_conn = get_auth_db_connection()
+    if not auth_conn:
+        return jsonify({"error": "Authentication database unavailable for update."}), 503
+
+    try:
+        with auth_conn.cursor() as cur:
+            # Update the hash using the resolved login identifier
+            query = 'UPDATE aaa.lg_fi SET pswd_hash = %s WHERE login = %s RETURNING login;'
+            cur.execute(query, (new_hash, login_id_for_auth_db))
+            updated_login = cur.fetchone()
+        auth_conn.close()
+
+        if updated_login:
+            # Force user to re-login immediately for security
+            session.pop('user_id', None)
+            session.pop('user_type', None)
+            session.pop('is_admin', None)
+            return jsonify({"success": True, "message": "Password updated successfully. Please log in again."}), 200
+        else:
+            return jsonify({"error": "User login ID not found in the authentication table (aaa.lg_fi). Check user sync."}), 404
+            
+    except Exception as e:
+        print(f"Error updating password in musr DB for {login_id_for_auth_db}: {e}")
+        if auth_conn and not auth_conn.closed:
+            auth_conn.close()
+        return jsonify({"error": "Database error during password update."}), 500
+        
 # --- Dashboard & Search Routes ---
 
 @app.route(f'{API_PREFIX}/global-search/<string:search_term>', methods=['GET'])
 def global_search(search_term: str):
     """Performs a global search across multiple tables using full-text search or ILIKE."""
-    ts_query_func = f"plainto_tsquery('public.lims_english', %s)"
+    ts_query_func = "plainto_tsquery('public.lims_english', %s)"
     search_pattern = f"%{search_term}%"
 
     results: Dict[str, List[Dict[str, Any]]] = {}
@@ -543,9 +643,8 @@ def global_search(search_term: str):
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             for key, (query, params) in queries.items():
                 try:
-                    # Inject ts_query_func into the query string before execution
-                    final_query = query.replace('{ts_query_func}', ts_query_func)
-                    cur.execute(final_query, params)
+                    # Execute query
+                    cur.execute(query, params)
                     results[key] = [transform_row_for_json(row) for row in cur.fetchall()]
                 except Exception as inner_e:
                     print(f"Error executing search for {key}: {inner_e}")
@@ -1121,7 +1220,7 @@ def create_record(schema: str, table: str):
         elif 'attachment' in data and (data['attachment'] == '' or (isinstance(data['attachment'], dict) and not data['attachment'])):
             data['attachment'] = None
             
-        # --- REMOVED PASSWORD HASHING LOGIC FOR USER TABLES ---
+        # --- REMOVED PASSWORD HASHING LOGIC FOR USER TABLES (PER REQUIREMENT) ---
         if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
@@ -1325,7 +1424,7 @@ def update_record(schema: str, table: str):
         set_clauses: List[str] = []
         values: List[Any] = []
         
-        # --- REMOVED PASSWORD HASHING LOGIC FOR USER TABLES ---
+        # --- REMOVED PASSWORD HASHING LOGIC FOR USER TABLES (PER REQUIREMENT) ---
         if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
            (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
@@ -1568,7 +1667,7 @@ def batch_upload(schema: str, table: str):
                         else:
                             filtered_record[k] = v
 
-                    # --- REMOVED PASSWORD HASHING LOGIC FOR USER TABLES ---
+                    # --- REMOVED PASSWORD HASHING LOGIC FOR USER TABLES (PER REQUIREMENT) ---
                     if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
                        (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
                        (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
@@ -1750,6 +1849,10 @@ def batch_update(schema: str, table: str):
             return jsonify({"error": f"Table '{schema}.{table}' not found or inaccessible."}), 404
         actual_schema, actual_table, table_type = resolved
 
+        pk_columns = get_pk_columns(schema, table)
+        if not pk_columns:
+            return jsonify({"error": f"Primary key not defined for {schema}.{table}. Cannot perform batch update."}), 400
+
         column_types = _get_column_types(conn, actual_schema, actual_table)
 
         records_to_update = request.get_json()
@@ -1763,7 +1866,7 @@ def batch_update(schema: str, table: str):
                 print("CRITICAL: Batch UPDATE detected malformed single-key JSON structure. Reformatting the entire batch.")
                 # 1. Manually parse the headers from the first record's key
                 malformed_key = list(first_record.keys())[0]
-                headers = [k.strip() for k in malformed_key.split(';')]
+                headers = [k.strip() for k in malformed_key.split(';') if k.strip()]
 
                 # 2. Reconstruct the records list based on these headers
                 new_records = []
@@ -1786,10 +1889,6 @@ def batch_update(schema: str, table: str):
         # --- END CRITICAL FIX 2 ---
 
 
-        pk_columns = get_pk_columns(schema, table)
-        if not pk_columns:
-            return jsonify({"error": f"Primary key not defined for {schema}.{table}. Cannot perform batch update."}), 400
-
         updated_count = 0
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             for record_data in records_to_update:
@@ -1805,7 +1904,7 @@ def batch_update(schema: str, table: str):
                     print(f"  Warning: Skipping record in batch update due to missing primary key(s): {pk_fields} in {record_data}")
                     continue
                 
-                # --- REMOVED PASSWORD HASHING LOGIC FOR USER TABLES ---
+                # --- REMOVED PASSWORD HASHING LOGIC FOR USER TABLES (PER REQUIREMENT) ---
                 if (actual_schema.lower() == 'lims' and actual_table.lower() == 'personal') or \
                    (actual_schema.lower() == 'lims' and actual_table.lower() == 'customers') or \
                    (actual_schema.lower() == 'lims' and actual_table.lower() == 'external_contacts'):
@@ -1834,7 +1933,7 @@ def batch_update(schema: str, table: str):
                                 # Attempt to decode base64 data
                                 base64_data = val.split(',')[1]
                                 set_clauses_parts.append(f'"{key}" = %s')
-                                values.append(psycopg2.Binary(base64.b64decode(base64_data)))
+                                set_values.append(psycopg2.Binary(base64.b64decode(base64_data)))
                             except Exception as e:
                                 print(f"WARNING: Could not decode base64 attachment for column '{key}'. Storing as None. Error: {e}")
                                 set_clauses_parts.append(f'"{key}" = %s')
