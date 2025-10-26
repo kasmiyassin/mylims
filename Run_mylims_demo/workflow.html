@@ -3,846 +3,1375 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Workflow Tracking - TIFI</title>
+    <title>Protocols & ELN - TIFI LIMS</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Include Quill library and styles -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-        .sidebar { border-right: 1px solid #e2e8f0; }
-        .sidebar-item { color: #475569; }
+        /* Base styles */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* Tailwind's bg-slate-50 */
+            margin: 0; padding: 0; box-sizing: border-box;
+            overflow-x: hidden;
+        }
+        /* Sidebar styling */
+        .sidebar { transition: width 0.3s ease; border-right: 1px solid #e2e8f0; height: 100vh; }
+        .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.5rem; }
+         .sidebar-nav-container::-webkit-scrollbar { width: 6px; }
+         .sidebar-nav-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .sidebar-item { transition: all 0.2s ease; color: #475569; }
         .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
-        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
-        .kanban-board { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 1rem; min-height: 65vh; }
-        .kanban-column { min-width: 320px; max-width: 320px; background-color: #f1f5f9; border-radius: 0.75rem; display: flex; flex-direction: column; transition: background-color 0.2s ease-in-out; }
-        .kanban-column-header { padding: 1rem; }
-        .kanban-cards-container { padding: 0 1rem 1rem 1rem; flex-grow: 1; overflow-y: auto; }
-        .kanban-card { background-color: white; border-radius: 0.5rem; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1); transition: all 0.2s ease; cursor: grab; border-left-width: 4px; }
-        .kanban-card:hover { box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); transform: translateY(-2px); }
-        .kanban-card.dragging { opacity: 0.5; cursor: grabbing; transform: scale(1.05); }
-        .kanban-column.drag-valid { background-color: #dcfce7; } /* Light Green */
-        .kanban-column.drag-invalid { background-color: #fee2e2; } /* Light Red */
-        .modal-overlay { z-index: 50; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
-        .border-l-blue-500 { border-left-color: #3b82f6; } .border-l-red-500 { border-left-color: #ef4444; } .border-l-pink-500 { border-left-color: #ec4899; } .border-l-amber-500 { border-left-color: #f59e0b; } .border-l-teal-500 { border-left-color: #14b8a6; } .border-l-fuchsia-500 { border-left-color: #d946ef; } .border-l-gray-500 { border-left-color: #6b7280; }
-        .border-l-orange-500 { border-left-color: #f97316; }
-        .border-l-lime-500 { border-left-color: #84cc16; }
-        .border-l-emerald-500 { border-left-color: #10b981; }
-        .border-l-violet-500 { border-left-color: #8b5cf6; }
-        .border-l-rose-500 { border-left-color: #f43f5e; }
-        .border-l-cyan-500 { border-left-color: #06b6d4; }
-        .border-l-purple-500 { border-left-color: #a855f7; }
-        .border-l-indigo-500 { border-left-color: #6366f1; }
-        .border-l-green-500 { border-left-color: #22c55e; }
-        .border-l-yellow-500 { border-left-color: #eab308; }
-        .border-l-gray-400 { border-left-color: #9ca3af; }
-        .border-l-gray-600 { border-left-color: #4b5563; }
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e2b3b; }
+        .user-profile-link { transition: all 0.2s ease; cursor: pointer; text-decoration: none; display: flex; align-items: center; }
+        .user-profile-link:hover { background-color: #f1f5f9; border-radius: 0.25rem; }
+
+        /* Card styling */
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        /* Loading spinner */
+        .loading-spinner { border: 4px solid rgba(0, 0, 0, 0.1); border-left-color: #3b82f6; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* Modal styles */
+        .modal { display: none; } /* Hidden by default */
+        .modal.open { display: flex; } /* Shown when open */
+
+        /* Quill Editor adjustments */
+        .ql-editor { min-height: 150px; border: 1px solid #d1d5db; border-radius: 0 0 0.375rem 0.375rem; font-family: 'Inter', sans-serif; font-size: 0.875rem; padding: 0.75rem; }
+        .ql-toolbar.ql-snow { border: 1px solid #d1d5db; border-bottom: 0; border-radius: 0.375rem 0.375rem 0 0; background-color: #f9fafb; }
+        .ql-snow .ql-editor pre { background-color: #f3f4f6; border: 1px solid #e5e7eb; padding: 0.5rem; border-radius: 0.25rem; white-space: pre-wrap; word-wrap: break-word; }
+        .ql-snow .ql-editor blockquote { border-left: 4px solid #ccc; margin-bottom: 5px; margin-top: 5px; padding-left: 16px; }
+        .step-content-display .ql-editor { border: none; min-height: auto; padding: 0; }
+        .step-content-display .ql-snow .ql-tooltip { display: none !important; } /* Hide tooltips in display mode */
+
+        /* Custom Quill Button Style for Materials */
+        .ql-material-button {
+            width: auto; min-width: 28px; padding: 2px 6px; text-align: center; border: 1px solid transparent; /* No border for button */
+            background: transparent; color: #444; font-size: 12px; line-height: 1; margin: 0 4px; display: inline-flex; align-items: center; justify-content: center;
+        }
+        .ql-snow .ql-toolbar button.ql-material-button:hover { background-color: #eee; color: #111; }
+        .ql-snow .ql-toolbar button.ql-material-button svg { width: 14px; height: 14px; margin-right: 2px; }
+
+        /* Material/Reagent Tag Display in Step (in read mode) */
+        .material-tag {
+            display: inline-flex;
+            align-items: center;
+            background-color: #e0f2f1; /* Teal 100 */
+            color: #115e59; /* Teal 800 */
+            border: 1px solid #99f6e4; /* Teal 300 */
+            padding: 2px 6px;
+            border-radius: 9999px; /* Pill shape */
+            font-size: 0.75rem; /* text-xs */
+            font-weight: 500;
+            margin: 2px 4px 2px 0;
+            cursor: default; /* Not interactive in display mode */
+            white-space: nowrap;
+        }
+        .material-tag i { width: 12px; height: 12px; margin-right: 4px; }
+        .equipment-tag {
+            background-color: #eff6ff; /* Blue 100 */
+            color: #1e40af; /* Blue 800 */
+            border: 1px solid #bfdbfe; /* Blue 300 */
+        }
+        /* Style for the span containing the blot in the editor */
+        .ql-editor span[data-blot="material"] { cursor: pointer; } /* Make it look clickable in editor */
+
+
+        /* Tab styling */
+        .tab-button { padding: 0.5rem 1rem; border: none; background: none; color: #64748B; font-weight: 500; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s ease; font-size: 0.875rem; /* text-sm */ }
+        .tab-button.active { color: #4f46e5; border-bottom-color: #4f46e5; font-weight: 600; }
+        .tab-content { display: none; padding-top: 1rem; }
+        .tab-content.active { display: block; }
+
+        /* Two-column layout */
+        .protocol-container { display: flex; height: calc(100vh - 4.5rem); /* Adjusted for slightly taller header */ }
+        .protocol-list-panel { width: 320px; flex-shrink: 0; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; height: 100%; background-color: white; }
+        .protocol-detail-panel { flex-grow: 1; overflow-y: auto; padding: 1.5rem; height: 100%; background-color: #f1f5f9; /* Slate 100 bg */ }
+        .protocol-list-items { flex-grow: 1; overflow-y: auto; }
+        .protocol-list-item.selected { background-color: #eef2ff; border-left: 4px solid #4f46e5; }
+        /* Run Status Pill */
+        .run-status-pill { padding: 0.125rem 0.5rem; border-radius: 9999px; font-weight: 500; font-size: 0.7rem; line-height: 1; text-transform: uppercase; }
+
     </style>
 </head>
-<body>
-    <div id="main-app">
-        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white w-64 p-4 flex flex-col">
-            <div class="text-gray-800 text-2xl font-bold mb-8 flex items-center shrink-0"><i data-lucide="flask-conical" class="mr-2 text-blue-600"></i><span>TIFI</span></div>
-            <nav class="flex-grow space-y-2">
-                <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
-                <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
-                <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md "><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
-                <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (ELN)</span></a>
-                <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md "><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
-                <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
-                <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
-                <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
-                <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
-                <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
-                <a href="booking.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Booking</span></a>
-                <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Tables</span></a>
-            </nav>
-            <div class="mt-auto shrink-0">
-                <div id="user-profile" class="p-2 mb-2 border-t"></div>
-                <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
-            </div>
+<body class="flex">
+    <!-- Sidebar -->
+    <div id="sidebar" class="sidebar fixed top-0 left-0 bg-white w-64 p-4 flex flex-col z-20 shrink-0">
+        <!-- Sidebar content -->
+        <div class="text-gray-800 text-2xl font-bold mb-4 flex items-center shrink-0">
+            <i data-lucide="flask-conical" class="inline-block mr-2 text-blue-600"></i><span>TIFI LIMS</span>
         </div>
-        
-        <div id="main-content" class="ml-64 p-8">
-            <h1 class="text-3xl font-bold text-gray-800 mb-2">Workflow Automation & Tracking</h1>
-            <p class="text-gray-600 mb-6">Drag a sample to the next column to log a new analysis step and advance the workflow.</p>
-            
-            <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                    <div>
-                        <label for="filter-workflow" class="text-sm font-medium text-gray-700">Filter by Workflow</label>
-                        <select id="filter-workflow" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm"></select>
-                    </div>
-                    <div>
-                        <label for="filter-project" class="text-sm font-medium text-gray-700">Filter by Project</label>
-                        <select id="filter-project" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm"></select>
-                    </div>
-                    <div>
-                        <label for="filter-type" class="text-sm font-medium text-gray-700">Filter by Sample Type</label>
-                        <select id="filter-type" class="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm"></select>
-                    </div>
-                    <div>
-                        <label for="filter-search" class="text-sm font-medium text-gray-700">Search Sample ID</label>
-                        <div class="flex items-center space-x-4 mt-1">
-                            <input type="text" id="filter-search" placeholder="e.g., W25iDE0001" class="w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                            <div class="flex items-center whitespace-nowrap pt-2">
-                                <input type="checkbox" id="filter-workflow-only" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                <label for="filter-workflow-only" class="ml-2 block text-sm text-gray-900">Has Workflow</label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="kanban-board-container" class="kanban-board">
-                <div class="w-full flex items-center justify-center h-full">
-                    <i data-lucide="loader-2" class="animate-spin h-12 w-12 text-blue-600"></i>
-                    <p class="ml-4 text-lg text-gray-600">Loading Workflow Data...</p>
-                </div>
-            </div>
+        <div class="sidebar-nav-container space-y-2">
+            <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+            <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+            <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+            <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (ELN)</span></a>
+            <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+            <a href="planned_samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Planned Samples</span></a>
+            <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+            <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+            <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+            <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+            <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+            <a href="booking.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Booking</span></a>
+            <a href="laboratory.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="microscope" class="w-5 h-5 mr-3"></i><span>Tables</span></a>
         </div>
-        <div id="modal-container"></div>
+        <div class="mt-4 shrink-0">
+             <a href="user_profile.html" id="user-profile-link" class="user-profile-link p-2 mb-2 border-t flex items-center text-gray-800">
+                <div id="user-profile" class="flex items-center"></div>
+            </a>
+            <button id="logout-button" class="sidebar-item w-full flex items-center p-2 rounded-md text-left"><i data-lucide="log-out" class="w-5 h-5 mr-3"></i><span>Logout</span></button>
+        </div>
     </div>
 
-<script>
-    if (sessionStorage.getItem('isLoggedIn') !== 'true') window.location.href = './login.html';
-    
-    // --- YOUR ORIGINAL VARIABLES AND MAPS (PRESERVED) ---
-    const API_BASE_URL = '/mylims_demo/api'; // Changed to '/mylims/api' for consistency
-    let masterSampleList = []; // This will now hold data from lab.detailed_samples_view
-    let allWorkflows = [];
-    let allWorkflowSteps = [];
-    let allProjects = [];
-    let allSampleTypes = [];
+    <!-- Main Content Area -->
+    <div id="main-content" class="ml-64 flex-grow flex flex-col">
+        <!-- Header -->
+        <div class="p-4 border-b border-gray-200 bg-white flex justify-between items-center sticky top-0 z-10 h-[4.5rem]">
+            <div>
+                 <h1 class="text-xl font-semibold text-gray-800">Protocols & ELN</h1>
+                 <p class="text-sm text-gray-500">Manage laboratory protocols and electronic notebook entries.</p>
+            </div>
+            <button id="create-protocol-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg flex items-center transition duration-200 text-sm shadow hover:shadow-md">
+                <i data-lucide="plus" class="w-4 h-4 mr-1"></i> New Protocol (SOP)
+            </button>
+        </div>
 
-    // This ordered list defines our Kanban columns
-    // This should ideally come from lims.workflow_steps, dynamically.
-    // For now, it's hardcoded to represent typical LIMS stages.
-    const workflowSteps = [
-        'Received', 'Dissection', 'Extracted', 'Nanodrop QC', 'Qubit QC', 'Tapestation QC',
-        'PCR Done', 'qPCR Done', 'Library Prep', 'Sequencing Done', 'Bioinformatics Done', 'Completed'
-    ];
-    
-    // Mapping for Kanban card border colors based on sample type abbreviation
-    const sampleTypeColors = {
-        'Water': 'blue-500', 'DNA': 'red-500', 'RNA': 'pink-500', 'Sediments': 'amber-500',
-        'Tissue': 'teal-500', 'Library': 'fuchsia-500', 'Fish': 'gray-500', 'default': 'gray-400',
-        'EXT': 'orange-500', // Extraction product
-        'NDQC': 'lime-500', // Nanodrop QC result
-        'QBC': 'emerald-500', // Qubit QC result
-        'TSQC': 'violet-500', // Tapestation QC result
-        'PCRP': 'rose-500', // PCR Product
-        'QPCRR': 'cyan-500', // qPCR Result
-        'LIBP': 'purple-500', // Library Prep Product
-        'SEQR': 'indigo-500', // Sequencing Run result
-        'Analysis': 'green-500', // Bioinformatics Analysis (general, if not covered by SEQR)
-        'Otolith': 'yellow-500', // Otolith
-        'GE': 'red-400', // Gel Electrophoresis result
-        'Dissection': 'blue-400', // Dissection (referring to the process/product)
-        'Storage': 'gray-600', // Storage related
-        'Dataset': 'lime-700', // Dataset type
-        'Publication': 'purple-700' // Publication type
-    };
-
-    // This map links a workflow status to the *primary* table where new data for that step is logged.
-    // It also specifies the primary key fields for that table, which are needed to construct API calls.
-    const statusToTableMap = {
-        'Received': { schema: 'lab', table: 'parental_samples', // This is where the status is updated
-            pk_fields: ['sample_id', 'sampling_date'], // PK of the samples table
-            fields: [
-                { name: 'reception_date', label: 'Reception Date', type: 'date', required: true },
-                { name: 'receiver_person_id', label: 'Receiver Person ID', type: 'text', required: true },
-                { name: 'transport', label: 'Transport Method', type: 'text' }
-            ]
-        },
-        'Dissection': {
-            schema: 'lab', table: 'dissections',
-            pk_fields: ['dissection_id', 'dissection_date'],
-            fields: [
-                { name: 'dissection_date', label: 'Dissection Date', type: 'date', required: true },
-                { name: 'person_id', label: 'Dissector Person ID', type: 'text', required: true },
-                { name: 'stomach_contents_jsonb', label: 'Stomach Contents (JSON)', type: 'textarea' },
-                { name: 'gonad_weight_g', label: 'Gonad Weight (g)', type: 'number' },
-                { name: 'liver_weight_g', label: 'Liver Weight (g)', type: 'number' }
-            ]
-        },
-        'Extracted': {
-            schema: 'lab', table: 'extraction',
-            pk_fields: ['extraction_id', 'extraction_date'],
-            fields: [
-                { name: 'extraction_date', label: 'Extraction Date', type: 'date', required: true },
-                { name: 'person_id', label: 'Person', type: 'text', required: true },
-                { name: 'kit', label: 'Kit', type: 'text' },
-                { name: 'elution_volume_ul', label: 'Elution Volume (?)', type: 'number' },
-                { name: 'yield_qubit_ng_ul', label: 'Yield Qubit (ng/?)', type: 'number' },
-                { name: 'yield_nanodrop_ng_ul', label: 'Yield Nanodrop (ng/?)', type: 'number' },
-                { name: 'extracted_dna_sample_id', label: 'Extracted DNA Sample ID', type: 'text' },
-                { name: 'extracted_rna_sample_id', label: 'Extracted RNA Sample ID', type: 'text' }
-            ]
-        },
-        'Nanodrop QC': {
-            schema: 'lab', table: 'nanodrop',
-            pk_fields: ['nanodrop_id', 'measurement_date'],
-            fields: [
-                { name: 'measurement_date', label: 'Date', type: 'date', required: true },
-                { name: 'person_id', label: 'Person', type: 'text', required: true },
-                { name: 'nanodrop_concentration', label: 'Concentration (ng/?)', type: 'number' },
-                { name: 'a260_280', label: 'A260/280 Ratio', type: 'number' },
-                { name: 'a260_230', label: 'A260/230 Ratio', type: 'number' }
-            ]
-        },
-        'Qubit QC': {
-            schema: 'lab', table: 'qubit',
-            pk_fields: ['qubit_id', 'measurement_date'],
-            fields: [
-                { name: 'measurement_date', label: 'Date', type: 'date', required: true },
-                { name: 'person_id', label: 'Person', type: 'text', required: true },
-                { name: 'qubit_original_sample_conc', label: 'Concentration (ng/?)', type: 'number' },
-                { name: 'assay_kit', label: 'Assay Kit', type: 'text' }
-            ]
-        },
-        'Tapestation QC': {
-            schema: 'lab', table: 'tapestation',
-            pk_fields: ['tapestation_id', 'measurement_date'],
-            fields: [
-                { name: 'measurement_date', label: 'Date', type: 'date', required: true },
-                { name: 'person_id', label: 'Person', type: 'text', required: true },
-                { name: 'kit', label: 'Kit', type: 'text' },
-                { name: 'position', label: 'Position', type: 'text' }
-            ]
-        },
-        'PCR Done': {
-            schema: 'lab', table: 'pcr',
-            pk_fields: ['pcr_id', 'pcr_date'],
-            fields: [
-                { name: 'pcr_date', label: 'Date', type: 'date', required: true },
-                { name: 'person_id', label: 'Person', type: 'text', required: true },
-                { name: 'primer_id', label: 'Primer ID', type: 'text' },
-                { name: 'kit', label: 'Kit', type: 'text' }
-            ]
-        },
-        'qPCR Done': {
-            schema: 'lab', table: 'qpcr',
-            pk_fields: ['qpcr_id', 'qpcr_date'],
-            fields: [
-                { name: 'qpcr_date', label: 'Date', type: 'date', required: true },
-                { name: 'person_id', label: 'Person', type: 'text', required: true },
-                { name: 'primer_id', label: 'Primer ID', type: 'text' },
-                { name: 'ct_value', label: 'Ct Value', type: 'number' }
-            ]
-        },
-        'Library Prep': {
-            schema: 'lab', table: 'library',
-            pk_fields: ['library_id', 'prep_date'],
-            fields: [
-                { name: 'library_name', label: 'Library Name', type: 'text', required: true },
-                { name: 'prep_date', label: 'Date', type: 'date', required: true },
-                { name: 'person_id', label: 'Person', type: 'text', required: true },
-                { name: 'library_prep_kit', label: 'Prep Kit', type: 'text' },
-                { name: 'index_sequence', label: 'Index Sequence', type: 'text' }
-            ]
-        },
-        'Sequencing Done': {
-            schema: 'lab', table: 'sequencing',
-            pk_fields: ['sequencing_id', 'sequencing_date'],
-            fields: [
-                { name: 'sequencing_date', label: 'Date', type: 'date', required: true },
-                { name: 'person_id', label: 'Person', type: 'text', required: true },
-                { name: 'sequencer', label: 'Sequencer', type: 'text' },
-                { name: 'flow_cell_id', label: 'Flow Cell ID', type: 'text' },
-                { name: 'total_reads', label: 'Total Reads', type: 'number' },
-                { name: 'raw_data_path', label: 'Raw Data Path', type: 'text' }
-            ]
-        },
-        'Bioinformatics Done': {
-            schema: 'bioinformatics', table: 'analysis_runs',
-            pk_fields: ['run_id', 'run_date'],
-            fields: [
-                { name: 'run_id', label: 'Run ID', type: 'text', required: true },
-                { name: 'run_date', label: 'Date', type: 'date', required: true },
-                { name: 'person_id', label: 'Person', type: 'text', required: true },
-                { name: 'pipeline_id', label: 'Pipeline ID', type: 'text' },
-                { name: 'reference_db_id', label: 'Reference DB ID', type: 'text' },
-                { name: 'final_output_path', label: 'Output Path', type: 'text' }
-            ]
-        },
-        'Completed': { // Mark a sample as fully completed
-            schema: 'lab', table: 'parental_samples', // Updates the sample's main record
-            pk_fields: ['sample_id', 'sampling_date'], // PK of the samples table
-            fields: [
-                { name: 'completion_date', label: 'Completion Date', type: 'date', required: true },
-                { name: 'notes', label: 'Completion Notes', type: 'textarea' }
-            ]
-        }
-    };
-
-    document.addEventListener('DOMContentLoaded', () => {
-        lucide.createIcons();
-        const user = JSON.parse(sessionStorage.getItem('user'));
-        if(user) document.getElementById('user-profile').innerHTML = `<p class="font-semibold text-sm text-gray-800">${user.full_name || user.person_id}</p>`;
-        document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href = './login.html'; });
-        initializeWorkflowPage();
-    });
-
-    async function apiFetch(endpoint, options = {}) {
-        try {
-            if (!(options.body instanceof FormData) && options.body !== null && typeof options.body === 'object') {
-                options.headers = { 'Content-Type': 'application/json', ...options.headers };
-                if(options.body) options.body = JSON.stringify(options.body);
-            } else if (options.body === null) {
-                options.body = null;
-            }
-            const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
-            if (!response.ok) { 
-                const err = await response.json().catch(() => ({error: 'Server error'})); 
-                throw new Error(err.error || `API request failed with status ${response.status}`); 
-            }
-            return response.status === 204 ? { success: true } : await response.json();
-        } catch (error) { console.error("API Error:", error); return { error: error.message }; }
-    }
-
-    // New helper to get schema for a specific table
-    async function getTableSchema(schema, table) {
-        const cacheKey = `schema.${schema}.${table}`;
-        if (sessionStorage.getItem(cacheKey)) {
-            return JSON.parse(sessionStorage.getItem(cacheKey));
-        }
-        const schemaData = await apiFetch(`table/${schema}/${table}/schema`);
-        if (schemaData && !schemaData.error) {
-            sessionStorage.setItem(cacheKey, JSON.stringify(schemaData));
-        }
-        return schemaData;
-    }
-
-    function renderKanbanBoard(samples) {
-        const container = document.getElementById('kanban-board-container');
-        container.innerHTML = workflowSteps.map(statusId => {
-            const samplesInColumn = samples.filter(s => s.sample_status_id === statusId);
-            return `
-            <div class="kanban-column" data-status-id="${statusId}">
-                <div class="kanban-column-header">
-                    <h2 class="font-bold text-lg text-gray-700 flex justify-between items-center">
-                        <span>${statusId}</span>
-                        <span class="text-base font-bold text-white bg-gray-500 rounded-full px-2.5 py-1">${samplesInColumn.length}</span>
-                    </h2>
+        <!-- Protocol Container -->
+        <div class="protocol-container flex-grow">
+            <!-- Protocol List Panel -->
+            <div class="protocol-list-panel p-4">
+                 <div class="mb-4 relative">
+                    <input type="text" id="protocol-search" placeholder="Search protocols..." class="w-full p-2 pl-8 border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+                    <i data-lucide="search" class="absolute top-1/2 left-2 transform -translate-y-1/2 text-gray-400 w-4 h-4"></i>
                 </div>
-                <div class="kanban-cards-container space-y-3 pr-2">
-                    ${samplesInColumn.map(sample => {
-                        const color = sampleTypeColors[sample.sample_type_abrv] || sampleTypeColors.default;
-                        const currentIndex = workflowSteps.indexOf(sample.sample_status_id);
-                        const nextStepIndex = currentIndex + 1;
-                        const canProceed = nextStepIndex < workflowSteps.length;
-                        
-                        // Pass the primary sample's ID and sampling_date for status updates
-                        // These fields are directly available from detailed_samples_view
-                        const samplePKsForLabSamples = {
-                            sample_id: sample.sample_id,
-                            sampling_date: formatDateForUrl(sample.sampling_date)
-                        };
-
-                        // Use a display name that combines the sample ID and origin type for clarity
-                        const displayName = `${sample.sample_id} (${sample.sample_origin_type || 'N/A'})`;
-
-                        return `
-                        <div class="kanban-card p-3 border-l-${color}" draggable="${canProceed ? 'true' : 'false'}" 
-                             data-sample-pks-for-lab-samples='${JSON.stringify(samplePKsForLabSamples)}' 
-                             data-current-status="${sample.sample_status_id}"
-                             data-sample-id-for-modal="${sample.sample_id}">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <p class="font-semibold text-gray-900">${displayName}</p>
-                                    <p class="text-sm text-gray-600">${sample.external_name || 'No external name'}</p>
-                                    <p class="text-xs text-gray-500">${sample.sample_type_abrv || 'N/A'} - ${sample.project_id || 'N/A'}</p>
-                                </div>
-                                ${canProceed ? `<button class="proceed-btn text-gray-400 hover:text-blue-600" data-next-step="${workflowSteps[nextStepIndex]}" title="Proceed to ${workflowSteps[nextStepIndex]}">
-                                    <i class="pointer-events-none" data-lucide="arrow-right-circle"></i>
-                                </button>` : ''}
-                            </div>
-                            <p class="text-xs text-gray-400 mt-2">Last status change: ${timeSince(sample.reception_date || sample.extraction_date || sample.measurement_date || sample.run_date || sample.prep_date || sample.sequencing_date)} ago</p>
-                        </div>
-                        `}).join('')}
+                <div class="mb-4 space-y-2">
+                    <select id="protocol-filter-project" class="w-full p-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="">Filter by Project</option>
+                        <!-- Project options loaded dynamically -->
+                    </select>
+                    <select id="protocol-filter-status" class="w-full p-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="">Filter by Status</option>
+                         <option value="Active">Active</option>
+                         <option value="Planned">Planned</option>
+                         <option value="In Progress">In Progress</option>
+                         <option value="Completed">Completed</option>
+                         <option value="Archived">Archived</option>
+                         <option value="On Hold">On Hold</option>
+                         <!-- Add more statuses from reference.status if needed -->
+                    </select>
                 </div>
-            </div>`;
-        }).join('');
-        lucide.createIcons();
-        addEventListeners();
-    }
-
-    function addEventListeners() {
-        document.querySelectorAll('.kanban-card').forEach(card => {
-            card.addEventListener('dragstart', handleDragStart);
-            card.addEventListener('dragend', handleDragEnd);
-            card.addEventListener('click', (e) => {
-                if (!e.target.closest('.proceed-btn')) {
-                    const sampleIdForModal = card.dataset.sampleIdForModal;
-                    showSampleDetailsModal(sampleIdForModal); 
-                }
-            });
-        });
-        document.querySelectorAll('.kanban-column').forEach(column => {
-            column.addEventListener('dragover', handleDragOver);
-            column.addEventListener('dragleave', handleDragLeave);
-            column.addEventListener('drop', handleDrop);
-        });
-        document.querySelectorAll('.proceed-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const card = e.target.closest('.kanban-card');
-                const samplePKsForLabSamples = JSON.parse(card.dataset.samplePksForLabSamples);
-                const nextStep = e.target.closest('.proceed-btn').dataset.nextStep;
-                openWorkflowActionModal(samplePKsForLabSamples, nextStep);
-            });
-        });
-    }
-
-    function handleDragStart(e) {
-        e.target.classList.add('dragging');
-        const samplePKsForLabSamples = JSON.parse(e.target.dataset.samplePksForLabSamples);
-        const currentStatus = e.target.dataset.currentStatus;
-        const currentIndex = workflowSteps.indexOf(currentStatus);
-        const nextStepIndex = currentIndex + 1;
-        
-        e.dataTransfer.setData('text/plain', JSON.stringify(samplePKsForLabSamples));
-        
-        document.querySelectorAll('.kanban-column').forEach(col => {
-            if (nextStepIndex < workflowSteps.length && col.dataset.statusId === workflowSteps[nextStepIndex]) {
-                col.classList.add('drag-valid');
-            } else {
-                col.classList.add('drag-invalid');
-            }
-        });
-    }
-
-    function handleDragEnd(e) {
-        e.target.classList.remove('dragging');
-        document.querySelectorAll('.kanban-column').forEach(col => {
-            col.classList.remove('drag-valid', 'drag-invalid');
-        });
-    }
-
-    function handleDragOver(e) { e.preventDefault(); }
-    function handleDragLeave(e) {}
-
-    async function handleDrop(e) {
-        e.preventDefault();
-        const targetColumn = e.currentTarget;
-        if (targetColumn.classList.contains('drag-valid')) {
-            const samplePKsForLabSamples = JSON.parse(e.dataTransfer.getData('text/plain'));
-            const newStatus = targetColumn.dataset.statusId;
-            openWorkflowActionModal(samplePKsForLabSamples, newStatus);
-        }
-    }
-
-    async function openWorkflowActionModal(samplePKsForLabSamples, targetStatus) {
-        const actionInfo = statusToTableMap[targetStatus];
-        if (!actionInfo) {
-            alert(`No action definition found for status: ${targetStatus}. Please check statusToTableMap.`);
-            return;
-        }
-
-        // Find the full detailed sample object from masterSampleList
-        const sample = masterSampleList.find(s => 
-            String(s.sample_id) === String(samplePKsForLabSamples.sample_id) && 
-            formatDateForUrl(s.sampling_date) === formatDateForUrl(samplePKsForLabSamples.sampling_date)
-        );
-        if (!sample) {
-            alert('Sample not found in current list. Please refresh the page.');
-            return;
-        }
-        
-        let formFieldsHtml = '';
-        const targetTableSchema = await getTableSchema(actionInfo.schema, actionInfo.table);
-
-        for (const field of actionInfo.fields) {
-            let inputType = field.type;
-            let value = '';
-
-            if (field.name === 'sample_id') {
-                value = sample.sample_id; // The sample_id being moved
-            } else if (field.name === 'parent_sample_id') {
-                value = sample.sample_id; // The "current" sample becomes the parent for a newly generated product
-            }
-            else if (field.name.includes('_date') || field.name.includes('_at')) {
-                value = new Date().toISOString().split('T')[0]; // Default to today
-            } else if (field.name.includes('person_id')) {
-                const loggedInUser = JSON.parse(sessionStorage.getItem('user'));
-                value = loggedInUser?.person_id || ''; // Pre-fill with logged-in user
-            } else if (field.name === 'library_id' && sample.library_id) {
-                value = sample.library_id;
-            } else if (field.name === 'workflow_id' && sample.workflow_id) {
-                value = sample.workflow_id;
-            } else if (field.name === 'step_id' && sample.step_id) {
-                value = sample.step_id;
-            } else if (sample[field.name] !== undefined && sample[field.name] !== null) {
-                value = sample[field.name];
-                if (inputType === 'date') value = formatDateForUrl(value);
-            }
-            
-            if (inputType === 'textarea') {
-                formFieldsHtml += `
-                    <div>
-                        <label for="${field.name}" class="block text-sm font-medium text-gray-700">${field.label || field.name}</label>
-                        <textarea id="${field.name}" name="${field.name}" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" ${field.required ? 'required' : ''}>${value}</textarea>
-                    </div>
-                `;
-            } else {
-                formFieldsHtml += `
-                    <div>
-                        <label for="${field.name}" class="block text-sm font-medium text-gray-700">${field.label || field.name}</label>
-                        <input type="${inputType}" id="${field.name}" name="${field.name}" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" value="${value}" ${field.required ? 'required' : ''}>
-                    </div>
-                `;
-            }
-        }
-        
-        const modalHTML = `<div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4"><div class="modal-content bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg"><div class="flex justify-between items-center mb-4 pb-4 border-b"><h2 class="text-2xl font-bold text-gray-800">Log: ${targetStatus}</h2><button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-3xl">&times;</button></div><form id="workflow-action-form" class="space-y-4"><p>For Sample: <strong class="text-blue-600">${sample.sample_id}</strong> (Type: ${sample.sample_type_abrv || 'N/A'}, Project: ${sample.project_id || 'N/A'})</p>${formFieldsHtml}<div class="pt-4 flex justify-end"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Save & Advance</button></div></form></div></div>`;
-        const { closeModal } = showModal(modalHTML);
-        
-        document.getElementById('workflow-action-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const dataToLog = {};
-            for (let [key, value] of formData.entries()) {
-                if (value === '') {
-                    dataToLog[key] = null;
-                } else if (targetTableSchema.find(col => col.column_name === key && col.data_type === 'jsonb')) {
-                    try { dataToLog[key] = JSON.parse(value); } catch { dataToLog[key] = value; }
-                } else if (targetTableSchema.find(col => col.column_name === key && ['integer', 'numeric', 'bigint'].includes(col.data_type))) {
-                    dataToLog[key] = Number(value);
-                } else {
-                    dataToLog[key] = value;
-                }
-            }
-            
-            // Crucially, the sample_id being passed to the new record creation table
-            // should be the ID of the *current card/item* being moved.
-            // Its parent_sample_id should be the main sample's ID if this is a derived product.
-            if (actionInfo.table !== 'parental_samples') { // If logging to a child table (not just updating parent status)
-                // Set the sample_id of the new record to the ID of the current card
-                // The detailed_samples_view has this as sample.sample_id
-                dataToLog.sample_id = sample.sample_id;
-            }
-            // For tables that accept a parent_sample_id (like dna, rna, tissue, fish, etc.)
-            // The sample.sample_id from detailed_samples_view acts as the parent here.
-            if (['dna', 'rna', 'tissue', 'fish', 'sediments', 'water', 'otoliths'].includes(actionInfo.table)) {
-                dataToLog.parent_sample_id = sample.sample_id;
-            }
-
-            // Handle composite PKs for the target table (e.g., experiment_id, experiment_date; sampling_id, sampling_date)
-            const pkColumnsForTargetTable = targetTableSchema.filter(col => col.is_primary_key).map(col => col.column_name);
-
-            if (pkColumnsForTargetTable.includes('experiment_id') && sample.associated_experiment_id) {
-                dataToLog.experiment_id = sample.associated_experiment_id;
-            } else if (pkColumnsForTargetTable.includes('experiment_id') && !dataToLog.experiment_id) {
-                if (targetTableSchema.some(col => col.column_name === 'experiment_id' && col.is_primary_key && col.is_nullable === 'NO')) {
-                    alert(`Error: '${actionInfo.table}' requires an 'experiment_id' for new entries, but it's not associated with this sample. Please ensure the sample is linked to an experiment.`);
-                    return;
-                }
-            }
-            
-            if (pkColumnsForTargetTable.includes('experiment_date') && sample.associated_experiment_date) {
-                dataToLog.experiment_date = formatDateForUrl(sample.associated_experiment_date);
-            } else if (pkColumnsForTargetTable.includes('experiment_date') && !dataToLog.experiment_date) {
-                const dateFieldForLogTable = actionInfo.fields.find(f => f.name.includes('_date'));
-                if (dateFieldForLogTable && dataToLog[dateFieldForLogTable.name]) {
-                    dataToLog.experiment_date = formatDateForUrl(dataToLog[dateFieldForLogTable.name]);
-                } else {
-                    dataToLog.experiment_date = new Date().toISOString().split('T')[0];
-                }
-            }
-
-            if (pkColumnsForTargetTable.includes('sampling_id') && sample.sampling_id) {
-                dataToLog.sampling_id = sample.sampling_id;
-            }
-            if (pkColumnsForTargetTable.includes('sampling_date') && sample.sampling_date) {
-                dataToLog.sampling_date = formatDateForUrl(sample.sampling_date);
-            }
-
-            console.log("Data to log in target table:", dataToLog);
-
-            let actionLogResult;
-            try {
-                actionLogResult = await apiFetch(`table/${actionInfo.schema}/${actionInfo.table}`, { method: 'POST', body: dataToLog });
-            } catch (error) {
-                alert(`Error logging action in ${actionInfo.schema}.${actionInfo.table}: ${error.message}`);
-                return;
-            }
-            
-            if (actionLogResult && !actionLogResult.error) {
-                // ALWAYS update the status in lab.parental_samples using the original sample's PKs
-                const updateSampleStatusResult = await apiFetch(`table/lab/parental_samples?sample_id=${sample.sample_id}&sampling_date=${formatDateForUrl(sample.sampling_date)}`, {
-                    method: 'PUT',
-                    body: { sample_status_id: targetStatus }
-                });
-
-                if (updateSampleStatusResult && !updateSampleStatusResult.error) {
-                    alert('Action logged and workflow updated successfully!');
-                    closeModal();
-                    initializeWorkflowPage(); // Re-initialize to refresh kanban board
-                } else {
-                    alert(`Error updating sample workflow status: ${updateSampleStatusResult.error}. You might need to manually correct the status.`);
-                }
-            } else {
-                alert(`Error logging action: ${actionLogResult.error}`);
-            }
-        });
-    }
-
-    function timeSince(dateString) {
-        if (!dateString) return 'N/A';
-        const seconds = Math.floor((new Date() - new Date(dateString)) / 1000);
-        const interval = seconds / 86400;
-        if (interval > 1) return Math.floor(interval) + " days";
-        if (interval * 24 > 1) return Math.floor(interval * 24) + " hours";
-        if (interval * 24 * 60 > 1) return Math.floor(interval * 24 * 60) + " minutes";
-        return "Just now";
-    }
-
-    function showModal(content) {
-        const container = document.getElementById('modal-container');
-        container.innerHTML = content;
-        const modal = container.querySelector('.modal-overlay');
-        const modalContent = container.querySelector('.modal-content');
-        setTimeout(() => modalContent.classList.remove('opacity-0', '-translate-y-10'), 10);
-        const closeModal = () => { modalContent.classList.add('opacity-0', '-translate-y-10'); setTimeout(() => container.innerHTML = '', 300); };
-        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-        container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
-        return { closeModal };
-    }
-
-    async function initializeWorkflowPage() {
-        const boardContainer = document.getElementById('kanban-board-container');
-        boardContainer.innerHTML = `<div class="w-full flex items-center justify-center h-full">
-            <i data-lucide="loader-2" class="animate-spin h-12 w-12 text-blue-600"></i>
-            <p class="ml-4 text-lg text-gray-600">Loading Workflow Data...</p>
-        </div>`;
-        lucide.createIcons();
-
-        // Fetch ALL records from detailed_samples_view
-        const [samplesResult, workflowsResult, projectsResult, sampleTypesResult] = await Promise.all([
-            apiFetch('table/lab/detailed_samples_view'), // ***CHANGED FROM parental_samples to detailed_samples_view***
-            apiFetch('table/lims/workflows'),
-            apiFetch('table/lims/projects'),
-            apiFetch('table/reference/samples_type')
-        ]);
-
-        if (samplesResult.error) {
-            boardContainer.innerHTML = `<p class="text-red-500 text-center w-full">Error loading samples: ${samplesResult.error}</p>`;
-            return;
-        }
-        masterSampleList = samplesResult;
-
-        if (!workflowsResult.error) allWorkflows = workflowsResult;
-        if (!projectsResult.error) allProjects = projectsResult;
-        if (!sampleTypesResult.error) allSampleTypes = sampleTypesResult;
-
-        populateFilterDropdowns();
-        applyFilters(); // Initial application of filters
-    }
-    
-    function populateFilterDropdowns() {
-        const workflowFilter = document.getElementById('filter-workflow');
-        const projectFilter = document.getElementById('filter-project');
-        const typeFilter = document.getElementById('filter-type');
-        
-        workflowFilter.innerHTML = '<option value="">All With Workflow</option>';
-        workflowFilter.innerHTML += '<option value="NO_WORKFLOW">Samples without Workflow</option>';
-        allWorkflows.forEach(w => {
-            workflowFilter.innerHTML += `<option value="${w.workflow_id}">${w.workflow_name || w.workflow_id}</option>`;
-        });
-
-        projectFilter.innerHTML = '<option value="">All Projects</option>';
-        allProjects.forEach(p => {
-            projectFilter.innerHTML += `<option value="${p.project_id}">${p.title || p.project_id}</option>`;
-        });
-
-        typeFilter.innerHTML = '<option value="">All Sample Types</option>';
-        // Populate sample type filter based on unique sample_type_abrv from detailed_samples_view
-        const uniqueSampleTypes = [...new Set(masterSampleList.map(s => s.sample_type_abrv).filter(Boolean))];
-        uniqueSampleTypes.sort().forEach(typeAbrv => {
-             typeFilter.innerHTML += `<option value="${typeAbrv}">${typeAbrv}</option>`;
-        });
-    }
-
-    function applyFilters() {
-        const workflowId = document.getElementById('filter-workflow').value;
-        const projectId = document.getElementById('filter-project').value;
-        const sampleType = document.getElementById('filter-type').value;
-        const searchTerm = document.getElementById('filter-search').value.toLowerCase();
-        const workflowOnly = document.getElementById('filter-workflow-only').checked;
-
-        let filteredSamples = masterSampleList;
-
-        // --- EXCLUDE "Completed" and "Closed" status samples first ---
-        filteredSamples = filteredSamples.filter(s => s.sample_status_id !== 'Completed' && s.sample_status_id !== 'Closed');
-
-        if (workflowOnly) {
-            filteredSamples = filteredSamples.filter(s => s.workflow_id != null);
-        }
-
-        if (workflowId) {
-            if (workflowId === 'NO_WORKFLOW') {
-                filteredSamples = filteredSamples.filter(s => s.workflow_id == null);
-            } else {
-                filteredSamples = filteredSamples.filter(s => s.workflow_id == workflowId);
-            }
-        }
-        
-        if (projectId) {
-            filteredSamples = filteredSamples.filter(s => s.project_id === projectId);
-        }
-        if (sampleType) {
-            filteredSamples = filteredSamples.filter(s => s.sample_type_abrv === sampleType);
-        }
-        if (searchTerm) {
-            filteredSamples = filteredSamples.filter(s => 
-                String(s.sample_id).toLowerCase().includes(searchTerm) ||
-                String(s.external_name || '').toLowerCase().includes(searchTerm) ||
-                String(s.sample_origin_type || '').toLowerCase().includes(searchTerm) || // Search in origin type
-                String(s.project_id || '').toLowerCase().includes(searchTerm) // Search project ID as well
-            );
-        }
-        
-        renderKanbanBoard(filteredSamples);
-    }
-    
-    async function showSampleDetailsModal(sampleId) {
-        // Fetch the full detailed sample view record.
-        // For detailed_samples_view, sample_id itself is unique, so filtering by it should be enough.
-        const sampleDetails = await apiFetch(`table/lab/detailed_samples_view?sample_id=${sampleId}`); // Use direct equality for sample_id
-        const sample = sampleDetails && sampleDetails.length > 0 ? sampleDetails[0] : null;
-
-        if (!sample) { alert('Sample not found or details could not be loaded.'); return; }
-
-        const modalHTML = `<div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div class="modal-content bg-white rounded-lg shadow-2xl p-6 w-full max-w-2xl">
-                <div class="flex justify-between items-center mb-4 pb-4 border-b">
-                    <h2 class="text-2xl font-bold text-gray-800">Sample: ${sample.sample_id}</h2>
-                    <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-3xl">&times;</button>
-                </div>
-                <div class="max-h-[70vh] overflow-y-auto pr-4 text-gray-700">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-6">
-                        <div><strong>Origin Type:</strong><span class="font-medium ml-2">${sample.sample_origin_type || 'N/A'}</span></div>
-                        <div><strong>Sample Type:</strong><span class="font-medium ml-2">${sample.sample_type_abrv || sample.sample_type_id || 'N/A'}</span></div>
-                        <div><strong>Current Status:</strong><span class="font-bold ml-2 text-blue-600">${sample.sample_status_id || 'N/A'}</span></div>
-                        <div><strong>External Name:</strong><span class="font-medium ml-2">${sample.external_name || 'N/A'}</span></div>
-                        <div><strong>Parent Sample:</strong><span class="font-medium ml-2">${sample.parent_sample_id || 'N/A'}</span></div>
-                        <div><strong>Project:</strong><span class="font-medium ml-2">${sample.project_id || 'N/A'}</span></div>
-                        <div><strong>Workflow ID:</strong><span class="font-medium ml-2">${sample.workflow_id || 'Not Assigned'}</span></div>
-                        <div><strong>Current Step:</strong><span class="font-medium ml-2">${sample.current_workflow_step || sample.step_id || 'N/A'}</span></div>
-                        <div><strong>Reception Date:</strong><span class="font-medium ml-2">${sample.reception_date ? new Date(sample.reception_date).toLocaleDateString() : 'N/A'}</span></div>
-                        <div><strong>Sampling Date:</strong><span class="font-medium ml-2">${sample.sampling_date ? new Date(sample.sampling_date).toLocaleDateString() : 'N/A'}</span></div>
-                        <div><strong>Storage Location:</strong><span class="font-medium ml-2">${sample.storage_id || 'N/A'} ${sample.storage_box ? `- Box ${sample.storage_box}` : ''} ${sample.storage_position ? `- Pos ${sample.storage_position}` : ''}</span></div>
-                    </div>
-                    
-                    <div id="workflow-steps-container" class="mb-6"></div>
-                    
-                    <h3 class="font-bold text-lg mb-3">Analysis History</h3>
-                    <div class="relative pl-4 border-l-2 border-gray-200" id="history-timeline"><p>Loading history...</p></div>
+                <div id="protocol-list" class="protocol-list-items space-y-1 pr-1">
+                    <p class="text-gray-500 text-sm p-2"><span class="loading-spinner mr-2"></span>Loading protocols...</p>
                 </div>
             </div>
-        </div>`;
-        showModal(modalHTML);
-        
-        loadWorkflowStepsIntoModal(sample.workflow_id, sample.sample_status_id);
-        
-        const historyContainer = document.getElementById('history-timeline');
-        historyContainer.innerHTML = '';
-        
-        let events = [];
-        // Add events based on available fields in the detailed_samples_view
-        if (sample.reception_date) {
-            events.push({ step: 'Received', date: new Date(sample.reception_date) });
-        }
-        if (sample.dissection_date) {
-            events.push({ step: 'Dissection', date: new Date(sample.dissection_date) });
-        }
-        if (sample.extraction_date) { // For extraction events
-            events.push({ step: 'Extraction', date: new Date(sample.extraction_date) });
-        }
-        // QC steps (Nanodrop, Qubit, Tapestation) often share 'measurement_date' field names
-        // You'll need to check the presence of the specific ID or a relevant field for that type of QC.
-        if (sample.nanodrop_id && sample.nanodrop_measurement_date) {
-            events.push({ step: 'Nanodrop QC', date: new Date(sample.nanodrop_measurement_date) });
-        }
-        if (sample.qubit_id && sample.qubit_measurement_date) {
-            events.push({ step: 'Qubit QC', date: new Date(sample.qubit_measurement_date) });
-        }
-        if (sample.tapestation_id && sample.tapestation_measurement_date) {
-            events.push({ step: 'Tapestation QC', date: new Date(sample.tapestation_measurement_date) });
-        }
-        // PCR, qPCR, Gel (each has its own date field)
-        if (sample.pcr_id && sample.pcr_date) {
-            events.push({ step: 'PCR Done', date: new Date(sample.pcr_date) });
-        }
-        if (sample.qpcr_id && sample.qpcr_date) {
-            events.push({ step: 'qPCR Done', date: new Date(sample.qpcr_date) });
-        }
-        if (sample.gel_gelelectrophoresis_id && sample.gel_run_date) {
-             events.push({ step: 'Gel Electrophoresis', date: new Date(sample.gel_run_date) });
-        }
-        // Library Prep and Sequencing
-        if (sample.library_id && sample.library_prep_date) {
-            events.push({ step: 'Library Prep', date: new Date(sample.library_prep_date) });
-        }
-        if (sample.sequencing_id && sample.sequencing_date) {
-            events.push({ step: 'Sequencing Done', date: new Date(sample.sequencing_date) });
-        }
-        // Bioinformatics Analysis
-        if (sample.analysis_run_id && sample.run_date) {
-             events.push({ step: 'Bioinformatics Analysis', date: new Date(sample.run_date) });
-        }
-        // Otoliths
-        if (sample.otolith_id && sample.otolith_experiment_date) { // Using experiment_date from otoliths
-            events.push({ step: 'Otolith Reading', date: new Date(sample.otolith_experiment_date) });
-        }
-        // Add any other relevant dates from detailed_samples_view here
 
-        events.sort((a,b) => a.date.getTime() - b.date.getTime());
-        if (events.length > 0) {
-            historyContainer.innerHTML = events.map(event => `
-                <div class="mb-4 relative">
-                    <div class="absolute -left-[9px] mt-1.5 w-4 h-4 bg-blue-500 rounded-full border-4 border-white"></div>
-                    <time class="mb-1 text-sm font-normal leading-none text-gray-500">${event.date.toLocaleString()}</time>
-                    <h4 class="text-md font-semibold text-gray-900">${event.step.replace(/_/g, ' ')}</h4>
+            <!-- Protocol Detail Panel -->
+            <div id="protocol-detail-panel" class="protocol-detail-panel">
+                <!-- Placeholder -->
+                 <div id="protocol-placeholder" class="flex flex-col items-center justify-center h-full text-gray-500 bg-white rounded-xl shadow-inner border border-gray-200">
+                    <i data-lucide="book-text" class="w-16 h-16 text-gray-400 mb-4"></i>
+                    <p class="text-lg font-medium">Select a protocol from the list</p>
+                    <p class="text-sm">or click "New Protocol" to create one.</p>
                 </div>
-            `).join('');
-        } else {
-            historyContainer.innerHTML = '<p>No history found.</p>';
+
+                <!-- Protocol Detail Content (Initially Hidden) -->
+                <div id="protocol-detail-content" class="hidden space-y-6">
+                     <!-- Protocol Header Card -->
+                     <div class="card p-6">
+                         <div class="flex justify-between items-start mb-4">
+                             <div class="flex-grow mr-4">
+                                 <span id="detail-protocol-status" class="run-status-pill bg-gray-200 text-gray-700 mb-2 inline-block">Draft</span>
+                                 <h2 id="detail-protocol-title" class="text-3xl font-bold text-gray-800 break-words leading-tight">Protocol Title</h2>
+                                 <p id="detail-protocol-description" class="text-gray-600 mt-2 text-sm max-w-3xl"></p>
+                             </div>
+                             <div class="flex flex-col space-y-2 flex-shrink-0">
+                                 <button id="start-eln-run-btn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center transition duration-150 text-sm shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                     <i data-lucide="play" class="w-4 h-4 mr-1"></i> Start ELN Run
+                                 </button>
+                                 <button id="edit-protocol-btn" class="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 font-semibold py-1 px-3 rounded-lg flex items-center justify-center text-xs transition duration-150 w-full">
+                                     <i data-lucide="edit-2" class="w-3 h-3 mr-1"></i> Edit Protocol Info
+                                 </button>
+                                 <button id="delete-protocol-btn" class="bg-red-100 hover:bg-red-200 text-red-800 font-semibold py-1 px-3 rounded-lg flex items-center justify-center text-xs transition duration-150 w-full">
+                                     <i data-lucide="trash-2" class="w-3 h-3 mr-1"></i> Delete Protocol
+                                 </button>
+                             </div>
+                         </div>
+                         <div class="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-xs text-gray-500 border-t pt-4">
+                             <div><i data-lucide="user" class="w-3 h-3 inline mr-1 text-gray-400"></i> Author: <span id="detail-protocol-author" class="font-medium text-gray-700 block truncate"></span></div>
+                             <div><i data-lucide="git-branch" class="w-3 h-3 inline mr-1 text-gray-400"></i> Version: <span id="detail-protocol-version" class="font-medium text-gray-700 block"></span></div>
+                             <div><i data-lucide="calendar" class="w-3 h-3 inline mr-1 text-gray-400"></i> Last Update: <span id="detail-protocol-updated" class="font-medium text-gray-700 block"></span></div>
+                             <div><i data-lucide="folder" class="w-3 h-3 inline mr-1 text-gray-400"></i> Project: <span id="detail-protocol-project-link" class="font-medium text-blue-600 hover:underline block truncate"></span></div>
+                         </div>
+                     </div>
+
+                    <!-- Main Content Card (Tabs) -->
+                    <div class="card p-6">
+                        <div class="border-b border-gray-200 mb-6">
+                            <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+                                <button class="tab-button active" data-tab="steps"><i data-lucide="list-checks" class="w-4 h-4 mr-1.5 inline-block"></i> Steps</button>
+                                <button class="tab-button" data-tab="components"><i data-lucide="flask-conical" class="w-4 h-4 mr-1.5 inline-block"></i> Compounds & Equipment</button>
+                                <button class="tab-button" data-tab="runs"><i data-lucide="notebook-pen" class="w-4 h-4 mr-1.5 inline-block"></i> ELN Runs</button>
+                                <button class="tab-button" data-tab="history"><i data-lucide="history" class="w-4 h-4 mr-1.5 inline-block"></i> History & Comments</button>
+                            </nav>
+                        </div>
+
+                        <!-- Steps Tab Content -->
+                        <div id="tab-content-steps" class="tab-content active space-y-6">
+                            <div class="flex justify-between items-center mb-4">
+                                <p class="text-sm text-gray-600 italic">The definitive, standardized procedure (SOP).</p>
+                                <button id="add-step-btn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-1 px-3 rounded-lg flex items-center text-xs transition duration-150 shadow hover:shadow-md">
+                                    <i data-lucide="plus" class="w-3 h-3 mr-1"></i> Add New Step
+                                </button>
+                            </div>
+                            <div id="protocol-steps-list" class="space-y-4">
+                                <!-- Steps loaded here -->
+                            </div>
+                        </div>
+
+                        <!-- Components Tab Content -->
+                        <div id="tab-content-components" class="tab-content">
+                            <div class="flex justify-between items-center mb-6">
+                                <p class="text-sm text-gray-600 italic">List of **Compounds/Reagents** and **Equipment** generally required for this protocol.</p>
+                                <button id="manage-components-btn" class="bg-blue-100 hover:bg-blue-200 text-blue-700 font-semibold py-1 px-3 rounded-lg flex items-center text-xs transition duration-150 border border-blue-200">
+                                    <i data-lucide="list-plus" class="w-3 h-3 mr-1"></i> Manage Component List
+                                </button>
+                            </div>
+                            <div id="protocol-components-list" class="space-y-6">
+                                <div class="border rounded-lg overflow-hidden">
+                                    <h3 class="text-base font-semibold text-gray-700 bg-gray-50 border-b px-4 py-2 flex items-center"><i data-lucide="droplet" class="w-4 h-4 mr-2 text-teal-600"></i> Reagents & Compounds (from lims.reagents)</h3>
+                                    <div class="p-4">
+                                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                            <thead class="bg-gray-50">
+                                                <tr>
+                                                    <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                                    <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Lot/Stock ID</th>
+                                                    <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Est. Qty / Notes</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="reagents-table-body" class="bg-white divide-y divide-gray-200">
+                                                <tr><td colspan="3" class="px-3 py-4 text-center text-gray-500 italic">No reagents linked. Use "Manage Component List".</td></tr>
+                                            </tbody>
+                                        </table>
+                                     </div>
+                                </div>
+                                <div class="border rounded-lg overflow-hidden">
+                                     <h3 class="text-base font-semibold text-gray-700 bg-gray-50 border-b px-4 py-2 flex items-center"><i data-lucide="wrench" class="w-4 h-4 mr-2 text-blue-600"></i> Equipment (from lims.equipment)</h3>
+                                     <div class="p-4">
+                                        <ul id="equipment-list" class="space-y-2 text-sm text-gray-700">
+                                            <li class="text-gray-500 italic ml-4">No specific equipment linked. Use "Manage Component List".</li>
+                                        </ul>
+                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ELN Runs Tab Content -->
+                        <div id="tab-content-runs" class="tab-content">
+                            <div class="flex justify-between items-center mb-6">
+                                <p class="text-sm text-gray-600 italic">Actual execution records, observations, and results (from eln.step_executions).</p>
+                                <button id="view-all-runs-btn" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-1 px-3 rounded-lg flex items-center text-xs transition duration-150 border border-gray-300">
+                                    <i data-lucide="list-video" class="w-3 h-3 mr-1"></i> View All Runs (Future)
+                                </button>
+                            </div>
+                            <div id="eln-runs-list" class="space-y-4">
+                                <!-- Example Run Item -->
+                                <div class="p-4 border rounded-lg bg-white shadow-sm flex justify-between items-center hover:bg-gray-50 transition-colors duration-150">
+                                    <div>
+                                        <h4 class="font-medium text-blue-700">ELN Run <span class="font-mono text-sm bg-gray-100 px-1 rounded">#EXP_001_PR_003</span></h4>
+                                        <p class="text-xs text-gray-500 mt-1">Started by <span class="font-medium">Jane Doe</span> on <span class="font-medium">2025-10-25</span></p>
+                                    </div>
+                                    <div class="flex items-center space-x-3">
+                                        <span class="run-status-pill bg-green-100 text-green-700 border border-green-200">Completed</span>
+                                        <button class="text-blue-500 hover:text-blue-700 p-1 rounded hover:bg-blue-100" title="View Run Details"><i data-lucide="eye" class="w-4 h-4"></i></button>
+                                    </div>
+                                </div>
+                                <!-- End Example -->
+                                <p class="text-gray-500 italic text-sm py-4 text-center" id="no-runs-message">No ELN runs recorded for this protocol yet.</p>
+                            </div>
+                        </div>
+
+                        <!-- History & Comments Tab Content -->
+                         <div id="tab-content-history" class="tab-content grid grid-cols-1 md:grid-cols-2 gap-8">
+                             <div>
+                                <h3 class="text-lg font-semibold text-gray-700 mb-3 border-b pb-2">Version History <span class="text-xs text-gray-500">(eln.protocol_versions)</span></h3>
+                                <div id="protocol-history-log" class="text-sm text-gray-600 space-y-3 max-h-96 overflow-y-auto pr-3">
+                                    <p class="text-gray-500 italic text-sm">Loading history...</p>
+                                    <!-- History items loaded here -->
+                                </div>
+                             </div>
+                             <div>
+                                <h3 class="text-lg font-semibold text-gray-700 mb-3 border-b pb-2">Comments <span class="text-xs text-gray-500">(eln.comments)</span></h3>
+                                <div id="protocol-comments-section" class="space-y-4">
+                                     <div class="mb-4">
+                                         <textarea id="new-comment-input" rows="3" placeholder="Add a comment about the protocol or a specific step..." class="w-full p-2 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"></textarea>
+                                         <button id="add-comment-btn" class="mt-2 bg-gray-600 hover:bg-gray-700 text-white text-xs font-semibold py-1.5 px-3 rounded shadow hover:shadow-md disabled:opacity-50">
+                                             Add Comment
+                                         </button>
+                                     </div>
+                                    <div id="comments-list" class="space-y-4 max-h-80 overflow-y-auto pr-3">
+                                         <p class="text-gray-500 italic text-sm">Loading comments...</p>
+                                         <!-- Comments loaded here -->
+                                     </div>
+                                </div>
+                             </div>
+                        </div>
+                    </div> <!-- End Main Content Card -->
+                </div> <!-- End protocol-detail-content -->
+            </div> <!-- End protocol-detail-panel -->
+        </div> <!-- End protocol-container -->
+    </div> <!-- End main-content -->
+
+    <!-- Modals -->
+    <!-- Protocol Create/Edit Modal -->
+    <div id="protocol-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-60 overflow-y-auto h-full w-full flex items-center justify-center z-30 p-4">
+        <div class="relative mx-auto p-6 border w-full max-w-lg shadow-xl rounded-xl bg-white">
+            <h3 id="modal-title" class="text-xl font-semibold mb-4 text-gray-800">Create New Protocol</h3>
+            <form id="protocol-form" class="space-y-4">
+                <input type="hidden" id="protocol-id" name="protocol_id">
+                <div>
+                    <label for="protocol-title" class="block text-xs font-medium text-gray-700 mb-1">Title <span class="text-red-500">*</span></label>
+                    <input type="text" id="protocol-title" name="title" required class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+                </div>
+                <div>
+                    <label for="protocol-version" class="block text-xs font-medium text-gray-700 mb-1">Version (e.g., 1.0) <span class="text-red-500">*</span></label>
+                    <input type="text" id="protocol-version" name="version" required value="1" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+                 </div>
+                <div>
+                    <label for="protocol-description" class="block text-xs font-medium text-gray-700 mb-1">Description (Short)</label>
+                    <textarea id="protocol-description" name="description" rows="3" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"></textarea>
+                </div>
+                <div>
+                    <label for="protocol-project" class="block text-xs font-medium text-gray-700 mb-1">Link to Project</label>
+                    <select id="protocol-project" name="project_id" class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+                        <option value="">-- Select Project --</option>
+                    </select>
+                </div>
+                 <div>
+                    <label for="protocol-status-modal" class="block text-xs font-medium text-gray-700 mb-1">Status <span class="text-red-500">*</span></label>
+                    <select id="protocol-status-modal" name="status_id" required class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+                         <option value="Active">Active</option>
+                         <option value="Planned">Planned</option>
+                         <option value="In Progress">In Progress</option>
+                         <option value="Completed">Completed</option>
+                         <option value="Archived">Archived</option>
+                         <option value="On Hold">On Hold</option>
+                         <!-- Add more statuses -->
+                    </select>
+                </div>
+                <div>
+                    <label for="protocol-tags" class="block text-xs font-medium text-gray-700 mb-1">Tags (comma-separated)</label>
+                    <input type="text" id="protocol-tags" name="tags" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+                </div>
+                 <div>
+                    <label for="protocol-notes" class="block text-xs font-medium text-gray-700 mb-1">Internal Notes</label>
+                    <textarea id="protocol-notes" name="notes" rows="2" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"></textarea>
+                </div>
+
+                <div id="modal-error" class="text-red-600 text-xs mt-3 hidden"></div>
+                <div class="flex justify-end space-x-2 mt-6 border-t pt-4">
+                    <button type="button" id="cancel-protocol-modal" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-150 text-xs">Cancel</button>
+                    <button type="submit" id="save-protocol-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 text-xs">Save Protocol</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Step Create/Edit Modal -->
+    <div id="step-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-60 overflow-y-auto h-full w-full flex items-center justify-center z-40 p-4">
+        <div class="relative mx-auto p-6 border w-full max-w-3xl shadow-xl rounded-xl bg-white">
+            <h3 id="step-modal-title" class="text-xl font-semibold mb-4 text-gray-800">Add New Step</h3>
+            <form id="step-form">
+                <input type="hidden" id="step-id" name="step_id">
+                <input type="hidden" id="step-protocol-id" name="protocol_id">
+
+                <div class="grid grid-cols-4 gap-4 mb-4">
+                    <div>
+                        <label for="step-number" class="block text-xs font-medium text-gray-700 mb-1">Step Number <span class="text-red-500">*</span></label>
+                        <input type="number" id="step-number" name="step_number" required min="1" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+                    </div>
+                    <div class="col-span-3">
+                        <label for="step-title" class="block text-xs font-medium text-gray-700 mb-1">Step Title (Optional)</label>
+                        <input type="text" id="step-title" name="title" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Step Description (SOP) <span class="text-red-500">*</span></label>
+                    <div id="step-description-editor-container">
+                        <div id="step-description-editor"></div>
+                    </div>
+                    <input type="hidden" id="step-description" name="description">
+                    <p class="text-xs text-gray-500 mt-2">**Tip:** Use the <span class="font-semibold text-blue-600"><i data-lucide="flask-conical" class="w-3 h-3 inline"></i> Material</span> button in the toolbar to add structured reagents and equipment.</p>
+                </div>
+
+                 <div class="mb-4 p-4 border rounded-lg bg-gray-50">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-2 flex items-center"><i data-lucide="info" class="w-4 h-4 mr-1"></i> Supplementary Details (Optional)</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label for="step-time" class="block text-xs font-medium text-gray-700 mb-1">Est. Time (min)</label>
+                            <input type="number" id="step-time" name="estimated_time_minutes" min="0" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+                        </div>
+                        <div class="md:col-span-2">
+                             <label for="step-notes" class="block text-xs font-medium text-gray-700 mb-1">Notes / Troubleshooting</label>
+                             <textarea id="step-notes" name="notes" rows="1" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="step-modal-error" class="text-red-600 text-xs mt-3 hidden"></div>
+                <div class="flex justify-end space-x-2 mt-6 border-t pt-4">
+                    <button type="button" id="cancel-step-modal" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-150 text-xs">Cancel</button>
+                    <button type="submit" id="save-step-btn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 text-xs">Save Step</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Material Selector Modal -->
+    <div id="material-selector-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-60 overflow-y-auto h-full w-full flex items-center justify-center z-50 p-4">
+        <div class="relative mx-auto p-6 border w-full max-w-md shadow-xl rounded-xl bg-white">
+            <h3 class="text-xl font-semibold mb-4 text-gray-800">Insert Material into Step</h3>
+            <div class="space-y-4">
+                <div>
+                    <label for="material-type-select" class="block text-xs font-medium text-gray-700 mb-1">Material Type</label>
+                    <select id="material-type-select" class="w-full p-2 border rounded-lg bg-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="reagent">Reagent / Compound (from lims.reagents)</option>
+                        <option value="equipment">Equipment (from lims.equipment)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="material-select" class="block text-xs font-medium text-gray-700 mb-1">Select Item</label>
+                    <select id="material-select" class="w-full p-2 border rounded-lg bg-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="">-- Select or Search Material --</option>
+                         <!-- Options loaded dynamically -->
+                    </select>
+                </div>
+                <div id="quantity-group">
+                    <label for="material-quantity" class="block text-xs font-medium text-gray-700 mb-1">Quantity/Amount (Optional)</label>
+                    <div class="flex space-x-2">
+                        <input type="number" step="any" id="material-quantity" class="w-2/3 p-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm" placeholder="e.g., 50">
+                        <select id="material-unit" class="w-1/3 p-2 border rounded-lg bg-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                             <option value="">Units</option>
+                             <option value="ul">µl</option>
+                             <option value="ml">ml</option>
+                             <option value="l">L</option>
+                             <option value="g">g</option>
+                             <option value="mg">mg</option>
+                             <option value="ug">µg</option>
+                             <option value="ng">ng</option>
+                             <option value="M">M</option>
+                             <option value="mM">mM</option>
+                             <option value="uM">µM</option>
+                             <option value="nM">nM</option>
+                             <option value="pcs">pcs</option>
+                             <option value="rxn">rxn</option>
+                             <!-- Add more common lab units -->
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-2 mt-6 border-t pt-4">
+                <button type="button" id="cancel-material-select" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-150 text-xs">Cancel</button>
+                <button type="button" id="insert-material-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 text-xs">Insert into Step</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Component Manager Modal -->
+    <div id="component-manager-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-60 overflow-y-auto h-full w-full flex items-center justify-center z-50 p-4">
+        <div class="relative mx-auto p-6 border w-full max-w-4xl shadow-2xl rounded-xl bg-white">
+            <h3 class="text-xl font-semibold mb-4 text-gray-800 flex items-center"><i data-lucide="list-plus" class="w-5 h-5 mr-2"></i> Manage Protocol Components</h3>
+            <p class="text-sm text-gray-600 mb-6 border-b pb-3">Select **Compounds/Reagents** and **Equipment** that are generally required for this SOP. These items will appear in the "Compounds & Equipment" tab and can be inserted into Steps.</p>
+
+            <div id="component-manager-content" class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Reagent Section -->
+                <div>
+                    <h4 class="font-semibold text-lg text-teal-700 mb-3 flex items-center"><i data-lucide="droplet" class="w-4 h-4 mr-2"></i> Reagent List <span class="text-xs text-gray-500 ml-2">(from lims.reagents)</span></h4>
+                    <div class="space-y-3 p-4 border rounded-lg bg-teal-50">
+                         <select id="add-reagent-select" class="w-full p-2 border rounded-lg bg-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                            <option value="">-- Select Reagent to Add --</option>
+                             <!-- Options loaded dynamically -->
+                         </select>
+                         <button id="add-reagent-to-protocol-btn" class="w-full bg-teal-500 hover:bg-teal-600 text-white font-medium py-2 px-4 rounded-lg text-sm transition duration-150 shadow hover:shadow-md disabled:opacity-50">Add to Protocol List</button>
+                    </div>
+                    <div class="mt-4">
+                        <h5 class="text-sm font-medium text-gray-700 mb-2">Currently Required Reagents:</h5>
+                        <ul id="protocol-reagents-required" class="space-y-2 text-sm max-h-60 overflow-y-auto pr-2 border rounded-lg p-3 bg-white">
+                            <li class="text-gray-500 italic">No reagents added.</li>
+                            <!-- Required items listed here -->
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Equipment Section -->
+                <div>
+                    <h4 class="font-semibold text-lg text-blue-700 mb-3 flex items-center"><i data-lucide="wrench" class="w-4 h-4 mr-2"></i> Equipment List <span class="text-xs text-gray-500 ml-2">(from lims.equipment)</span></h4>
+                    <div class="space-y-3 p-4 border rounded-lg bg-blue-50">
+                         <select id="add-equipment-select" class="w-full p-2 border rounded-lg bg-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                            <option value="">-- Select Equipment to Add --</option>
+                             <!-- Options loaded dynamically -->
+                         </select>
+                         <button id="add-equipment-to-protocol-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg text-sm transition duration-150 shadow hover:shadow-md disabled:opacity-50">Add to Protocol List</button>
+                    </div>
+                    <div class="mt-4">
+                        <h5 class="text-sm font-medium text-gray-700 mb-2">Currently Required Equipment:</h5>
+                         <ul id="protocol-equipment-required" class="space-y-2 text-sm max-h-60 overflow-y-auto pr-2 border rounded-lg p-3 bg-white">
+                            <li class="text-gray-500 italic">No equipment added.</li>
+                             <!-- Required items listed here -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end space-x-2 mt-8 border-t pt-4">
+                <button type="button" id="save-component-changes-btn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 text-xs shadow hover:shadow-md disabled:opacity-50" disabled>Save Component List</button>
+                <button type="button" id="close-component-manager" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-150 text-xs">Close</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- Security and Session Check ---
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') {
+            localStorage.setItem('redirectUrl', window.location.href);
+            window.location.href = './login.html';
         }
-    }
 
-    function formatDateForUrl(dateString) {
-        if (!dateString) return '';
-        try {
-            const date = new Date(dateString);
-            return isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0];
-        } catch (e) {
-            console.warn("Failed to format date for URL:", dateString, e);
-            return '';
+        // --- Global Constants & State ---
+        const API_BASE_URL = '/mylims_demo/api'; // Corrected API Prefix
+        let currentProtocols = [];
+        let currentProtocolDetail = null;
+        let quillInstances = {};
+        let projectsCache = [];
+        let reagentsCache = [];
+        let equipmentCache = [];
+        let editorQuillInstance = null; // Quill instance for the modal editor
+        let insertMaterialCallback = null; // Callback for material insertion
+
+        // --- Quill Configuration ---
+        const Quill = window.Quill;
+        const Embed = Quill.import('blots/embed');
+
+        class MaterialBlot extends Embed {
+            static create(value) {
+                let node = super.create(value.id); // Use ID for blot creation if available
+                node.setAttribute('data-id', value.id);
+                node.setAttribute('data-name', value.name);
+                node.setAttribute('data-type', value.type);
+                node.setAttribute('data-qty', value.qty || '');
+                node.setAttribute('data-unit', value.unit || '');
+
+                let tagClass = value.type === 'equipment' ? 'material-tag equipment-tag' : 'material-tag';
+                let icon = value.type === 'equipment' ? 'wrench' : 'droplet'; // Use wrench for equipment
+                let content = `
+                    <i data-lucide="${icon}" class="inline-block w-3 h-3 mr-1 text-current"></i>
+                    ${value.name}
+                    ${value.qty ? `<span class="font-semibold ml-1">${value.qty}${value.unit ? ` ${value.unit}` : ''}</span>` : ''}
+                `;
+
+                node.innerHTML = content;
+                node.className = tagClass;
+                node.setAttribute('contenteditable', 'false'); // Make non-editable
+                node.title = `${value.type.charAt(0).toUpperCase() + value.type.slice(1)}: ${value.name} (ID: ${value.id})`; // Add tooltip
+                return node;
+            }
+
+            static value(node) {
+                return {
+                    id: node.getAttribute('data-id'),
+                    name: node.getAttribute('data-name'),
+                    type: node.getAttribute('data-type'),
+                    qty: node.getAttribute('data-qty'),
+                    unit: node.getAttribute('data-unit')
+                };
+            }
         }
-    }
+        MaterialBlot.blotName = 'material';
+        MaterialBlot.tagName = 'span'; // Render as inline span
+        MaterialBlot.className = 'ql-material-blot'; // Add a class for potential styling
+        Quill.register(MaterialBlot);
 
-    function timeSince(dateString) {
-        if (!dateString) return 'N/A';
-        const seconds = Math.floor((new Date() - new Date(dateString)) / 1000);
-        const interval = seconds / 86400;
-        if (interval > 1) return Math.floor(interval) + " days";
-        if (interval * 24 > 1) return Math.floor(interval * 24) + " hours";
-        if (interval * 24 * 60 > 1) return Math.floor(interval * 24 * 60) + " minutes";
-        return "Just now";
-    }
+        // --- API Fetch Helper ---
+        async function apiFetch(endpoint, options = {}) {
+            const defaultHeaders = { 'Content-Type': 'application/json' };
+            options.headers = { ...defaultHeaders, ...options.headers };
+            if (options.body && typeof options.body !== 'string' && !(options.body instanceof FormData)) {
+                options.body = JSON.stringify(options.body);
+            }
+            try {
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                if (!response.ok) {
+                    let errorBody;
+                    try {
+                        errorBody = await response.json();
+                    } catch (jsonError) {
+                        errorBody = { error: await response.text() || `HTTP error! Status: ${response.status}` };
+                    }
+                    console.error(`API Error on ${endpoint}:`, response.status, errorBody);
+                    throw new Error(errorBody.error || `HTTP error! Status: ${response.status}`);
+                }
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.includes("application/json")) {
+                    return response.json();
+                } else if (response.status === 200 || response.status === 201) { // Assume success on 200/201 if not JSON
+                    return { success: true };
+                } else {
+                    // Handle non-JSON success responses if needed, or assume empty success
+                     return { success: true };
+                }
+            } catch (error) {
+                console.error(`API Fetch Error on ${endpoint}:`, error);
+                // Propagate the error message correctly
+                throw new Error(error.message || 'Network or fetch error');
+            }
+        }
 
-    function showModal(content) {
-        const container = document.getElementById('modal-container');
-        container.innerHTML = content;
-        const modal = container.querySelector('.modal-overlay');
-        const modalContent = container.querySelector('.modal-content');
-        setTimeout(() => modalContent.classList.remove('opacity-0', '-translate-y-10'), 10);
-        const closeModal = () => { modalContent.classList.add('opacity-0', '-translate-y-10'); setTimeout(() => container.innerHTML = '', 300); };
-        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-        container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
-        return { closeModal };
-    }
-</script>
+
+        // --- Date Formatting ---
+        function formatDateTime(dateString) {
+            if (!dateString) return 'N/A';
+            try {
+                // Use toLocaleDateString for YYYY-MM-DD format, suitable for sorting and display
+                const dateObj = new Date(dateString);
+                 // Check if the date is valid
+                 if (isNaN(dateObj.getTime())) {
+                     return dateString; // Return original if invalid
+                 }
+                return dateObj.toLocaleDateString('en-CA'); // YYYY-MM-DD
+            } catch (e) {
+                console.warn("Could not format date:", dateString, e);
+                return dateString; // Fallback to original string
+            }
+        }
+
+
+        // --- UI Update Functions ---
+        function displayProtocols(protocols) {
+            const listElement = document.getElementById('protocol-list');
+            if (!listElement) return;
+            listElement.innerHTML = '';
+
+            const searchTerm = document.getElementById('protocol-search').value.toLowerCase();
+            const projectFilter = document.getElementById('protocol-filter-project').value;
+            const statusFilter = document.getElementById('protocol-filter-status').value;
+
+            const filteredProtocols = protocols.filter(p =>
+                ((p.title && p.title.toLowerCase().includes(searchTerm)) ||
+                 (p.tags && p.tags.toLowerCase().includes(searchTerm)) ||
+                 (p.protocol_id && p.protocol_id.toLowerCase().includes(searchTerm)) // Search by ID too
+                 ) &&
+                (projectFilter === '' || p.project_id === projectFilter) &&
+                (statusFilter === '' || p.status_id === statusFilter)
+            );
+
+            if (filteredProtocols.length === 0) {
+                 listElement.innerHTML = `<p class="text-gray-500 text-sm p-4 text-center">${(searchTerm || projectFilter || statusFilter) ? 'No protocols match current filters.' : 'No protocols found.'}</p>`;
+                 return;
+            }
+
+            filteredProtocols.sort((a,b) => new Date(b.updated_at) - new Date(a.updated_at)); // Sort by most recently updated
+
+            filteredProtocols.forEach(protocol => {
+                const item = document.createElement('div');
+                item.className = `protocol-list-item p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${currentProtocolDetail?.protocol_id === protocol.protocol_id ? 'selected' : ''}`;
+                item.dataset.protocolId = protocol.protocol_id;
+                const statusInfo = getProtocolStatusClasses(protocol.status_id);
+                item.innerHTML = `
+                    <div class="flex justify-between items-center mb-1">
+                        <h4 class="font-medium text-blue-700 text-sm truncate pr-2">${protocol.title || 'Untitled Protocol'}</h4>
+                        <span class="run-status-pill ${statusInfo.bg} ${statusInfo.text} border ${statusInfo.border}">${protocol.status_id || 'N/A'}</span>
+                    </div>
+                    <p class="text-xs text-gray-500 truncate mb-1">${protocol.description || 'No description'}</p>
+                    <p class="text-xs text-gray-400">v${protocol.version || '1'} | Updated: ${formatDateTime(protocol.updated_at)}</p>
+                `;
+                item.addEventListener('click', () => {
+                     document.querySelector('.protocol-list-item.selected')?.classList.remove('selected');
+                     item.classList.add('selected');
+                     loadProtocolDetails(protocol.protocol_id);
+                });
+                listElement.appendChild(item);
+            });
+            lucide.createIcons(); // Needed if icons were in the list items
+        }
+
+        function getProtocolStatusClasses(status) {
+            // Updated statuses to match reference.status more closely and add borders
+            switch (status) {
+                case 'Completed':
+                case 'Approved': // Treat Approved like Completed visually
+                    return { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' };
+                case 'In Progress': // Standard In Progress
+                    return { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' };
+                case 'Planned': // Planned status
+                    return { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200' };
+                 case 'Draft': // Draft status (using yellow)
+                    return { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' };
+                case 'On Hold': // On Hold status
+                    return { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' };
+                case 'Archived': // Archived status
+                    return { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-300' };
+                 case 'Received': // Example if needed
+                     return { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' };
+                default: // Default/Unknown
+                    return { bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-gray-200' };
+            }
+        }
+
+
+        function displayProtocolDetails(protocol) {
+            currentProtocolDetail = protocol;
+            document.getElementById('protocol-placeholder').classList.add('hidden');
+            const detailContent = document.getElementById('protocol-detail-content');
+            detailContent.classList.remove('hidden');
+
+            document.getElementById('detail-protocol-title').textContent = protocol.title || 'Untitled Protocol';
+            document.getElementById('detail-protocol-description').textContent = protocol.description || 'No description provided.';
+            document.getElementById('detail-protocol-author').textContent = protocol.author_name || protocol.author_person_id || 'Unknown';
+            document.getElementById('detail-protocol-version').textContent = protocol.version || '1';
+            document.getElementById('detail-protocol-updated').textContent = formatDateTime(protocol.updated_at);
+
+            const statusPill = document.getElementById('detail-protocol-status');
+            statusPill.textContent = protocol.status_id || 'Unknown';
+            const statusClasses = getProtocolStatusClasses(protocol.status_id);
+            statusPill.className = `run-status-pill ${statusClasses.bg} ${statusClasses.text} border ${statusClasses.border} mb-2 inline-block`; // Use inline-block
+
+            const projectLinkSpan = document.getElementById('detail-protocol-project-link');
+            if (protocol.project_id && projectsCache.length > 0) {
+                const linkedProject = projectsCache.find(p => p.project_id === protocol.project_id);
+                if(linkedProject) {
+                    projectLinkSpan.innerHTML = `<a href="projects.html?filter_project_id=${protocol.project_id}" class="text-blue-600 hover:underline">${linkedProject.title} (${protocol.project_id})</a>`;
+                } else {
+                    projectLinkSpan.textContent = protocol.project_id; // Show ID if name not found
+                }
+            } else if (protocol.project_id) {
+                projectLinkSpan.textContent = protocol.project_id;
+            } else {
+                projectLinkSpan.textContent = 'None';
+            }
+
+            // Enable run button only if protocol seems usable (e.g., not Archived)
+            const canRun = protocol.status_id !== 'Archived'; // Add more conditions if needed
+            const runButton = document.getElementById('start-eln-run-btn');
+            runButton.disabled = !canRun;
+            runButton.classList.toggle('opacity-50', !canRun);
+            runButton.classList.toggle('cursor-not-allowed', !canRun);
+
+
+            displaySteps(protocol.steps || []);
+            // TODO: Fetch and display actual components linked via eln.step_components
+            displayComponents({ reagents: [], equipment: [] }); // Placeholder display
+            // TODO: Fetch and display ELN runs from eln.step_executions
+            displayRuns([]); // Placeholder display
+            // TODO: Fetch and display history/comments
+            displayHistory([]); // Placeholder display
+            displayComments([]); // Placeholder display
+
+
+            switchTab('steps'); // Default to steps tab
+            lucide.createIcons();
+        }
+
+        function displaySteps(steps) {
+             const stepsListElement = document.getElementById('protocol-steps-list');
+             stepsListElement.innerHTML = '';
+             // Ensure all previous Quill instances are properly handled (removed or disabled)
+             Object.values(quillInstances).forEach(instance => {
+                 if (instance && typeof instance.disable === 'function') {
+                     instance.disable(); // Disable before potentially removing container
+                 }
+             });
+             quillInstances = {}; // Reset instances map
+
+             if (!steps || steps.length === 0) {
+                 stepsListElement.innerHTML = '<p class="text-gray-500 italic text-sm text-center py-4">No steps defined for this SOP yet. Use "Add New Step" to define the procedure.</p>';
+                 return;
+             }
+
+             steps.sort((a, b) => a.step_number - b.step_number).forEach(step => {
+                 const stepElement = document.createElement('div');
+                 stepElement.className = 'step-container p-4 border rounded-lg bg-white shadow-sm relative hover:shadow transition-shadow duration-150';
+                 stepElement.dataset.stepId = step.step_id;
+                 stepElement.innerHTML = `
+                     <div class="flex justify-between items-start mb-3 pb-3 border-b border-gray-100">
+                         <div class="flex items-center">
+                             <h4 class="font-semibold text-gray-800 text-base">
+                                 <span class="text-blue-600 font-bold mr-2">${step.step_number}.</span>
+                                 <span class="step-title-display font-medium">${step.title || 'Untitled Step'}</span>
+                             </h4>
+                         </div>
+                         <div class="flex items-center space-x-2 text-xs text-gray-500 pt-1 flex-shrink-0">
+                            ${step.estimated_time_minutes ? `<span class="flex items-center"><i data-lucide="clock" class="w-3 h-3 mr-1"></i> ${step.estimated_time_minutes} min</span>` : ''}
+                             <button class="edit-step-modal-btn text-gray-400 hover:text-yellow-600 p-1 rounded hover:bg-yellow-50" data-step-id="${step.step_id}" title="Edit Step Details">
+                                 <i data-lucide="settings-2" class="w-4 h-4"></i>
+                             </button>
+                             <button class="delete-step-btn text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50" data-step-id="${step.step_id}" title="Delete Step">
+                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
+                             </button>
+                         </div>
+                     </div>
+
+                     <div class="step-content-display ql-snow text-sm text-gray-700 mb-3 prose prose-sm max-w-none">
+                         <div class="ql-editor">${step.description || '<p class="italic text-gray-500">No description provided.</p>'}</div>
+                     </div>
+
+                     ${step.notes ? `
+                     <div class="step-footer border-t border-gray-100 pt-2 mt-3">
+                         <p class="text-xs text-gray-600">
+                             <span class="font-semibold text-gray-700">Notes:</span> ${step.notes}
+                         </p>
+                     </div>` : ''}
+                 `;
+                 stepsListElement.appendChild(stepElement);
+
+                 // Render MaterialBlots correctly after HTML is added
+                 const qlEditorDiv = stepElement.querySelector('.step-content-display .ql-editor');
+                 if (qlEditorDiv) {
+                     // Find spans that represent our MaterialBlot and re-render icons inside them
+                     qlEditorDiv.querySelectorAll('span.material-tag i[data-lucide]').forEach(iconElement => {
+                          // Icons should be rendered by the main lucide call later
+                     });
+                 }
+             });
+             lucide.createIcons(); // Render all icons, including those inside MaterialBlots
+             attachStepActionListeners();
+        }
+
+        function displayComponents(componentsData) {
+            // This function now just displays the *linked* components, not the full cache
+            const reagentsBody = document.getElementById('reagents-table-body');
+            const equipmentList = document.getElementById('equipment-list');
+            reagentsBody.innerHTML = '';
+            equipmentList.innerHTML = '';
+
+            const linkedReagents = componentsData?.reagents || [];
+            const linkedEquipment = componentsData?.equipment || [];
+
+            // Display Linked Reagents
+            if (linkedReagents.length === 0) {
+                 reagentsBody.innerHTML = `<tr><td colspan="3" class="px-3 py-4 text-center text-gray-500 italic">No reagents linked. Use "Manage Component List".</td></tr>`;
+            } else {
+                linkedReagents.forEach(r => {
+                    // Find full reagent details from cache if needed, otherwise use linked data
+                    const reagentDetail = reagentsCache.find(rc => rc.reagent_id === r.id) || r;
+                    reagentsBody.innerHTML += `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-3 py-2 font-medium text-gray-900">${reagentDetail.reagent_complete_name || r.name || r.id}</td>
+                            <td class="px-3 py-2 text-gray-600">${reagentDetail.lot || 'N/A'}</td>
+                            <td class="px-3 py-2 text-gray-600">${r.required_qty || 'N/A'} ${r.unit || ''}</td>
+                        </tr>`;
+                });
+            }
+
+            // Display Linked Equipment
+            if (linkedEquipment.length === 0) {
+                equipmentList.innerHTML = `<li class="text-gray-500 italic ml-4">No equipment linked. Use "Manage Component List".</li>`;
+            } else {
+                linkedEquipment.forEach(e => {
+                     const equipDetail = equipmentCache.find(ec => ec.equipment_id === e.id) || e;
+                     equipmentList.innerHTML += `
+                        <li class="flex items-center space-x-2 py-1">
+                            <i data-lucide="wrench" class="w-4 h-4 text-blue-500 flex-shrink-0"></i>
+                            <span class="font-medium">${equipDetail.equipment_name || e.name || e.id}</span>
+                            ${e.notes ? `<span class="text-gray-500 text-xs italic">(${e.notes})</span>` : ''}
+                        </li>`;
+                });
+            }
+             lucide.createIcons();
+        }
+
+        function displayRuns(runs) {
+             const listEl = document.getElementById('eln-runs-list');
+             const noRunsMsg = document.getElementById('no-runs-message');
+             listEl.innerHTML = ''; // Clear previous runs first
+             noRunsMsg.style.display = 'none';
+
+             if (!runs || runs.length === 0) {
+                 noRunsMsg.style.display = 'block';
+                 return;
+             }
+
+             runs.sort((a,b) => new Date(b.start_time || b.created_at) - new Date(a.start_time || a.created_at));
+
+             runs.forEach(run => {
+                 const runEl = document.createElement('div');
+                 runEl.className = 'p-4 border rounded-lg bg-white shadow-sm flex justify-between items-center hover:bg-gray-50 transition-colors duration-150';
+                 const statusInfo = getProtocolStatusClasses(run.status); // Use same styling logic
+                 runEl.innerHTML = `
+                     <div>
+                         <h4 class="font-medium text-blue-700">ELN Run <span class="font-mono text-sm bg-gray-100 px-1 rounded">#${run.protocol_run_guid ? run.protocol_run_guid.substring(0,8) : run.execution_id.substring(0,8)}</span></h4>
+                         <p class="text-xs text-gray-500 mt-1">
+                            Started by <span class="font-medium">${run.executed_by_person_name || run.executed_by_person_id || 'Unknown'}</span>
+                            on <span class="font-medium">${formatDateTime(run.start_time || run.created_at)}</span>
+                         </p>
+                     </div>
+                     <div class="flex items-center space-x-3">
+                         <span class="run-status-pill ${statusInfo.bg} ${statusInfo.text} border ${statusInfo.border}">${run.status || 'Unknown'}</span>
+                         <button class="view-run-details-btn text-blue-500 hover:text-blue-700 p-1 rounded hover:bg-blue-100" data-run-guid="${run.protocol_run_guid || run.execution_id}" title="View Run Details">
+                             <i data-lucide="eye" class="w-4 h-4"></i>
+                         </button>
+                     </div>
+                 `;
+                 listEl.appendChild(runEl);
+             });
+              lucide.createIcons();
+             // Add event listeners for view buttons if needed
+        }
+
+        function displayHistory(historyItems) {
+            const logEl = document.getElementById('protocol-history-log');
+            logEl.innerHTML = '';
+            if (!historyItems || historyItems.length === 0) {
+                 logEl.innerHTML = `<p class="text-gray-500 italic text-sm">No version history available.</p>`;
+                 return;
+            }
+            historyItems.sort((a,b) => new Date(b.modification_timestamp) - new Date(a.modification_timestamp));
+
+            historyItems.forEach(item => {
+                 logEl.innerHTML += `
+                     <div class="relative pb-4">
+                         <span class="absolute top-1 left-[-5px] -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true"></span>
+                         <div class="relative flex items-start space-x-3">
+                              <div>
+                                 <div class="relative px-1">
+                                     <div class="h-2 w-2 bg-blue-500 rounded-full ring-4 ring-white flex items-center justify-center"></div>
+                                 </div>
+                             </div>
+                             <div class="min-w-0 flex-1 py-0">
+                                 <p class="text-xs text-gray-500">
+                                     Version <span class="font-semibold text-gray-700">${item.version_number}</span> created on ${formatDateTime(item.modification_timestamp)}
+                                     by <span class="font-medium text-gray-800">${item.modified_by_person_name || item.modified_by_person_id || 'System'}</span>.
+                                     <span class="ml-2 italic">(Based on changes to Title/Description)</span>
+                                     <button class="view-version-btn text-blue-500 hover:underline ml-2" data-version-id="${item.version_id}">(View Snapshot)</button>
+                                 </p>
+                             </div>
+                         </div>
+                     </div>
+                 `;
+            });
+             // Add event listeners for view buttons if needed
+        }
+
+        function displayComments(comments) {
+             const listEl = document.getElementById('comments-list');
+             listEl.innerHTML = '';
+             if (!comments || comments.length === 0) {
+                 listEl.innerHTML = `<p class="text-gray-500 italic text-sm text-center py-4">No comments yet.</p>`;
+                 return;
+             }
+             comments.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+
+             comments.forEach(comment => {
+                 listEl.innerHTML += `
+                     <div class="p-3 border rounded-lg bg-gray-50 text-sm">
+                         <p class="text-gray-800">${comment.comment_text}</p>
+                         <p class="text-xs text-gray-500 mt-2">
+                            - <span class="font-medium">${comment.author_name || comment.person_id}</span>
+                            on ${formatDateTime(comment.created_at)}
+                            ${comment.step_id ? `(Regarding Step ${comment.step_number || '?'})` : '(Protocol Level)'}
+                         </p>
+                         </div>
+                 `;
+             });
+        }
+
+
+        function switchTab(targetTabId) {
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.toggle('active', button.dataset.tab === targetTabId);
+            });
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.toggle('active', content.id === `tab-content-${targetTabId}`);
+            });
+            lucide.createIcons(); // Re-render icons if needed in the newly visible tab
+        }
+
+        // --- Modal Handling ---
+        function openProtocolModal(protocol = null) {
+             const form = document.getElementById('protocol-form');
+             form.reset();
+             document.getElementById('modal-error').classList.add('hidden');
+             document.getElementById('protocol-id').value = '';
+
+             if (protocol) {
+                 document.getElementById('modal-title').textContent = 'Edit Protocol Info';
+                 document.getElementById('protocol-id').value = protocol.protocol_id;
+                 document.getElementById('protocol-title').value = protocol.title || '';
+                 document.getElementById('protocol-version').value = protocol.version || '1';
+                 document.getElementById('protocol-description').value = protocol.description || '';
+                 document.getElementById('protocol-project').value = protocol.project_id || '';
+                 document.getElementById('protocol-status-modal').value = protocol.status_id || 'Draft';
+                 document.getElementById('protocol-tags').value = protocol.tags || '';
+                 document.getElementById('protocol-notes').value = protocol.notes || '';
+             } else {
+                 document.getElementById('modal-title').textContent = 'Create New Protocol';
+                 document.getElementById('protocol-version').value = '1'; // Default for new
+                 document.getElementById('protocol-status-modal').value = 'Draft'; // Default for new
+             }
+             populateProjectDropdown(projectsCache); // Ensure dropdown is populated
+             document.getElementById('protocol-modal').classList.add('open');
+        }
+        function closeProtocolModal() { document.getElementById('protocol-modal').classList.remove('open'); }
+
+        function openStepModal(protocolId, step = null) {
+            const form = document.getElementById('step-form');
+            form.reset();
+            document.getElementById('step-modal-error').classList.add('hidden');
+            document.getElementById('step-id').value = '';
+            document.getElementById('step-protocol-id').value = protocolId; // Set parent protocol ID
+
+            // Initialize or clear the modal Quill editor
+            if (!editorQuillInstance) {
+                initializeModalQuill(); // Initialize if not already done
+            }
+            // Ensure instance exists before trying to set content
+            if(editorQuillInstance){
+                 editorQuillInstance.setContents([]); // Clear previous content
+                 // Re-render icons in the toolbar if necessary (might be redundant if done once)
+                 lucide.createIcons();
+            } else {
+                console.error("Failed to initialize or find modal Quill instance.");
+                // Optionally show an error to the user
+                return; // Prevent modal opening if editor fails
+            }
+
+
+            if (step) {
+                // Editing existing step
+                document.getElementById('step-modal-title').textContent = `Edit Step ${step.step_number}`;
+                document.getElementById('step-id').value = step.step_id;
+                document.getElementById('step-number').value = step.step_number || '';
+                document.getElementById('step-title').value = step.title || '';
+                document.getElementById('step-time').value = step.estimated_time_minutes || '';
+                document.getElementById('step-notes').value = step.notes || '';
+                if (step.description && editorQuillInstance) {
+                    // Use dangerouslyPasteHTML to load existing HTML content
+                    editorQuillInstance.clipboard.dangerouslyPasteHTML(step.description);
+                }
+            } else {
+                // Adding a new step
+                document.getElementById('step-modal-title').textContent = 'Add New Step';
+                // Suggest next step number
+                const lastStep = currentProtocolDetail?.steps?.reduce((max, s) => Math.max(max, s.step_number), 0) || 0;
+                document.getElementById('step-number').value = lastStep + 1;
+            }
+            document.getElementById('step-modal').classList.add('open');
+        }
+
+        function closeStepModal() { document.getElementById('step-modal').classList.remove('open'); }
+        function closeComponentManagerModal() { document.getElementById('component-manager-modal').classList.remove('open'); }
+
+
+        // --- Event Handlers ---
+        // (handleSaveProtocol, handleDeleteProtocol, handleSaveStep, handleDeleteStep - Keep existing)
+         async function handleSaveProtocol(event) {
+             event.preventDefault();
+             const form = document.getElementById('protocol-form');
+             const protocolId = document.getElementById('protocol-id').value;
+             const errorDiv = document.getElementById('modal-error');
+             errorDiv.classList.add('hidden');
+             const saveButton = document.getElementById('save-protocol-btn');
+             saveButton.disabled = true;
+             saveButton.innerHTML = '<span class="loading-spinner mr-1" style="width:16px; height:16px; border-width: 2px;"></span> Saving...';
+
+             const formData = new FormData(form);
+             const data = Object.fromEntries(formData.entries());
+
+             if (data.project_id === "") data.project_id = null;
+             // Ensure version is treated correctly (e.g., as integer if DB requires)
+             try {
+                data.version = parseInt(data.version) || 1;
+             } catch { data.version = 1; } // Fallback
+
+             try {
+                 let result;
+                 let isCreating = !protocolId;
+                 const endpoint = `eln/protocols${isCreating ? '' : `/${protocolId}`}`; // Use specific ELN endpoints
+                 const method = isCreating ? 'POST' : 'PUT';
+
+                 if (isCreating) {
+                     data.author_person_id = sessionStorage.getItem('user_id') || 'unknown'; // Assign author on creation
+                 }
+
+                 result = await apiFetch(endpoint, { method: method, body: data });
+
+                 closeProtocolModal();
+                 await loadProtocols(); // Refresh list
+
+                 // If creating, result might contain the new ID (depends on backend implementation)
+                 // If updating, use the existing ID
+                 const targetProtocolId = isCreating ? (result?.protocol_id || protocolId) : protocolId;
+
+                 if (targetProtocolId) {
+                     await loadProtocolDetails(targetProtocolId); // Load or reload details
+                     // Highlight the newly created/updated item in the list
+                     setTimeout(() => {
+                         const items = document.querySelectorAll('.protocol-list-item');
+                         items.forEach(item => item.classList.remove('selected'));
+                         const newItem = document.querySelector(`.protocol-list-item[data-protocol-id="${targetProtocolId}"]`);
+                         newItem?.classList.add('selected');
+                         newItem?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                     }, 150); // Small delay to ensure list is rendered
+                 } else if (!isCreating) {
+                      await loadProtocolDetails(protocolId); // Reload details on update even if ID wasn't returned
+                 }
+
+
+             } catch (error) {
+                 errorDiv.textContent = `Error: ${error.message}`;
+                 errorDiv.classList.remove('hidden');
+             } finally {
+                 saveButton.disabled = false;
+                 saveButton.textContent = 'Save Protocol';
+             }
+         }
+
+         async function handleDeleteProtocol() {
+            if (!currentProtocolDetail || !currentProtocolDetail.protocol_id) return;
+            const protocolId = currentProtocolDetail.protocol_id;
+            const protocolTitle = currentProtocolDetail.title || 'this protocol';
+
+            // Replace window.confirm with a custom modal if possible in production
+            const confirmed = confirm(`DELETE: "${protocolTitle}" (Version ${currentProtocolDetail.version})?\n\nThis will delete the protocol and ALL its steps. This action cannot be undone.`);
+
+            if (confirmed) {
+                try {
+                    await apiFetch(`eln/protocols/${protocolId}`, { method: 'DELETE' });
+                    // Switch back to list view and refresh
+                    currentProtocolDetail = null;
+                    document.getElementById('protocol-placeholder').classList.remove('hidden');
+                    document.getElementById('protocol-detail-content').classList.add('hidden');
+                    await loadProtocols();
+                } catch (error) {
+                    alert(`Error deleting protocol: ${error.message}`);
+                    console.error("Delete protocol error:", error);
+                }
+            }
+         }
+
+
+         async function handleSaveStep(event) {
+             event.preventDefault();
+             const form = document.getElementById('step-form');
+             const stepId = document.getElementById('step-id').value;
+             const protocolId = document.getElementById('step-protocol-id').value;
+             const errorDiv = document.getElementById('step-modal-error');
+             errorDiv.classList.add('hidden');
+             const saveButton = document.getElementById('save-step-btn');
+             saveButton.disabled = true;
+             saveButton.innerHTML = '<span class="loading-spinner mr-1" style="width:16px; height:16px; border-width: 2px;"></span> Saving...';
+
+             if (!editorQuillInstance) {
+                errorDiv.textContent = "Editor not initialized."; errorDiv.classList.remove('hidden');
+                saveButton.disabled = false; saveButton.textContent = 'Save Step';
+                return;
+             }
+
+             const formData = new FormData(form);
+             const data = Object.fromEntries(formData.entries());
+             data.description = editorQuillInstance.root.innerHTML; // Get HTML content
+
+             // Basic Validation
+             try {
+                data.step_number = parseInt(data.step_number);
+                if (isNaN(data.step_number) || data.step_number < 1) throw new Error();
+             } catch {
+                 errorDiv.textContent = "Step Number must be a positive integer."; errorDiv.classList.remove('hidden');
+                 saveButton.disabled = false; saveButton.textContent = 'Save Step'; return;
+             }
+             if (!data.description || data.description === '<p><br></p>') {
+                 errorDiv.textContent = "Step Description cannot be empty."; errorDiv.classList.remove('hidden');
+                 saveButton.disabled = false; saveButton.textContent = 'Save Step'; return;
+             }
+             data.estimated_time_minutes = data.estimated_time_minutes ? parseInt(data.estimated_time_minutes) : null;
+             if (data.estimated_time_minutes !== null && isNaN(data.estimated_time_minutes)) data.estimated_time_minutes = null;
+
+
+              try {
+                 let isCreating = !stepId;
+                 const stepEndpoint = `eln/protocols/${protocolId}/steps${isCreating ? '' : `/${stepId}`}`;
+                 const method = isCreating ? 'POST' : 'PUT';
+
+                 // Add client-side check for duplicate step number on create
+                 if (isCreating && currentProtocolDetail && currentProtocolDetail.steps.some(s => s.step_number === data.step_number)) {
+                     throw new Error(`Step number ${data.step_number} already exists in this protocol.`);
+                 }
+
+                 await apiFetch(stepEndpoint, { method: method, body: data });
+
+                 closeStepModal();
+                 await loadProtocolDetails(protocolId); // Reload full details after saving a step
+              } catch (error) {
+                 errorDiv.textContent = `Error saving step: ${error.message}`;
+                 errorDiv.classList.remove('hidden');
+              } finally {
+                 saveButton.disabled = false;
+                 saveButton.textContent = 'Save Step';
+              }
+         }
+
+         async function handleDeleteStep(stepId) {
+             if (!currentProtocolDetail || !currentProtocolDetail.protocol_id || !stepId) return;
+             const protocolId = currentProtocolDetail.protocol_id;
+
+             const step = currentProtocolDetail.steps.find(s => s.step_id === stepId);
+             const stepIdentifier = step ? `Step ${step.step_number}` : 'this step';
+
+             const confirmed = confirm(`DELETE: ${stepIdentifier}?\n\nThis action cannot be undone.`);
+
+             if (confirmed) {
+                 try {
+                     await apiFetch(`eln/protocols/${protocolId}/steps/${stepId}`, { method: 'DELETE' });
+                     await loadProtocolDetails(protocolId); // Reload details
+                 } catch (error) {
+                     alert(`Error deleting step: ${error.message}`);
+                     console.error("Delete step error:", error);
+                 }
+             }
+          }
+
+
+        // Attach listeners for step edit/delete buttons
+        function attachStepActionListeners() {
+            // Use event delegation on the steps list container for efficiency
+            const stepsListContainer = document.getElementById('protocol-steps-list');
+            if (!stepsListContainer) return;
+
+             // Remove previous listeners if any (simple approach)
+             stepsListContainer.onclick = null;
+
+             stepsListContainer.addEventListener('click', (e) => {
+                 const button = e.target.closest('button');
+                 if (!button) return; // Exit if the click wasn't on or inside a button
+
+                 const stepId = button.dataset.stepId;
+                 if (!stepId) return; // Exit if no step ID found
+
+                 if (button.classList.contains('edit-step-modal-btn')) {
+                     const step = currentProtocolDetail?.steps?.find(s => s.step_id === stepId);
+                     if (step) openStepModal(currentProtocolDetail.protocol_id, step);
+                 } else if (button.classList.contains('delete-step-btn')) {
+                     handleDeleteStep(stepId);
+                 }
+             });
+        }
+
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+
+            // Display logged-in user info
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if (user && (user.person_id || user.contact_id || user.customer_id)) {
+                 let userInitial, userName, userColor;
+                 if (user.person_id === 'TIFI' || user.person_id === 'kasmi') { // Special Admins
+                     userInitial = user.person_id.charAt(0).toUpperCase(); userName = user.full_name || user.person_id; userColor = 'bg-red-500';
+                 } else if (user.person_id) { // Regular Staff
+                     userInitial = user.person_id.charAt(0).toUpperCase(); userName = user.full_name || user.person_id; userColor = 'bg-blue-500';
+                 } else if (user.customer_id) { // Customer
+                     userInitial = String(user.customer_id).charAt(0).toUpperCase(); userName = user.customer_name || `Customer ${user.customer_id}`; userColor = 'bg-green-500';
+                 } else if (user.contact_id) { // External Contact
+                     userInitial = String(user.contact_id).charAt(0).toUpperCase(); userName = user.full_name || `Contact ${user.contact_id}`; userColor = 'bg-purple-500';
+                 }
+                 document.getElementById('user-profile').innerHTML = `<span class="mr-2 p-1.5 ${userColor} text-white rounded-full text-xs font-bold w-6 h-6 flex items-center justify-center">${userInitial}</span> <p class="font-semibold text-sm text-gray-800">${userName}</p>`;
+            }
+
+            // --- Attach Main Listeners ---
+            document.getElementById('logout-button').addEventListener('click', async () => {
+                 try { await apiFetch('logout', { method: 'POST' }); } catch (e) { console.error("Logout API failed:", e); }
+                 sessionStorage.clear(); localStorage.removeItem('redirectUrl'); window.location.href = './login.html';
+            });
+            document.getElementById('create-protocol-btn').addEventListener('click', () => openProtocolModal());
+            document.getElementById('cancel-protocol-modal').addEventListener('click', closeProtocolModal);
+            document.getElementById('protocol-form').addEventListener('submit', handleSaveProtocol);
+            document.getElementById('edit-protocol-btn').addEventListener('click', () => { if(currentProtocolDetail) openProtocolModal(currentProtocolDetail); });
+            document.getElementById('delete-protocol-btn').addEventListener('click', handleDeleteProtocol);
+            document.getElementById('add-step-btn').addEventListener('click', () => { if(currentProtocolDetail) openStepModal(currentProtocolDetail.protocol_id); });
+            document.getElementById('cancel-step-modal').addEventListener('click', closeStepModal);
+            document.getElementById('step-form').addEventListener('submit', handleSaveStep);
+            document.querySelectorAll('.tab-button').forEach(button => {
+                 button.addEventListener('click', () => switchTab(button.dataset.tab));
+            });
+            document.getElementById('protocol-search').addEventListener('input', () => { displayProtocols(currentProtocols); });
+            document.getElementById('protocol-filter-project').addEventListener('change', () => { displayProtocols(currentProtocols); });
+            document.getElementById('protocol-filter-status').addEventListener('change', () => { displayProtocols(currentProtocols); });
+
+            // --- Material Insertion Listeners ---
+             document.getElementById('insert-material-btn').addEventListener('click', () => {
+                 const type = document.getElementById('material-type-select').value;
+                 const selectedOption = document.getElementById('material-select').selectedOptions[0];
+                 const qty = document.getElementById('material-quantity').value;
+                 const unit = document.getElementById('material-unit').value;
+
+                 if (!selectedOption || !selectedOption.value) { alert("Please select a material or equipment."); return; }
+
+                 const cache = type === 'reagent' ? reagentsCache : equipmentCache;
+                 const idField = type === 'reagent' ? 'reagent_id' : 'equipment_id';
+                 const nameField = type === 'reagent' ? 'reagent_complete_name' : 'equipment_name';
+                 const selectedItem = cache.find(item => item[idField] === selectedOption.value);
+
+                 const materialData = {
+                     id: selectedOption.value,
+                     name: selectedItem ? selectedItem[nameField] : selectedOption.textContent,
+                     type: type,
+                     qty: qty || null,
+                     unit: unit || null
+                 };
+
+                 if (insertMaterialCallback && editorQuillInstance) {
+                     insertMaterialCallback(materialData);
+                     closeMaterialSelectorModal();
+                      // Timeout ensures icons render after blot insertion completes
+                     setTimeout(() => { lucide.createIcons(); }, 50);
+                 } else {
+                     console.error("Callback or Quill instance missing for material insertion.");
+                 }
+             });
+             document.getElementById('cancel-material-select').addEventListener('click', closeMaterialSelectorModal);
+
+             // --- Component Manager Listeners ---
+             // Make sure the listener is attached *only once*
+            const manageCompBtn = document.getElementById('manage-components-btn');
+            if (manageCompBtn) {
+                 // Remove any existing listener first to be safe
+                 manageCompBtn.removeEventListener('click', openComponentManagerModal);
+                 manageCompBtn.addEventListener('click', openComponentManagerModal);
+            }
+            document.getElementById('close-component-manager').addEventListener('click', closeComponentManagerModal);
+            // Add listeners for adding/removing components within the manager modal (TODO)
+             document.getElementById('add-reagent-to-protocol-btn').addEventListener('click', () => {
+                 console.log("Add Reagent button clicked - Placeholder");
+                 // TODO: Implement logic to add selected reagent to currentProtocolDetail.components.reagents
+                 // Need to handle duplicates, potentially update DB via API, then refresh display.
+             });
+             document.getElementById('add-equipment-to-protocol-btn').addEventListener('click', () => {
+                 console.log("Add Equipment button clicked - Placeholder");
+                  // TODO: Implement logic to add selected equipment to currentProtocolDetail.components.equipment
+             });
+             document.getElementById('save-component-changes-btn').addEventListener('click', () => {
+                 console.log("Save Component Changes button clicked - Placeholder");
+                 // TODO: Implement API call to save the updated currentProtocolDetail.components list
+                 // Likely involves a PUT request to the protocol endpoint with the component data.
+                 closeComponentManagerModal();
+             });
+
+
+            // Initialize Quill for the Step Modal
+            initializeModalQuill();
+
+            // Initial data load
+            loadProtocols();
+            loadProjectsIntoDropdown(); // Load projects for filters/modals
+            loadComponentsCache(); // Load reagents/equipment for selectors
+
+        });
+
+    </script>
 </body>
 </html>
+
