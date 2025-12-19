@@ -8,3 +8,11 @@ Development of this database need to reoptimize the structure and design to repl
 ## ToDo informations
 
 -[] GIS change geometry to geogrphy
+
+- [] Mercury
+- [x] Venus
+- [x] Earth (Orbit/Moon)
+- [x] Mars
+- [ ] Jupiter
+- [ ] Saturn
+- [ ] Uranus
