@@ -21,39 +21,39 @@ DATABASE: demo
 │   ├── *reference_databases
 │   ├── *region
 │   ├── *sampling_type
-│   ├── status
-│   ├── taxon
-│   └── unitsvessel
+│   ├── *status
+│   ├── *taxon
+│   └── *units
 │
 ├── core
-│   ├── persons
-│   ├── organizations (Organizations, Suppliers)
-│   ├── equipments
-│   ├── vessel
-│   └── locations (rooms, building, officies)
+│   ├── *persons
+│   ├── *organizations (Organizations, Suppliers)
+│   ├── *equipments
+│   ├── *vessel
+│   └── *locations (rooms, building, officies)
 │
 ├── lims (Logistics & People)
-│   ├── projects (Project metadata, Funding, Roles)
-│   ├── project_personnel
-│   ├── project_permit
-│   ├── reagents
-│   ├── storage 
-│   ├── experiments
-│   ├── experiments_projects
-│   ├── experiments_samples
-│   └── sop
+│   ├── *projects (Project metadata, Funding, Roles)
+│   ├── *project_personnel
+│   ├── *project_permit
+│   ├── *reagents
+│   ├── *storage 
+│   ├── *experiments
+│   ├── *experiments_projects
+│   ├── *experiments_samples
+│   └── *sop
 │
 ├── field
-│   ├── cruises (Cruises and expeditions)
-│   ├── fishing
-│   ├── sampling_event
-│   ├── sampling_abiotic
-│   └── catch
+│   ├── *cruises (Cruises and expeditions)
+│   ├── *fishing
+│   ├── *sampling_event
+│   ├── *sampling_abiotic
+│   └── *catch
 │
 ├── bio_assets
-│   ├── samples_reservation
-│   ├── samples_root
-│   ├── organisms (Typed fish data: Length, weight, sex)
+│   ├── *samples_reservation
+│   ├── *samples_root
+│   ├── *organisms (Typed fish data: Length, weight, sex)
 │   ├── tissue
 │   ├── dna
 │   ├── rna

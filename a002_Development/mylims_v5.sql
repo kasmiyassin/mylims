@@ -213,7 +213,7 @@ CREATE TABLE IF NOT EXISTS "core"."equipments" (
 CREATE TABLE IF NOT EXISTS "core"."vessel" (
     "vessel_id" text PRIMARY KEY,
     "vessel_name" text,
-    "capitine" text REFERENCES "core"."persons"("person_id"),
+    "captain" text REFERENCES "core"."persons"("person_id"),
     "belong_to" text,
     "tags" text,
     "notes" text,
@@ -234,6 +234,9 @@ CREATE TABLE IF NOT EXISTS "lims"."projects" (
     "pi_person_id" text REFERENCES "core"."persons"("person_id"),
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "description" text,
+    "report_date" date,
+    "contact_finance" text,
+    "contact_funder" text,
     "tags" text,
     "notes" text,
     "attachment" bytea,
@@ -268,6 +271,8 @@ CREATE TABLE IF NOT EXISTS "lims"."sop" (
     "title" text NOT NULL,
     "version" text,
     "author_id" text REFERENCES "core"."persons"("person_id"),
+    "reviewer1_person_id" text  REFERENCES "core"."persons"("person_id"),
+    "reviewer2_person_id" text  REFERENCES "core"."persons"("person_id"),
     "content" text,
     "attachment" bytea,
     "attachment_link" text,
@@ -341,8 +346,10 @@ CREATE TABLE IF NOT EXISTS "field"."cruises" (
     "start_date" date,
     "end_date" date,
     "chief_scientist_id" text REFERENCES "core"."persons"("person_id"),
+    "captain_id" text REFERENCES "core"."persons"("person_id"),
     "project_id" text REFERENCES "lims"."projects"("project_id"),
     "region_id" text REFERENCES "reference"."region"("region_id"),
+    "ecosystem_id" text REFERENCES "reference"."ecosystem"("ecosystem_id"),
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "tags" text,
     "notes" text
@@ -362,7 +369,7 @@ CREATE TABLE IF NOT EXISTS "field"."sampling_event" (
     "latitude" numeric,
     "longitude" numeric,
     "geography" geography(Point, 4326),
-    "together_with_contact_id" text REFERENCES "lims"."external_contacts"("contact_id"),
+    "together_with_contact_id" text REFERENCES "core"."persons"("person_id"),
     "status_id" text DEFAULT 'Planned' NOT NULL REFERENCES "reference"."status"("status_id"),
     "tags" text,
     "notes" text,
@@ -408,7 +415,7 @@ CREATE TABLE IF NOT EXISTS "field"."sampling_abiotic" (
     "notes" text,
 );
 
-CREATE TABLE IF NOT EXISTS "field"."sampling_abiotic_v2" (
+CREATE TABLE IF NOT EXISTS "field"."sampling_abiotic_v2" ( -- this how tthypically the table of abiotic should looks in sql
     "sampling_id" text REFERENCES "field"."sampling"("sampling_id"),
     "parameter" text NOT NULL,
     "value" numeric,
@@ -484,7 +491,6 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."samples_root" (
     "external_id" text,
     "migfish_id" text,
     "parent_sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
-    "root_sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
     "sampling_id" text REFERENCES "field"."sampling"("sampling_id"),
     "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
     "collection_date" date,
