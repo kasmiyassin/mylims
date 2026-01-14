@@ -11,6 +11,7 @@ Development of this database need to reoptimize the structure and design to repl
 - [X] Remove partitioning from all tables, because it complicates to add new data and there is need to mi
 
 
+
 # Ideas
 
 DATABASE: demo
