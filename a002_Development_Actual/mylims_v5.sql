@@ -95,8 +95,18 @@ CREATE TABLE IF NOT EXISTS "reference"."taxon" (
     "common_name_en" text,
     "common_name_de" text,
     "common_name_de" text,
-    -- "max_length" numeric,
-    -- min_length numeric
+    -- "has_fork_length" boolean DEFAULT false
+    -- "has_standard_length" boolean DEFAULT false
+    -- "has_otoliths" boolean DEFAULT false
+    -- "has_scales" boolean DEFAULT false
+    -- "max_total_length_mm" integer,
+    -- "max_fork_length_mm" integer
+    -- "max_standard_length_mm" integer
+    -- "max_weight_g" integer,
+
+    -- "is_fish" boolean DEFAULT false -- I was thinking maybe if we also sample other organisms for isotopes in the Weser, we should prep the database also for that?
+    -- "is_invertebrate" boolean DEFAULT false
+    -- "is_plant" boolean DEFAULT false
 
     "rank" text,
     "path" ltree,
@@ -525,10 +535,10 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."organisms" (
     "sample_id" text PRIMARY KEY REFERENCES "bio_assets"."samples_root"("sample_id"),
     "taxon_id" text REFERENCES "reference"."taxon"("taxon_id"),
     "sex" text CHECK (sex IN ('Male', 'Female', 'Undetermined', 'Hermaphrodite')),
-    "total_length_mm" numeric,
-    "fork_length_mm" numeric,
-    "standard_length_mm" numeric,
-    "weight_g" numeric,
+    "total_length_mm" integer, --I think all these should be integer, as we won´t measure/weigh a fish in micrometer or milligrams
+    "fork_length_mm" integer,
+    "standard_length_mm" integer,
+    "weight_g" integer,
     "sex" text,
     "maturity_stage" text,
     "stomach_contents" text,
