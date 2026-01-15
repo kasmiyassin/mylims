@@ -94,6 +94,10 @@ CREATE TABLE IF NOT EXISTS "reference"."taxon" (
     "scientific_name" text,
     "common_name_en" text,
     "common_name_de" text,
+    "common_name_de" text,
+    -- "max_length" numeric,
+    -- min_length numeric
+
     "rank" text,
     "path" ltree,
     "tags" text,
