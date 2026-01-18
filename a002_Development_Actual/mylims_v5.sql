@@ -31,6 +31,7 @@ CREATE SCHEMA IF NOT EXISTS "bioinformatics"; -- bioinformatics anaylses
 CREATE SCHEMA IF NOT EXISTS "communications"; -- chat and exchange with others
 CREATE SCHEMA IF NOT EXISTS "eln"; --
 CREATE SCHEMA IF NOT EXISTS "audit"; -- 
+CREATE SCHEMA IF NOT EXISTS "dashboard"; -- 
 
 -- =========================================
 -- 3. AUDIT SCHEMA
@@ -358,8 +359,8 @@ CREATE TABLE IF NOT EXISTS "field"."sampling_event" (
     "ecosystem_id" text REFERENCES "reference"."ecosystem"("ecosystem_id"),
     "vessel_id" text REFERENCES "core"."vessel"("vessel_id"),
     "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
-    "latitude" numeric,
-    "longitude" numeric,
+    "latitude" numeric CHECK (latitude >= -90 AND latitude <= 90), 
+    "longitude" numeric CHECK (longitude >= -180 AND longitude <= 180),
     "geo_type" text,
     "geography" geography(Geography, 4326), -- lat and lon and geotype combined to create this geographe
     "together_with_contact_id" text REFERENCES "core"."persons"("person_id"),
@@ -408,8 +409,8 @@ CREATE TABLE IF NOT EXISTS "field"."sampling_abiotic" (
 
 CREATE TABLE IF NOT EXISTS "field"."fishing" (
     "sampling_id" text PRIMARY KEY REFERENCES "field"."sampling_event"("sampling_id"),
-    "latitude" numeric,
-    "longitude" numeric,
+    "latitude" numeric CHECK (latitude >= -90 AND latitude <= 90), 
+    "longitude" numeric CHECK (longitude >= -180 AND longitude <= 180),
     "geo_type" text,
     "fishing_geography" geography(Geography, 4326),
     "location_name" text,
@@ -923,12 +924,24 @@ CREATE TABLE IF NOT EXISTS "communications"."reports" (
 
 
 -- =========================================
--- 14. functions
+-- 14. FUNCTIONS & TRIGGERS
 -- =========================================
 
--- F14.1. AUDIT LOGGING FUNCTION
--- ###################################### 
+-- 14.1 SETUP SEARCH CONFIGURATION
+-- ----------------------------------------------------------------------------
+-- Creates a specific text search configuration for the lab (English stemmer)
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_ts_config WHERE cfgname = 'lims_english') THEN
+        CREATE TEXT SEARCH DICTIONARY english_stem (TEMPLATE = snowball, LANGUAGE = english);
+        CREATE TEXT SEARCH CONFIGURATION public.lims_english (COPY = english);
+        ALTER TEXT SEARCH CONFIGURATION public.lims_english 
+        ALTER MAPPING FOR asciiword, asciihword, hword, hword_part, word WITH english_stem;
+    END IF;
+END $$;
 
+-- 14.2 AUDIT LOGGING SYSTEM
+-- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION "audit".fn_log_audit_action()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -936,103 +949,42 @@ DECLARE
     v_new_data jsonb := NULL;
     v_person_id text;
 BEGIN
-    -- 1. Get the application-level user ID from a session variable
-    -- This variable will be set by Flask app before running queries.
+    -- Attempt to capture the application-level user ID (if set by the app/API session)
     BEGIN
         v_person_id := current_setting('session.logged_in_person_id', true);
     EXCEPTION WHEN OTHERS THEN
         v_person_id := NULL;
     END;
 
-    -- 2. Determine the action and capture data snapshots
     IF (TG_OP = 'UPDATE') THEN
         v_old_data := row_to_json(OLD)::jsonb;
         v_new_data := row_to_json(NEW)::jsonb;
-        
-        -- Optimization: If the data hasn't actually changed, don't log it
-        IF v_old_data = v_new_data THEN
-            RETURN NEW;
-        END IF;
-
+        -- Optimization: Do not log if data hasn't changed
+        IF v_old_data = v_new_data THEN RETURN NEW; END IF;
     ELSIF (TG_OP = 'DELETE') THEN
         v_old_data := row_to_json(OLD)::jsonb;
-        v_new_data := NULL;
-
     ELSIF (TG_OP = 'INSERT') THEN
-        v_old_data := NULL;
         v_new_data := row_to_json(NEW)::jsonb;
     END IF;
 
-    -- 3. Insert into the audit_log table
     INSERT INTO "audit"."audit_log" (
-        "schema_name",
-        "table_name",
-        "user_db_name",
-        "logged_in_person_id",
-        "action",
-        "original_data",
-        "new_data",
-        "query_text"
+        "schema_name", "table_name", "user_db_name", "logged_in_person_id",
+        "action", "original_data", "new_data", "query_text"
     )
     VALUES (
-        TG_TABLE_SCHEMA,
-        TG_TABLE_NAME,
-        session_user, -- Captures 'postgres' or 'web_admin'
-        v_person_id,  -- Captures the researcher's ID from your Flask UI
-        SUBSTRING(TG_OP, 1, 1), -- 'I', 'U', or 'D'
-        v_old_data,
-        v_new_data,
-        current_query()
+        TG_TABLE_SCHEMA, TG_TABLE_NAME, session_user, v_person_id,
+        SUBSTRING(TG_OP, 1, 1), v_old_data, v_new_data, current_query()
     );
 
-    IF (TG_OP = 'DELETE') THEN
-        RETURN OLD;
-    ELSE
-        RETURN NEW;
-    END IF;
+    IF (TG_OP = 'DELETE') THEN RETURN OLD; ELSE RETURN NEW; END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-
--- TRIGGER for applied function to all table
-DO $$
-DECLARE
-    t RECORD;
-    v_schema_list text[] := ARRAY[
-        'reference', 'core', 'lims', 'field', 'bio_assets', 
-        'biologyfish', 'moleculargenetics', 'bioinformatics', 
-        'communications', 'eln'
-    ];
-BEGIN
-    -- Loop through every table in the specified schemas
-    FOR t IN 
-        SELECT table_schema, table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = ANY(v_schema_list) 
-          AND table_type = 'BASE TABLE'
-    LOOP
-        -- 1. Drop the trigger if it already exists to avoid errors on re-runs
-        EXECUTE format('DROP TRIGGER IF EXISTS trg_audit_log ON %I.%I', 
-                        t.table_schema, t.table_name);
-
-        -- 2. Create the new trigger
-        EXECUTE format('CREATE TRIGGER trg_audit_log 
-                        AFTER INSERT OR UPDATE OR DELETE ON %I.%I 
-                        FOR EACH ROW EXECUTE FUNCTION "audit".fn_log_audit_action()', 
-                        t.table_schema, t.table_name);
-        
-        RAISE NOTICE 'Audit enabled on table: %.%', t.table_schema, t.table_name;
-    END LOOP;
-END $$;
-
-
-
--- F14.2. Labeling FUNCTIONS
--- ############################################################################
-
--- F14.2.1 Hierarchical Sample ID (Roots and Children)
--- Logic: Root = TypeYYPrj000 | Child = ParentID_type#
+-- 14.3 ID GENERATION FUNCTIONS
 -- ----------------------------------------------------------------------------
+
+-- 14.3.1 Hierarchical Sample ID (Roots and Children)
+-- Logic: Root = TypeYYPrj001 | Child = ParentID_type#
 CREATE OR REPLACE FUNCTION bio_assets.fn_generate_hierarchical_sample_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1042,11 +994,13 @@ DECLARE
     v_prefix text;
     v_next_serial int;
 BEGIN
-    -- Get Type Abbreviation (e.g., 'F', 'T', 'D', 'P')
+    -- Concurrency Safety: Lock table to prevent duplicate IDs during simultaneous inserts
+    LOCK TABLE bio_assets.samples_root IN SHARE ROW EXCLUSIVE MODE;
+
     SELECT abbreviation INTO v_type_abrv FROM reference.sample_type WHERE sample_type_id = NEW.sample_type_id;
 
-    -- CASE 1: ROOT SAMPLE (No Parent)
     IF NEW.parent_sample_id IS NULL THEN
+        -- Root Sample Logic
         SELECT acronym INTO v_prj_acronym FROM lims.projects WHERE project_id = NEW.project_id;
         v_year := TO_CHAR(COALESCE(NEW.collection_date, CURRENT_DATE), 'YY');
         v_prefix := COALESCE(v_type_abrv, 'S') || v_year || COALESCE(v_prj_acronym, 'UNK');
@@ -1056,24 +1010,22 @@ BEGIN
         WHERE sample_id LIKE v_prefix || '%' AND parent_sample_id IS NULL;
         
         NEW.sample_id := v_prefix || LPAD(v_next_serial::text, 3, '0');
-
-    -- CASE 2: CHILD SAMPLE (Derived from Parent)
     ELSE
-        v_prefix := NEW.parent_sample_id || '_' || LOWER(v_type_abrv);
+        -- Child Sample Logic
+        v_prefix := NEW.parent_sample_id || '_' || LOWER(COALESCE(v_type_abrv, 'x'));
         
         SELECT COALESCE(MAX(SUBSTRING(sample_id FROM LENGTH(v_prefix) + 1)::int), 0) + 1
         INTO v_next_serial FROM bio_assets.samples_root WHERE sample_id LIKE v_prefix || '%';
         
-        NEW.sample_id := v_prefix || v_next_serial::text;
+        NEW.sample_id := v_prefix || v_next_serial::text; -- Usually short ID for children (e.g. _1, _2)
     END IF;
 
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- F14.2.2 Field Sampling ID
--- Logic: YY + EcoAbrv + RegAbrv + _000
--- ----------------------------------------------------------------------------
+-- 14.3.2 Field Sampling ID
+-- Logic: YY + Eco + Reg + _001
 CREATE OR REPLACE FUNCTION field.fn_generate_sampling_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1083,6 +1035,8 @@ DECLARE
     v_prefix text;
     v_next_serial int;
 BEGIN
+    LOCK TABLE field.sampling_event IN SHARE ROW EXCLUSIVE MODE;
+
     SELECT ecosystem_abrv INTO v_eco_abrv FROM reference.ecosystem WHERE ecosystem_id = NEW.ecosystem_id;
     SELECT region_abrv INTO v_reg_abrv FROM reference.region WHERE region_id = NEW.region_id;
     
@@ -1096,18 +1050,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- F14.2.3 Metadata Table IDs
--- Logic: SampleID + _suffix_ + 00
--- ----------------------------------------------------------------------------
+-- 14.3.3 Metadata Table IDs (Generic)
+-- Logic: SampleID_suffix_01
 CREATE OR REPLACE FUNCTION public.fn_generate_metadata_id()
 RETURNS TRIGGER AS $$
 DECLARE
-    v_id_col text := TG_ARGV[0];
-    v_suffix text := TG_ARGV[1];
+    v_id_col text := TG_ARGV[0]; 
+    v_suffix text := TG_ARGV[1]; 
+    v_pad int := COALESCE(TG_ARGV[2]::int, 2); 
     v_prefix text;
     v_next_serial int;
-    v_pad int := COALESCE(TG_ARGV[2]::int, 2);
 BEGIN
+    IF NEW.sample_id IS NULL THEN RAISE EXCEPTION 'Sample ID missing for metadata generation'; END IF;
+
     v_prefix := NEW.sample_id || '_' || v_suffix || '_';
 
     EXECUTE format('SELECT COALESCE(MAX(SUBSTRING(%I FROM %L)::int), 0) + 1 
@@ -1120,9 +1075,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- F14.2.4 Administrative Sequence IDs
--- Logic: YY + tag + _0000 | Dataset: PrjYYds_0000
--- ----------------------------------------------------------------------------
+-- 14.3.4 Sequence IDs (Admin/ELN)
+-- Logic: YYtag_0001
 CREATE OR REPLACE FUNCTION public.fn_generate_sequence_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1152,9 +1106,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- F14.2.5 Special IDs (Bookings & Chat)
--- Logic: Booking = YYYYMMDD000 | Chat = PrjYYMMDD_00
--- ----------------------------------------------------------------------------
+-- 14.3.5 Special IDs (Bookings & Chat)
 CREATE OR REPLACE FUNCTION public.fn_generate_special_ids()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1163,6 +1115,7 @@ BEGIN
     IF TG_TABLE_NAME = 'bookings' THEN
         DECLARE v_date_prefix text := TO_CHAR(NEW.start_time, 'YYYYMMDD');
         BEGIN
+            LOCK TABLE eln.bookings IN SHARE ROW EXCLUSIVE MODE;
             SELECT COALESCE(MAX(SUBSTRING(booking_id::text FROM 9)::int), 0) + 1
             INTO v_next_serial FROM eln.bookings WHERE booking_id::text LIKE v_date_prefix || '%';
             NEW.booking_id := (v_date_prefix || LPAD(v_next_serial::text, 3, '0'))::bigint;
@@ -1175,6 +1128,8 @@ BEGIN
         BEGIN
             SELECT acronym INTO v_prj FROM lims.projects WHERE project_id = NEW.project_id;
             v_prefix := COALESCE(v_prj, 'UNK') || v_date || '_';
+            
+            LOCK TABLE communications.projects_chat IN SHARE ROW EXCLUSIVE MODE;
             SELECT COALESCE(MAX(SUBSTRING(message_id FROM LENGTH(v_prefix) + 1)::int), 0) + 1
             INTO v_next_serial FROM communications.projects_chat WHERE message_id LIKE v_prefix || '%';
             NEW.message_id := v_prefix || LPAD(v_next_serial::text, 2, '0');
@@ -1184,9 +1139,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- F14.2.6 Reservation ID (Manual Override or Auto)
--- Logic: TypeYYEcoReg_000
--- ----------------------------------------------------------------------------
+-- 14.3.6 Reservation IDs
+-- Logic: TypeYYEcoReg_001
 CREATE OR REPLACE FUNCTION bio_assets.fn_generate_reservation_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -1197,10 +1151,11 @@ DECLARE
     v_prefix text;
     v_next_serial int;
 BEGIN
-    -- Manual check: if ID is already provided, skip auto-gen
     IF NEW.reservation_sample_id IS NOT NULL AND NEW.reservation_sample_id <> '' THEN
         RETURN NEW;
     END IF;
+
+    LOCK TABLE bio_assets.samples_reservation IN SHARE ROW EXCLUSIVE MODE;
 
     SELECT abbreviation INTO v_type_abrv FROM reference.sample_type WHERE sample_type_id = NEW.sample_type_id;
 
@@ -1216,167 +1171,77 @@ BEGIN
     INTO v_next_serial FROM bio_assets.samples_reservation WHERE reservation_sample_id LIKE v_prefix || '%';
 
     NEW.reservation_sample_id := v_prefix || LPAD(v_next_serial::text, 3, '0');
-
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- F14.2.7 Catch ID
--- Logic: SamplingID + _Sp0000
--- ----------------------------------------------------------------------------
+-- 14.3.7 Catch IDs
 CREATE OR REPLACE FUNCTION field.fn_generate_catch_id() 
 RETURNS TRIGGER AS $$
 BEGIN
+    -- Uses count as simple serial for catch within a sampling event
     NEW.catch_id := NEW.sampling_id || '_Sp' || LPAD((SELECT COALESCE(COUNT(*),0)+1 FROM field.catch WHERE sampling_id = NEW.sampling_id)::text, 4, '0');
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- TRIGGER REGISTRATION
 
--- 1. Bio Assets & Field
-CREATE TRIGGER trg_hierarchical_sample_id BEFORE INSERT ON bio_assets.samples_root FOR EACH ROW EXECUTE FUNCTION bio_assets.fn_generate_hierarchical_sample_id();
-CREATE TRIGGER trg_field_sampling_id BEFORE INSERT ON field.sampling_event FOR EACH ROW EXECUTE FUNCTION field.fn_generate_sampling_id();
-CREATE TRIGGER trg_gen_reservation_id BEFORE INSERT ON bio_assets.samples_reservation FOR EACH ROW EXECUTE FUNCTION bio_assets.fn_generate_reservation_id();
-CREATE TRIGGER trg_catch_id BEFORE INSERT ON field.catch FOR EACH ROW EXECUTE FUNCTION field.fn_generate_catch_id();
+-- 14.4 HELPER & SYNC FUNCTIONS
+-- ----------------------------------------------------------------------------
 
--- 2. Metadata Tables
-CREATE TRIGGER trg_gen_diss_id BEFORE INSERT ON biologyfish.dissection FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('dissection_id', 'd');
-CREATE TRIGGER trg_gen_nano_id BEFORE INSERT ON moleculargenetics.nanodrop FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('measurement_id', 'nanodrop');
-CREATE TRIGGER trg_gen_qubit_id BEFORE INSERT ON moleculargenetics.qubit FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('measurement_id', 'qubit');
-CREATE TRIGGER trg_gen_tape_id BEFORE INSERT ON moleculargenetics.tapestation FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('measurement_id', 'tapestation');
-CREATE TRIGGER trg_gen_qpcr_id BEFORE INSERT ON moleculargenetics.qpcr FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('qpcr_id', 'qpcr', 3);
-CREATE TRIGGER trg_gen_gel_id  BEFORE INSERT ON moleculargenetics.gelelectrophoresis FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('gel_id', 'Gel', 3);
-CREATE TRIGGER trg_gen_assign_id BEFORE INSERT ON bioinformatics.assignments FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('assignment_id', 'assign', 6);
-
--- 3. Sequences & Admin
-CREATE TRIGGER trg_gen_ds_id   BEFORE INSERT ON bioinformatics.seq_dataset FOR EACH ROW EXECUTE FUNCTION public.fn_generate_sequence_id('dataset_id', 'ds');
-CREATE TRIGGER trg_gen_prot_id BEFORE INSERT ON eln.protocols FOR EACH ROW EXECUTE FUNCTION public.fn_generate_sequence_id('protocol_id', 'prtcl');
-CREATE TRIGGER trg_gen_plan_id BEFORE INSERT ON communications.internal_plans FOR EACH ROW EXECUTE FUNCTION public.fn_generate_sequence_id('plan_id', 'intpln');
-CREATE TRIGGER trg_gen_rep_id  BEFORE INSERT ON communications.reports FOR EACH ROW EXECUTE FUNCTION public.fn_generate_sequence_id('report_id', 'rprt');
-CREATE TRIGGER trg_gen_book_id BEFORE INSERT ON eln.bookings FOR EACH ROW EXECUTE FUNCTION public.fn_generate_special_ids();
-CREATE TRIGGER trg_gen_chat_id BEFORE INSERT ON communications.projects_chat FOR EACH ROW EXECUTE FUNCTION public.fn_generate_special_ids();
-
-
--- F14.3. AUTO-RESOLVE SAMPLE ID FROM EXTERNAL/TEAM ID
--- ############################################################################
-
+-- 14.4.1 Auto-Resolve Sample ID from External ID
 CREATE OR REPLACE FUNCTION public.fn_resolve_sample_id_from_external()
 RETURNS TRIGGER AS $$
 DECLARE
     v_resolved_id text;
 BEGIN
-    -- Only run if sample_id is missing but an external_id/team_id is provided
     IF (NEW.sample_id IS NULL OR NEW.sample_id = '') AND 
        (NEW.external_id IS NOT NULL AND NEW.external_id <> '') THEN
-
-        -- Search in samples_root for a match in either external_id or team_id
-        -- We also check that the sample_type_id matches (e.g., DNA to DNA)
         SELECT sample_id INTO v_resolved_id
         FROM bio_assets.samples_root
         WHERE (external_id = NEW.external_id OR team_id = NEW.external_id)
           AND is_active = true
         LIMIT 1;
 
-        -- If found, auto-fill the sample_id
         IF v_resolved_id IS NOT NULL THEN
             NEW.sample_id := v_resolved_id;
         ELSE
-            -- Optional: Raise an error if the team ID isn't registered in root first
-            RAISE EXCEPTION 'ID % not found in bio_assets.samples_root. Please register the root sample first.', NEW.external_id;
+            RAISE EXCEPTION 'ID % not found in bio_assets.samples_root.', NEW.external_id;
         END IF;
     END IF;
-
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger
-
--- Apply to DNA/Nucleic Acid
-CREATE TRIGGER trg_resolve_dna_id 
-BEFORE INSERT ON moleculargenetics.nucleic_acid
-FOR EACH ROW EXECUTE FUNCTION public.fn_resolve_sample_id_from_external();
-
--- Apply to Tissue
-CREATE TRIGGER trg_resolve_tissue_id 
-BEFORE INSERT ON bio_assets.tissue
-FOR EACH ROW EXECUTE FUNCTION public.fn_resolve_sample_id_from_external();
-
--- Apply to Dissection
-CREATE TRIGGER trg_resolve_dissection_id 
-BEFORE INSERT ON biologyfish.dissection
-FOR EACH ROW EXECUTE FUNCTION public.fn_resolve_sample_id_from_external();
-
-
-
--- F14.4. COORDINATE TO GEOGRAPHY CONVERSION
--- ############################################
-
+-- 14.4.2 Geography Sync (PostGIS)
+-- Handles INSERT and UPDATE, including clearing geography if lat/lon is removed
 CREATE OR REPLACE FUNCTION public.fn_sync_latlon_to_geography()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Only proceed if coordinates are available and have changed or geography is empty
     IF (NEW.latitude IS NOT NULL AND NEW.longitude IS NOT NULL) THEN
-        IF (TG_OP = 'INSERT' OR 
-            OLD.latitude IS DISTINCT FROM NEW.latitude OR 
-            OLD.longitude IS DISTINCT FROM NEW.longitude OR
-            (TG_TABLE_NAME = 'sampling_event' AND NEW.geography IS NULL) OR
-            (TG_TABLE_NAME = 'fishing' AND NEW.fishing_geography IS NULL)) 
-        THEN
-
-            -- Determine which geography column to fill based on the table
-            IF TG_TABLE_NAME = 'sampling_event' THEN
-                -- Sampling events are typically Points
-                NEW.geography := ST_SetSRID(ST_MakePoint(NEW.longitude, NEW.latitude), 4326)::geography;
-            
-            ELSIF TG_TABLE_NAME = 'fishing' THEN
-                -- Fishing can be different types based on geo_type column
-                CASE LOWER(COALESCE(NEW.geo_type, 'point'))
-                    WHEN 'path' THEN
-                        -- Assuming path logic might involve multiple points; 
-                        -- simple implementation: create a point if only one set of lat/lon exists
-                        NEW.fishing_geography := ST_SetSRID(ST_MakePoint(NEW.longitude, NEW.latitude), 4326)::geography;
-                    WHEN 'shape' THEN
-                        -- Placeholder for polygon logic
-                        NEW.fishing_geography := ST_SetSRID(ST_MakePoint(NEW.longitude, NEW.latitude), 4326)::geography;
-                    ELSE
-                        -- Default to Point
-                        NEW.fishing_geography := ST_SetSRID(ST_MakePoint(NEW.longitude, NEW.latitude), 4326)::geography;
-                END CASE;
-            END IF;
+        IF TG_TABLE_NAME = 'sampling_event' THEN
+            NEW.geography := ST_SetSRID(ST_MakePoint(NEW.longitude, NEW.latitude), 4326)::geography;
+        ELSIF TG_TABLE_NAME = 'fishing' THEN
+            NEW.fishing_geography := ST_SetSRID(ST_MakePoint(NEW.longitude, NEW.latitude), 4326)::geography;
+        END IF;
+    ELSIF (NEW.latitude IS NULL OR NEW.longitude IS NULL) THEN
+        IF TG_TABLE_NAME = 'sampling_event' THEN
+            NEW.geography := NULL;
+        ELSIF TG_TABLE_NAME = 'fishing' THEN
+            NEW.fishing_geography := NULL;
         END IF;
     END IF;
-
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-
--- Trigger
-
--- Apply to Sampling Event
-CREATE TRIGGER trg_sync_geo_sampling
-BEFORE INSERT OR UPDATE OF latitude, longitude ON field.sampling_event
-FOR EACH ROW EXECUTE FUNCTION public.fn_sync_latlon_to_geography();
-
--- Apply to Fishing
-CREATE TRIGGER trg_sync_geo_fishing
-BEFORE INSERT OR UPDATE OF latitude, longitude ON field.fishing
-FOR EACH ROW EXECUTE FUNCTION public.fn_sync_latlon_to_geography();
-
-
-
--- F14.5. UPDATED LTREE PATH FUNCTION for taxon
--- This version handles the specific V5 column names: parent_taxon_id and taxon_path
--- ############################################
+-- 14.4.3 Taxon Path
 CREATE OR REPLACE FUNCTION "reference".fn_update_taxon_path()
 RETURNS TRIGGER AS $$
 DECLARE
     v_parent_path ltree;
 BEGIN
     IF NEW.parent_taxon_id IS NOT NULL THEN
-        -- Get the path of the parent
         SELECT taxon_path INTO v_parent_path 
         FROM "reference"."taxon" 
         WHERE taxon_id = NEW.parent_taxon_id;
@@ -1384,208 +1249,939 @@ BEGIN
         IF NOT FOUND THEN
             RAISE EXCEPTION 'Parent taxon % not found.', NEW.parent_taxon_id;
         END IF;
-        -- Combine parent path with the new ID
         NEW.taxon_path := v_parent_path || NEW.taxon_id;
     ELSE
-        -- Root level path
         NEW.taxon_path := NEW.taxon_id::ltree;
     END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger for Taxon
-CREATE TRIGGER trg_update_taxon_path 
-BEFORE INSERT OR UPDATE OF parent_taxon_id ON "reference"."taxon" 
-FOR EACH ROW EXECUTE FUNCTION "reference".fn_update_taxon_path();
 
--- F14.6. Search Configuration and Column Setup
--- Create a custom text search configuration
--- #################################### 
-
--- 1. SEARCH CONFIGURATION
-CREATE TEXT SEARCH DICTIONARY english_stem (TEMPLATE = snowball, LANGUAGE = english);
-CREATE TEXT SEARCH CONFIGURATION public.lims_english (COPY = english);
-ALTER TEXT SEARCH CONFIGURATION public.lims_english 
-ALTER MAPPING FOR asciiword, asciihword, hword, hword_part, word WITH english_stem;
-
--- 2. ADD SEARCH COLUMNS TO ALL RELEVANT TABLES
-ALTER TABLE "core"."persons" ADD COLUMN IF NOT EXISTS "search_vector" tsvector;
-ALTER TABLE "core"."organizations" ADD COLUMN IF NOT EXISTS "search_vector" tsvector;
-ALTER TABLE "core"."locations" ADD COLUMN IF NOT EXISTS "search_vector" tsvector;
-ALTER TABLE "core"."equipments" ADD COLUMN IF NOT EXISTS "search_vector" tsvector;
-ALTER TABLE "lims"."projects" ADD COLUMN IF NOT EXISTS "search_vector" tsvector;
-ALTER TABLE "lims"."sop" ADD COLUMN IF NOT EXISTS "search_vector" tsvector;
-ALTER TABLE "field"."sampling_event" ADD COLUMN IF NOT EXISTS "search_vector" tsvector;
-ALTER TABLE "field"."fishing" ADD COLUMN IF NOT EXISTS "search_vector" tsvector;
-ALTER TABLE "bio_assets"."samples_root" ADD COLUMN IF NOT EXISTS "search_vector" tsvector;
-ALTER TABLE "bio_assets"."specimen_organisms" ADD COLUMN IF NOT EXISTS "search_vector" tsvector;
-ALTER TABLE "biologyfish"."dissection" ADD COLUMN IF NOT EXISTS "search_vector" tsvector;
-ALTER TABLE "moleculargenetics"."nucleic_acid" ADD COLUMN IF NOT EXISTS "search_vector" tsvector;
-ALTER TABLE "bioinformatics"."pipelines" ADD COLUMN IF NOT EXISTS "search_vector" tsvector;
-ALTER TABLE "eln"."protocols" ADD COLUMN IF NOT EXISTS "search_vector" tsvector;
-ALTER TABLE "communications"."projects_chat" ADD COLUMN IF NOT EXISTS "search_vector" tsvector;
-
-
--- Core Schema
+-- 14.5 SEARCH VECTOR UPDATES
+-- ----------------------------------------------------------------------------
+-- Standardizers for Full Text Search
 CREATE OR REPLACE FUNCTION core.fn_update_persons_search() RETURNS TRIGGER AS $$
 BEGIN
-    NEW.search_vector := TO_TSVECTOR('public.lims_english', COALESCE(NEW.first_name,'') || ' ' || COALESCE(NEW.last_name,'') || ' ' || COALESCE(NEW.email,'') || ' ' || COALESCE(NEW.notes,''));
+    NEW.search_vector := TO_TSVECTOR('public.lims_english', CONCAT_WS(' ', NEW.first_name, NEW.last_name, NEW.email, NEW.notes));
     RETURN NEW;
 END; $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION core.fn_update_orgs_search() RETURNS TRIGGER AS $$
 BEGIN
-    NEW.search_vector := TO_TSVECTOR('public.lims_english', COALESCE(NEW.name,'') || ' ' || COALESCE(NEW.notes,''));
+    NEW.search_vector := TO_TSVECTOR('public.lims_english', CONCAT_WS(' ', NEW.name, NEW.notes));
     RETURN NEW;
 END; $$ LANGUAGE plpgsql;
 
--- LIMS & Projects
 CREATE OR REPLACE FUNCTION lims.fn_update_projects_search() RETURNS TRIGGER AS $$
 BEGIN
-    NEW.search_vector := TO_TSVECTOR('public.lims_english', COALESCE(NEW.title,'') || ' ' || COALESCE(NEW.acronym,'') || ' ' || COALESCE(NEW.description,'') || ' ' || COALESCE(NEW.notes,''));
+    NEW.search_vector := TO_TSVECTOR('public.lims_english', CONCAT_WS(' ', NEW.title, NEW.acronym, NEW.description, NEW.notes));
     RETURN NEW;
 END; $$ LANGUAGE plpgsql;
 
--- Samples & Biology
 CREATE OR REPLACE FUNCTION bio_assets.fn_update_samples_search() RETURNS TRIGGER AS $$
 BEGIN
-    NEW.search_vector := TO_TSVECTOR('public.lims_english', COALESCE(NEW.sample_id,'') || ' ' || COALESCE(NEW.external_id,'') || ' ' || COALESCE(NEW.team_id,'') || ' ' || COALESCE(NEW.notes,''));
+    NEW.search_vector := TO_TSVECTOR('public.lims_english', CONCAT_WS(' ', NEW.sample_id, NEW.external_id, NEW.team_id, NEW.notes));
     RETURN NEW;
 END; $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION biologyfish.fn_update_dissection_search() RETURNS TRIGGER AS $$
 BEGIN
-    NEW.search_vector := TO_TSVECTOR('public.lims_english', COALESCE(NEW.stomach_contents_text,'') || ' ' || COALESCE(NEW.parasite_observation,'') || ' ' || COALESCE(NEW.notes,''));
+    NEW.search_vector := TO_TSVECTOR('public.lims_english', CONCAT_WS(' ', NEW.stomach_contents_text, NEW.parasite_observation, NEW.notes));
     RETURN NEW;
 END; $$ LANGUAGE plpgsql;
 
--- Communications
 CREATE OR REPLACE FUNCTION communications.fn_update_chat_search() RETURNS TRIGGER AS $$
 BEGIN
     NEW.search_vector := TO_TSVECTOR('public.lims_english', COALESCE(NEW.message_body,''));
     RETURN NEW;
 END; $$ LANGUAGE plpgsql;
 
--- 4. TRIGGER REGISTRATION
-
-CREATE TRIGGER trg_search_persons BEFORE INSERT OR UPDATE ON core.persons FOR EACH ROW EXECUTE FUNCTION core.fn_update_persons_search();
-CREATE TRIGGER trg_search_orgs BEFORE INSERT OR UPDATE ON core.organizations FOR EACH ROW EXECUTE FUNCTION core.fn_update_orgs_search();
-CREATE TRIGGER trg_search_projects BEFORE INSERT OR UPDATE ON lims.projects FOR EACH ROW EXECUTE FUNCTION lims.fn_update_projects_search();
-CREATE TRIGGER trg_search_samples BEFORE INSERT OR UPDATE ON bio_assets.samples_root FOR EACH ROW EXECUTE FUNCTION bio_assets.fn_update_samples_search();
-CREATE TRIGGER trg_search_dissection BEFORE INSERT OR UPDATE ON biologyfish.dissection FOR EACH ROW EXECUTE FUNCTION biologyfish.fn_update_dissection_search();
-CREATE TRIGGER trg_search_chat BEFORE INSERT OR UPDATE ON communications.projects_chat FOR EACH ROW EXECUTE FUNCTION communications.fn_update_chat_search();
-
--- 5. GIN INDEXES FOR PERFORMANCE
-CREATE INDEX idx_fts_persons ON core.persons USING GIN(search_vector);
-CREATE INDEX idx_fts_projects ON lims.projects USING GIN(search_vector);
-CREATE INDEX idx_fts_samples ON bio_assets.samples_root USING GIN(search_vector);
-CREATE INDEX idx_fts_dissection ON biologyfish.dissection USING GIN(search_vector);
-
--- F14.7. Global Search Function
--- #################################### 
-
-
+-- 14.6 GLOBAL SEARCH FUNCTION
+-- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.fn_global_search(p_search_term text)
-RETURNS TABLE(
-    schema_name text, 
-    table_name text, 
-    primary_key_id text, 
-    matching_data jsonb
-) AS $$
+RETURNS TABLE(schema_name text, table_name text, primary_key_id text, matching_data jsonb) AS $$
 DECLARE
     rec RECORD;
     query text;
 BEGIN
-    -- Iterate through all tables that have a 'search_vector' column
     FOR rec IN
-        SELECT 
-            t.table_schema, 
-            t.table_name,
-            (SELECT column_name 
-             FROM information_schema.key_column_usage 
-             WHERE table_name = t.table_name 
-               AND table_schema = t.table_schema 
-             LIMIT 1) as pk_col
+        SELECT t.table_schema, t.table_name,
+            (SELECT column_name FROM information_schema.key_column_usage 
+             WHERE table_name = t.table_name AND table_schema = t.table_schema LIMIT 1) as pk_col
         FROM information_schema.columns t
         WHERE t.column_name = 'search_vector'
           AND t.table_schema NOT IN ('information_schema', 'pg_catalog', 'audit')
     LOOP
-        -- Execute dynamic search query for each table
         query := format(
-            'SELECT %L::text, %L::text, %I::text, to_jsonb(t) ' ||
-            'FROM %I.%I AS t ' ||
+            'SELECT %L::text, %L::text, %I::text, to_jsonb(t) FROM %I.%I AS t ' ||
             'WHERE t.search_vector @@ plainto_tsquery(%L, %L)',
-            rec.table_schema, rec.table_name, rec.pk_col, 
-            rec.table_schema, rec.table_name, 
+            rec.table_schema, rec.table_name, rec.pk_col, rec.table_schema, rec.table_name, 
             'public.lims_english', p_search_term
         );
-        
         RETURN QUERY EXECUTE query;
     END LOOP;
 END;
 $$ LANGUAGE plpgsql STABLE;
 
 
--- 15. Index
--- #################################### 
+-- 14.7 TRIGGER REGISTRATION 
+-- ============================================================================
 
--- 1. REFERENCE SCHEMA INDEXES (Taxonomy & Hierarchy)
-CREATE INDEX idx_ref_taxon_path ON "reference"."taxon" USING GIST ("taxon_path");
-CREATE INDEX idx_ref_taxon_parent ON "reference"."taxon" ("parent_taxon_id");
-CREATE INDEX idx_ref_eco_path ON "reference"."ecosystem" USING GIST ("ecosystem_path");
-CREATE INDEX idx_ref_reg_path ON "reference"."region" USING GIST ("region_path");
+DO $$
+BEGIN
+    -- 1. Bio Assets & Field IDs
+    DROP TRIGGER IF EXISTS trg_hierarchical_sample_id ON bio_assets.samples_root;
+    CREATE TRIGGER trg_hierarchical_sample_id BEFORE INSERT ON bio_assets.samples_root FOR EACH ROW EXECUTE FUNCTION bio_assets.fn_generate_hierarchical_sample_id();
 
--- 2. CORE SCHEMA INDEXES (People & Orgs)
-CREATE INDEX idx_core_pers_org ON "core"."persons" ("organization_id");
-CREATE INDEX idx_core_pers_fts ON "core"."persons" USING GIN ("search_vector");
-CREATE INDEX idx_core_org_fts ON "core"."organizations" USING GIN ("search_vector");
-CREATE INDEX idx_core_loc_geog ON "core"."locations" USING GIST ("geography");
-CREATE INDEX idx_core_loc_parent ON "core"."locations" ("parent_location_id");
+    DROP TRIGGER IF EXISTS trg_field_sampling_id ON field.sampling_event;
+    CREATE TRIGGER trg_field_sampling_id BEFORE INSERT ON field.sampling_event FOR EACH ROW EXECUTE FUNCTION field.fn_generate_sampling_id();
 
--- 3. LIMS SCHEMA INDEXES (Projects & Storage)
-CREATE INDEX idx_lims_proj_fts ON "lims"."projects" USING GIN ("search_vector");
-CREATE INDEX idx_lims_proj_dates ON "lims"."projects" ("start_date", "end_date");
-CREATE INDEX idx_lims_exp_proj ON "lims"."experiments" ("project_id");
-CREATE INDEX idx_lims_stor_parent ON "lims"."storage_units" ("parent_storage_id");
-CREATE INDEX idx_lims_inst_type ON "lims"."equipments" ("equipment_type_id");
+    DROP TRIGGER IF EXISTS trg_gen_reservation_id ON bio_assets.samples_reservation;
+    CREATE TRIGGER trg_gen_reservation_id BEFORE INSERT ON bio_assets.samples_reservation FOR EACH ROW EXECUTE FUNCTION bio_assets.fn_generate_reservation_id();
 
--- 4. FIELD SCHEMA INDEXES (Geospatial & Events)
-CREATE INDEX idx_field_samp_date ON "field"."sampling_event" ("sampling_date");
-CREATE INDEX idx_field_samp_geog ON "field"."sampling_event" USING GIST ("geography");
-CREATE INDEX idx_field_samp_eco ON "field"."sampling_event" ("ecosystem_id");
-CREATE INDEX idx_field_fish_samp ON "field"."fishing" ("sampling_id");
-CREATE INDEX idx_field_fish_geog ON "field"."fishing" USING GIST ("fishing_geography");
-CREATE INDEX idx_field_catch_samp ON "field"."catch" ("sampling_id");
-CREATE INDEX idx_field_catch_tax ON "field"."catch" ("taxon_id");
+    DROP TRIGGER IF EXISTS trg_catch_id ON field.catch;
+    CREATE TRIGGER trg_catch_id BEFORE INSERT ON field.catch FOR EACH ROW EXECUTE FUNCTION field.fn_generate_catch_id();
 
--- 5. BIO_ASSETS SCHEMA INDEXES (Sample Lineage)
-CREATE INDEX idx_bio_root_parent ON "bio_assets"."samples_root" ("parent_sample_id");
-CREATE INDEX idx_bio_root_samp_ev ON "bio_assets"."samples_root" ("sampling_id");
-CREATE INDEX idx_bio_root_proj ON "bio_assets"."samples_root" ("project_id");
-CREATE INDEX idx_bio_root_type ON "bio_assets"."samples_root" ("sample_type_id");
-CREATE INDEX idx_bio_root_extid ON "bio_assets"."samples_root" ("external_id");
-CREATE INDEX idx_bio_root_teamid ON "bio_assets"."samples_root" ("team_id");
-CREATE INDEX idx_bio_root_fts ON "bio_assets"."samples_root" USING GIN ("search_vector");
-CREATE INDEX idx_bio_res_samp_ev ON "bio_assets"."samples_reservation" ("sampling_id");
+    -- 2. Metadata Tables (IDs)
+    DROP TRIGGER IF EXISTS trg_gen_diss_id ON biologyfish.dissection;
+    CREATE TRIGGER trg_gen_diss_id BEFORE INSERT ON biologyfish.dissection FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('dissection_id', 'dissection');
 
--- 6. BIOLOGYFISH & MOLECULAR INDEXES (Lab Metadata)
-CREATE INDEX idx_biofish_spec_tax ON "bio_assets"."specimen_organisms" ("taxon_id");
-CREATE INDEX idx_biofish_diss_fts ON "biologyfish"."dissection" USING GIN ("search_vector");
-CREATE INDEX idx_mol_pcr_run ON "moleculargenetics"."pcr" ("run_id");
-CREATE INDEX idx_mol_lib_sample ON "moleculargenetics"."library" ("sample_id");
-CREATE INDEX idx_mol_seq_lib ON "moleculargenetics"."sequencing" ("library_id");
+    DROP TRIGGER IF EXISTS trg_gen_nano_id ON moleculargenetics.nanodrop;
+    CREATE TRIGGER trg_gen_nano_id BEFORE INSERT ON moleculargenetics.nanodrop FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('measurement_id', 'nanodrop');
 
--- 7. BIOINFORMATICS & ELN INDEXES
-CREATE INDEX idx_binfo_ds_proj ON "bioinformatics"."seq_dataset" ("project_id");
-CREATE INDEX idx_binfo_assign_ds ON "bioinformatics"."assignments" ("dataset_id");
-CREATE INDEX idx_eln_book_inst ON "eln"."bookings" ("equipment_id");
-CREATE INDEX idx_eln_book_time ON "eln"."bookings" ("start_time", "end_time");
-CREATE INDEX idx_eln_prot_fts ON "eln"."protocols" USING GIN ("search_vector");
+    DROP TRIGGER IF EXISTS trg_gen_qubit_id ON moleculargenetics.qubit;
+    CREATE TRIGGER trg_gen_qubit_id BEFORE INSERT ON moleculargenetics.qubit FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('measurement_id', 'qubit');
 
--- 8. COMMUNICATIONS & AUDIT INDEXES
-CREATE INDEX idx_comm_chat_proj ON "communications"."projects_chat" ("project_id");
-CREATE INDEX idx_comm_chat_fts ON "communications"."projects_chat" USING GIN ("search_vector");
-CREATE INDEX idx_audit_log_table ON "audit"."audit_log" ("schema_name", "table_name");
-CREATE INDEX idx_audit_log_time ON "audit"."audit_log" ("action_timestamp");
-CREATE INDEX idx_audit_log_person ON "audit"."audit_log" ("logged_in_person_id");
+    DROP TRIGGER IF EXISTS trg_gen_tape_id ON moleculargenetics.tapestation;
+    CREATE TRIGGER trg_gen_tape_id BEFORE INSERT ON moleculargenetics.tapestation FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('measurement_id', 'tapestation');
+
+    DROP TRIGGER IF EXISTS trg_gen_qpcr_id ON moleculargenetics.qpcr;
+    CREATE TRIGGER trg_gen_qpcr_id BEFORE INSERT ON moleculargenetics.qpcr FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('qpcr_id', 'qpcr', 3);
+
+    DROP TRIGGER IF EXISTS trg_gen_gel_id ON moleculargenetics.gelelectrophoresis;
+    CREATE TRIGGER trg_gen_gel_id  BEFORE INSERT ON moleculargenetics.gelelectrophoresis FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('gel_id', 'Gel', 3);
+
+    DROP TRIGGER IF EXISTS trg_gen_assign_id ON bioinformatics.assignments;
+    CREATE TRIGGER trg_gen_assign_id BEFORE INSERT ON bioinformatics.assignments FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('assignment_id', 'assign', 6);
+
+    -- 3. Sequence & Special IDs
+    DROP TRIGGER IF EXISTS trg_gen_ds_id ON bioinformatics.seq_dataset;
+    CREATE TRIGGER trg_gen_ds_id   BEFORE INSERT ON bioinformatics.seq_dataset FOR EACH ROW EXECUTE FUNCTION public.fn_generate_sequence_id('dataset_id', 'ds');
+
+    DROP TRIGGER IF EXISTS trg_gen_prot_id ON eln.protocols;
+    CREATE TRIGGER trg_gen_prot_id BEFORE INSERT ON eln.protocols FOR EACH ROW EXECUTE FUNCTION public.fn_generate_sequence_id('protocol_id', 'prtcl');
+
+    DROP TRIGGER IF EXISTS trg_gen_plan_id ON communications.internal_plans;
+    CREATE TRIGGER trg_gen_plan_id BEFORE INSERT ON communications.internal_plans FOR EACH ROW EXECUTE FUNCTION public.fn_generate_sequence_id('plan_id', 'intpln');
+
+    DROP TRIGGER IF EXISTS trg_gen_rep_id ON communications.reports;
+    CREATE TRIGGER trg_gen_rep_id  BEFORE INSERT ON communications.reports FOR EACH ROW EXECUTE FUNCTION public.fn_generate_sequence_id('report_id', 'rprt');
+
+    DROP TRIGGER IF EXISTS trg_gen_book_id ON eln.bookings;
+    CREATE TRIGGER trg_gen_book_id BEFORE INSERT ON eln.bookings FOR EACH ROW EXECUTE FUNCTION public.fn_generate_special_ids();
+
+    DROP TRIGGER IF EXISTS trg_gen_chat_id ON communications.projects_chat;
+    CREATE TRIGGER trg_gen_chat_id BEFORE INSERT ON communications.projects_chat FOR EACH ROW EXECUTE FUNCTION public.fn_generate_special_ids();
+
+    -- 4. Sample Resolution (External ID Link)
+    DROP TRIGGER IF EXISTS trg_resolve_dna_id ON moleculargenetics.nucleic_acid;
+    CREATE TRIGGER trg_resolve_dna_id BEFORE INSERT ON moleculargenetics.nucleic_acid FOR EACH ROW EXECUTE FUNCTION public.fn_resolve_sample_id_from_external();
+
+    DROP TRIGGER IF EXISTS trg_resolve_tissue_id ON bio_assets.tissue;
+    CREATE TRIGGER trg_resolve_tissue_id BEFORE INSERT ON bio_assets.tissue FOR EACH ROW EXECUTE FUNCTION public.fn_resolve_sample_id_from_external();
+
+    DROP TRIGGER IF EXISTS trg_resolve_dissection_id ON biologyfish.dissection;
+    CREATE TRIGGER trg_resolve_dissection_id BEFORE INSERT ON biologyfish.dissection FOR EACH ROW EXECUTE FUNCTION public.fn_resolve_sample_id_from_external();
+
+    -- 5. Sync & Paths
+    DROP TRIGGER IF EXISTS trg_sync_geo_sampling ON field.sampling_event;
+    CREATE TRIGGER trg_sync_geo_sampling BEFORE INSERT OR UPDATE OF latitude, longitude ON field.sampling_event FOR EACH ROW EXECUTE FUNCTION public.fn_sync_latlon_to_geography();
+
+    DROP TRIGGER IF EXISTS trg_sync_geo_fishing ON field.fishing;
+    CREATE TRIGGER trg_sync_geo_fishing BEFORE INSERT OR UPDATE OF latitude, longitude ON field.fishing FOR EACH ROW EXECUTE FUNCTION public.fn_sync_latlon_to_geography();
+
+    DROP TRIGGER IF EXISTS trg_update_taxon_path ON "reference"."taxon";
+    CREATE TRIGGER trg_update_taxon_path BEFORE INSERT OR UPDATE OF parent_taxon_id ON "reference"."taxon" FOR EACH ROW EXECUTE FUNCTION "reference".fn_update_taxon_path();
+
+    -- 6. Search Vectors
+    DROP TRIGGER IF EXISTS trg_search_persons ON core.persons;
+    CREATE TRIGGER trg_search_persons BEFORE INSERT OR UPDATE ON core.persons FOR EACH ROW EXECUTE FUNCTION core.fn_update_persons_search();
+
+    DROP TRIGGER IF EXISTS trg_search_orgs ON core.organizations;
+    CREATE TRIGGER trg_search_orgs BEFORE INSERT OR UPDATE ON core.organizations FOR EACH ROW EXECUTE FUNCTION core.fn_update_orgs_search();
+
+    DROP TRIGGER IF EXISTS trg_search_projects ON lims.projects;
+    CREATE TRIGGER trg_search_projects BEFORE INSERT OR UPDATE ON lims.projects FOR EACH ROW EXECUTE FUNCTION lims.fn_update_projects_search();
+
+    DROP TRIGGER IF EXISTS trg_search_samples ON bio_assets.samples_root;
+    CREATE TRIGGER trg_search_samples BEFORE INSERT OR UPDATE ON bio_assets.samples_root FOR EACH ROW EXECUTE FUNCTION bio_assets.fn_update_samples_search();
+
+    DROP TRIGGER IF EXISTS trg_search_dissection ON biologyfish.dissection;
+    CREATE TRIGGER trg_search_dissection BEFORE INSERT OR UPDATE ON biologyfish.dissection FOR EACH ROW EXECUTE FUNCTION biologyfish.fn_update_dissection_search();
+
+    DROP TRIGGER IF EXISTS trg_search_chat ON communications.projects_chat;
+    CREATE TRIGGER trg_search_chat BEFORE INSERT OR UPDATE ON communications.projects_chat FOR EACH ROW EXECUTE FUNCTION communications.fn_update_chat_search();
+END $$;
+
+-- 14.8 GLOBAL AUDIT ACTIVATION
+-- ----------------------------------------------------------------------------
+DO $$
+DECLARE
+    t RECORD;
+    v_schema_list text[] := ARRAY['reference', 'core', 'lims', 'field', 'bio_assets', 'biologyfish', 'moleculargenetics', 'bioinformatics', 'communications', 'eln'];
+BEGIN
+    FOR t IN 
+        SELECT table_schema, table_name FROM information_schema.tables 
+        WHERE table_schema = ANY(v_schema_list) AND table_type = 'BASE TABLE'
+    LOOP
+        EXECUTE format('DROP TRIGGER IF EXISTS trg_audit_log ON %I.%I', t.table_schema, t.table_name);
+        EXECUTE format('CREATE TRIGGER trg_audit_log AFTER INSERT OR UPDATE OR DELETE ON %I.%I FOR EACH ROW EXECUTE FUNCTION "audit".fn_log_audit_action()', t.table_schema, t.table_name);
+    END LOOP;
+END $$;
+
+
+-- =========================================
+-- 15. INDEXES
+-- =========================================
+
+-- 15.1 REFERENCE SCHEMA (Hierarchy & Lookups)
+CREATE INDEX IF NOT EXISTS idx_ref_taxon_path ON "reference"."taxon" USING GIST ("taxon_path");
+CREATE INDEX IF NOT EXISTS idx_ref_taxon_parent ON "reference"."taxon" ("parent_taxon_id");
+CREATE INDEX IF NOT EXISTS idx_ref_eco_path ON "reference"."ecosystem" USING GIST ("ecosystem_path");
+CREATE INDEX IF NOT EXISTS idx_ref_reg_path ON "reference"."region" USING GIST ("region_path");
+CREATE INDEX IF NOT EXISTS idx_ref_sci_name ON "reference"."taxon" USING gin ("scientific_name" gin_trgm_ops);
+
+-- 15.2 CORE SCHEMA (Search & Relationships)
+CREATE INDEX IF NOT EXISTS idx_core_pers_org ON "core"."persons" ("organization_id");
+CREATE INDEX IF NOT EXISTS idx_core_pers_fts ON "core"."persons" USING GIN ("search_vector");
+CREATE INDEX IF NOT EXISTS idx_core_org_fts ON "core"."organizations" USING GIN ("search_vector");
+CREATE INDEX IF NOT EXISTS idx_core_loc_geog ON "core"."locations" USING GIST ("location_path");
+CREATE INDEX IF NOT EXISTS idx_core_loc_parent ON "core"."locations" ("parent_build_id");
+CREATE INDEX IF NOT EXISTS idx_core_equip_room ON "core"."equipments" ("room_id");
+
+-- 15.3 LIMS SCHEMA (Projects & Experiments)
+CREATE INDEX IF NOT EXISTS idx_lims_proj_fts ON "lims"."projects" USING GIN ("search_vector");
+CREATE INDEX IF NOT EXISTS idx_lims_proj_dates ON "lims"."projects" ("start_date", "end_date");
+CREATE INDEX IF NOT EXISTS idx_lims_exp_proj ON "lims"."experiments_projects" ("project_id");
+CREATE INDEX IF NOT EXISTS idx_lims_stor_parent ON "lims"."storage" ("parent_storage_id");
+CREATE INDEX IF NOT EXISTS idx_lims_exp_sop ON "lims"."experiments" ("sop_id");
+
+-- 15.4 FIELD SCHEMA (Geospatial & Time)
+CREATE INDEX IF NOT EXISTS idx_field_samp_date ON "field"."sampling_event" ("sampling_date");
+CREATE INDEX IF NOT EXISTS idx_field_samp_geog ON "field"."sampling_event" USING GIST ("geography");
+CREATE INDEX IF NOT EXISTS idx_field_samp_eco ON "field"."sampling_event" ("ecosystem_id");
+CREATE INDEX IF NOT EXISTS idx_field_samp_cruise ON "field"."sampling_event" ("cruise_id");
+CREATE INDEX IF NOT EXISTS idx_field_fish_samp ON "field"."fishing" ("sampling_id");
+CREATE INDEX IF NOT EXISTS idx_field_fish_geog ON "field"."fishing" USING GIST ("fishing_geography");
+CREATE INDEX IF NOT EXISTS idx_field_catch_samp ON "field"."catch" ("sampling_id");
+CREATE INDEX IF NOT EXISTS idx_field_catch_tax ON "field"."catch" ("taxon_id");
+
+-- 15.5 BIO_ASSETS SCHEMA (Lineage & Search)
+CREATE INDEX IF NOT EXISTS idx_bio_root_parent ON "bio_assets"."samples_root" ("parent_sample_id");
+CREATE INDEX IF NOT EXISTS idx_bio_root_samp_ev ON "bio_assets"."samples_root" ("sampling_id");
+CREATE INDEX IF NOT EXISTS idx_bio_root_proj ON "bio_assets"."samples_root" ("project_id");
+CREATE INDEX IF NOT EXISTS idx_bio_root_type ON "bio_assets"."samples_root" ("sample_type_id");
+CREATE INDEX IF NOT EXISTS idx_bio_root_extid ON "bio_assets"."samples_root" ("external_id");
+CREATE INDEX IF NOT EXISTS idx_bio_root_teamid ON "bio_assets"."samples_root" ("team_id");
+CREATE INDEX IF NOT EXISTS idx_bio_root_fts ON "bio_assets"."samples_root" USING GIN ("search_vector");
+CREATE INDEX IF NOT EXISTS idx_bio_res_samp_ev ON "bio_assets"."samples_reservation" ("sampling_id");
+
+-- 15.6 BIOLOGYFISH & MOLECULAR INDEXES (Lab Metadata)
+CREATE INDEX IF NOT EXISTS idx_biofish_spec_tax ON "bio_assets"."specimen_organisms" ("taxon_id");
+CREATE INDEX IF NOT EXISTS idx_biofish_diss_fts ON "biologyfish"."dissection" USING GIN ("search_vector");
+CREATE INDEX IF NOT EXISTS idx_biofish_diss_samp ON "biologyfish"."dissection" ("sample_id");
+CREATE INDEX IF NOT EXISTS idx_mol_pcr_exp ON "moleculargenetics"."pcr" ("experiment_id");
+CREATE INDEX IF NOT EXISTS idx_mol_lib_sample ON "moleculargenetics"."library" ("sample_id");
+CREATE INDEX IF NOT EXISTS idx_mol_seq_lib ON "moleculargenetics"."sequencing_libraries" ("library_id");
+CREATE INDEX IF NOT EXISTS idx_mol_seq_run ON "moleculargenetics"."sequencing_libraries" ("run_id");
+
+-- 15.7 BIOINFORMATICS & ELN INDEXES
+CREATE INDEX IF NOT EXISTS idx_binfo_ds_run ON "bioinformatics"."seq_dataset" ("run_id");
+CREATE INDEX IF NOT EXISTS idx_binfo_assign_ds ON "bioinformatics"."assignments" ("dataset_id");
+CREATE INDEX IF NOT EXISTS idx_eln_book_res ON "eln"."bookings" ("resource_id");
+CREATE INDEX IF NOT EXISTS idx_eln_book_time ON "eln"."bookings" ("start_time", "end_time");
+CREATE INDEX IF NOT EXISTS idx_eln_prot_fts ON "eln"."protocols" USING GIN ("search_vector");
+CREATE INDEX IF NOT EXISTS idx_eln_prot_json ON "eln"."protocols" USING GIN ("content_json");
+
+-- 15.8 COMMUNICATIONS & AUDIT INDEXES
+CREATE INDEX IF NOT EXISTS idx_comm_chat_proj ON "communications"."projects_chat" ("project_id");
+CREATE INDEX IF NOT EXISTS idx_comm_chat_fts ON "communications"."projects_chat" USING GIN ("search_vector");
+CREATE INDEX IF NOT EXISTS idx_audit_log_target ON "audit"."audit_log" ("schema_name", "table_name");
+CREATE INDEX IF NOT EXISTS idx_audit_log_time ON "audit"."audit_log" ("action_timestamp");
+CREATE INDEX IF NOT EXISTS idx_audit_log_person ON "audit"."audit_log" ("logged_in_person_id");
+
+
+-- ==========================================================
+-- 16. Views
+-- ==========================================================
+
+-- V16.0.  Global Lab Overview (Complete Database Link)
+-- ------------------------------------------------------------
+-- Description: Master view connecting all schema layers.
+-- Granularity: One row per Sample ID (Root or Child).
+-- Features: 
+--   1. Links Field, Biology, Molecular, and Bioinfo schemas.
+--   2. Uses JSONB aggregation for 1-to-Many relationships (e.g. QC reads).
+--   3. Provides "Story" traceability from Cruise -> Sample -> Seq -> Analysis.
+
+CREATE OR REPLACE VIEW public.global_lab_overview AS
+WITH 
+-- 1. AGGREGATE MOLECULAR QC DATA (1:N relationships)
+agg_nanodrop AS (
+    SELECT sample_id, jsonb_agg(jsonb_build_object(
+        'id', measurement_id, 'date', processing_date, 
+        'conc', concentration, 'unit', conc_unit, 
+        '260_280', a260_a280
+    )) as nanodrop_data
+    FROM moleculargenetics.nanodrop GROUP BY sample_id
+),
+agg_qubit AS (
+    SELECT sample_id, jsonb_agg(jsonb_build_object(
+        'id', measurement_id, 'date', processing_date, 
+        'conc', concentration, 'unit', conc_unit, 
+        'assay', assay_type
+    )) as qubit_data
+    FROM moleculargenetics.qubit GROUP BY sample_id
+),
+agg_tapestation AS (
+    SELECT sample_id, jsonb_agg(jsonb_build_object(
+        'id', measurement_id, 'date', processing_date, 
+        'avg_size', avg_size_bp, 'conc', concentration, 
+        'rin', din_rin
+    )) as tapestation_data
+    FROM moleculargenetics.tapestation GROUP BY sample_id
+),
+agg_gel AS (
+    SELECT sample_id, jsonb_agg(jsonb_build_object(
+        'id', gel_id, 'date', processing_date, 
+        'vol', volume_sample, 'band', band_size_bp, 
+        'img', image_path
+    )) as gel_data
+    FROM moleculargenetics.gelelectrophoresis GROUP BY sample_id
+),
+agg_qpcr AS (
+    SELECT sample_id, jsonb_agg(jsonb_build_object(
+        'id', qpcr_id, 'date', processing_date, 
+        'target', target_gene_id, 'ct', ct_value
+    )) as qpcr_data
+    FROM moleculargenetics.qpcr GROUP BY sample_id
+),
+
+-- 2. AGGREGATE SEQUENCING HISTORY (Library -> Run -> Flowcell)
+agg_sequencing AS (
+    SELECT 
+        sl.library_id, 
+        jsonb_agg(jsonb_build_object(
+            'run_id', s.run_id, 
+            'lane', sl.lane_number,
+            'flowcell', s.flowcell_id, 
+            'date', fc.run_date, 
+            'sequencer', fc.sequencer_id,
+            'status', s.status_id
+        )) as sequencing_history,
+        MAX(s.run_id) as latest_run_id
+    FROM moleculargenetics.sequencing_libraries sl
+    JOIN moleculargenetics.sequencing s ON sl.run_id = s.run_id
+    LEFT JOIN moleculargenetics.sequencing_flowcells fc ON s.flowcell_id = fc.flowcell_id
+    GROUP BY sl.library_id
+),
+
+-- 3. AGGREGATE BIOINFORMATICS (Assignments per Sample)
+agg_bioinfo AS (
+    SELECT 
+        sample_id, 
+        SUM(count) as total_reads_assigned, 
+        COUNT(DISTINCT taxon_id) as distinct_taxa_count,
+        -- Get top 5 hits as JSON for quick preview
+        jsonb_agg(jsonb_build_object(
+            'taxon', taxon_id, 'count', count, 'conf', confidence
+        ) ORDER BY count DESC) FILTER (WHERE count > 10) as top_hits
+    FROM bioinformatics.assignments 
+    GROUP BY sample_id
+)
+
+SELECT
+    -- === 1. IDENTITY & HIERARCHY ===
+    s.sample_id,
+    s.external_id,
+    s.team_id,
+    s.sample_type_id,
+    st.abbreviation as type_abrv,
+    s.parent_sample_id,
+    s.is_active,
+    s.status_id as sample_status,
+    s.collection_date,
+    s.notes as sample_notes,
+
+    -- === 2. PROJECT & MANAGEMENT ===
+    prj.project_id,
+    prj.acronym as project_acronym,
+    prj.title as project_title,
+    prj.pi_person_id,
+    b.batch_id,
+    b.name as batch_name,
+    exp.experiment_id,
+    exp.title as experiment_title,
+    sop.sop_id,
+    sop.title as sop_title,
+
+    -- === 3. STORAGE LOCATION ===
+    s.storage_id,
+    stor.name as storage_name,
+    stor.type as storage_type,
+    stor.room_id,
+    s.storage_position,
+
+    -- === 4. FIELD & SAMPLING CONTEXT ===
+    se.sampling_id,
+    se.sampling_date,
+    se.latitude as sampling_lat,
+    se.longitude as sampling_lon,
+    r.region_abrv as region,
+    e.ecosystem_abrv as ecosystem,
+    cr.cruise_id,
+    cr.name as cruise_name,
+    v.vessel_name,
+    
+    -- Abiotic Data (Snapshot)
+    ab.temperature_sampling_depth_c as field_temp_c,
+    ab.salinity as field_salinity,
+    ab.oxygen as field_oxygen,
+    ab.ph as field_ph,
+    ab.turbidity_ntu,
+    
+    -- Fishing Event Data
+    fish.fishing_method,
+    fish.depth_m as fishing_depth,
+    fish.total_catch_quantity_kg,
+
+    -- === 5. BIOLOGICAL SPECIMEN (Fish/Organism) ===
+    spec.organism_type,
+    tax.scientific_name,
+    tax.common_name_en,
+    spec.sex,
+    spec.life_stage,
+    spec.total_length_mm,
+    spec.fork_length_mm,
+    spec.standard_length_mm,
+    spec.weight_g as specimen_weight_g,
+    spec.processing_date as biology_processing_date,
+    
+    -- Dissection Details (If dissected)
+    diss.dissection_id,
+    diss.liver_weight_g,
+    diss.gonad_weight_g,
+    diss.stomach_contents_text,
+    diss.parasite_observation,
+    diss.notes as dissection_notes,
+    
+    -- Otoliths & Tags
+    oto.otolith_id,
+    oto.age_read,
+    oto.confidence_level as otolith_confidence,
+    tag.tag_id as tag_mark_id,
+    tag.model_type as tag_model,
+
+    -- === 6. ENVIRONMENTAL SAMPLES (Water/Sediment) ===
+    wat.volume_filtered_ml,
+    wat.filter_type,
+    sed.grain_size,
+    sed.weight_mg as sediment_weight,
+    tis.tissue_type,
+    tis.preservation_medium,
+
+    -- === 7. MOLECULAR: EXTRACTION ===
+    na.extraction_method,
+    na.kit as extraction_kit,
+    na.volume_uL as extract_vol,
+    na.conc_qubit as extract_conc_qubit,
+    na.conc_nanodrop as extract_conc_nano,
+    na.din_rin_score,
+    na.yield_qubit_ug,
+    
+    -- === 8. MOLECULAR: PCR & PROCESSING ===
+    pcr.pcr_id,
+    pcr.cycles as pcr_cycles,
+    pcr.polymerase_mastermix,
+    pcr.primer_fwd_id,
+    pcr.primer_rev_id,
+    
+    -- === 9. MOLECULAR QC (JSON Aggregations) ===
+    nd.nanodrop_data,
+    qb.qubit_data,
+    ts.tapestation_data,
+    gl.gel_data,
+    qp.qpcr_data,
+
+    -- === 10. LIBRARY & SEQUENCING ===
+    lib.library_id,
+    lib.prep_kit as lib_kit,
+    lib.avg_fragment_size,
+    lib.lib_barcode,
+    seq.sequencing_history,
+    seq.latest_run_id,
+
+    -- === 11. BIOINFORMATICS ===
+    bi.total_reads_assigned,
+    bi.distinct_taxa_count,
+    bi.top_hits,
+    ds.dataset_id, 
+    ds.description as dataset_desc,
+    ds.read_count_filtered as dataset_total_reads,
+    
+    -- === 12. METADATA ===
+    s.attachment_link,
+    s.search_vector
+
+FROM bio_assets.samples_root s
+-- Reference Lookups
+LEFT JOIN reference.sample_type st ON s.sample_type_id = st.sample_type_id
+LEFT JOIN reference.status stat ON s.status_id = stat.status_id
+
+-- LIMS Core Context
+LEFT JOIN lims.projects prj ON s.project_id = prj.project_id
+LEFT JOIN lims.storage stor ON s.storage_id = stor.storage_id
+LEFT JOIN eln.batch b ON s.batch_id = b.batch_id
+LEFT JOIN lims.experiments exp ON s.experiment_id = exp.experiment_id
+LEFT JOIN lims.sop sop ON exp.sop_id = sop.sop_id
+
+-- Field Data
+LEFT JOIN field.sampling_event se ON s.sampling_id = se.sampling_id
+LEFT JOIN reference.region r ON se.region_id = r.region_id
+LEFT JOIN reference.ecosystem e ON se.ecosystem_id = e.ecosystem_id
+LEFT JOIN field.cruises cr ON se.cruise_id = cr.cruise_id
+LEFT JOIN core.vessel v ON se.vessel_id = v.vessel_id
+LEFT JOIN field.sampling_abiotic ab ON se.sampling_id = ab.sampling_id
+LEFT JOIN field.fishing fish ON se.sampling_id = fish.sampling_id
+
+-- Biological Data (Type Specific 1:1)
+LEFT JOIN bio_assets.specimen_organisms spec ON s.sample_id = spec.sample_id
+LEFT JOIN reference.taxon tax ON spec.taxon_id = tax.taxon_id
+LEFT JOIN bio_assets.water wat ON s.sample_id = wat.sample_id
+LEFT JOIN bio_assets.sediments sed ON s.sample_id = sed.sample_id
+LEFT JOIN bio_assets.tissue tis ON s.sample_id = tis.sample_id
+
+-- Biology Sub-details (Linked to Specimen)
+LEFT JOIN biologyfish.dissection diss ON spec.sample_id = diss.sample_id
+LEFT JOIN biologyfish.otoliths oto ON spec.sample_id = oto.sample_id
+LEFT JOIN biologyfish.tag_mark tag ON spec.sample_id = tag.sample_id
+
+-- Molecular Data (Linked to Sample ID)
+LEFT JOIN moleculargenetics.nucleic_acid na ON s.sample_id = na.sample_id
+LEFT JOIN moleculargenetics.pcr pcr ON s.sample_id = pcr.sample_id
+LEFT JOIN moleculargenetics.library lib ON s.sample_id = lib.sample_id
+
+-- Aggregated Molecular QC Data
+LEFT JOIN agg_nanodrop nd ON s.sample_id = nd.sample_id
+LEFT JOIN agg_qubit qb ON s.sample_id = qb.sample_id
+LEFT JOIN agg_tapestation ts ON s.sample_id = ts.sample_id
+LEFT JOIN agg_gel gl ON s.sample_id = gl.sample_id
+LEFT JOIN agg_qpcr qp ON s.sample_id = qp.sample_id
+
+-- Sequencing Data (via Library)
+LEFT JOIN agg_sequencing seq ON lib.library_id = seq.library_id
+
+-- Bioinformatics Data
+LEFT JOIN agg_bioinfo bi ON s.sample_id = bi.sample_id
+-- Link to dataset via assignment map
+LEFT JOIN bioinformatics.seq_sample_assignment ssa ON s.sample_id = ssa.sample_id
+LEFT JOIN bioinformatics.seq_dataset ds ON ssa.dataset_id = ds.dataset_id;
+
+
+
+-- 16.1. PROJECT & MANAGEMENT DASHBOARDS
+
+-- VIEW: Project Progress Dashboard
+-- Usage: High-level overview for PIs and Managers. Shows sample counts and experiment progress.
+CREATE OR REPLACE VIEW lims.view_project_dashboard AS
+SELECT 
+    p.project_id,
+    p.acronym,
+    p.title,
+    pi.first_name || ' ' || pi.last_name AS pi_name,
+    p.start_date,
+    p.end_date,
+    p.status_id,
+    -- Metrics
+    COUNT(DISTINCT s.sample_id) AS total_samples,
+    COUNT(DISTINCT exp.experiment_id) AS experiments_run,
+    COUNT(DISTINCT se.sampling_id) AS sampling_campaigns,
+    COUNT(DISTINCT pub.report_id) AS reports_generated
+FROM lims.projects p
+LEFT JOIN core.persons pi ON p.pi_person_id = pi.person_id
+LEFT JOIN bio_assets.samples_root s ON p.project_id = s.project_id
+LEFT JOIN lims.experiments_projects ep ON p.project_id = ep.project_id
+LEFT JOIN lims.experiments exp ON ep.experiment_id = exp.experiment_id
+LEFT JOIN field.sampling_event se ON p.project_id = se.project_id
+LEFT JOIN communications.reports pub ON p.project_id = pub.project_id
+GROUP BY p.project_id, p.acronym, p.title, pi_name, p.start_date, p.end_date, p.status_id;
+
+-- VIEW: Team Workload
+-- Usage: See who is doing what (Sampling, Experiments, Analysis).
+CREATE OR REPLACE VIEW core.view_team_activity AS
+SELECT 
+    per.person_id,
+    per.first_name || ' ' || per.last_name AS full_name,
+    per.role_in_org,
+    COUNT(DISTINCT exp.experiment_id) AS experiments_led,
+    COUNT(DISTINCT se.sampling_id) AS sampling_events_attended,
+    COUNT(DISTINCT diss.dissection_id) AS dissections_performed,
+    COUNT(DISTINCT eln.run_id) AS protocols_executed
+FROM core.persons per
+LEFT JOIN lims.experiments exp ON per.person_id = exp.person_id
+LEFT JOIN field.sampling_event se ON per.person_id = se.together_with_contact_id
+LEFT JOIN biologyfish.dissection diss ON per.person_id = diss.person_id
+LEFT JOIN eln.protocols_run eln ON per.person_id = eln.person_id
+GROUP BY per.person_id, per.first_name, per.last_name, per.role_in_org;
+
+-- 16.2. FIELD & SPATIAL VIEWS
+
+-- VIEW: Sampling Map Data (GeoJSON ready)
+-- Usage: Direct feed for Mapbox/Leaflet/GIS tools.
+CREATE OR REPLACE VIEW field.view_sampling_map_data AS
+SELECT 
+    se.sampling_id,
+    se.sampling_date,
+    se.project_id,
+    c.name AS cruise_name,
+    v.vessel_name,
+    r.region_abrv,
+    e.ecosystem_abrv,
+    se.latitude,
+    se.longitude,
+    -- Create GeoJSON properties
+    jsonb_build_object(
+        'type', 'Feature',
+        'geometry', ST_AsGeoJSON(se.geography)::jsonb,
+        'properties', jsonb_build_object(
+            'id', se.sampling_id,
+            'date', se.sampling_date,
+            'cruise', c.name,
+            'temp', ab.temperature_sampling_depth_c,
+            'salinity', ab.salinity
+        )
+    ) AS geojson_feature
+FROM field.sampling_event se
+LEFT JOIN field.cruises c ON se.cruise_id = c.cruise_id
+LEFT JOIN core.vessel v ON se.vessel_id = v.vessel_id
+LEFT JOIN reference.region r ON se.region_id = r.region_id
+LEFT JOIN reference.ecosystem e ON se.ecosystem_id = e.ecosystem_id
+LEFT JOIN field.sampling_abiotic ab ON se.sampling_id = ab.sampling_id
+WHERE se.latitude IS NOT NULL;
+
+-- VIEW: Catch Composition Statistics
+-- Usage: Ecological analysis of catch data.
+CREATE OR REPLACE VIEW field.view_catch_statistics AS
+SELECT 
+    c.sampling_id,
+    se.sampling_date,
+    r.region_abrv,
+    t.scientific_name,
+    t.common_name_en,
+    SUM(c.quantity_weight_kg) AS total_biomass_kg,
+    SUM(c.quantity_count) AS total_abundance,
+    -- Calculate frequency of occurrence or relative abundance if needed in UI
+    se.project_id
+FROM field.catch c
+JOIN field.sampling_event se ON c.sampling_id = se.sampling_id
+JOIN reference.taxon t ON c.taxon_id = t.taxon_id
+JOIN reference.region r ON se.region_id = r.region_id
+GROUP BY c.sampling_id, se.sampling_date, r.region_abrv, t.scientific_name, t.common_name_en, se.project_id;
+
+
+-- 16.3. BIOLOGY & SPECIMEN VIEWS
+
+-- VIEW: Full Biological Profile (The "Fish Card")
+-- Usage: Combines external measurements with internal dissection data.
+CREATE OR REPLACE VIEW biologyfish.view_biological_profile AS
+SELECT 
+    spec.sample_id,
+    spec.organism_type,
+    t.scientific_name,
+    spec.sex,
+    spec.life_stage,
+    -- External Metrics
+    spec.total_length_mm,
+    spec.weight_g AS total_weight_g,
+    -- Internal Metrics (Dissection)
+    d.liver_weight_g,
+    d.gonad_weight_g,
+    d.stomach_contents_text,
+    d.parasite_observation,
+    -- Calculated Indices
+    CASE WHEN spec.total_length_mm > 0 THEN 
+        (spec.weight_g * 100) / (spec.total_length_mm ^ 3) 
+    ELSE NULL END AS fulton_condition_factor,
+    CASE WHEN spec.weight_g > 0 THEN 
+        (d.gonad_weight_g / spec.weight_g) * 100 
+    ELSE NULL END AS gonadosomatic_index_GSI,
+    CASE WHEN spec.weight_g > 0 THEN 
+        (d.liver_weight_g / spec.weight_g) * 100 
+    ELSE NULL END AS hepatosomatic_index_HSI,
+    -- Ageing
+    oto.age_read AS otolith_age,
+    oto.confidence_level AS age_confidence
+FROM bio_assets.specimen_organisms spec
+LEFT JOIN reference.taxon t ON spec.taxon_id = t.taxon_id
+LEFT JOIN biologyfish.dissection d ON spec.sample_id = d.sample_id
+LEFT JOIN biologyfish.otoliths oto ON spec.sample_id = oto.sample_id;
+
+-- 16.4. INVENTORY & STORAGE VIEWS
+
+-- VIEW: Sample Location Explorer (Recursive Path Resolver)
+-- Usage: "Where is Sample X?" - displays human readable path like "Room 101 > Freezer B > Shelf 2 > Box 5".
+CREATE OR REPLACE VIEW lims.view_sample_location_paths AS
+WITH RECURSIVE storage_tree AS (
+    SELECT 
+        storage_id, 
+        name, 
+        parent_storage_id, 
+        name::text AS full_path
+    FROM lims.storage
+    WHERE parent_storage_id IS NULL
+    UNION ALL
+    SELECT 
+        s.storage_id, 
+        s.name, 
+        s.parent_storage_id, 
+        st.full_path || ' > ' || s.name
+    FROM lims.storage s
+    JOIN storage_tree st ON s.parent_storage_id = st.storage_id
+)
+SELECT 
+    samp.sample_id,
+    samp.sample_type_id,
+    samp.external_id,
+    st.full_path AS storage_location,
+    samp.storage_position, -- e.g. A1, B2
+    samp.collection_date
+FROM bio_assets.samples_root samp
+JOIN storage_tree st ON samp.storage_id = st.storage_id
+WHERE samp.is_active = true;
+
+-- VIEW: Reagent Expiry Alert
+-- Usage: Dashboard widget for Lab Manager.
+CREATE OR REPLACE VIEW lims.view_reagent_alerts AS
+SELECT 
+    r.reagent_id,
+    r.name,
+    r.lot_number,
+    r.expiry_date,
+    r.quantity,
+    u.unit_abbreviation,
+    st.name AS storage_location,
+    CASE 
+        WHEN r.expiry_date < CURRENT_DATE THEN 'EXPIRED'
+        WHEN r.expiry_date < CURRENT_DATE + INTERVAL '30 days' THEN 'EXPIRING SOON'
+        ELSE 'OK'
+    END AS status_alert
+FROM lims.reagents r
+LEFT JOIN reference.units u ON r.unit_id = u.unit_id
+LEFT JOIN lims.storage st ON r.storage_id = st.storage_id
+WHERE r.expiry_date < CURRENT_DATE + INTERVAL '60 days'
+ORDER BY r.expiry_date ASC;
+
+-- 16.5. MOLECULAR LAB & QC VIEWS
+
+-- VIEW: Extraction Quality Comparison
+-- Usage: Compare Yield and Purity across extraction methods.
+CREATE OR REPLACE VIEW moleculargenetics.view_extraction_qc_summary AS
+SELECT 
+    na.sample_id,
+    na.extraction_method,
+    na.kit,
+    na.processing_date,
+    -- Yields
+    na.yield_nanodrop_ug,
+    na.yield_qubit_ug,
+    -- Purity
+    na.a260_280,
+    na.a260_230,
+    na.din_rin_score,
+    -- Flag problematic samples
+    CASE 
+        WHEN na.a260_280 < 1.7 OR na.a260_280 > 2.1 THEN 'Check Purity'
+        WHEN na.conc_qubit < 1.0 THEN 'Low Conc'
+        ELSE 'Pass'
+    END AS qc_flag
+FROM moleculargenetics.nucleic_acid na;
+
+-- VIEW: Sequencing Queue
+-- Usage: What is ready to run? What is currently running?
+CREATE OR REPLACE VIEW moleculargenetics.view_sequencing_queue AS
+SELECT 
+    l.library_id,
+    l.sample_id,
+    l.prep_kit,
+    l.molarity_nm,
+    l.lib_barcode,
+    -- Sequencing Status
+    sl.run_id,
+    seq.status_id AS run_status,
+    fc.sequencer_id,
+    CASE 
+        WHEN sl.run_id IS NULL THEN 'Pending Assignment'
+        WHEN seq.status_id = 'Completed' THEN 'Sequenced'
+        WHEN seq.status_id = 'Running' THEN 'In Progress'
+        ELSE 'Scheduled'
+    END AS pipeline_stage
+FROM moleculargenetics.library l
+LEFT JOIN moleculargenetics.sequencing_libraries sl ON l.library_id = sl.library_id
+LEFT JOIN moleculargenetics.sequencing seq ON sl.run_id = seq.run_id
+LEFT JOIN moleculargenetics.sequencing_flowcells fc ON seq.flowcell_id = fc.flowcell_id;
+
+
+-- 16.6. BIOINFORMATICS VIEWS
+
+-- VIEW: Taxonomy Pivot (Simplified)
+-- Usage: Clean table of "What did we find in this sample?"
+CREATE OR REPLACE VIEW bioinformatics.view_taxonomy_results AS
+SELECT 
+    a.sample_id,
+    ds.dataset_id,
+    p.name AS pipeline_used,
+    t.scientific_name,
+    t.rank,
+    a.count AS read_count,
+    a.confidence,
+    -- Relative abundance calculation (requires window function)
+    ROUND((a.count::numeric / SUM(a.count) OVER (PARTITION BY a.sample_id)) * 100, 2) AS relative_abundance_pct
+FROM bioinformatics.assignments a
+JOIN bioinformatics.seq_dataset ds ON a.dataset_id = ds.dataset_id
+JOIN bioinformatics.pipelines p ON a.pipeline_id = p.pipeline_id
+JOIN reference.taxon t ON a.taxon_id = t.taxon_id;
+
+-- 16.7. ELN & ADMIN VIEWS
+
+-- VIEW: Booking Calendar (UI Ready)
+-- Usage: Feed for FullCalendar or similar frontend lib.
+CREATE OR REPLACE VIEW eln.view_booking_calendar_events AS
+SELECT 
+    b.booking_id,
+    res.name AS resource_title,
+    res.calendar_color,
+    p.first_name || ' ' || p.last_name AS booked_by,
+    b.start_time,
+    b.end_time,
+    b.project_id,
+    b.notes
+FROM eln.bookings b
+JOIN eln.bookable_resources res ON b.resource_id = res.resource_id
+JOIN core.persons p ON b.person_id = p.person_id;
+
+-- VIEW: Readable Audit Log
+-- Usage: Admin history review.
+CREATE OR REPLACE VIEW audit.view_readable_log AS
+SELECT 
+    a.action_timestamp,
+    a.schema_name,
+    a.table_name,
+    a.action,
+    COALESCE(p.first_name || ' ' || p.last_name, a.user_db_name) AS actor,
+    a.original_data,
+    a.new_data,
+    a.query_text
+FROM audit.audit_log a
+LEFT JOIN core.persons p ON a.logged_in_person_id = p.person_id
+ORDER BY a.action_timestamp DESC;
+
+-- 16.8. COMPOSITE SEARCH VIEW
+
+-- VIEW: Master Search Index
+-- Usage: "Google-like" search across the database. 
+-- Note: This leverages the 'fn_global_search' logic but makes it a view for easier ORM access.
+-- WARNING: This can be heavy, use with LIMIT in applications.
+CREATE OR REPLACE VIEW public.view_global_search_index AS
+    SELECT 'Person' as type, person_id as id, first_name || ' ' || last_name as label, search_vector FROM core.persons
+    UNION ALL
+    SELECT 'Project', project_id, title, search_vector FROM lims.projects
+    UNION ALL
+    SELECT 'Sample', sample_id, external_id || ' (' || sample_type_id || ')', search_vector FROM bio_assets.samples_root
+    UNION ALL
+    SELECT 'Protocol', protocol_id, title, search_vector FROM eln.protocols
+    UNION ALL
+    SELECT 'Chat', message_id, substring(message_body from 1 for 50), search_vector FROM communications.projects_chat;
+
+
+
+-- 16.9. LINEAGE & TRACEABILITY 
+
+-- VIEW: Downstream Traceability (Parent -> Child -> Grandchild)
+-- Usage: Query by 'ancestor_sample_id' to find EVERYTHING derived from it.
+-- Returns: Flattened list of all descendants with their specific analysis flags.
+CREATE OR REPLACE VIEW bio_assets.view_downstream_lineage AS
+WITH RECURSIVE hierarchy AS (
+    -- Anchor: All samples start as their own ancestor (Level 0)
+    SELECT 
+        s.sample_id AS ancestor_sample_id,
+        s.sample_id AS descendant_sample_id,
+        s.sample_type_id AS descendant_type,
+        0 AS depth,
+        s.sample_id::text AS path
+    FROM bio_assets.samples_root s
+    
+    UNION ALL
+    
+    -- Recursive: Join parent to child
+    SELECT 
+        h.ancestor_sample_id,
+        s.sample_id,
+        s.sample_type_id,
+        h.depth + 1,
+        h.path || ' -> ' || s.sample_id
+    FROM bio_assets.samples_root s
+    JOIN hierarchy h ON s.parent_sample_id = h.descendant_sample_id
+)
+SELECT 
+    h.ancestor_sample_id,
+    h.descendant_sample_id,
+    h.descendant_type,
+    h.depth,
+    h.path,
+    -- Analysis Story Flags
+    -- 1. Biology
+    CASE WHEN d.dissection_id IS NOT NULL THEN 'Yes' ELSE NULL END AS is_dissected,
+    d.weight_g AS dissected_weight,
+    -- 2. Molecular (Extraction)
+    CASE WHEN na.sample_id IS NOT NULL THEN na.extraction_method ELSE NULL END AS extraction_method,
+    na.yield_qubit_ug AS dna_yield,
+    -- 3. Molecular (Library)
+    CASE WHEN lib.library_id IS NOT NULL THEN lib.prep_kit ELSE NULL END AS library_kit,
+    -- 4. Sequencing
+    CASE WHEN seq.run_id IS NOT NULL THEN seq.run_id ELSE NULL END AS sequencing_run
+FROM hierarchy h
+-- Join Analysis Tables to tell the story
+LEFT JOIN biologyfish.dissection d ON h.descendant_sample_id = d.sample_id
+LEFT JOIN moleculargenetics.nucleic_acid na ON h.descendant_sample_id = na.sample_id
+LEFT JOIN moleculargenetics.library lib ON h.descendant_sample_id = lib.sample_id
+LEFT JOIN moleculargenetics.sequencing_libraries seq_lib ON lib.library_id = seq_lib.library_id
+LEFT JOIN moleculargenetics.sequencing seq ON seq_lib.run_id = seq.run_id;
+
+-- VIEW: Upstream Provenance (Child -> Parent -> Grandparent)
+-- Usage: "Where did this sample come from?"
+CREATE OR REPLACE VIEW bio_assets.view_upstream_provenance AS
+WITH RECURSIVE ancestry AS (
+    -- Anchor: Start with the child
+    SELECT 
+        s.sample_id AS target_child_id,
+        s.sample_id AS ancestor_id,
+        s.sample_type_id AS ancestor_type,
+        0 AS steps_up,
+        s.sample_id::text AS lineage_path
+    FROM bio_assets.samples_root s
+    
+    UNION ALL
+    
+    -- Recursive: Find the parent
+    SELECT 
+        a.target_child_id,
+        s.sample_id,
+        s.sample_type_id,
+        a.steps_up + 1,
+        s.sample_id || ' -> ' || a.lineage_path
+    FROM bio_assets.samples_root s
+    JOIN ancestry a ON s.sample_id = (SELECT parent_sample_id FROM bio_assets.samples_root WHERE sample_id = a.ancestor_id)
+)
+SELECT * FROM ancestry;
+
