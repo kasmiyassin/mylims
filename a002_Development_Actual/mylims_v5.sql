@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS "reference"."sample_type" (
     "sample_type_id" text PRIMARY KEY,
     "abbreviation" text UNIQUE NOT NULL,
     "rank" text,
+    "sample_path" ltree,
     "notes" text
 );
 
@@ -81,11 +82,11 @@ CREATE TABLE IF NOT EXISTS "reference"."taxon" (
     -- species info taxomics info
     "taxon_id" text PRIMARY KEY,
     "parent_taxon_id" text REFERENCES "reference"."taxon"("taxon_id"),
-    "scientific_name" text,
+    "scientific_name" text NOT NULL,
     "common_name_en" text,
     "common_name_de" text,
-    "rank" text, -- e.g. Animalia.Chordata.Actinopterygii.Salmoniformes.Salmonidae.Salmo.salar
-    "path" ltree,
+    "rank" text, -- species, family
+    "taxon_path" ltree, -- e.g. Animalia.Chordata.Actinopterygii.Salmoniformes.Salmonidae.Salmo.salar
     "organism_type" text, -- e.g. 'fish', 'invertebrate', 'plant'
     -- YK: it is better to include it into the sample table or  with organism type to replaced these with organizme type, so that easier to select organizme type
     -- I was thinking maybe if we also sample other organisms for isotopes in the Weser, we should prep the database also for that? 
@@ -116,7 +117,8 @@ CREATE TABLE IF NOT EXISTS "reference"."region" (
     "region_id" text PRIMARY KEY,
     "region_abrv" text UNIQUE NOT NULL,
     "parent_region" text,
-    "path" ltree,
+    "rank" text,
+    "region_path" ltree,
     "notes" text,
     "attachment_link" text
 );
@@ -125,7 +127,8 @@ CREATE TABLE IF NOT EXISTS "reference"."ecosystem" (
     "ecosystem_id" text PRIMARY KEY,
     "ecosystem_abrv" text UNIQUE NOT NULL,
     "notes" text,
-    "path" ltree,
+    "rank" text,
+    "ecosystem_path" ltree,
     "attachment_link" text
 );
 
@@ -157,6 +160,7 @@ CREATE TABLE IF NOT EXISTS "core"."organizations" (
     "name" text NOT NULL,
     "type" text CHECK (type IN ('Internal', 'Funder', 'Partner', 'Supplier', 'Customer')),
     "address" text,
+    "country" text,
     "contact_email" text,
     "contact_phone" text,
     "notes" text,
@@ -170,6 +174,8 @@ CREATE TABLE IF NOT EXISTS "core"."persons" (
     "last_name" text NOT NULL,
     "email" text UNIQUE,
     "phone" text,
+    "address" text,
+    "country" text,
     "organization_id" text REFERENCES "core"."organizations"("organization_id"),
     "room" text,
     "status_id" text REFERENCES "reference"."status"("status_id"),
@@ -183,12 +189,13 @@ CREATE TABLE IF NOT EXISTS "core"."locations" (
     "name" text,
     "etage" text,
     "address" text,
-    "institute" text,
+    "organization_id" text REFERENCES "core"."organizations"("organization_id"),
     "city" text,
     "country" text,
+    "rank" text,
+    "location_path" ltree,
     "notes" text,
-    "attachment_link" text,
-    "path" ltree
+    "attachment_link" text
 );
 
 CREATE TABLE IF NOT EXISTS "core"."equipments" (
@@ -210,6 +217,7 @@ CREATE TABLE IF NOT EXISTS "core"."vessel" (
     "vessel_name" text,
     "captain" text REFERENCES "core"."persons"("person_id"),
     "belong_to" text,
+    "mmsi_number" text,
     "notes" text,
     "attachment_link" text
 );
@@ -218,9 +226,10 @@ CREATE TABLE IF NOT EXISTS "core"."vessel" (
 -- 6. LIMS SCHEMA
 -- =========================================
 CREATE TABLE IF NOT EXISTS "lims"."projects" (
-    "project_id" text PRIMARY KEY,
+    "project_id" text PRIMARY KEY, -- e.g. AQP, ADA, MEM
     "title" text NOT NULL,
     "acronym" text NOT NULL,
+    "grant_nr" text,
     "start_date" date,
     "end_date" date,
     "funding_source" text,
@@ -239,7 +248,7 @@ CREATE TABLE IF NOT EXISTS "lims"."project_personal" (
     "person_id" text REFERENCES "core"."persons"("person_id") ON DELETE CASCADE,
     "role" text,
     "start_date" date,
-    "end_date" date,,
+    "end_date" date,
     PRIMARY KEY ("project_id", "person_id")
 );
 
@@ -263,6 +272,8 @@ CREATE TABLE IF NOT EXISTS "lims"."sop" (
     "reviewer1_person_id" text  REFERENCES "core"."persons"("person_id"),
     "reviewer2_person_id" text  REFERENCES "core"."persons"("person_id"),
     "content" text,
+    "is_active" boolean DEFAULT true,
+    "status_id" text REFERENCES "reference"."status"("status_id"),
     "attachment_link" text,
     "notes" text
 );
@@ -294,6 +305,7 @@ CREATE TABLE IF NOT EXISTS "lims"."reagents" (
     "storage_id" text REFERENCES "lims"."storage"("storage_id"),
     "quantity" numeric,
     "unit_id" text REFERENCES "reference"."units"("unit_id"),
+    "SDS_link" text,
     "notes" text,
     "attachment_link" text
 );
@@ -301,7 +313,7 @@ CREATE TABLE IF NOT EXISTS "lims"."reagents" (
 CREATE TABLE IF NOT EXISTS "lims"."experiments" (
     "experiment_id" text PRIMARY KEY,
     "title" text,
-    "date" date NOT NULL DEFAULT CURRENT_DATE,
+    "processing_date" date NOT NULL DEFAULT CURRENT_DATE,
     "aim" text,
     "method" text,
     "sop_id" text REFERENCES "lims"."sop"("sop_id"),
@@ -336,7 +348,7 @@ CREATE TABLE IF NOT EXISTS "field"."cruises" (
 );
 
 CREATE TABLE IF NOT EXISTS "field"."sampling_event" (
-    "sampling_id" text PRIMARY KEY,
+    "sampling_id" text PRIMARY KEY, -- 25RigEco001
     "sampling_date" date NOT NULL,
     "External_sampling_id" text,
     "project_id" text REFERENCES "lims"."projects"("project_id"),
@@ -347,7 +359,7 @@ CREATE TABLE IF NOT EXISTS "field"."sampling_event" (
     "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
     "latitude" numeric,
     "longitude" numeric,
-    "geography" geography(Point, 4326),
+    "geography" geography(Geography, 4326),
     "together_with_contact_id" text REFERENCES "core"."persons"("person_id"),
     "together_with_organization_id" text REFERENCES "core"."organizations"("organization_id"),
     "status_id" text DEFAULT 'Planned' NOT NULL REFERENCES "reference"."status"("status_id"),
@@ -360,6 +372,7 @@ CREATE TABLE IF NOT EXISTS "field"."sampling_abiotic" (
     "weather" text,
     "temperature_atmospheric_c" numeric,
     "temperature_sampling_depth_c" numeric,
+    "temperature_unit_id" text REFERENCES "reference"."units"("unit_id"),
     "ph" numeric,
     "turbidity_ntu" numeric,
     "oxygen" numeric,
@@ -383,6 +396,7 @@ CREATE TABLE IF NOT EXISTS "field"."sampling_abiotic" (
     "visibility_m" numeric,
     "wind_speed" numeric,
     "wind_unit_id" text REFERENCES "reference"."units"("unit_id"),
+    "secchi_depth_m" numeric,
     "attachment_link" text,
     "instrument_id" text REFERENCES "core"."equipments"("equipment_id"),
     "notes" text,
@@ -439,6 +453,8 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."samples_reservation" (
     "conservation" text,
     "Sampler_id" text ,
     "status_id" text REFERENCES "reference"."status"("status_id") DEFAULT 'Planned',
+    "is_sampled" boolean DEFAULT true,
+    "is_pathogen" boolean DEFAULT false, 
     "other_info" text,
     "notes" text,
     "attachment_link" text,
@@ -447,10 +463,10 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."samples_reservation" (
 
 CREATE TABLE IF NOT EXISTS "bio_assets"."samples_root" (
     "sample_id" text PRIMARY KEY,
-    "migfish_id" text,
-    "sample_type_id" text REFERENCES "reference"."sample_type"("sample_type_id"),
+    "team_id" text,
     "external_id" text,
     "parent_sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
+    "sample_type_id" text REFERENCES "reference"."sample_type"("sample_type_id"),
     "sampling_id" text REFERENCES "field"."sampling_event"("sampling_id"),
     "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
     "collection_date" date,
@@ -464,6 +480,8 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."samples_root" (
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "batch_id" text REFERENCES "eln"."batch"("batch_id"),
     "project_id" text REFERENCES "lims"."projects"("project_id"),
+    "is_active" boolean DEFAULT true,
+    "is_pathogen" boolean DEFAULT false, 
     "notes" text,
     "attachment_link" text
 );
@@ -471,12 +489,14 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."samples_root" (
 CREATE TABLE IF NOT EXISTS "lims"."experiments_samples" (
     "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
     "sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
+    "external_id" text,
     PRIMARY KEY ("experiment_id", "sample_id")
 );
 
 
 CREATE TABLE IF NOT EXISTS "bio_assets"."sediments" (
     "sample_id" text PRIMARY KEY REFERENCES "bio_assets"."samples_root"("sample_id"),
+    "external_id" text,
     "grain_size" text,
     "weight_mg" numeric,
     "depth_m" numeric,
@@ -487,6 +507,7 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."sediments" (
 
 CREATE TABLE IF NOT EXISTS "bio_assets"."water" (
     "sample_id" text PRIMARY KEY REFERENCES "bio_assets"."samples_root"("sample_id"),
+    "external_id" text,
     "volume_filtered_ml" numeric,
     "filter_type" text,
     "pore_size_um" numeric,
@@ -500,8 +521,9 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."water" (
 -- =========================================
 -- 9. BIOLOGYFISH SCHEMA
 -- =========================================
-CREATE TABLE IF NOT EXISTS "bio_assets"."speciemen_organisms" (
+CREATE TABLE IF NOT EXISTS "bio_assets"."specimen_organisms" (
     "sample_id" text PRIMARY KEY REFERENCES "bio_assets"."samples_root"("sample_id"),
+    "external_id" text,
     "organism_type" text NOT NULL , -- Fish, plakton...
     "taxon_id" text REFERENCES "reference"."taxon"("taxon_id"),
     "weight_g" numeric,
@@ -511,20 +533,22 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."speciemen_organisms" (
     "eye_diameter_mm" numeric,
     "sex" text CHECK ("sex" IN ('M', 'F', 'U', NULL)), -- Male, Female, undetermined
     "reproductive_state" numeric,
+    "life_stage" text,
     "Transmitter_ID" text,
     "PITTag" text,
     "notes" text,
     "person_id" text REFERENCES "core"."persons"("person_id"),
     "attachment_link" text,
-    "date" date
+    "processing_date" date
 );
 
 CREATE TABLE IF NOT EXISTS "biologyfish"."dissection" (
     "dissection_id" text PRIMARY KEY,
-    "sample_id" text REFERENCES "bio_assets"."speciemen_organisms"("sample_id"),
+    "sample_id" text REFERENCES "bio_assets"."specimen_organisms"("sample_id"),
+    "external_id" text,
     "taxon_id" text REFERENCES "reference"."taxon"("taxon_id"),
     "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
-    "date" date,
+    "processing_date" date,
     "weight_g" numeric,
     "standard_length_mm" numeric,
     "fork_length_mm" numeric,
@@ -535,11 +559,11 @@ CREATE TABLE IF NOT EXISTS "biologyfish"."dissection" (
     "liver_weight_g" numeric,
     "stomach_weight_g" numeric,
     "gonad_weight_g" numeric,
-    "ug_per_Egg" numeric,
-    "Transmitter_ID" text,
+    "ug_per_egg" numeric,
+    "transmitter_ID" text,
     "PITTag" text,
-    "Surgeon_ID" text,
-    "Genetics_Sample" text,
+    "surgeon_ID" text,
+    "genetics_sample" text,
     "Scale_Sample" text,
     "Scale_Proc" text,
     "Muscle_Sample" text,
@@ -552,9 +576,12 @@ CREATE TABLE IF NOT EXISTS "biologyfish"."dissection" (
   	"Oto_Iso_Sample" text,
     "Stomach_Content" text,
     "stomach_fullness_index" text,
-    "stomach_contents_jsonb" text,
+    "stomach_contents_text" text,
     "parasite_observation" text,
     "pathology_observation" text,
+    "stomach_contents_jsonb" jsonb,
+    "parasite_observation_jsonb" jsonb,
+    "pathology_observation_jsonb" jsonb,
     "person_id" text REFERENCES "core"."persons"("person_id"),
     "notes" text,
     "attachment_link" text
@@ -562,6 +589,7 @@ CREATE TABLE IF NOT EXISTS "biologyfish"."dissection" (
 
 CREATE TABLE IF NOT EXISTS "bio_assets"."tissue" (
     "sample_id" text PRIMARY KEY REFERENCES "bio_assets"."samples_root"("sample_id"),
+    "external_id" text,
     "tissue_type" text,
     "preservation_medium" text,
     "weight_mg" numeric,
@@ -572,7 +600,8 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."tissue" (
 CREATE TABLE IF NOT EXISTS "biologyfish"."otoliths" (
     "otolith_id" text PRIMARY KEY,
     "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
-    "sample_id" text REFERENCES "bio_assets"."speciemen_organisms"("sample_id"),
+    "sample_id" text REFERENCES "bio_assets"."specimen_organisms"("sample_id"),
+    "external_id" text,
     "age_read" integer,
     "read_by_person_id" text REFERENCES "core"."persons"("person_id"),
     "confidence_level" text,
@@ -584,9 +613,10 @@ CREATE TABLE IF NOT EXISTS "biologyfish"."otoliths" (
 
 CREATE TABLE IF NOT EXISTS "biologyfish"."tag_mark" (
     "tag_id" text PRIMARY KEY,
-    "sample_id" text REFERENCES "bio_assets"."speciemen_organisms"("sample_id"),
+    "sample_id" text REFERENCES "bio_assets"."specimen_organisms"("sample_id"),
+    "external_id" text,
     "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
-    "date" date,
+    "processing_date" date,
     "weight_g" numeric,
     "total_length_mm" numeric,
     "model_type" text,
@@ -602,30 +632,34 @@ CREATE TABLE IF NOT EXISTS "biologyfish"."tag_mark" (
 -- =========================================
 CREATE TABLE IF NOT EXISTS "moleculargenetics"."nucleic_acid" ( --RNA or DNA
     "sample_id" text PRIMARY KEY REFERENCES "bio_assets"."samples_root"("sample_id"),
+    "external_id" text,
     "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
-    "date" date,
+    "processing_date" date,
     "extraction_method" text,
-    "volume_ul" numeric,
-    "conc_qubit_ng_ul" numeric,
-    "conc_nanodrop_ng_ul" numeric,
+    "kit" text,
+    "volume_uL" numeric,
+    "volume_unit" text DEFAULT 'ul',
+    "conc_qubit" numeric,
+    "conc_qubit_unit" text DEFAULT 'ng_ul',
+    "yield_qubit_ug" numeric GENERATED ALWAYS AS (volume_uL * conc_qubit / 1000) STORED,
+    "conc_nanodrop" numeric,
+    "conc_nanodrop_unit" text DEFAULT 'ng_ul',
+    "yield_nanodrop_ug" numeric GENERATED ALWAYS AS (volume_uL * conc_nanodrop / 1000) STORED,
     "a260_280" numeric,
     "a260_230" numeric,
-    "rin_score" numeric, -- RIN or DIN
-    "extraction_method" text,
-    "extraction_date" date,
-    "kit" text,
+    "DIN_RIN_score" numeric, -- RIN or DIN
     "extraction_blank_id" text,
     "notes" text,
     "attachment_link" text
 );
 
 CREATE TABLE IF NOT EXISTS "moleculargenetics"."nanodrop" (
-    "measurement_id" serial PRIMARY KEY,
+    "measurement_id" text PRIMARY KEY, --sampleid_nanodrop_000
     "sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
     "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
-    "date" date,
+    "processing_date" date,
     "concentration" numeric,
-    "unit" text DEFAULT 'ng/ul',
+    "conc_unit" text DEFAULT 'ng_ul',
     "a260" numeric,
     "a280" numeric,
     "a260_a280" numeric,
@@ -634,79 +668,106 @@ CREATE TABLE IF NOT EXISTS "moleculargenetics"."nanodrop" (
 );
 
 CREATE TABLE IF NOT EXISTS "moleculargenetics"."qubit" (
-    "measurement_id" serial PRIMARY KEY,
+    "measurement_id" text PRIMARY KEY, --sampleid_qubit_000
     "sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
-    "date" date,
+    "processing_date" date,
     "concentration" numeric,
-    "unit" text DEFAULT 'ng/ul',
+    "conc_unit" text DEFAULT 'ng_ul',
     "assay_type" text,
     "notes" text
 );
 
 CREATE TABLE IF NOT EXISTS "moleculargenetics"."tapestation" (
-    "measurement_id" serial PRIMARY KEY,
+    "measurement_id" serial PRIMARY KEY, --sampleid_Tapestation_000
     "sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
-    "date" date,
+    "processing_date" date,
     "avg_size_bp" numeric,
     "concentration" numeric,
-    "DIN_RIN" numeric,
+    "conc_unit" text DEFAULT 'ng_ul',
     "molarity" numeric,
+    "molarity_unit" text DEFAULT 'nmol/l',
+    "Integrated_area_percent" numeric,
+    "DIN_RIN" numeric,
+    "kit" text,
     "notes" text
 );
 
 CREATE TABLE IF NOT EXISTS "moleculargenetics"."pcr" (
-    "pcr_id" text PRIMARY KEY,
+    "pcr_id" text PRIMARY KEY, -- sample_id_pcr_000 
     "sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
     "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
-    "date" date,
+    "processing_date" date,
+    "volume_reaction" numeric,
+    "volume_sample" numeric,
+    "dilution_factor" numeric,
     "primer_fwd_id" text,
     "primer_rev_id" text,
-    "polymerase" text,
+    "polymerase_mastermix" text,
     "cycles" integer,
     "annealing_temp_c" numeric,
+    "position" text, -- A1
     "notes" text
 );
 
 CREATE TABLE IF NOT EXISTS "moleculargenetics"."qpcr" (
-    "qpcr_id" text PRIMARY KEY,
-    "date" date,
+    "qpcr_id" text PRIMARY KEY, --sample_id_qPCR_000
+    "processing_date" date,
     "sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
     "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
     "target_gene_id" text REFERENCES "reference"."genes"("gene_id"),
+    "polymerase_mastermix" text,
+    "volume_reaction" numeric,
+    "volume_sample" numeric,
+    "dilution_factor" numeric,
+    "position" text, -- A1
     "ct_value" numeric,
     "notes" text
 );
 
 CREATE TABLE IF NOT EXISTS "moleculargenetics"."gelelectrophoresis" (
-    "gel_id" text PRIMARY KEY,
-    "date" date,
+    "gel_id" text PRIMARY KEY, --sample_id_Gel_000 
+    "processing_date" date,
     "sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
+    "pcr_id" text REFERENCES "moleculargenetics"."pcr"("pcr_id"),
+    "external_id" text,
     "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
     "gel_percentage" numeric,
+    "volume_reaction" numeric,
+    "volume_sample" numeric,
+    "dilution_factor" numeric,
+    "lader" text,
+    "marker" text,
     "voltage" numeric,
     "run_time_min" integer,
     "band_size_bp" integer,
+    "position" text, -- from left to right 1
     "image_path" text,
     "notes" text
 );
 
-CREATE TABLE IF NOT EXISTS "moleculargenetics"."library" (
+CREATE TABLE "moleculargenetics"."library" (
     "library_id" text PRIMARY KEY,
-    "date" date,
-    "sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
-    "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
     "prep_kit" text,
-    "index_i7" text,
-    "index_i5" text,
+    "processing_date" date,
     "avg_fragment_size" numeric,
+    "concentration_ng_uL" numeric,
     "molarity_nm" numeric,
-    "status_id" text REFERENCES "reference"."status"("status_id"),
+    "lib_barcode" text, -- unique per library
+    "status_id" text REFERENCES reference.status("status_id"),
     "notes" text
 );
 
+CREATE TABLE "moleculargenetics"."library_samples" (
+    "library_id" text REFERENCES "moleculargenetics"."library"("library_id") ON DELETE CASCADE,
+    "sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
+    "sample_barcode" text, -- unique per sample within this library
+    PRIMARY KEY ("library_id", "sample_id")
+);
+
+
 CREATE TABLE IF NOT EXISTS "moleculargenetics"."sequencing_flowcells" (
-    "flowcell_id" text PRIMARY KEY,
-    "date" date,
+    "flowcell_id" text PRIMARY KEY, -- manual
+    "processing_date" date,
     "type" text,
     "sequencer_id" text REFERENCES "core"."equipments"("equipment_id"),
     "run_date" date,
@@ -714,16 +775,20 @@ CREATE TABLE IF NOT EXISTS "moleculargenetics"."sequencing_flowcells" (
     "notes" text
 );
 
-CREATE TABLE IF NOT EXISTS "moleculargenetics"."sequencing" (
+CREATE TABLE "moleculargenetics"."sequencing" (
     "run_id" text PRIMARY KEY,
     "flowcell_id" text REFERENCES "moleculargenetics"."sequencing_flowcells"("flowcell_id"),
-    "library_id" text REFERENCES "moleculargenetics"."library"("library_id"),
-    "lane_number" integer,
-    "raw_read_count" bigint,
-    "raw_path" text,
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "notes" text
 );
+
+CREATE TABLE "moleculargenetics"."sequencing_libraries" (
+    "run_id" text REFERENCES "moleculargenetics"."sequencing"("run_id") ON DELETE CASCADE,
+    "library_id" text REFERENCES "moleculargenetics".library("library_id") ON DELETE CASCADE,
+    "lane_number" integer,
+    PRIMARY KEY ("run_id", "library_id")
+);
+
 
 -- =========================================
 -- 11. BIOINFORMATICS SCHEMA
@@ -744,11 +809,22 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."seq_dataset" (
     "file_format" text CHECK (file_format IN ('FASTQ', 'FASTA', 'BAM', 'SAM')),
     "read_count_filtered" bigint,
     "quality_metrics_json" jsonb,
+    "checksum_md5" text,
     "notes" text
 );
 
+CREATE TABLE "bioinformatics"."seq_sample_assignment" (
+    "dataset_id" text REFERENCES "bioinformatics"."seq_dataset"("dataset_id"),
+    "sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
+    "library_id" text REFERENCES "moleculargenetics"."library"("library_id"),
+    "barcode" text, -- copy from library_samples
+    "read_count" bigint,
+    PRIMARY KEY ("dataset_id", "sample_id")
+);
+
 CREATE TABLE IF NOT EXISTS "bioinformatics"."assignments" (
-    "assignment_id" bigserial PRIMARY KEY,
+    "assignment_id" bigserial PRIMARY KEY, --sampleid_read_000000
+    "sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
     "dataset_id" text REFERENCES "bioinformatics"."seq_dataset"("dataset_id"),
     "pipeline_id" text REFERENCES "bioinformatics"."pipelines"("pipeline_id"),
     "taxon_id" text REFERENCES "reference"."taxon"("taxon_id"),
