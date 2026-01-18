@@ -53,19 +53,19 @@ CREATE TABLE IF NOT EXISTS "audit"."audit_log" (
 -- =========================================
 CREATE TABLE IF NOT EXISTS "reference"."status" (
     "status_id" text PRIMARY KEY,
-    "notes" text,
+    "notes" text
 );
 
 CREATE TABLE IF NOT EXISTS "reference"."category" (
     "category_id" text PRIMARY KEY,
-    "notes" text,
+    "notes" text
 );
 
 CREATE TABLE IF NOT EXISTS "reference"."sample_type" (
     "sample_type_id" text PRIMARY KEY,
     "abbreviation" text UNIQUE NOT NULL,
     "rank" text,
-    "notes" text,
+    "notes" text
 );
 
 CREATE TABLE IF NOT EXISTS "reference"."units" (
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS "reference"."units" (
     "unit_abbreviation" text UNIQUE NOT NULL,
     "unit_type" text NOT NULL,
     "parent_unit_id" text REFERENCES "reference"."units"("unit_id"),
-    "conversion_factor" numeric,
+    "conversion_factor" numeric
 );
 
 CREATE TABLE IF NOT EXISTS "reference"."taxon" (
@@ -86,8 +86,7 @@ CREATE TABLE IF NOT EXISTS "reference"."taxon" (
     "common_name_de" text,
     "rank" text, -- e.g. Animalia.Chordata.Actinopterygii.Salmoniformes.Salmonidae.Salmo.salar
     "path" ltree,
-    -- type of sample
-    -- "organism_type" text  -- e.g. 'fish', 'invertebrate', 'plant'
+    "organism_type" text, -- e.g. 'fish', 'invertebrate', 'plant'
     -- YK: it is better to include it into the sample table or  with organism type to replaced these with organizme type, so that easier to select organizme type
     -- I was thinking maybe if we also sample other organisms for isotopes in the Weser, we should prep the database also for that? 
     -- "is_fish" boolean DEFAULT false , 
@@ -98,9 +97,13 @@ CREATE TABLE IF NOT EXISTS "reference"."taxon" (
     "has_standard_length" boolean DEFAULT false,
     "has_otoliths" boolean DEFAULT false,
     "has_scales" boolean DEFAULT false,
+    "min_total_length_mm" numeric,
     "max_total_length_mm" numeric,
+    "min_fork_length_mm" numeric,
     "max_fork_length_mm" numeric,
+    "min_standard_length_mm" numeric,
     "max_standard_length_mm" numeric,
+    "min_weight_g" numeric,
     "max_weight_g" numeric,
     -- specification tags
     "tags_type" text,
@@ -353,7 +356,7 @@ CREATE TABLE IF NOT EXISTS "field"."sampling_event" (
 );
 
 CREATE TABLE IF NOT EXISTS "field"."sampling_abiotic" (
-    "sampling_id" text PRIMARY KEY REFERENCES "field"."sampling"("sampling_id"),
+    "sampling_id" text PRIMARY KEY REFERENCES "field"."sampling_event"("sampling_id"),
     "weather" text,
     "temperature_atmospheric_c" numeric,
     "temperature_sampling_depth_c" numeric,
@@ -377,11 +380,9 @@ CREATE TABLE IF NOT EXISTS "field"."sampling_abiotic" (
     "sea_state" text,
     "cloud_cover_percent" numeric,
     "rainfall_mm" numeric,
-    "instrument_id" text,
     "visibility_m" numeric,
     "wind_speed" numeric,
     "wind_unit_id" text REFERENCES "reference"."units"("unit_id"),
-    "notes" text,
     "attachment_link" text,
     "instrument_id" text REFERENCES "core"."equipments"("equipment_id"),
     "notes" text,
@@ -390,7 +391,7 @@ CREATE TABLE IF NOT EXISTS "field"."sampling_abiotic" (
 
 
 CREATE TABLE IF NOT EXISTS "field"."fishing" (
-    "sampling_id" text PRIMARY KEY REFERENCES "field"."sampling"("sampling_id"),
+    "sampling_id" text PRIMARY KEY REFERENCES "field"."sampling_event"("sampling_id"),
     "latitude" numeric,
     "longitude" numeric,
     "fishing_geography" geography(Geography, 4326),
@@ -415,7 +416,7 @@ CREATE TABLE IF NOT EXISTS "field"."fishing" (
 
 CREATE TABLE IF NOT EXISTS "field"."catch" (
     "catch_id" serial PRIMARY KEY, -- Samplingid_0001
-    "sampling_id" text REFERENCES "field"."sampling"("sampling_id"),
+    "sampling_id" text REFERENCES "field"."sampling_event"("sampling_id"),
     "total_catch_weight_kg" numeric,
     "taxon_id" text REFERENCES "reference"."taxon"("taxon_id"),
     "quantity_weight_kg" numeric,
@@ -436,6 +437,7 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."samples_reservation" (
     "planned_date" date,
     "transport" text,
     "conservation" text,
+    "Sampler_id" text ,
     "status_id" text REFERENCES "reference"."status"("status_id") DEFAULT 'Planned',
     "other_info" text,
     "notes" text,
@@ -449,13 +451,13 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."samples_root" (
     "sample_type_id" text REFERENCES "reference"."sample_type"("sample_type_id"),
     "external_id" text,
     "parent_sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
-    "sampling_id" text REFERENCES "field"."sampling"("sampling_id"),
+    "sampling_id" text REFERENCES "field"."sampling_event"("sampling_id"),
     "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
     "collection_date" date,
     "storage_id" text REFERENCES "lims"."storage"("storage_id"),
     "storage_position" text,
     "sampler_person_id" text,
-    "receiver_person_id" text REFERENCES "lims"."personal"("person_id"),
+    "receiver_person_id" text REFERENCES "lims"."persons"("person_id"),
     "reception_date" date,
     "transport" text,
     "conservation" text,
@@ -463,7 +465,7 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."samples_root" (
     "batch_id" text REFERENCES "eln"."batch"("batch_id"),
     "project_id" text REFERENCES "lims"."projects"("project_id"),
     "notes" text,
-    "attachment_link" text,
+    "attachment_link" text
 );
 
 CREATE TABLE IF NOT EXISTS "lims"."experiments_samples" (
@@ -502,16 +504,17 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."speciemen_organisms" (
     "sample_id" text PRIMARY KEY REFERENCES "bio_assets"."samples_root"("sample_id"),
     "organism_type" text NOT NULL , -- Fish, plakton...
     "taxon_id" text REFERENCES "reference"."taxon"("taxon_id"),
-    "sex" text CHECK (sex IN ('Male', 'Female', 'Undetermined', 'Hermaphrodite')),
-    "total_length_mm" integer, --I think all these should be integer, as we won´t measure/weigh a fish in micrometer or milligrams
-    "fork_length_mm" integer,
-    "standard_length_mm" integer,
     "weight_g" numeric,
+    "standard_length_mm" numeric,
+    "fork_length_mm" numeric,
+    "total_length_mm" numeric,
+    "eye_diameter_mm" numeric,
     "sex" text CHECK ("sex" IN ('M', 'F', 'U', NULL)), -- Male, Female, undetermined
-    "maturity_stage" text,
-    "disease_info" JSONB,
-    "tag_id" text,
+    "reproductive_state" numeric,
+    "Transmitter_ID" text,
+    "PITTag" text,
     "notes" text,
+    "person_id" text REFERENCES "core"."persons"("person_id"),
     "attachment_link" text,
     "date" date
 );
@@ -519,15 +522,39 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."speciemen_organisms" (
 CREATE TABLE IF NOT EXISTS "biologyfish"."dissection" (
     "dissection_id" text PRIMARY KEY,
     "sample_id" text REFERENCES "bio_assets"."speciemen_organisms"("sample_id"),
+    "taxon_id" text REFERENCES "reference"."taxon"("taxon_id"),
     "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
     "date" date,
-    "liver_weight_mg" numeric,
-    "gonad_weight_mg" numeric,
-    "stomach_content_weight_mg" numeric,
+    "weight_g" numeric,
+    "standard_length_mm" numeric,
+    "fork_length_mm" numeric,
+    "total_length_mm" numeric,
+    "eye_diameter_mm" numeric,
+    "sex" text CHECK ("sex" IN ('M', 'F', 'U', NULL)), -- Male, Female, undetermined
+    "reproductive_state" numeric,
+    "liver_weight_g" numeric,
+    "stomach_weight_g" numeric,
+    "gonad_weight_g" numeric,
+    "ug_per_Egg" numeric,
+    "Transmitter_ID" text,
+    "PITTag" text,
+    "Surgeon_ID" text,
+    "Genetics_Sample" text,
+    "Scale_Sample" text,
+    "Scale_Proc" text,
+    "Muscle_Sample" text,
+    "Muscle_Iso_Hom" text,
+    "Muscle_Iso_Wei" text,
+    "Blood_Sample" text,
+    "Eyelens_Sample" text,
+    "Otolith_Sample" text,
+    "Oto_Laser_Sample" text,
+  	"Oto_Iso_Sample" text,
+    "Stomach_Content" text,
     "stomach_fullness_index" text,
-    "stomach_contents_jsonb" JSONB,
-    "parasite_observation" JSONB,
-    "pathology_observation" JSONB,
+    "stomach_contents_jsonb" text,
+    "parasite_observation" text,
+    "pathology_observation" text,
     "person_id" text REFERENCES "core"."persons"("person_id"),
     "notes" text,
     "attachment_link" text
@@ -573,8 +600,10 @@ CREATE TABLE IF NOT EXISTS "biologyfish"."tag_mark" (
 -- =========================================
 -- 10. MOLECULARGENETICS SCHEMA
 -- =========================================
-CREATE TABLE IF NOT EXISTS "moleculargenetics" ( --RNA or DNA
+CREATE TABLE IF NOT EXISTS "moleculargenetics"."nucleic_acid" ( --RNA or DNA
     "sample_id" text PRIMARY KEY REFERENCES "bio_assets"."samples_root"("sample_id"),
+    "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
+    "date" date,
     "extraction_method" text,
     "volume_ul" numeric,
     "conc_qubit_ng_ul" numeric,
@@ -584,11 +613,9 @@ CREATE TABLE IF NOT EXISTS "moleculargenetics" ( --RNA or DNA
     "rin_score" numeric, -- RIN or DIN
     "extraction_method" text,
     "extraction_date" date,
-    "experiment_number" text,
     "kit" text,
     "extraction_blank_id" text,
     "notes" text,
-    "date" date,
     "attachment_link" text
 );
 
