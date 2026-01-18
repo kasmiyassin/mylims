@@ -934,8 +934,8 @@ DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_ts_config WHERE cfgname = 'lims_english') THEN
         CREATE TEXT SEARCH DICTIONARY english_stem (TEMPLATE = snowball, LANGUAGE = english);
-        CREATE TEXT SEARCH CONFIGURATION public.lims_english (COPY = english);
-        ALTER TEXT SEARCH CONFIGURATION public.lims_english 
+        CREATE TEXT SEARCH CONFIGURATION dashboard.lims_english (COPY = english);
+        ALTER TEXT SEARCH CONFIGURATION dashboard.lims_english 
         ALTER MAPPING FOR asciiword, asciihword, hword, hword_part, word WITH english_stem;
     END IF;
 END $$;
@@ -1052,7 +1052,7 @@ $$ LANGUAGE plpgsql;
 
 -- 14.3.3 Metadata Table IDs (Generic)
 -- Logic: SampleID_suffix_01
-CREATE OR REPLACE FUNCTION public.fn_generate_metadata_id()
+CREATE OR REPLACE FUNCTION dashboard.fn_generate_metadata_id()
 RETURNS TRIGGER AS $$
 DECLARE
     v_id_col text := TG_ARGV[0]; 
@@ -1077,7 +1077,7 @@ $$ LANGUAGE plpgsql;
 
 -- 14.3.4 Sequence IDs (Admin/ELN)
 -- Logic: YYtag_0001
-CREATE OR REPLACE FUNCTION public.fn_generate_sequence_id()
+CREATE OR REPLACE FUNCTION dashboard.fn_generate_sequence_id()
 RETURNS TRIGGER AS $$
 DECLARE
     v_id_col text := TG_ARGV[0];
@@ -1107,7 +1107,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- 14.3.5 Special IDs (Bookings & Chat)
-CREATE OR REPLACE FUNCTION public.fn_generate_special_ids()
+CREATE OR REPLACE FUNCTION dashboard.fn_generate_special_ids()
 RETURNS TRIGGER AS $$
 DECLARE
     v_next_serial int;
@@ -1190,7 +1190,7 @@ $$ LANGUAGE plpgsql;
 -- ----------------------------------------------------------------------------
 
 -- 14.4.1 Auto-Resolve Sample ID from External ID
-CREATE OR REPLACE FUNCTION public.fn_resolve_sample_id_from_external()
+CREATE OR REPLACE FUNCTION dashboard.fn_resolve_sample_id_from_external()
 RETURNS TRIGGER AS $$
 DECLARE
     v_resolved_id text;
@@ -1215,7 +1215,7 @@ $$ LANGUAGE plpgsql;
 
 -- 14.4.2 Geography Sync (PostGIS)
 -- Handles INSERT and UPDATE, including clearing geography if lat/lon is removed
-CREATE OR REPLACE FUNCTION public.fn_sync_latlon_to_geography()
+CREATE OR REPLACE FUNCTION dashboard.fn_sync_latlon_to_geography()
 RETURNS TRIGGER AS $$
 BEGIN
     IF (NEW.latitude IS NOT NULL AND NEW.longitude IS NOT NULL) THEN
@@ -1263,43 +1263,43 @@ $$ LANGUAGE plpgsql;
 -- Standardizers for Full Text Search
 CREATE OR REPLACE FUNCTION core.fn_update_persons_search() RETURNS TRIGGER AS $$
 BEGIN
-    NEW.search_vector := TO_TSVECTOR('public.lims_english', CONCAT_WS(' ', NEW.first_name, NEW.last_name, NEW.email, NEW.notes));
+    NEW.search_vector := TO_TSVECTOR('dashboard.lims_english', CONCAT_WS(' ', NEW.first_name, NEW.last_name, NEW.email, NEW.notes));
     RETURN NEW;
 END; $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION core.fn_update_orgs_search() RETURNS TRIGGER AS $$
 BEGIN
-    NEW.search_vector := TO_TSVECTOR('public.lims_english', CONCAT_WS(' ', NEW.name, NEW.notes));
+    NEW.search_vector := TO_TSVECTOR('dashboard.lims_english', CONCAT_WS(' ', NEW.name, NEW.notes));
     RETURN NEW;
 END; $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION lims.fn_update_projects_search() RETURNS TRIGGER AS $$
 BEGIN
-    NEW.search_vector := TO_TSVECTOR('public.lims_english', CONCAT_WS(' ', NEW.title, NEW.acronym, NEW.description, NEW.notes));
+    NEW.search_vector := TO_TSVECTOR('dashboard.lims_english', CONCAT_WS(' ', NEW.title, NEW.acronym, NEW.description, NEW.notes));
     RETURN NEW;
 END; $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION bio_assets.fn_update_samples_search() RETURNS TRIGGER AS $$
 BEGIN
-    NEW.search_vector := TO_TSVECTOR('public.lims_english', CONCAT_WS(' ', NEW.sample_id, NEW.external_id, NEW.team_id, NEW.notes));
+    NEW.search_vector := TO_TSVECTOR('dashboard.lims_english', CONCAT_WS(' ', NEW.sample_id, NEW.external_id, NEW.team_id, NEW.notes));
     RETURN NEW;
 END; $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION biologyfish.fn_update_dissection_search() RETURNS TRIGGER AS $$
 BEGIN
-    NEW.search_vector := TO_TSVECTOR('public.lims_english', CONCAT_WS(' ', NEW.stomach_contents_text, NEW.parasite_observation, NEW.notes));
+    NEW.search_vector := TO_TSVECTOR('dashboard.lims_english', CONCAT_WS(' ', NEW.stomach_contents_text, NEW.parasite_observation, NEW.notes));
     RETURN NEW;
 END; $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION communications.fn_update_chat_search() RETURNS TRIGGER AS $$
 BEGIN
-    NEW.search_vector := TO_TSVECTOR('public.lims_english', COALESCE(NEW.message_body,''));
+    NEW.search_vector := TO_TSVECTOR('dashboard.lims_english', COALESCE(NEW.message_body,''));
     RETURN NEW;
 END; $$ LANGUAGE plpgsql;
 
 -- 14.6 GLOBAL SEARCH FUNCTION
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.fn_global_search(p_search_term text)
+CREATE OR REPLACE FUNCTION dashboard.fn_global_search(p_search_term text)
 RETURNS TABLE(schema_name text, table_name text, primary_key_id text, matching_data jsonb) AS $$
 DECLARE
     rec RECORD;
@@ -1317,7 +1317,7 @@ BEGIN
             'SELECT %L::text, %L::text, %I::text, to_jsonb(t) FROM %I.%I AS t ' ||
             'WHERE t.search_vector @@ plainto_tsquery(%L, %L)',
             rec.table_schema, rec.table_name, rec.pk_col, rec.table_schema, rec.table_name, 
-            'public.lims_english', p_search_term
+            'dashboard.lims_english', p_search_term
         );
         RETURN QUERY EXECUTE query;
     END LOOP;
@@ -1345,61 +1345,61 @@ BEGIN
 
     -- 2. Metadata Tables (IDs)
     DROP TRIGGER IF EXISTS trg_gen_diss_id ON biologyfish.dissection;
-    CREATE TRIGGER trg_gen_diss_id BEFORE INSERT ON biologyfish.dissection FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('dissection_id', 'dissection');
+    CREATE TRIGGER trg_gen_diss_id BEFORE INSERT ON biologyfish.dissection FOR EACH ROW EXECUTE FUNCTION dashboard.fn_generate_metadata_id('dissection_id', 'dissection');
 
     DROP TRIGGER IF EXISTS trg_gen_nano_id ON moleculargenetics.nanodrop;
-    CREATE TRIGGER trg_gen_nano_id BEFORE INSERT ON moleculargenetics.nanodrop FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('measurement_id', 'nanodrop');
+    CREATE TRIGGER trg_gen_nano_id BEFORE INSERT ON moleculargenetics.nanodrop FOR EACH ROW EXECUTE FUNCTION dashboard.fn_generate_metadata_id('measurement_id', 'nanodrop');
 
     DROP TRIGGER IF EXISTS trg_gen_qubit_id ON moleculargenetics.qubit;
-    CREATE TRIGGER trg_gen_qubit_id BEFORE INSERT ON moleculargenetics.qubit FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('measurement_id', 'qubit');
+    CREATE TRIGGER trg_gen_qubit_id BEFORE INSERT ON moleculargenetics.qubit FOR EACH ROW EXECUTE FUNCTION dashboard.fn_generate_metadata_id('measurement_id', 'qubit');
 
     DROP TRIGGER IF EXISTS trg_gen_tape_id ON moleculargenetics.tapestation;
-    CREATE TRIGGER trg_gen_tape_id BEFORE INSERT ON moleculargenetics.tapestation FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('measurement_id', 'tapestation');
+    CREATE TRIGGER trg_gen_tape_id BEFORE INSERT ON moleculargenetics.tapestation FOR EACH ROW EXECUTE FUNCTION dashboard.fn_generate_metadata_id('measurement_id', 'tapestation');
 
     DROP TRIGGER IF EXISTS trg_gen_qpcr_id ON moleculargenetics.qpcr;
-    CREATE TRIGGER trg_gen_qpcr_id BEFORE INSERT ON moleculargenetics.qpcr FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('qpcr_id', 'qpcr', 3);
+    CREATE TRIGGER trg_gen_qpcr_id BEFORE INSERT ON moleculargenetics.qpcr FOR EACH ROW EXECUTE FUNCTION dashboard.fn_generate_metadata_id('qpcr_id', 'qpcr', 3);
 
     DROP TRIGGER IF EXISTS trg_gen_gel_id ON moleculargenetics.gelelectrophoresis;
-    CREATE TRIGGER trg_gen_gel_id  BEFORE INSERT ON moleculargenetics.gelelectrophoresis FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('gel_id', 'Gel', 3);
+    CREATE TRIGGER trg_gen_gel_id  BEFORE INSERT ON moleculargenetics.gelelectrophoresis FOR EACH ROW EXECUTE FUNCTION dashboard.fn_generate_metadata_id('gel_id', 'Gel', 3);
 
     DROP TRIGGER IF EXISTS trg_gen_assign_id ON bioinformatics.assignments;
-    CREATE TRIGGER trg_gen_assign_id BEFORE INSERT ON bioinformatics.assignments FOR EACH ROW EXECUTE FUNCTION public.fn_generate_metadata_id('assignment_id', 'assign', 6);
+    CREATE TRIGGER trg_gen_assign_id BEFORE INSERT ON bioinformatics.assignments FOR EACH ROW EXECUTE FUNCTION dashboard.fn_generate_metadata_id('assignment_id', 'assign', 6);
 
     -- 3. Sequence & Special IDs
     DROP TRIGGER IF EXISTS trg_gen_ds_id ON bioinformatics.seq_dataset;
-    CREATE TRIGGER trg_gen_ds_id   BEFORE INSERT ON bioinformatics.seq_dataset FOR EACH ROW EXECUTE FUNCTION public.fn_generate_sequence_id('dataset_id', 'ds');
+    CREATE TRIGGER trg_gen_ds_id   BEFORE INSERT ON bioinformatics.seq_dataset FOR EACH ROW EXECUTE FUNCTION dashboard.fn_generate_sequence_id('dataset_id', 'ds');
 
     DROP TRIGGER IF EXISTS trg_gen_prot_id ON eln.protocols;
-    CREATE TRIGGER trg_gen_prot_id BEFORE INSERT ON eln.protocols FOR EACH ROW EXECUTE FUNCTION public.fn_generate_sequence_id('protocol_id', 'prtcl');
+    CREATE TRIGGER trg_gen_prot_id BEFORE INSERT ON eln.protocols FOR EACH ROW EXECUTE FUNCTION dashboard.fn_generate_sequence_id('protocol_id', 'prtcl');
 
     DROP TRIGGER IF EXISTS trg_gen_plan_id ON communications.internal_plans;
-    CREATE TRIGGER trg_gen_plan_id BEFORE INSERT ON communications.internal_plans FOR EACH ROW EXECUTE FUNCTION public.fn_generate_sequence_id('plan_id', 'intpln');
+    CREATE TRIGGER trg_gen_plan_id BEFORE INSERT ON communications.internal_plans FOR EACH ROW EXECUTE FUNCTION dashboard.fn_generate_sequence_id('plan_id', 'intpln');
 
     DROP TRIGGER IF EXISTS trg_gen_rep_id ON communications.reports;
-    CREATE TRIGGER trg_gen_rep_id  BEFORE INSERT ON communications.reports FOR EACH ROW EXECUTE FUNCTION public.fn_generate_sequence_id('report_id', 'rprt');
+    CREATE TRIGGER trg_gen_rep_id  BEFORE INSERT ON communications.reports FOR EACH ROW EXECUTE FUNCTION dashboard.fn_generate_sequence_id('report_id', 'rprt');
 
     DROP TRIGGER IF EXISTS trg_gen_book_id ON eln.bookings;
-    CREATE TRIGGER trg_gen_book_id BEFORE INSERT ON eln.bookings FOR EACH ROW EXECUTE FUNCTION public.fn_generate_special_ids();
+    CREATE TRIGGER trg_gen_book_id BEFORE INSERT ON eln.bookings FOR EACH ROW EXECUTE FUNCTION dashboard.fn_generate_special_ids();
 
     DROP TRIGGER IF EXISTS trg_gen_chat_id ON communications.projects_chat;
-    CREATE TRIGGER trg_gen_chat_id BEFORE INSERT ON communications.projects_chat FOR EACH ROW EXECUTE FUNCTION public.fn_generate_special_ids();
+    CREATE TRIGGER trg_gen_chat_id BEFORE INSERT ON communications.projects_chat FOR EACH ROW EXECUTE FUNCTION dashboard.fn_generate_special_ids();
 
     -- 4. Sample Resolution (External ID Link)
     DROP TRIGGER IF EXISTS trg_resolve_dna_id ON moleculargenetics.nucleic_acid;
-    CREATE TRIGGER trg_resolve_dna_id BEFORE INSERT ON moleculargenetics.nucleic_acid FOR EACH ROW EXECUTE FUNCTION public.fn_resolve_sample_id_from_external();
+    CREATE TRIGGER trg_resolve_dna_id BEFORE INSERT ON moleculargenetics.nucleic_acid FOR EACH ROW EXECUTE FUNCTION dashboard.fn_resolve_sample_id_from_external();
 
     DROP TRIGGER IF EXISTS trg_resolve_tissue_id ON bio_assets.tissue;
-    CREATE TRIGGER trg_resolve_tissue_id BEFORE INSERT ON bio_assets.tissue FOR EACH ROW EXECUTE FUNCTION public.fn_resolve_sample_id_from_external();
+    CREATE TRIGGER trg_resolve_tissue_id BEFORE INSERT ON bio_assets.tissue FOR EACH ROW EXECUTE FUNCTION dashboard.fn_resolve_sample_id_from_external();
 
     DROP TRIGGER IF EXISTS trg_resolve_dissection_id ON biologyfish.dissection;
-    CREATE TRIGGER trg_resolve_dissection_id BEFORE INSERT ON biologyfish.dissection FOR EACH ROW EXECUTE FUNCTION public.fn_resolve_sample_id_from_external();
+    CREATE TRIGGER trg_resolve_dissection_id BEFORE INSERT ON biologyfish.dissection FOR EACH ROW EXECUTE FUNCTION dashboard.fn_resolve_sample_id_from_external();
 
     -- 5. Sync & Paths
     DROP TRIGGER IF EXISTS trg_sync_geo_sampling ON field.sampling_event;
-    CREATE TRIGGER trg_sync_geo_sampling BEFORE INSERT OR UPDATE OF latitude, longitude ON field.sampling_event FOR EACH ROW EXECUTE FUNCTION public.fn_sync_latlon_to_geography();
+    CREATE TRIGGER trg_sync_geo_sampling BEFORE INSERT OR UPDATE OF latitude, longitude ON field.sampling_event FOR EACH ROW EXECUTE FUNCTION dashboard.fn_sync_latlon_to_geography();
 
     DROP TRIGGER IF EXISTS trg_sync_geo_fishing ON field.fishing;
-    CREATE TRIGGER trg_sync_geo_fishing BEFORE INSERT OR UPDATE OF latitude, longitude ON field.fishing FOR EACH ROW EXECUTE FUNCTION public.fn_sync_latlon_to_geography();
+    CREATE TRIGGER trg_sync_geo_fishing BEFORE INSERT OR UPDATE OF latitude, longitude ON field.fishing FOR EACH ROW EXECUTE FUNCTION dashboard.fn_sync_latlon_to_geography();
 
     DROP TRIGGER IF EXISTS trg_update_taxon_path ON "reference"."taxon";
     CREATE TRIGGER trg_update_taxon_path BEFORE INSERT OR UPDATE OF parent_taxon_id ON "reference"."taxon" FOR EACH ROW EXECUTE FUNCTION "reference".fn_update_taxon_path();
@@ -1525,7 +1525,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_person ON "audit"."audit_log" ("logged_
 --   2. Uses JSONB aggregation for 1-to-Many relationships (e.g. QC reads).
 --   3. Provides "Story" traceability from Cruise -> Sample -> Seq -> Analysis.
 
-CREATE OR REPLACE VIEW public.global_lab_overview AS
+CREATE OR REPLACE VIEW dashboard.global_lab_overview AS
 WITH 
 -- 1. AGGREGATE MOLECULAR QC DATA (1:N relationships)
 agg_nanodrop AS (
@@ -2092,7 +2092,7 @@ ORDER BY a.action_timestamp DESC;
 -- Usage: "Google-like" search across the database. 
 -- Note: This leverages the 'fn_global_search' logic but makes it a view for easier ORM access.
 -- WARNING: This can be heavy, use with LIMIT in applications.
-CREATE OR REPLACE VIEW public.view_global_search_index AS
+CREATE OR REPLACE VIEW dashboard.view_global_search_index AS
     SELECT 'Person' as type, person_id as id, first_name || ' ' || last_name as label, search_vector FROM core.persons
     UNION ALL
     SELECT 'Project', project_id, title, search_vector FROM lims.projects
