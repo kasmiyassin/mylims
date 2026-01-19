@@ -179,6 +179,7 @@ CREATE TABLE IF NOT EXISTS "core"."persons" (
     "country" text,
     "organization_id" text REFERENCES "core"."organizations"("organization_id"),
     "room" text,
+	"role_in_org" text,
     "status_id" text REFERENCES "reference"."status"("status_id"),
     "notes" text,
     "attachment_link" text
@@ -362,8 +363,8 @@ CREATE TABLE IF NOT EXISTS "field"."sampling_event" (
     "latitude" numeric CHECK (latitude >= -90 AND latitude <= 90), 
     "longitude" numeric CHECK (longitude >= -180 AND longitude <= 180),
     "geo_type" text,
-    "geography" geography(Geography, 4326), -- lat and lon and geotype combined to create this geographe
-    "together_with_contact_id" text REFERENCES "core"."persons"("person_id"),
+	"geography" geography(Geometry, 4326), -- Supports Point, LineString, or Polygon    
+	"together_with_contact_id" text REFERENCES "core"."persons"("person_id"),
     "together_with_organization_id" text REFERENCES "core"."organizations"("organization_id"),
     "status_id" text DEFAULT 'Planned' NOT NULL REFERENCES "reference"."status"("status_id"),
     "notes" text,
@@ -412,8 +413,8 @@ CREATE TABLE IF NOT EXISTS "field"."fishing" (
     "latitude" numeric CHECK (latitude >= -90 AND latitude <= 90), 
     "longitude" numeric CHECK (longitude >= -180 AND longitude <= 180),
     "geo_type" text,
-    "fishing_geography" geography(Geography, 4326),
-    "location_name" text,
+	"fishing_geography" geography(Geometry, 4326), -- Supports Point, LineString, or Polygon
+	"location_name" text,
     "depth_m" numeric,
     "start_time" time,
     "end_time" time,
@@ -441,6 +442,26 @@ CREATE TABLE IF NOT EXISTS "field"."catch" (
     "quantity_count" integer,
     "notes" text,
     "attachment_link" text
+);
+
+-- 12 eLN
+
+CREATE TABLE IF NOT EXISTS "eln"."batch" (
+    "batch_id" text PRIMARY KEY, -- manual for being understandable 
+    "name" text,
+    "description" text,
+    "creation_date" date DEFAULT CURRENT_DATE,
+    "status_id" text REFERENCES "reference"."status"("status_id"),
+    "notes" text
+);
+
+CREATE TABLE IF NOT EXISTS "eln"."bookable_resources" (
+    "resource_id" text PRIMARY KEY, --manual 
+    "equipment_id" text REFERENCES "core"."equipments"("equipment_id"),
+    "name" text,
+    "is_active" boolean DEFAULT true,
+    "calendar_color" text,
+    "notes" text
 );
 
 -- =========================================
@@ -477,7 +498,7 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."samples_root" (
     "storage_id" text REFERENCES "lims"."storage"("storage_id"),
     "storage_position" text,
     "sampler_person_id" text,
-    "receiver_person_id" text REFERENCES "lims"."persons"("person_id"),
+    "receiver_person_id" text REFERENCES "core"."persons"("person_id"),
     "reception_date" date,
     "transport" text,
     "conservation" text,
@@ -624,7 +645,7 @@ CREATE TABLE IF NOT EXISTS "biologyfish"."tag_mark" (
     "weight_g" numeric,
     "total_length_mm" numeric,
     "model_type" text,
-    "tag_id" text,
+    "tag_ref" text,
     "notes" text,
     "attachment_link" text
 );
@@ -645,10 +666,10 @@ CREATE TABLE IF NOT EXISTS "moleculargenetics"."nucleic_acid" ( --RNA or DNA
     "volume_unit" text DEFAULT 'ul',
     "conc_qubit" numeric,
     "conc_qubit_unit" text DEFAULT 'ng_ul',
-    "yield_qubit_ug" numeric GENERATED ALWAYS AS (volume_uL * conc_qubit / 1000) STORED,
+    "yield_qubit_ug" numeric GENERATED ALWAYS AS ("nucleic_acid"."volume_uL" * "nucleic_acid"."conc_qubit" / 1000) STORED,
     "conc_nanodrop" numeric,
     "conc_nanodrop_unit" text DEFAULT 'ng_ul',
-    "yield_nanodrop_ug" numeric GENERATED ALWAYS AS (volume_uL * conc_nanodrop / 1000) STORED,
+    "yield_nanodrop_ug" numeric GENERATED ALWAYS AS ("nucleic_acid"."volume_uL" * "nucleic_acid"."conc_nanodrop" / 1000) STORED,
     "a260_280" numeric,
     "a260_230" numeric,
     "DIN_RIN_score" numeric, -- RIN or DIN
@@ -810,7 +831,7 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."seq_dataset" (
     "dataset_id" text PRIMARY KEY, -- Prj25DS_000
     "description" text,
     "file_path" text,
-    "file_format" text C,
+    "file_format" text,
     "run_id" text REFERENCES "moleculargenetics"."sequencing"("run_id"),
     "read_count_filtered" bigint,
     "quality_metrics_json" jsonb,
@@ -842,23 +863,6 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."assignments" (
 -- =========================================
 -- 12. ELN SCHEMA
 -- =========================================
-CREATE TABLE IF NOT EXISTS "eln"."batch" (
-    "batch_id" text PRIMARY KEY, -- manual for being understandable 
-    "name" text,
-    "description" text,
-    "creation_date" date DEFAULT CURRENT_DATE,
-    "status_id" text REFERENCES "reference"."status"("status_id"),
-    "notes" text
-);
-
-CREATE TABLE IF NOT EXISTS "eln"."bookable_resources" (
-    "resource_id" text PRIMARY KEY, --manual 
-    "equipment_id" text REFERENCES "core"."equipments"("equipment_id"),
-    "name" text,
-    "is_active" boolean DEFAULT true,
-    "calendar_color" text,
-    "notes" text
-);
 
 CREATE TABLE IF NOT EXISTS "eln"."bookings" (
     "booking_id" bigserial PRIMARY KEY,  -- YYYYMMDD000
@@ -1260,6 +1264,32 @@ $$ LANGUAGE plpgsql;
 
 -- 14.5 SEARCH VECTOR UPDATES
 -- ----------------------------------------------------------------------------
+DO $$
+DECLARE
+    t RECORD;
+    -- List of your V5 schemas that need search capabilities
+    v_schema_list text[] := ARRAY['core', 'lims', 'field', 'bio_assets', 'biologyfish', 'moleculargenetics', 'communications', 'eln'];
+BEGIN
+    FOR t IN 
+        SELECT table_schema, table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = ANY(v_schema_list) 
+          AND table_type = 'BASE TABLE'
+    LOOP
+        -- Only add if the column doesn't already exist to avoid errors
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_schema = t.table_schema 
+              AND table_name = t.table_name 
+              AND column_name = 'search_vector'
+        ) THEN
+            EXECUTE format('ALTER TABLE %I.%I ADD COLUMN search_vector tsvector', t.table_schema, t.table_name);
+            RAISE NOTICE 'Added search_vector to %.%', t.table_schema, t.table_name;
+        END IF;
+    END LOOP;
+END $$;
+
+
 -- Standardizers for Full Text Search
 CREATE OR REPLACE FUNCTION core.fn_update_persons_search() RETURNS TRIGGER AS $$
 BEGIN
@@ -1492,7 +1522,6 @@ CREATE INDEX IF NOT EXISTS idx_biofish_spec_tax ON "bio_assets"."specimen_organi
 CREATE INDEX IF NOT EXISTS idx_biofish_diss_fts ON "biologyfish"."dissection" USING GIN ("search_vector");
 CREATE INDEX IF NOT EXISTS idx_biofish_diss_samp ON "biologyfish"."dissection" ("sample_id");
 CREATE INDEX IF NOT EXISTS idx_mol_pcr_exp ON "moleculargenetics"."pcr" ("experiment_id");
-CREATE INDEX IF NOT EXISTS idx_mol_lib_sample ON "moleculargenetics"."library" ("sample_id");
 CREATE INDEX IF NOT EXISTS idx_mol_seq_lib ON "moleculargenetics"."sequencing_libraries" ("library_id");
 CREATE INDEX IF NOT EXISTS idx_mol_seq_run ON "moleculargenetics"."sequencing_libraries" ("run_id");
 
@@ -1512,22 +1541,17 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_time ON "audit"."audit_log" ("action_ti
 CREATE INDEX IF NOT EXISTS idx_audit_log_person ON "audit"."audit_log" ("logged_in_person_id");
 
 
+
 -- ==========================================================
--- 16. Views
+-- 16. VIEWS & DASHBOARDS (CORRECTED & CLEAN)
 -- ==========================================================
 
--- V16.0.  Global Lab Overview (Complete Database Link)
--- ------------------------------------------------------------
--- Description: Master view connecting all schema layers.
--- Granularity: One row per Sample ID (Root or Child).
--- Features: 
---   1. Links Field, Biology, Molecular, and Bioinfo schemas.
---   2. Uses JSONB aggregation for 1-to-Many relationships (e.g. QC reads).
---   3. Provides "Story" traceability from Cruise -> Sample -> Seq -> Analysis.
-
+-- ----------------------------------------------------------------------------
+-- 16.0. GLOBAL LAB OVERVIEW (Master View)
+-- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW dashboard.global_lab_overview AS
 WITH 
--- 1. AGGREGATE MOLECULAR QC DATA (1:N relationships)
+-- 1. AGGREGATE MOLECULAR QC DATA
 agg_nanodrop AS (
     SELECT sample_id, jsonb_agg(jsonb_build_object(
         'id', measurement_id, 'date', processing_date, 
@@ -1548,7 +1572,7 @@ agg_tapestation AS (
     SELECT sample_id, jsonb_agg(jsonb_build_object(
         'id', measurement_id, 'date', processing_date, 
         'avg_size', avg_size_bp, 'conc', concentration, 
-        'rin', din_rin
+        'rin', "DIN_RIN"
     )) as tapestation_data
     FROM moleculargenetics.tapestation GROUP BY sample_id
 ),
@@ -1568,7 +1592,7 @@ agg_qpcr AS (
     FROM moleculargenetics.qpcr GROUP BY sample_id
 ),
 
--- 2. AGGREGATE SEQUENCING HISTORY (Library -> Run -> Flowcell)
+-- 2. AGGREGATE SEQUENCING HISTORY
 agg_sequencing AS (
     SELECT 
         sl.library_id, 
@@ -1587,16 +1611,15 @@ agg_sequencing AS (
     GROUP BY sl.library_id
 ),
 
--- 3. AGGREGATE BIOINFORMATICS (Assignments per Sample)
+-- 3. AGGREGATE BIOINFORMATICS
 agg_bioinfo AS (
     SELECT 
         sample_id, 
-        SUM(count) as total_reads_assigned, 
+        SUM("count") as total_reads_assigned, -- FIXED QUOTES
         COUNT(DISTINCT taxon_id) as distinct_taxa_count,
-        -- Get top 5 hits as JSON for quick preview
         jsonb_agg(jsonb_build_object(
-            'taxon', taxon_id, 'count', count, 'conf', confidence
-        ) ORDER BY count DESC) FILTER (WHERE count > 10) as top_hits
+            'taxon', taxon_id, 'count', "count", 'conf', confidence -- FIXED QUOTES
+        ) ORDER BY "count" DESC) FILTER (WHERE "count" > 10) as top_hits
     FROM bioinformatics.assignments 
     GROUP BY sample_id
 )
@@ -1644,7 +1667,7 @@ SELECT
     cr.name as cruise_name,
     v.vessel_name,
     
-    -- Abiotic Data (Snapshot)
+    -- Abiotic Data
     ab.temperature_sampling_depth_c as field_temp_c,
     ab.salinity as field_salinity,
     ab.oxygen as field_oxygen,
@@ -1656,19 +1679,17 @@ SELECT
     fish.depth_m as fishing_depth,
     fish.total_catch_quantity_kg,
 
-    -- === 5. BIOLOGICAL SPECIMEN (Fish/Organism) ===
+    -- === 5. BIOLOGICAL SPECIMEN ===
     spec.organism_type,
     tax.scientific_name,
     tax.common_name_en,
     spec.sex,
     spec.life_stage,
     spec.total_length_mm,
-    spec.fork_length_mm,
-    spec.standard_length_mm,
     spec.weight_g as specimen_weight_g,
     spec.processing_date as biology_processing_date,
     
-    -- Dissection Details (If dissected)
+    -- Dissection Details
     diss.dissection_id,
     diss.liver_weight_g,
     diss.gonad_weight_g,
@@ -1683,23 +1704,23 @@ SELECT
     tag.tag_id as tag_mark_id,
     tag.model_type as tag_model,
 
-    -- === 6. ENVIRONMENTAL SAMPLES (Water/Sediment) ===
+    -- === 6. ENVIRONMENTAL SAMPLES ===
     wat.volume_filtered_ml,
     wat.filter_type,
     sed.grain_size,
     sed.weight_mg as sediment_weight,
     tis.tissue_type,
     tis.preservation_medium,
-
-    -- === 7. MOLECULAR: EXTRACTION ===
+	
+	-- === 7. MOLECULAR: EXTRACTION ===
     na.extraction_method,
     na.kit as extraction_kit,
-    na.volume_uL as extract_vol,
+	na."volume_uL" as extract_vol,
     na.conc_qubit as extract_conc_qubit,
     na.conc_nanodrop as extract_conc_nano,
-    na.din_rin_score,
+    na."DIN_RIN_score",
     na.yield_qubit_ug,
-    
+	
     -- === 8. MOLECULAR: PCR & PROCESSING ===
     pcr.pcr_id,
     pcr.cycles as pcr_cycles,
@@ -1707,7 +1728,7 @@ SELECT
     pcr.primer_fwd_id,
     pcr.primer_rev_id,
     
-    -- === 9. MOLECULAR QC (JSON Aggregations) ===
+    -- === 9. MOLECULAR QC ===
     nd.nanodrop_data,
     qb.qubit_data,
     ts.tapestation_data,
@@ -1738,15 +1759,13 @@ FROM bio_assets.samples_root s
 -- Reference Lookups
 LEFT JOIN reference.sample_type st ON s.sample_type_id = st.sample_type_id
 LEFT JOIN reference.status stat ON s.status_id = stat.status_id
-
--- LIMS Core Context
+-- LIMS Core
 LEFT JOIN lims.projects prj ON s.project_id = prj.project_id
 LEFT JOIN lims.storage stor ON s.storage_id = stor.storage_id
 LEFT JOIN eln.batch b ON s.batch_id = b.batch_id
 LEFT JOIN lims.experiments exp ON s.experiment_id = exp.experiment_id
 LEFT JOIN lims.sop sop ON exp.sop_id = sop.sop_id
-
--- Field Data
+-- Field
 LEFT JOIN field.sampling_event se ON s.sampling_id = se.sampling_id
 LEFT JOIN reference.region r ON se.region_id = r.region_id
 LEFT JOIN reference.ecosystem e ON se.ecosystem_id = e.ecosystem_id
@@ -1754,46 +1773,38 @@ LEFT JOIN field.cruises cr ON se.cruise_id = cr.cruise_id
 LEFT JOIN core.vessel v ON se.vessel_id = v.vessel_id
 LEFT JOIN field.sampling_abiotic ab ON se.sampling_id = ab.sampling_id
 LEFT JOIN field.fishing fish ON se.sampling_id = fish.sampling_id
-
--- Biological Data (Type Specific 1:1)
+-- Biological
 LEFT JOIN bio_assets.specimen_organisms spec ON s.sample_id = spec.sample_id
 LEFT JOIN reference.taxon tax ON spec.taxon_id = tax.taxon_id
 LEFT JOIN bio_assets.water wat ON s.sample_id = wat.sample_id
 LEFT JOIN bio_assets.sediments sed ON s.sample_id = sed.sample_id
 LEFT JOIN bio_assets.tissue tis ON s.sample_id = tis.sample_id
-
--- Biology Sub-details (Linked to Specimen)
 LEFT JOIN biologyfish.dissection diss ON spec.sample_id = diss.sample_id
 LEFT JOIN biologyfish.otoliths oto ON spec.sample_id = oto.sample_id
 LEFT JOIN biologyfish.tag_mark tag ON spec.sample_id = tag.sample_id
-
--- Molecular Data (Linked to Sample ID)
+-- Molecular
 LEFT JOIN moleculargenetics.nucleic_acid na ON s.sample_id = na.sample_id
 LEFT JOIN moleculargenetics.pcr pcr ON s.sample_id = pcr.sample_id
-LEFT JOIN moleculargenetics.library lib ON s.sample_id = lib.sample_id
 
--- Aggregated Molecular QC Data
+-- FIXED: Join Library via the mapping table
+LEFT JOIN moleculargenetics.library_samples ls ON s.sample_id = ls.sample_id
+LEFT JOIN moleculargenetics.library lib ON ls.library_id = lib.library_id
+
+-- Aggregates
 LEFT JOIN agg_nanodrop nd ON s.sample_id = nd.sample_id
 LEFT JOIN agg_qubit qb ON s.sample_id = qb.sample_id
 LEFT JOIN agg_tapestation ts ON s.sample_id = ts.sample_id
 LEFT JOIN agg_gel gl ON s.sample_id = gl.sample_id
 LEFT JOIN agg_qpcr qp ON s.sample_id = qp.sample_id
-
--- Sequencing Data (via Library)
 LEFT JOIN agg_sequencing seq ON lib.library_id = seq.library_id
-
--- Bioinformatics Data
 LEFT JOIN agg_bioinfo bi ON s.sample_id = bi.sample_id
--- Link to dataset via assignment map
 LEFT JOIN bioinformatics.seq_sample_assignment ssa ON s.sample_id = ssa.sample_id
 LEFT JOIN bioinformatics.seq_dataset ds ON ssa.dataset_id = ds.dataset_id;
 
 
-
--- 16.1. PROJECT & MANAGEMENT DASHBOARDS
-
--- VIEW: Project Progress Dashboard
--- Usage: High-level overview for PIs and Managers. Shows sample counts and experiment progress.
+-- ----------------------------------------------------------------------------
+-- 16.1. PROJECT & MANAGEMENT
+-- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW lims.view_project_dashboard AS
 SELECT 
     p.project_id,
@@ -1803,7 +1814,6 @@ SELECT
     p.start_date,
     p.end_date,
     p.status_id,
-    -- Metrics
     COUNT(DISTINCT s.sample_id) AS total_samples,
     COUNT(DISTINCT exp.experiment_id) AS experiments_run,
     COUNT(DISTINCT se.sampling_id) AS sampling_campaigns,
@@ -1817,8 +1827,6 @@ LEFT JOIN field.sampling_event se ON p.project_id = se.project_id
 LEFT JOIN communications.reports pub ON p.project_id = pub.project_id
 GROUP BY p.project_id, p.acronym, p.title, pi_name, p.start_date, p.end_date, p.status_id;
 
--- VIEW: Team Workload
--- Usage: See who is doing what (Sampling, Experiments, Analysis).
 CREATE OR REPLACE VIEW core.view_team_activity AS
 SELECT 
     per.person_id,
@@ -1835,10 +1843,9 @@ LEFT JOIN biologyfish.dissection diss ON per.person_id = diss.person_id
 LEFT JOIN eln.protocols_run eln ON per.person_id = eln.person_id
 GROUP BY per.person_id, per.first_name, per.last_name, per.role_in_org;
 
--- 16.2. FIELD & SPATIAL VIEWS
-
--- VIEW: Sampling Map Data (GeoJSON ready)
--- Usage: Direct feed for Mapbox/Leaflet/GIS tools.
+-- ----------------------------------------------------------------------------
+-- 16.2. FIELD & SPATIAL
+-- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW field.view_sampling_map_data AS
 SELECT 
     se.sampling_id,
@@ -1850,7 +1857,6 @@ SELECT
     e.ecosystem_abrv,
     se.latitude,
     se.longitude,
-    -- Create GeoJSON properties
     jsonb_build_object(
         'type', 'Feature',
         'geometry', ST_AsGeoJSON(se.geography)::jsonb,
@@ -1870,8 +1876,6 @@ LEFT JOIN reference.ecosystem e ON se.ecosystem_id = e.ecosystem_id
 LEFT JOIN field.sampling_abiotic ab ON se.sampling_id = ab.sampling_id
 WHERE se.latitude IS NOT NULL;
 
--- VIEW: Catch Composition Statistics
--- Usage: Ecological analysis of catch data.
 CREATE OR REPLACE VIEW field.view_catch_statistics AS
 SELECT 
     c.sampling_id,
@@ -1881,7 +1885,6 @@ SELECT
     t.common_name_en,
     SUM(c.quantity_weight_kg) AS total_biomass_kg,
     SUM(c.quantity_count) AS total_abundance,
-    -- Calculate frequency of occurrence or relative abundance if needed in UI
     se.project_id
 FROM field.catch c
 JOIN field.sampling_event se ON c.sampling_id = se.sampling_id
@@ -1890,10 +1893,9 @@ JOIN reference.region r ON se.region_id = r.region_id
 GROUP BY c.sampling_id, se.sampling_date, r.region_abrv, t.scientific_name, t.common_name_en, se.project_id;
 
 
--- 16.3. BIOLOGY & SPECIMEN VIEWS
-
--- VIEW: Full Biological Profile (The "Fish Card")
--- Usage: Combines external measurements with internal dissection data.
+-- ----------------------------------------------------------------------------
+-- 16.3. BIOLOGY & SPECIMEN
+-- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW biologyfish.view_biological_profile AS
 SELECT 
     spec.sample_id,
@@ -1901,15 +1903,12 @@ SELECT
     t.scientific_name,
     spec.sex,
     spec.life_stage,
-    -- External Metrics
     spec.total_length_mm,
     spec.weight_g AS total_weight_g,
-    -- Internal Metrics (Dissection)
     d.liver_weight_g,
     d.gonad_weight_g,
     d.stomach_contents_text,
     d.parasite_observation,
-    -- Calculated Indices
     CASE WHEN spec.total_length_mm > 0 THEN 
         (spec.weight_g * 100) / (spec.total_length_mm ^ 3) 
     ELSE NULL END AS fulton_condition_factor,
@@ -1919,7 +1918,6 @@ SELECT
     CASE WHEN spec.weight_g > 0 THEN 
         (d.liver_weight_g / spec.weight_g) * 100 
     ELSE NULL END AS hepatosomatic_index_HSI,
-    -- Ageing
     oto.age_read AS otolith_age,
     oto.confidence_level AS age_confidence
 FROM bio_assets.specimen_organisms spec
@@ -1927,50 +1925,30 @@ LEFT JOIN reference.taxon t ON spec.taxon_id = t.taxon_id
 LEFT JOIN biologyfish.dissection d ON spec.sample_id = d.sample_id
 LEFT JOIN biologyfish.otoliths oto ON spec.sample_id = oto.sample_id;
 
--- 16.4. INVENTORY & STORAGE VIEWS
 
--- VIEW: Sample Location Explorer (Recursive Path Resolver)
--- Usage: "Where is Sample X?" - displays human readable path like "Room 101 > Freezer B > Shelf 2 > Box 5".
+-- ----------------------------------------------------------------------------
+-- 16.4. INVENTORY & STORAGE
+-- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW lims.view_sample_location_paths AS
 WITH RECURSIVE storage_tree AS (
     SELECT 
-        storage_id, 
-        name, 
-        parent_storage_id, 
-        name::text AS full_path
-    FROM lims.storage
-    WHERE parent_storage_id IS NULL
+        storage_id, name, parent_storage_id, name::text AS full_path
+    FROM lims.storage WHERE parent_storage_id IS NULL
     UNION ALL
     SELECT 
-        s.storage_id, 
-        s.name, 
-        s.parent_storage_id, 
-        st.full_path || ' > ' || s.name
-    FROM lims.storage s
-    JOIN storage_tree st ON s.parent_storage_id = st.storage_id
+        s.storage_id, s.name, s.parent_storage_id, st.full_path || ' > ' || s.name
+    FROM lims.storage s JOIN storage_tree st ON s.parent_storage_id = st.storage_id
 )
 SELECT 
-    samp.sample_id,
-    samp.sample_type_id,
-    samp.external_id,
-    st.full_path AS storage_location,
-    samp.storage_position, -- e.g. A1, B2
-    samp.collection_date
+    samp.sample_id, samp.sample_type_id, samp.external_id,
+    st.full_path AS storage_location, samp.storage_position, samp.collection_date
 FROM bio_assets.samples_root samp
 JOIN storage_tree st ON samp.storage_id = st.storage_id
 WHERE samp.is_active = true;
 
--- VIEW: Reagent Expiry Alert
--- Usage: Dashboard widget for Lab Manager.
 CREATE OR REPLACE VIEW lims.view_reagent_alerts AS
 SELECT 
-    r.reagent_id,
-    r.name,
-    r.lot_number,
-    r.expiry_date,
-    r.quantity,
-    u.unit_abbreviation,
-    st.name AS storage_location,
+    r.reagent_id, r.name, r.lot_number, r.expiry_date, r.quantity, u.unit_abbreviation, st.name AS storage_location,
     CASE 
         WHEN r.expiry_date < CURRENT_DATE THEN 'EXPIRED'
         WHEN r.expiry_date < CURRENT_DATE + INTERVAL '30 days' THEN 'EXPIRING SOON'
@@ -1982,24 +1960,14 @@ LEFT JOIN lims.storage st ON r.storage_id = st.storage_id
 WHERE r.expiry_date < CURRENT_DATE + INTERVAL '60 days'
 ORDER BY r.expiry_date ASC;
 
--- 16.5. MOLECULAR LAB & QC VIEWS
 
--- VIEW: Extraction Quality Comparison
--- Usage: Compare Yield and Purity across extraction methods.
+-- ----------------------------------------------------------------------------
+-- 16.5. MOLECULAR LAB & QC
+-- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW moleculargenetics.view_extraction_qc_summary AS
 SELECT 
-    na.sample_id,
-    na.extraction_method,
-    na.kit,
-    na.processing_date,
-    -- Yields
-    na.yield_nanodrop_ug,
-    na.yield_qubit_ug,
-    -- Purity
-    na.a260_280,
-    na.a260_230,
-    na.din_rin_score,
-    -- Flag problematic samples
+    na.sample_id, na.extraction_method, na.kit, na.processing_date,
+    na.yield_nanodrop_ug, na.yield_qubit_ug, na.a260_280, na.a260_230, na."DIN_RIN_score",
     CASE 
         WHEN na.a260_280 < 1.7 OR na.a260_280 > 2.1 THEN 'Check Purity'
         WHEN na.conc_qubit < 1.0 THEN 'Low Conc'
@@ -2007,19 +1975,12 @@ SELECT
     END AS qc_flag
 FROM moleculargenetics.nucleic_acid na;
 
--- VIEW: Sequencing Queue
--- Usage: What is ready to run? What is currently running?
+-- CORRECTED: Removed invalid "sample_id" and replaced with "sample_count"
 CREATE OR REPLACE VIEW moleculargenetics.view_sequencing_queue AS
 SELECT 
     l.library_id,
-    l.sample_id,
-    l.prep_kit,
-    l.molarity_nm,
-    l.lib_barcode,
-    -- Sequencing Status
-    sl.run_id,
-    seq.status_id AS run_status,
-    fc.sequencer_id,
+    (SELECT COUNT(*) FROM moleculargenetics.library_samples WHERE library_id = l.library_id) AS sample_count,
+    l.prep_kit, l.molarity_nm, l.lib_barcode, sl.run_id, seq.status_id AS run_status, fc.sequencer_id,
     CASE 
         WHEN sl.run_id IS NULL THEN 'Pending Assignment'
         WHEN seq.status_id = 'Completed' THEN 'Sequenced'
@@ -2032,66 +1993,42 @@ LEFT JOIN moleculargenetics.sequencing seq ON sl.run_id = seq.run_id
 LEFT JOIN moleculargenetics.sequencing_flowcells fc ON seq.flowcell_id = fc.flowcell_id;
 
 
--- 16.6. BIOINFORMATICS VIEWS
-
--- VIEW: Taxonomy Pivot (Simplified)
--- Usage: Clean table of "What did we find in this sample?"
+-- ----------------------------------------------------------------------------
+-- 16.6. BIOINFORMATICS
+-- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW bioinformatics.view_taxonomy_results AS
 SELECT 
-    a.sample_id,
-    ds.dataset_id,
-    p.name AS pipeline_used,
-    t.scientific_name,
-    t.rank,
-    a.count AS read_count,
+    a.sample_id, ds.dataset_id, p.name AS pipeline_used, t.scientific_name, t.rank,
+    a."count" AS read_count, -- FIXED QUOTES
     a.confidence,
-    -- Relative abundance calculation (requires window function)
-    ROUND((a.count::numeric / SUM(a.count) OVER (PARTITION BY a.sample_id)) * 100, 2) AS relative_abundance_pct
+    ROUND((a."count"::numeric / SUM(a."count") OVER (PARTITION BY a.sample_id)) * 100, 2) AS relative_abundance_pct
 FROM bioinformatics.assignments a
 JOIN bioinformatics.seq_dataset ds ON a.dataset_id = ds.dataset_id
 JOIN bioinformatics.pipelines p ON a.pipeline_id = p.pipeline_id
 JOIN reference.taxon t ON a.taxon_id = t.taxon_id;
 
--- 16.7. ELN & ADMIN VIEWS
 
--- VIEW: Booking Calendar (UI Ready)
--- Usage: Feed for FullCalendar or similar frontend lib.
+-- ----------------------------------------------------------------------------
+-- 16.7. ELN, ADMIN & SEARCH
+-- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW eln.view_booking_calendar_events AS
 SELECT 
-    b.booking_id,
-    res.name AS resource_title,
-    res.calendar_color,
+    b.booking_id, res.name AS resource_title, res.calendar_color,
     p.first_name || ' ' || p.last_name AS booked_by,
-    b.start_time,
-    b.end_time,
-    b.project_id,
-    b.notes
+    b.start_time, b.end_time, b.project_id, b.notes
 FROM eln.bookings b
 JOIN eln.bookable_resources res ON b.resource_id = res.resource_id
 JOIN core.persons p ON b.person_id = p.person_id;
 
--- VIEW: Readable Audit Log
--- Usage: Admin history review.
 CREATE OR REPLACE VIEW audit.view_readable_log AS
 SELECT 
-    a.action_timestamp,
-    a.schema_name,
-    a.table_name,
-    a.action,
+    a.action_timestamp, a.schema_name, a.table_name, a.action,
     COALESCE(p.first_name || ' ' || p.last_name, a.user_db_name) AS actor,
-    a.original_data,
-    a.new_data,
-    a.query_text
+    a.original_data, a.new_data, a.query_text
 FROM audit.audit_log a
 LEFT JOIN core.persons p ON a.logged_in_person_id = p.person_id
 ORDER BY a.action_timestamp DESC;
 
--- 16.8. COMPOSITE SEARCH VIEW
-
--- VIEW: Master Search Index
--- Usage: "Google-like" search across the database. 
--- Note: This leverages the 'fn_global_search' logic but makes it a view for easier ORM access.
--- WARNING: This can be heavy, use with LIMIT in applications.
 CREATE OR REPLACE VIEW dashboard.view_global_search_index AS
     SELECT 'Person' as type, person_id as id, first_name || ' ' || last_name as label, search_vector FROM core.persons
     UNION ALL
@@ -2104,84 +2041,78 @@ CREATE OR REPLACE VIEW dashboard.view_global_search_index AS
     SELECT 'Chat', message_id, substring(message_body from 1 for 50), search_vector FROM communications.projects_chat;
 
 
-
--- 16.9. LINEAGE & TRACEABILITY 
-
--- VIEW: Downstream Traceability (Parent -> Child -> Grandchild)
--- Usage: Query by 'ancestor_sample_id' to find EVERYTHING derived from it.
--- Returns: Flattened list of all descendants with their specific analysis flags.
+-- ----------------------------------------------------------------------------
+-- 16.8. LINEAGE & TRACEABILITY
+-- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW bio_assets.view_downstream_lineage AS
 WITH RECURSIVE hierarchy AS (
-    -- Anchor: All samples start as their own ancestor (Level 0)
     SELECT 
-        s.sample_id AS ancestor_sample_id,
-        s.sample_id AS descendant_sample_id,
-        s.sample_type_id AS descendant_type,
-        0 AS depth,
-        s.sample_id::text AS path
+        s.sample_id AS ancestor_sample_id, s.sample_id AS descendant_sample_id,
+        s.sample_type_id AS descendant_type, 0 AS depth, s.sample_id::text AS path
     FROM bio_assets.samples_root s
-    
     UNION ALL
-    
-    -- Recursive: Join parent to child
     SELECT 
-        h.ancestor_sample_id,
-        s.sample_id,
-        s.sample_type_id,
-        h.depth + 1,
-        h.path || ' -> ' || s.sample_id
-    FROM bio_assets.samples_root s
-    JOIN hierarchy h ON s.parent_sample_id = h.descendant_sample_id
+        h.ancestor_sample_id, s.sample_id, s.sample_type_id, h.depth + 1, h.path || ' -> ' || s.sample_id
+    FROM bio_assets.samples_root s JOIN hierarchy h ON s.parent_sample_id = h.descendant_sample_id
 )
 SELECT 
-    h.ancestor_sample_id,
-    h.descendant_sample_id,
-    h.descendant_type,
-    h.depth,
-    h.path,
-    -- Analysis Story Flags
-    -- 1. Biology
-    CASE WHEN d.dissection_id IS NOT NULL THEN 'Yes' ELSE NULL END AS is_dissected,
-    d.weight_g AS dissected_weight,
-    -- 2. Molecular (Extraction)
-    CASE WHEN na.sample_id IS NOT NULL THEN na.extraction_method ELSE NULL END AS extraction_method,
-    na.yield_qubit_ug AS dna_yield,
-    -- 3. Molecular (Library)
+    h.ancestor_sample_id, h.descendant_sample_id, h.descendant_type, h.depth, h.path,
+    CASE WHEN d.dissection_id IS NOT NULL THEN 'Yes' ELSE NULL END AS is_dissected, d.weight_g AS dissected_weight,
+    CASE WHEN na.sample_id IS NOT NULL THEN na.extraction_method ELSE NULL END AS extraction_method, na.yield_qubit_ug AS dna_yield,
     CASE WHEN lib.library_id IS NOT NULL THEN lib.prep_kit ELSE NULL END AS library_kit,
-    -- 4. Sequencing
     CASE WHEN seq.run_id IS NOT NULL THEN seq.run_id ELSE NULL END AS sequencing_run
 FROM hierarchy h
--- Join Analysis Tables to tell the story
 LEFT JOIN biologyfish.dissection d ON h.descendant_sample_id = d.sample_id
 LEFT JOIN moleculargenetics.nucleic_acid na ON h.descendant_sample_id = na.sample_id
-LEFT JOIN moleculargenetics.library lib ON h.descendant_sample_id = lib.sample_id
+-- FIXED: Join Library via the mapping table
+LEFT JOIN moleculargenetics.library_samples ls ON h.descendant_sample_id = ls.sample_id
+LEFT JOIN moleculargenetics.library lib ON ls.library_id = lib.library_id
 LEFT JOIN moleculargenetics.sequencing_libraries seq_lib ON lib.library_id = seq_lib.library_id
 LEFT JOIN moleculargenetics.sequencing seq ON seq_lib.run_id = seq.run_id;
 
--- VIEW: Upstream Provenance (Child -> Parent -> Grandparent)
--- Usage: "Where did this sample come from?"
 CREATE OR REPLACE VIEW bio_assets.view_upstream_provenance AS
 WITH RECURSIVE ancestry AS (
-    -- Anchor: Start with the child
     SELECT 
-        s.sample_id AS target_child_id,
-        s.sample_id AS ancestor_id,
-        s.sample_type_id AS ancestor_type,
-        0 AS steps_up,
-        s.sample_id::text AS lineage_path
+        s.sample_id AS target_child_id, s.sample_id AS ancestor_id,
+        s.sample_type_id AS ancestor_type, 0 AS steps_up, s.sample_id::text AS lineage_path
     FROM bio_assets.samples_root s
-    
     UNION ALL
-    
-    -- Recursive: Find the parent
     SELECT 
-        a.target_child_id,
-        s.sample_id,
-        s.sample_type_id,
-        a.steps_up + 1,
-        s.sample_id || ' -> ' || a.lineage_path
-    FROM bio_assets.samples_root s
-    JOIN ancestry a ON s.sample_id = (SELECT parent_sample_id FROM bio_assets.samples_root WHERE sample_id = a.ancestor_id)
+        a.target_child_id, s.sample_id, s.sample_type_id, a.steps_up + 1, s.sample_id || ' -> ' || a.lineage_path
+    FROM bio_assets.samples_root s JOIN ancestry a ON s.sample_id = (SELECT parent_sample_id FROM bio_assets.samples_root WHERE sample_id = a.ancestor_id)
 )
 SELECT * FROM ancestry;
 
+
+-- ----------------------------------------------------------------------------
+-- 16.9. ADVANCED METRICS (Throughput MV only)
+-- ----------------------------------------------------------------------------
+
+-- MATERIALIZED VIEW: Full Lab Pipeline Throughput
+CREATE MATERIALIZED VIEW IF NOT EXISTS "dashboard"."monthly_lab_throughput_mv" AS
+WITH monthly_stats AS (
+    SELECT TO_CHAR(processing_date, 'YYYY-MM') AS month_p, 'Biology: Dissection' AS stage, COUNT(*) AS count FROM biologyfish.dissection WHERE processing_date IS NOT NULL GROUP BY 1, 2
+    UNION ALL
+    SELECT TO_CHAR(processing_date, 'YYYY-MM') AS month_p, 'Molecular: Extraction' AS stage, COUNT(*) AS count FROM moleculargenetics.nucleic_acid WHERE processing_date IS NOT NULL GROUP BY 1, 2
+    UNION ALL
+    SELECT TO_CHAR(processing_date, 'YYYY-MM') AS month_p, 'Molecular: PCR' AS stage, COUNT(*) AS count FROM moleculargenetics.pcr WHERE processing_date IS NOT NULL GROUP BY 1, 2
+    UNION ALL
+    SELECT TO_CHAR(processing_date, 'YYYY-MM') AS month_p, 'Molecular: Library Prep' AS stage, COUNT(*) AS count FROM moleculargenetics.library WHERE processing_date IS NOT NULL GROUP BY 1, 2
+    UNION ALL
+    SELECT TO_CHAR(processing_date, 'YYYY-MM') AS month_p, 'QC: Tapestation' AS stage, COUNT(*) AS count FROM moleculargenetics.tapestation WHERE processing_date IS NOT NULL GROUP BY 1, 2
+    UNION ALL
+    SELECT TO_CHAR(fc.run_date, 'YYYY-MM') AS month_p, 'Sequencing: Run' AS stage, COUNT(s.run_id) AS count 
+    FROM moleculargenetics.sequencing s JOIN moleculargenetics.sequencing_flowcells fc ON s.flowcell_id = fc.flowcell_id WHERE fc.run_date IS NOT NULL GROUP BY 1, 2
+    UNION ALL
+    SELECT TO_CHAR(fc.run_date, 'YYYY-MM') AS month_p, 'Bioinfo: Taxon Assignment' AS stage, COUNT(DISTINCT a.sample_id) AS count
+    FROM bioinformatics.assignments a 
+    JOIN bioinformatics.seq_dataset ds ON a.dataset_id = ds.dataset_id 
+    JOIN moleculargenetics.sequencing s ON ds.run_id = s.run_id 
+    JOIN moleculargenetics.sequencing_flowcells fc ON s.flowcell_id = fc.flowcell_id 
+    WHERE fc.run_date IS NOT NULL GROUP BY 1, 2
+)
+SELECT month_p as month_period, stage, count, SUM(count) OVER (PARTITION BY stage ORDER BY month_p) as cumulative_total
+FROM monthly_stats ORDER BY month_p DESC, stage ASC
+WITH DATA;
+
+CREATE INDEX idx_lab_throughput_period ON "dashboard"."monthly_lab_throughput_mv" (month_period);
