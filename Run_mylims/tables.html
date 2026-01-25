@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Data Editor - TIFI LIMS</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Icons (Lucide) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- AG Grid (Latest Community Version) -->
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
+    <!-- AG Grid Styles -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-grid.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-theme-alpine.css" />
+
+    <!-- SheetJS for Excel Import/Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- Base & Typography --- */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* Tailwind's bg-slate-50 */
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* --- Sidebar styling (Matched to Dashboard) --- */
+        .sidebar {
+            transition: width 0.3s ease;
+            border-right: 1px solid #e2e8f0; /* Tailwind's border-slate-200 */
+            height: 100vh;
+            background-color: white;
+        }
+        .sidebar-nav-container {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+        .sidebar-nav-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .sidebar-nav-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        .sidebar-item {
+            transition: all 0.2s ease;
+            color: #475569; /* Tailwind's text-slate-600 */
+        }
+        .sidebar-item.active, .sidebar-item.active i {
+            background-color: #eef2ff; /* Tailwind's bg-indigo-50 */
+            color: #4f46e5; /* Tailwind's text-indigo-600 */
+            font-weight: 600;
+        }
+        .sidebar-item:hover {
+            background-color: #f1f5f9; /* Tailwind's bg-slate-100 */
+            color: #1e293b; /* Tailwind's text-slate-800 */
+        }
+
+        /* --- AG Grid Customization --- */
+        .ag-theme-alpine {
+            --ag-header-background-color: #f8fafc;
+            --ag-header-foreground-color: #475569;
+            --ag-border-color: #e2e8f0;
+            --ag-row-hover-color: #f1f5f9;
+            --ag-selected-row-background-color: #e0e7ff;
+            --ag-range-selection-border-color: #4f46e5;
+            --ag-font-family: 'Inter', sans-serif;
+            --ag-font-size: 13px;
+        }
+        .ag-header-cell-label { font-weight: 600; }
+        
+        /* --- Loading Overlay --- */
+        .loading-overlay {
+            position: absolute; inset: 0;
+            background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(2px);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 50;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        .loading-overlay.active { opacity: 1; pointer-events: all; }
+        
+        /* --- Toast Notification --- */
+        .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 100; display: flex; flex-direction: column; gap: 10px; }
+        .toast {
+            background: white; border-left: 4px solid #3b82f6;
+            padding: 12px 20px; border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: flex; align-items: center; gap: 12px;
+            transform: translateX(120%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .toast.show { transform: translateX(0); }
+        .toast.success { border-color: #10b981; }
+        .toast.error { border-color: #ef4444; }
+
+        /* --- Inputs --- */
+        .custom-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            padding-right: 2.5rem;
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="bg-white px-6 py-4 rounded-xl shadow-2xl flex items-center space-x-4 border border-slate-100">
+            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+            <p id="loadingText" class="text-slate-700 font-medium">Processing...</p>
+        </div>
+    </div>
+
+    <!-- SIDEBAR (Restored from Dashboard) -->
+    <div id="sidebar" class="sidebar fixed top-0 left-0 bg-white w-64 p-4 flex flex-col z-20">
+        <div class="text-gray-800 text-2xl font-bold mb-4 flex items-center shrink-0">
+            <i data-lucide="flask-conical" class="inline-block mr-2 text-blue-600"></i><span>TIFI LIMS</span>
+        </div>
+        
+        <div class="sidebar-nav-container space-y-2">
+            <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+            <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+            <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+            <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (ELN)</span></a>
+            <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+            <a href="planned_samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Planned Samples</span></a>
+            <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+            <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+            <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+            <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+            <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+            <a href="booking.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Booking</span></a>
+            <a href="tables.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="table-2" class="w-5 h-5 mr-3"></i><span>Tables</span></a>
+        </div>
+        
+        <div class="mt-4 shrink-0 border-t pt-2">
+            <a href="user_profile.html" id="user-profile-link" class="p-2 mb-2 flex items-center text-gray-800 hover:bg-slate-50 rounded-md">
+                <div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs mr-3">U</div>
+                <div>
+                    <p class="font-semibold text-sm">User Profile</p>
+                    <p class="text-xs text-slate-500">Logged In</p>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="ml-64 flex-1 flex flex-col h-screen relative bg-slate-50">
+        
+        <!-- Header / Toolbar -->
+        <header class="bg-white border-b border-slate-200 z-20 px-6 py-3 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            
+            <!-- Left: Table Selection -->
+            <div class="flex items-center gap-3 flex-1">
+                <div class="relative group min-w-[220px]">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i data-lucide="database" class="h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors"></i>
+                    </div>
+                    <select id="primaryTableSelect" class="custom-select w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all shadow-sm">
+                        <option value="" disabled selected>Select Primary Table...</option>
+                    </select>
+                </div>
+
+                <div class="text-slate-300"><i data-lucide="arrow-right" class="w-4 h-4"></i></div>
+
+                <div class="relative group min-w-[220px]">
+                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i data-lucide="link" class="h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors"></i>
+                    </div>
+                    <select id="secondaryTableSelect" class="custom-select w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all shadow-sm">
+                        <option value="">No Join (Optional)</option>
+                    </select>
+                </div>
+                
+                <div class="relative group w-32 hidden" id="joinColContainer">
+                    <input type="text" id="joinColumnInput" value="sample_id" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Join Col">
+                </div>
+
+                <button onclick="loadGridData()" class="ml-2 p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-md shadow-indigo-200 transition-all active:scale-95" title="Load Data">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Right: Actions -->
+            <div class="flex items-center gap-2">
+                 <button onclick="addNewRow()" class="flex items-center px-3 py-2 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-sm font-medium transition-colors border border-indigo-200">
+                    <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Add Row
+                 </button>
+                
+                 <div class="h-6 w-px bg-slate-200 mx-1"></div>
+
+                 <button onclick="toggleColumnPanel()" class="flex items-center px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium transition-colors border border-transparent hover:border-slate-200">
+                    <i data-lucide="columns" class="w-4 h-4 mr-2"></i>
+                </button>
+                
+                <input type="file" id="fileInput" class="hidden" accept=".csv, .xlsx, .xls" />
+                <button onclick="document.getElementById('fileInput').click()" class="flex items-center px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium transition-colors border border-transparent hover:border-slate-200">
+                    <i data-lucide="upload" class="w-4 h-4 mr-2"></i> Import
+                </button>
+                
+                <button onclick="exportData()" class="flex items-center px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium transition-colors border border-transparent hover:border-slate-200">
+                    <i data-lucide="download" class="w-4 h-4 mr-2"></i> Export
+                </button>
+                
+                <button onclick="saveChanges()" class="ml-2 flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-md shadow-emerald-200 text-sm font-medium transition-all active:scale-95">
+                    <i data-lucide="save" class="w-4 h-4 mr-2"></i> Save Changes
+                </button>
+            </div>
+        </header>
+
+        <!-- Grid Container -->
+        <div class="flex-1 p-4 overflow-hidden relative">
+            <div class="h-full bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+                <!-- Info Bar -->
+                <div class="px-4 py-2 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs text-slate-500">
+                    <span id="rowCountDisplay" class="font-mono">Ready to load data</span>
+                    <div class="flex gap-4">
+                        <span class="flex items-center"><i class="w-2 h-2 rounded-full bg-indigo-500 mr-1"></i> Editable</span>
+                        <span class="flex items-center"><i class="w-2 h-2 rounded-full bg-slate-300 mr-1"></i> Read-only (PK)</span>
+                    </div>
+                </div>
+                <!-- AG Grid Root -->
+                <div id="myGrid" class="ag-theme-alpine flex-1 w-full"></div>
+            </div>
+
+            <!-- Slide-out Column Panel -->
+            <div id="columnPanel" class="absolute top-4 bottom-4 right-4 w-64 bg-white rounded-xl shadow-2xl border border-slate-200 transform translate-x-[110%] transition-transform duration-300 z-40 flex flex-col">
+                <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl">
+                    <h3 class="font-semibold text-slate-700 text-sm">Visible Columns</h3>
+                    <button onclick="toggleColumnPanel()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-4 h-4"></i></button>
+                </div>
+                <div class="p-2 border-b border-slate-100">
+                     <button onclick="toggleAllColumns(true)" class="text-xs text-indigo-600 font-medium hover:underline mr-2">Select All</button>
+                     <button onclick="toggleAllColumns(false)" class="text-xs text-slate-500 font-medium hover:underline">Clear All</button>
+                </div>
+                <div id="columnToggleList" class="flex-1 overflow-y-auto p-2 space-y-1">
+                    <div class="text-center text-slate-400 text-xs italic mt-10">Load a table first</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT -->
+    <script>
+        const API_PREFIX = '/mylims/api'; // Adjust base path if needed
+        let gridApi = null;
+        
+        // Metadata
+        let tableSchemas = { primary: null, secondary: null };
+        let pkColumns = { primary: [], secondary: [] };
+        // Maps column names to which table they belong to for smarter imports
+        let columnMapping = { primary: new Set(), secondary: new Set() };
+        
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            
+            // Show/Hide Join Column input based on secondary selection
+            document.getElementById('secondaryTableSelect').addEventListener('change', (e) => {
+                const joinContainer = document.getElementById('joinColContainer');
+                if (e.target.value) joinContainer.classList.remove('hidden');
+                else joinContainer.classList.add('hidden');
+            });
+
+            // Populate Table Dropdowns
+            try {
+                const response = await fetch(`${API_PREFIX}/table_names_for_forms`);
+                if(response.ok) {
+                    const tables = await response.json();
+                    const pSelect = document.getElementById('primaryTableSelect');
+                    const sSelect = document.getElementById('secondaryTableSelect');
+                    
+                    tables.forEach(t => {
+                        pSelect.add(new Option(t, t));
+                        sSelect.add(new Option(t, t));
+                    });
+                } else {
+                    showToast('Failed to fetch table list', 'error');
+                }
+            } catch (e) {
+                console.error(e);
+                showToast('API Connection Failed', 'error');
+            }
+
+            // File Upload Listener
+            document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+        });
+
+        // --- Core: Load Data ---
+        async function loadGridData() {
+            const pTable = document.getElementById('primaryTableSelect').value;
+            const sTable = document.getElementById('secondaryTableSelect').value;
+            const joinCol = document.getElementById('joinColumnInput').value.trim();
+
+            if (!pTable) { showToast("Please select a Primary Table", "error"); return; }
+
+            showLoading(true, "Fetching Data & Schemas...");
+
+            try {
+                // Reset mappings
+                columnMapping.primary.clear();
+                columnMapping.secondary.clear();
+
+                // 1. Fetch Primary Schema
+                const [pSchemaName, pTableName] = pTable.split('.');
+                const pSchemaRes = await fetch(`${API_PREFIX}/table/${pSchemaName}/${pTableName}/schema`);
+                if(!pSchemaRes.ok) throw new Error("Failed to load schema");
+                
+                tableSchemas.primary = await pSchemaRes.json();
+                pkColumns.primary = tableSchemas.primary.filter(c => c.is_primary_key).map(c => c.column_name);
+                tableSchemas.primary.forEach(c => columnMapping.primary.add(c.column_name));
+
+                let sSchemaData = null;
+                if (sTable) {
+                    const [sSchemaName, sTableName] = sTable.split('.');
+                    const sSchemaRes = await fetch(`${API_PREFIX}/table/${sSchemaName}/${sTableName}/schema`);
+                    sSchemaData = await sSchemaRes.json();
+                    tableSchemas.secondary = sSchemaData;
+                    pkColumns.secondary = sSchemaData.filter(c => c.is_primary_key).map(c => c.column_name);
+                    tableSchemas.secondary.forEach(c => columnMapping.secondary.add(c.column_name));
+                } else {
+                    tableSchemas.secondary = null;
+                    pkColumns.secondary = [];
+                }
+
+                // 2. Fetch Data (Limit 1000 for performance in this demo)
+                const pDataRes = await fetch(`${API_PREFIX}/table/${pSchemaName}/${pTableName}?limit=1000`);
+                let gridData = await pDataRes.json();
+
+                // 3. Client-Side Join Logic
+                if (sTable && joinCol) {
+                    const [sSchemaName, sTableName] = sTable.split('.');
+                    const sDataRes = await fetch(`${API_PREFIX}/table/${sSchemaName}/${sTableName}?limit=1000`);
+                    const sData = await sDataRes.json();
+
+                    // Create lookup map
+                    const sDataMap = new Map();
+                    sData.forEach(row => {
+                        if (row[joinCol]) sDataMap.set(String(row[joinCol]), row);
+                    });
+
+                    // Merge
+                    gridData = gridData.map(row => {
+                        const joinVal = String(row[joinCol]);
+                        const match = sDataMap.get(joinVal);
+                        if (match) {
+                            const prefixedMatch = {};
+                            Object.keys(match).forEach(k => {
+                                if (k !== joinCol) prefixedMatch[`SEC::${k}`] = match[k];
+                            });
+                            return { ...row, ...prefixedMatch };
+                        }
+                        return row;
+                    });
+                }
+
+                // 4. Build Column Definitions
+                const columnDefs = [];
+
+                // Group: Primary
+                const pCols = tableSchemas.primary.map(col => createColDef(col, false));
+                columnDefs.push({
+                    headerName: pTableName.toUpperCase(),
+                    children: pCols,
+                    headerClass: 'text-indigo-700 font-bold bg-indigo-50'
+                });
+
+                // Group: Secondary
+                if (sTable && tableSchemas.secondary) {
+                    const [_, sTableNameOnly] = sTable.split('.');
+                    const sCols = tableSchemas.secondary
+                        .filter(col => col.column_name !== joinCol)
+                        .map(col => createColDef(col, true));
+                    
+                    columnDefs.push({
+                        headerName: sTableNameOnly.toUpperCase(),
+                        children: sCols,
+                        headerClass: 'text-emerald-700 font-bold bg-emerald-50'
+                    });
+                }
+
+                // 5. Initialize Grid
+                initAgGrid(columnDefs, gridData);
+                updateColumnToggleList(columnDefs);
+                showToast(`Loaded ${gridData.length} rows successfully`, 'success');
+
+            } catch (err) {
+                console.error(err);
+                showToast("Error loading data: " + err.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function createColDef(schemaCol, isSecondary) {
+            const fieldKey = isSecondary ? `SEC::${schemaCol.column_name}` : schemaCol.column_name;
+            const isPk = schemaCol.is_primary_key;
+            
+            let def = {
+                field: fieldKey,
+                headerName: schemaCol.column_name,
+                // Make editable if NOT PK, OR if it's a NEW row (allows setting manual IDs)
+                editable: (params) => {
+                    return !isPk || (params.node.data && params.node.data._isNew);
+                },
+                sortable: true,
+                filter: true,
+                resizable: true,
+                headerTooltip: `${schemaCol.data_type}`
+            };
+
+            // Custom Editors based on Type
+            const type = schemaCol.data_type;
+            if (['integer', 'bigint', 'numeric', 'double precision'].includes(type)) {
+                def.filter = 'agNumberColumnFilter';
+                def.cellEditor = 'agNumberCellEditor';
+                def.cellStyle = { textAlign: 'right', color: '#0f172a' };
+            } 
+            else if (type.includes('date') || type.includes('time')) {
+                def.filter = 'agDateColumnFilter';
+                def.cellEditor = 'agDateStringCellEditor';
+            } 
+            else if (type === 'boolean') {
+                def.cellRenderer = params => {
+                    return `<div class="flex items-center h-full"><div class="w-4 h-4 border rounded ${params.value ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'} flex items-center justify-center">${params.value ? '<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>' : ''}</div></div>`;
+                };
+                def.cellEditor = 'agSelectCellEditor';
+                def.cellEditorParams = { values: [true, false] };
+            }
+
+            if (isPk) {
+                // Visual distinction for PK
+                def.cellStyle = (params) => {
+                    if (params.node.data && params.node.data._isNew) {
+                         return { backgroundColor: '#fff7ed', fontWeight: 'bold', borderLeft: '2px solid orange' }; // Editable PK for new rows
+                    }
+                    return { backgroundColor: '#f8fafc', fontWeight: '600', color: '#64748b' };
+                };
+                def.pinned = 'left';
+                def.lockPosition = true;
+            }
+
+            return def;
+        }
+
+        function initAgGrid(colDefs, rowData) {
+            const gridDiv = document.querySelector('#myGrid');
+            gridDiv.innerHTML = ''; // Clear previous grid
+
+            const gridOptions = {
+                columnDefs: colDefs,
+                rowData: rowData,
+                defaultColDef: {
+                    flex: 1,
+                    minWidth: 120,
+                    filter: 'agTextColumnFilter',
+                    floatingFilter: true,
+                },
+                rowSelection: 'multiple',
+                animateRows: true,
+                pagination: true,
+                paginationPageSize: 100,
+                
+                onGridReady: (params) => {
+                    gridApi = params.api;
+                    document.getElementById('rowCountDisplay').innerText = `${rowData.length} records found`;
+                },
+                onCellValueChanged: (params) => {
+                    params.node.data._isModified = true;
+                    params.api.flashCells({ rowNodes: [params.node], columns: [params.column.getId()] });
+                }
+            };
+
+            agGrid.createGrid(gridDiv, gridOptions);
+        }
+        
+        // --- Add Row Function ---
+        function addNewRow() {
+            if (!gridApi) {
+                showToast("Please load a table first", "error");
+                return;
+            }
+            // Add an empty object with _isNew flag. 
+            // The grid will render empty cells, and our columnDefs will allow editing them.
+            gridApi.applyTransaction({ add: [{ _isNew: true }] });
+            // Scroll to bottom to see new row
+            gridApi.ensureIndexVisible(gridApi.getDisplayedRowCount() - 1);
+            showToast("Row added. Please fill required fields.", "info");
+        }
+
+        // --- Save Logic ---
+        async function saveChanges() {
+            if (!gridApi) return;
+            
+            gridApi.stopEditing();
+            showLoading(true, "Saving changes...");
+
+            const pTable = document.getElementById('primaryTableSelect').value;
+            const sTable = document.getElementById('secondaryTableSelect').value;
+            const [pSchema, pTblName] = pTable.split('.');
+            let sSchema, sTblName;
+            if(sTable) [sSchema, sTblName] = sTable.split('.');
+
+            // Separate arrays for Primary and Secondary ops
+            const pUpdates = [], pInserts = [];
+            const sUpdates = [], sInserts = [];
+
+            const joinCol = document.getElementById('joinColumnInput').value.trim();
+
+            gridApi.forEachNode(node => {
+                const data = node.data;
+                
+                // 1. Extract Primary Fields (ignore SEC:: and internal vars like _isNew)
+                const pRow = {};
+                Object.keys(data).forEach(k => {
+                    if (!k.startsWith('SEC::') && !k.startsWith('_')) pRow[k] = data[k];
+                });
+
+                // 2. Extract Secondary Fields (if applicable)
+                const sRow = {};
+                let hasSecData = false;
+                if (sTable) {
+                    Object.keys(data).forEach(k => {
+                        if (k.startsWith('SEC::')) {
+                            sRow[k.replace('SEC::', '')] = data[k];
+                            hasSecData = true;
+                        } 
+                    });
+                    // IMPORTANT: Ensure the Join Column (e.g., sample_id) is present in the Secondary Row
+                    // Even if the user entered it in the Primary column, we need it in Secondary for linking.
+                    if (joinCol && pRow[joinCol] && !sRow[joinCol]) {
+                        sRow[joinCol] = pRow[joinCol];
+                    }
+                }
+
+                // 3. Route to Insert or Update
+                if (data._isNew) {
+                    // New Row -> Insert
+                    if (Object.keys(pRow).length > 0) pInserts.push(pRow);
+                    if (hasSecData) sInserts.push(sRow);
+
+                } else if (data._isModified) {
+                    // Existing Row -> Update
+                    const hasPks = pkColumns.primary.every(pk => pRow[pk] != null);
+                    if(hasPks) pUpdates.push(pRow);
+
+                    if (hasSecData) {
+                         const hasSPks = pkColumns.secondary.every(pk => sRow[pk] != null);
+                         if(hasSPks) sUpdates.push(sRow);
+                         else if (sInserts.length === 0) { 
+                             // Edge case: User modified secondary data on an existing row where 
+                             // secondary record didn't exist? Treat as insert? 
+                             // For now, only update if PKs exist.
+                         }
+                    }
+                }
+            });
+
+            try {
+                let operations = 0;
+                
+                // A. Primary Inserts
+                if (pInserts.length) {
+                    await apiCall(`table/${pSchema}/${pTblName}/batch_upload`, 'POST', pInserts);
+                    operations++;
+                }
+                
+                // B. Secondary Inserts (NOW FIXED)
+                if (sInserts.length) {
+                    await apiCall(`table/${sSchema}/${sTblName}/batch_upload`, 'POST', sInserts);
+                    operations++;
+                }
+
+                // C. Updates
+                if (pUpdates.length) {
+                    await apiCall(`table/${pSchema}/${pTblName}/batch_update`, 'PUT', pUpdates);
+                    operations++;
+                }
+                if (sUpdates.length) {
+                    await apiCall(`table/${sSchema}/${sTblName}/batch_update`, 'PUT', sUpdates);
+                    operations++;
+                }
+
+                if (operations > 0) {
+                    showToast('Changes saved successfully!', 'success');
+                    loadGridData(); // Refresh to get fresh IDs/data
+                } else {
+                    showToast('No changes detected to save.', 'info');
+                }
+
+            } catch (e) {
+                console.error(e);
+                showToast(e.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // --- Helpers ---
+        async function apiCall(endpoint, method, body) {
+            const res = await fetch(`${API_PREFIX}/${endpoint}`, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if(!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || 'API Error');
+            }
+            return res.json();
+        }
+
+        // --- SMART IMPORT LOGIC ---
+        function handleFileUpload(evt) {
+            const file = evt.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                
+                if(gridApi) {
+                    // Smart Mapping: Prefix keys belonging to Secondary Table
+                    const rowsToAdd = jsonData.map(rawRow => {
+                        const newRow = { _isNew: true };
+                        
+                        Object.keys(rawRow).forEach(key => {
+                            // If key is explicitly in Secondary but NOT in Primary, map it to SEC::
+                            // If key is in both (like IDs), it usually defaults to Primary unless user specified prefix
+                            // If key is only in Primary, keep as is
+                            
+                            if (columnMapping.secondary.has(key) && !columnMapping.primary.has(key)) {
+                                newRow[`SEC::${key}`] = rawRow[key];
+                            } else {
+                                // Default to Primary column name
+                                newRow[key] = rawRow[key];
+                            }
+                        });
+                        return newRow;
+                    });
+
+                    gridApi.applyTransaction({ add: rowsToAdd });
+                    showToast(`Imported ${jsonData.length} rows. Data automatically mapped to tables.`, 'success');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+            evt.target.value = '';
+        }
+
+        function exportData() {
+            if(gridApi) gridApi.exportDataAsCsv({ fileName: 'LIMS_Data_Export.csv' });
+        }
+
+        // --- UI Helpers ---
+        function toggleColumnPanel() {
+            const panel = document.getElementById('columnPanel');
+            panel.classList.toggle('translate-x-[110%]');
+        }
+        
+        function updateColumnToggleList(colDefs) {
+            const list = document.getElementById('columnToggleList');
+            list.innerHTML = '';
+            
+            if(!gridApi) return;
+
+            colDefs.forEach(group => {
+                const groupTitle = document.createElement('div');
+                groupTitle.className = "text-xs font-bold text-slate-400 uppercase tracking-wider mt-3 mb-1 pl-1";
+                groupTitle.innerText = group.headerName;
+                list.appendChild(groupTitle);
+
+                group.children.forEach(col => {
+                    const div = document.createElement('div');
+                    div.className = "flex items-center space-x-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer";
+                    div.innerHTML = `
+                        <input type="checkbox" checked class="rounded text-indigo-600 focus:ring-indigo-500 border-gray-300 h-4 w-4" 
+                        onchange="gridApi.setColumnsVisible(['${col.field}'], this.checked)">
+                        <span class="text-sm text-slate-700 truncate" title="${col.headerName}">${col.headerName}</span>
+                    `;
+                    list.appendChild(div);
+                });
+            });
+        }
+        
+        function toggleAllColumns(visible) {
+             if(!gridApi) return;
+             const allCols = gridApi.getColumns();
+             gridApi.setColumnsVisible(allCols, visible);
+             // Update checkboxes visually
+             document.querySelectorAll('#columnToggleList input').forEach(cb => cb.checked = visible);
+        }
+
+        function showLoading(show, text) {
+            const el = document.getElementById('loadingOverlay');
+            if(text) document.getElementById('loadingText').innerText = text;
+            if(show) el.classList.add('active');
+            else el.classList.remove('active');
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            let icon = '';
+            if(type === 'success') icon = '<i data-lucide="check-circle" class="w-5 h-5 text-emerald-500"></i>';
+            else if(type === 'error') icon = '<i data-lucide="alert-circle" class="w-5 h-5 text-red-500"></i>';
+            else icon = '<i data-lucide="info" class="w-5 h-5 text-blue-500"></i>';
+
+            toast.innerHTML = `${icon}<span class="text-sm font-medium text-slate-700">${message}</span>`;
+            
+            container.appendChild(toast);
+            lucide.createIcons();
+            
+            // Animation sequence
+            setTimeout(() => toast.classList.add('show'), 10);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

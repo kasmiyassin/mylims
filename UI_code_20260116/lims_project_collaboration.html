@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GenFish LIMS - Project Collaboration</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --sidebar-width: 250px;
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --bg-light: #f8f9fa;
+            --chat-bg: #eef2f5;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--bg-light);
+            overflow-x: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            height: 100vh;
+            width: var(--sidebar-width);
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: var(--primary-color);
+            color: #ecf0f1;
+            padding-top: 1rem;
+            z-index: 1000;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .sidebar-brand { font-size: 1.4rem; font-weight: 700; text-align: center; margin-bottom: 2rem; color: white; }
+        .sidebar-brand i { color: var(--accent-color); }
+        .nav-header { font-size: 0.75rem; text-transform: uppercase; color: #95a5a6; padding: 10px 20px 5px; font-weight: 700; }
+        .nav-link { color: #bdc3c7; padding: 10px 20px; font-size: 0.95rem; transition: all 0.3s; border-left: 4px solid transparent; }
+        .nav-link:hover, .nav-link.active { color: white; background-color: rgba(255,255,255,0.05); border-left-color: var(--accent-color); }
+        .nav-link i { width: 25px; text-align: center; margin-right: 5px; }
+
+        /* Main Content */
+        .main-content { margin-left: var(--sidebar-width); padding: 20px 30px; }
+
+        /* Project Banner & Timeline */
+        .project-banner {
+            background: white; border-radius: 10px; padding: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px; border-top: 4px solid var(--accent-color);
+        }
+        
+        .timeline-container { position: relative; height: 6px; background: #eee; border-radius: 3px; margin: 20px 0; }
+        .timeline-progress { position: absolute; left: 0; top: 0; height: 100%; background: var(--accent-color); border-radius: 3px; }
+        .timeline-marker { position: absolute; top: -8px; width: 2px; height: 22px; background: #333; }
+        .timeline-label { position: absolute; top: 18px; font-size: 0.75rem; color: #7f8c8d; transform: translateX(-50%); }
+
+        /* Team Avatar Stack */
+        .avatar-stack { display: flex; align-items: center; }
+        .avatar {
+            width: 35px; height: 35px; border-radius: 50%; border: 2px solid white; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; color: white; margin-left: -10px; position: relative; background-color: #95a5a6;
+        }
+        .avatar:first-child { margin-left: 0; }
+        .avatar:hover { z-index: 10; transform: translateY(-3px); transition: 0.2s; }
+
+        /* Kanban Board */
+        .kanban-board { display: flex; gap: 20px; overflow-x: auto; padding-bottom: 10px; height: calc(100vh - 400px); min-height: 400px; }
+        .kanban-col {
+            flex: 1; min-width: 300px; background: #f4f5f7; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; height: 100%;
+        }
+        .kanban-header { font-weight: 700; padding: 10px 5px; color: #5e6c84; display: flex; justify-content: space-between; border-bottom: 2px solid rgba(0,0,0,0.05); margin-bottom: 10px; }
+        .kanban-body { flex: 1; overflow-y: auto; padding-right: 5px; }
+        
+        .kanban-card {
+            background: white; border-radius: 6px; padding: 15px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; border-left: 4px solid transparent;
+        }
+        .kanban-card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .kanban-card.p-High { border-left-color: var(--danger-color); }
+        .kanban-card.p-Medium { border-left-color: var(--warning-color); }
+        .kanban-card.p-Low { border-left-color: var(--success-color); }
+
+        /* Chat Interface */
+        .chat-layout { height: 600px; background: white; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); display: flex; overflow: hidden; }
+        .chat-channels { width: 250px; background: #f8f9fa; border-right: 1px solid #eee; padding: 15px; }
+        .chat-main { flex: 1; display: flex; flex-direction: column; }
+        .chat-history { flex: 1; padding: 20px; overflow-y: auto; background-color: white; }
+        .chat-input { padding: 15px; border-top: 1px solid #eee; background: #fdfdfd; }
+        
+        .channel-item { padding: 8px 12px; border-radius: 6px; cursor: pointer; margin-bottom: 5px; font-size: 0.9rem; color: #555; }
+        .channel-item:hover, .channel-item.active { background: white; color: var(--primary-color); font-weight: 600; shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .channel-item.active { border-left: 3px solid var(--accent-color); }
+
+        .message { margin-bottom: 15px; display: flex; }
+        .msg-content { max-width: 75%; padding: 10px 15px; border-radius: 12px; font-size: 0.9rem; line-height: 1.4; }
+        .msg-in .msg-content { background: #f1f3f5; color: #333; border-bottom-left-radius: 2px; }
+        .msg-out { flex-direction: row-reverse; }
+        .msg-out .msg-content { background: var(--accent-color); color: white; border-bottom-right-radius: 2px; }
+
+        /* Permit Cards */
+        .permit-card { border: 1px solid #eee; border-radius: 8px; padding: 15px; margin-bottom: 15px; transition: 0.2s; position: relative; overflow: hidden; }
+        .permit-card:hover { border-color: var(--accent-color); background: #fcfcfc; }
+        .permit-status { position: absolute; top: 0; right: 0; padding: 5px 10px; font-size: 0.7rem; font-weight: bold; border-bottom-left-radius: 8px; }
+        .status-Valid { background: #e8f5e9; color: #2e7d32; }
+        .status-Expiring { background: #fff3e0; color: #ef6c00; }
+        .status-Expired { background: #ffebee; color: #c62828; }
+
+        /* Animation for loading */
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <i class="fas fa-dna me-2"></i>GenFish LIMS
+        </div>
+        <div class="d-flex flex-column">
+            <div class="nav-header">Overview</div>
+            <a href="lims_dashboard_design.html" class="nav-link"><i class="fas fa-chart-line"></i> Dashboard</a>
+            
+            <div class="nav-header">Management</div>
+            <a href="#" class="nav-link active"><i class="fas fa-users-cog"></i> Projects & Teams</a>
+            <a href="lims_eln_booking.html" class="nav-link"><i class="fas fa-calendar-alt"></i> Booking / ELN</a>
+
+            <div class="nav-header">Lab Modules</div>
+            <a href="lims_samples_registry.html" class="nav-link"><i class="fas fa-vial"></i> Bio Assets</a>
+            <a href="lims_field_events.html" class="nav-link"><i class="fas fa-map-marked-alt"></i> Field Work</a>
+            <a href="lims_biology_fish.html" class="nav-link"><i class="fas fa-microscope"></i> Biology / Fish</a>
+            <a href="lims_molecular_biology.html" class="nav-link"><i class="fas fa-flask"></i> Molecular</a>
+            <a href="lims_bioinformatics.html" class="nav-link"><i class="fas fa-laptop-code"></i> Bioinformatics</a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h4 class="text-secondary fw-bold mb-0">Project Collaboration</h4>
+                <p class="text-muted small mb-0">Connected to <code>lims.projects</code> and <code>communications</code> schemas</p>
+            </div>
+            <div class="d-flex gap-2">
+                <!-- Dynamic Project Selector -->
+                <select class="form-select fw-bold border-primary" style="width: 250px;" id="projectSelector" onchange="loadProjectData()">
+                    <!-- Populated by JS -->
+                </select>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newProjectModal"><i class="fas fa-plus me-1"></i> New Project</button>
+            </div>
+        </div>
+
+        <!-- Project Overview Banner (Dynamic Content) -->
+        <div id="projectBannerArea" class="fade-in">
+            <!-- Populated by JS -->
+        </div>
+
+        <!-- Main Tabs -->
+        <ul class="nav nav-tabs mb-4" id="collabTabs" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#plans"><i class="fas fa-tasks me-2"></i>Task Board</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#chat"><i class="fas fa-comments me-2"></i>Team Chat</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#permits"><i class="fas fa-passport me-2"></i>Permits & Compliance</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#docs"><i class="fas fa-folder-open me-2"></i>Documents</button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="collabTabsContent">
+            
+            <!-- TAB 1: KANBAN TASK BOARD (communications.internal_plans) -->
+            <div class="tab-pane fade show active" id="plans">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-secondary active">Board View</button>
+                        <button class="btn btn-sm btn-outline-secondary">List View</button>
+                    </div>
+                    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newTaskModal"><i class="fas fa-plus me-1"></i> Add Task</button>
+                </div>
+                
+                <div class="kanban-board" id="kanbanBoardArea">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <!-- TAB 2: TEAM CHAT (communications.projects_chat) -->
+            <div class="tab-pane fade" id="chat">
+                <div class="chat-layout">
+                    <div class="chat-channels">
+                        <div class="text-uppercase small fw-bold text-muted mb-3">Channels</div>
+                        <div class="channel-item active"># general</div>
+                        <div class="channel-item"># sampling-logistics</div>
+                        <div class="channel-item"># bioinfo-results</div>
+                        <div class="mt-4 text-uppercase small fw-bold text-muted mb-3">Members</div>
+                        <div id="chatMembersArea">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                    <div class="chat-main">
+                        <div class="p-3 border-bottom bg-white d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0 fw-bold" id="currentChannelName"># general</h6>
+                            <small class="text-muted">Project Discussion</small>
+                        </div>
+                        <div class="chat-history" id="chatHistoryArea">
+                            <!-- Populated by JS -->
+                        </div>
+                        <div class="chat-input">
+                            <div class="input-group">
+                                <button class="btn btn-light border"><i class="fas fa-paperclip"></i></button>
+                                <input type="text" class="form-control" id="chatMessageInput" placeholder="Type a message..." onkeypress="handleChatEnter(event)">
+                                <button class="btn btn-primary" onclick="sendChatMessage()"><i class="fas fa-paper-plane"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: PERMITS (lims.permits) -->
+            <div class="tab-pane fade" id="permits">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold text-secondary">Regulatory Compliance</h6>
+                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#newPermitModal"><i class="fas fa-plus"></i> Log New Permit</button>
+                </div>
+                
+                <div class="row" id="permitsArea">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <!-- TAB 4: DOCUMENTS (communications.reports) -->
+            <div class="tab-pane fade" id="docs">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h6 class="fw-bold mb-0">File Repository</h6>
+                        <div class="input-group w-auto">
+                            <input type="text" class="form-control form-control-sm" placeholder="Search files...">
+                            <button class="btn btn-sm btn-outline-secondary"><i class="fas fa-search"></i></button>
+                        </div>
+                    </div>
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light">
+                            <tr>
+                                <th style="width: 50px;"></th>
+                                <th>Name</th>
+                                <th>Category</th>
+                                <th>Date</th>
+                                <th class="text-end">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="docsTableBody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- === MODALS === -->
+
+    <!-- New Task Modal -->
+    <div class="modal fade" id="newTaskModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">New Task (Internal Plan)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="newTaskForm">
+                        <div class="mb-3">
+                            <label class="form-label">Title</label>
+                            <input type="text" class="form-control" id="taskTitle" required>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col">
+                                <label class="form-label">Assignee</label>
+                                <select class="form-select" id="taskAssignee">
+                                    <!-- Populated by JS -->
+                                </select>
+                            </div>
+                            <div class="col">
+                                <label class="form-label">Due Date</label>
+                                <input type="date" class="form-control" id="taskDueDate">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Priority</label>
+                            <select class="form-select" id="taskPriority">
+                                <option value="Low">Low</option>
+                                <option value="Medium" selected>Medium</option>
+                                <option value="High">High</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="submitNewTask()">Create</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Project Modal -->
+    <div class="modal fade" id="newProjectModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Initialize New Project</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form>
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Project ID</label>
+                                <input type="text" class="form-control fw-bold" placeholder="e.g. WESER-26">
+                            </div>
+                            <div class="col-md-9">
+                                <label class="form-label">Project Name</label>
+                                <input type="text" class="form-control" placeholder="Full Title">
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">PI (Principal Investigator)</label>
+                                <select class="form-select"><option>Dr. Scientist</option></select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Funding Source</label>
+                                <input type="text" class="form-control" placeholder="Grant No.">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">Start Date</label>
+                                <input type="date" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">End Date</label>
+                                <input type="date" class="form-control">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-primary">Save Project</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        /**
+         * DBService: Simulates connection to PostgreSQL tables
+         * Maps to schemas: lims, communications, core, reference
+         */
+        const DBService = {
+            // TABLE: lims.projects
+            projects: [
+                { id: 'WESER-25', name: 'Ecological Monitoring of Weser', pi: 'Dr. Hans Miller', start: '2025-01-01', end: '2026-12-31', grant: 'DFG-2024-X', status: 'Active' },
+                { id: 'NS-ECO', name: 'North Sea Biodiversity Survey', pi: 'Prof. A. Fisher', start: '2024-01-01', end: '2025-06-30', grant: 'EU-HORIZON', status: 'Completed' },
+                { id: 'GEN-DIV', name: 'Genetic Diversity of Sticklebacks', pi: 'Dr. Hans Miller', start: '2026-03-01', end: '2028-02-28', grant: 'Pending', status: 'Planning' }
+            ],
+
+            // TABLE: communications.internal_plans
+            tasks: [
+                { id: 1, project_id: 'WESER-25', title: 'Prepare Sampling Kits', status: 'Backlog', priority: 'High', due: '2026-01-25', assignee: 'Bioinfo Lead' },
+                { id: 2, project_id: 'WESER-25', title: 'DNA Extraction (Batch A)', status: 'In Progress', priority: 'High', due: '2026-01-22', assignee: 'Dr. Scientist' },
+                { id: 3, project_id: 'WESER-25', title: 'Q1 Report Draft', status: 'Review', priority: 'Medium', due: '2026-02-01', assignee: 'Bioinfo Lead' },
+                { id: 4, project_id: 'WESER-25', title: 'Submit Ethics App', status: 'Done', priority: 'Low', due: '2025-12-15', assignee: 'Dr. Scientist' },
+                { id: 5, project_id: 'NS-ECO', title: 'Final Data Archive', status: 'In Progress', priority: 'Medium', due: '2026-02-15', assignee: 'Dr. Scientist' }
+            ],
+
+            // TABLE: communications.projects_chat
+            messages: [
+                { id: 1, project_id: 'WESER-25', user: 'Dr. Scientist', text: 'Permit has been approved!', time: '09:30 AM', type: 'in' },
+                { id: 2, project_id: 'WESER-25', user: 'Me', text: 'Great news! I will prep the gear.', time: '09:35 AM', type: 'out' }
+            ],
+
+            // TABLE: lims.permits
+            permits: [
+                { id: 'P01', project_id: 'WESER-25', name: 'Fishing Permit (Weser)', ref: '99-AF-2025', valid_to: '2026-12-31', status: 'Valid', type: 'Fishing' },
+                { id: 'P02', project_id: 'WESER-25', name: 'Animal Welfare (Ethics)', ref: 'ETH-02', valid_to: '2026-02-15', status: 'Expiring', type: 'Ethics' }
+            ],
+
+            // TABLE: communications.reports
+            docs: [
+                { id: 1, project_id: 'WESER-25', name: 'Weser_Permit_2025.pdf', category: 'Legal', date: '2026-01-10', type: 'pdf' },
+                { id: 2, project_id: 'WESER-25', name: 'Raw_Catch_Data.xlsx', category: 'Data', date: '2026-01-12', type: 'excel' }
+            ],
+
+            // TABLE: core.persons
+            users: ['Dr. Scientist', 'Bioinfo Lead', 'Field Tech', 'Lab Manager']
+        };
+
+        // --- UI LOGIC ---
+
+        let currentProjectId = 'WESER-25';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadProjectSelector();
+            loadProjectData();
+        });
+
+        function loadProjectSelector() {
+            const select = document.getElementById('projectSelector');
+            select.innerHTML = '';
+            DBService.projects.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.text = `${p.id} (${p.status})`;
+                if(p.id === currentProjectId) opt.selected = true;
+                select.appendChild(opt);
+            });
+        }
+
+        function loadProjectData() {
+            currentProjectId = document.getElementById('projectSelector').value;
+            const project = DBService.projects.find(p => p.id === currentProjectId);
+            
+            if(!project) return;
+
+            // 1. Render Banner
+            const now = new Date();
+            const start = new Date(project.start);
+            const end = new Date(project.end);
+            const totalTime = end - start;
+            const elapsedTime = now - start;
+            let progress = Math.min(100, Math.max(0, (elapsedTime / totalTime) * 100));
+            if (project.status === 'Planning') progress = 0;
+            if (project.status === 'Completed') progress = 100;
+
+            const bannerHTML = `
+                <div class="project-banner fade-in">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h3 class="fw-bold text-primary mb-1">${project.name}</h3>
+                            <div class="d-flex align-items-center gap-3 text-muted mb-3">
+                                <small><i class="fas fa-hashtag me-1"></i> ID: <strong>${project.id}</strong></small>
+                                <small><i class="fas fa-user-tie me-1"></i> PI: <strong>${project.pi}</strong></small>
+                                <small><i class="fas fa-money-check-alt me-1"></i> Grant: <strong>${project.grant}</strong></small>
+                            </div>
+                            <div class="mb-2 d-flex justify-content-between small text-muted">
+                                <span>Start: ${project.start}</span>
+                                <span class="fw-bold text-dark">Today</span>
+                                <span>End: ${project.end}</span>
+                            </div>
+                            <div class="timeline-container">
+                                <div class="timeline-progress" style="width: ${progress}%;"></div>
+                                <div class="timeline-marker" style="left: ${progress}%; border-left: 2px dashed red; background: none;"></div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 border-start ps-4">
+                            <h6 class="fw-bold text-secondary small text-uppercase mb-3">Project Team</h6>
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="avatar-stack">
+                                    <div class="avatar bg-primary" title="${project.pi}">DS</div>
+                                    <div class="avatar bg-success">BL</div>
+                                    <div class="avatar bg-secondary">+2</div>
+                                </div>
+                                <button class="btn btn-sm btn-outline-secondary">Manage Team</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('projectBannerArea').innerHTML = bannerHTML;
+
+            // 2. Load Modules
+            renderKanban();
+            renderChat();
+            renderPermits();
+            renderDocs();
+            populateAssignees();
+        }
+
+        function renderKanban() {
+            const tasks = DBService.tasks.filter(t => t.project_id === currentProjectId);
+            const columns = ['Backlog', 'In Progress', 'Review', 'Done'];
+            const board = document.getElementById('kanbanBoardArea');
+            board.innerHTML = '';
+
+            columns.forEach(status => {
+                const colTasks = tasks.filter(t => t.status === status);
+                const colHTML = `
+                    <div class="kanban-col">
+                        <div class="kanban-header">
+                            <span>${status}</span>
+                            <span class="badge bg-secondary rounded-pill">${colTasks.length}</span>
+                        </div>
+                        <div class="kanban-body">
+                            ${colTasks.map(t => `
+                                <div class="kanban-card p-${t.priority}">
+                                    <h6 class="mb-1 fw-bold text-dark">${t.title}</h6>
+                                    <div class="d-flex align-items-center justify-content-between mt-2">
+                                        <small class="text-muted"><i class="far fa-clock me-1"></i> ${t.due}</small>
+                                        <div class="avatar bg-secondary" style="width:24px;height:24px;font-size:0.7rem;">
+                                            ${t.assignee.split(' ').map(n=>n[0]).join('')}
+                                        </div>
+                                    </div>
+                                    <div class="mt-2 text-end">
+                                        ${status !== 'Done' ? `<button class="btn btn-sm p-0 text-primary" onclick="moveTask(${t.id}, '${getNextStatus(status)}')"><i class="fas fa-arrow-right"></i></button>` : ''}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                board.insertAdjacentHTML('beforeend', colHTML);
+            });
+        }
+
+        function getNextStatus(current) {
+            const flow = ['Backlog', 'In Progress', 'Review', 'Done'];
+            const idx = flow.indexOf(current);
+            return idx < flow.length - 1 ? flow[idx + 1] : current;
+        }
+
+        function moveTask(id, newStatus) {
+            const task = DBService.tasks.find(t => t.id === id);
+            if(task) {
+                task.status = newStatus;
+                renderKanban();
+            }
+        }
+
+        function renderChat() {
+            const msgs = DBService.messages.filter(m => m.project_id === currentProjectId);
+            const container = document.getElementById('chatHistoryArea');
+            container.innerHTML = `<div class="text-center small text-muted my-3">-- Project: ${currentProjectId} --</div>`;
+            
+            msgs.forEach(m => {
+                const html = `
+                    <div class="message msg-${m.type}">
+                        ${m.type === 'in' ? `<div class="avatar bg-primary me-2 flex-shrink-0">${m.user.substring(0,2)}</div>` : ''}
+                        <div>
+                            ${m.type === 'in' ? `<div class="small fw-bold mb-1">${m.user} <span class="text-muted fw-normal ms-2">${m.time}</span></div>` : ''}
+                            <div class="msg-content">${m.text}</div>
+                            ${m.type === 'out' ? `<div class="small text-muted text-end mt-1">${m.time} <i class="fas fa-check-double"></i></div>` : ''}
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', html);
+            });
+            
+            // Scroll to bottom
+            container.scrollTop = container.scrollHeight;
+
+            // Members list
+            document.getElementById('chatMembersArea').innerHTML = DBService.users.map(u => `
+                <div class="channel-item"><div class="d-flex align-items-center"><div class="status-dot dot-active me-2"></div> ${u}</div></div>
+            `).join('');
+        }
+
+        function sendChatMessage() {
+            const input = document.getElementById('chatMessageInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            DBService.messages.push({
+                id: Date.now(),
+                project_id: currentProjectId,
+                user: 'Me',
+                text: text,
+                time: timeStr,
+                type: 'out'
+            });
+
+            input.value = '';
+            renderChat();
+        }
+
+        function handleChatEnter(e) {
+            if(e.key === 'Enter') sendChatMessage();
+        }
+
+        function renderPermits() {
+            const permits = DBService.permits.filter(p => p.project_id === currentProjectId);
+            const container = document.getElementById('permitsArea');
+            container.innerHTML = '';
+
+            if(permits.length === 0) {
+                container.innerHTML = '<div class="col-12 text-center text-muted p-4">No permits linked to this project.</div>';
+                return;
+            }
+
+            permits.forEach(p => {
+                const icon = p.type === 'Fishing' ? 'fa-fish' : 'fa-heart';
+                const color = p.status === 'Valid' ? 'success' : 'warning';
+                
+                const html = `
+                    <div class="col-md-6">
+                        <div class="permit-card">
+                            <div class="permit-status status-${p.status}">${p.status}</div>
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="bg-${color}-subtle text-${color} rounded p-3 me-3"><i class="fas ${icon} fa-2x"></i></div>
+                                <div>
+                                    <h5 class="mb-1 fw-bold">${p.name}</h5>
+                                    <div class="text-muted small">Ref: #${p.ref} | ${p.authority}</div>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between small text-muted">
+                                <span>Expires: ${p.valid_to}</span>
+                                <a href="#" class="fw-bold text-dark text-decoration-underline">View Details</a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', html);
+            });
+        }
+
+        function renderDocs() {
+            const docs = DBService.docs.filter(d => d.project_id === currentProjectId);
+            const tbody = document.getElementById('docsTableBody');
+            tbody.innerHTML = '';
+
+            docs.forEach(d => {
+                const icon = d.type === 'pdf' ? 'fa-file-pdf text-danger' : 'fa-file-excel text-success';
+                const html = `
+                    <tr>
+                        <td class="text-center"><i class="fas ${icon} fa-lg"></i></td>
+                        <td><a href="#" class="text-decoration-none fw-bold text-dark">${d.name}</a></td>
+                        <td><span class="badge bg-light text-dark border">${d.category}</span></td>
+                        <td class="text-muted small">${d.date}</td>
+                        <td class="text-end"><button class="btn btn-sm btn-light"><i class="fas fa-download"></i></button></td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', html);
+            });
+        }
+
+        function populateAssignees() {
+            const sel = document.getElementById('taskAssignee');
+            sel.innerHTML = '';
+            DBService.users.forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = u;
+                opt.text = u;
+                sel.appendChild(opt);
+            });
+        }
+
+        function submitNewTask() {
+            const title = document.getElementById('taskTitle').value;
+            const assignee = document.getElementById('taskAssignee').value;
+            const due = document.getElementById('taskDueDate').value || 'TBD';
+            const priority = document.getElementById('taskPriority').value;
+
+            if(!title) return;
+
+            DBService.tasks.push({
+                id: Date.now(),
+                project_id: currentProjectId,
+                title: title,
+                status: 'Backlog',
+                priority: priority,
+                due: due,
+                assignee: assignee
+            });
+
+            renderKanban();
+            // Close modal
+            const modalEl = document.getElementById('newTaskModal');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            modal.hide();
+            // Reset form
+            document.getElementById('newTaskForm').reset();
+        }
+
+    </script>
+</body>
+</html>

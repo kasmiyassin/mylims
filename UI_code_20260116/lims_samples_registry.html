@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GenFish LIMS - Samples Registry</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Handsontable (Excel-like Grid) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.js"></script>
+    
+    <style>
+        :root {
+            --sidebar-width: 250px;
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --bg-light: #f8f9fa;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--bg-light);
+            overflow-x: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            height: 100vh;
+            width: var(--sidebar-width);
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: var(--primary-color);
+            color: #ecf0f1;
+            padding-top: 1rem;
+            z-index: 1000;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .sidebar-brand { font-size: 1.4rem; font-weight: 700; text-align: center; margin-bottom: 2rem; color: white; }
+        .sidebar-brand i { color: var(--accent-color); }
+        .nav-header { font-size: 0.75rem; text-transform: uppercase; color: #95a5a6; padding: 10px 20px 5px; font-weight: 700; }
+        .nav-link { color: #bdc3c7; padding: 10px 20px; font-size: 0.95rem; transition: all 0.3s; border-left: 4px solid transparent; }
+        .nav-link:hover, .nav-link.active { color: white; background-color: rgba(255,255,255,0.05); border-left-color: var(--accent-color); }
+        .nav-link i { width: 25px; text-align: center; margin-right: 5px; }
+
+        /* Main Content */
+        .main-content { margin-left: var(--sidebar-width); padding: 20px 30px; height: 100vh; display: flex; flex-direction: column; }
+
+        /* Control Bar */
+        .control-bar {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        /* Data Grid Container */
+        .grid-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+            flex-grow: 1;
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .grid-toolbar {
+            padding: 10px 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #fff;
+        }
+
+        #hotTable {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        /* Status Badges within Handsontable (Custom Renderer style) */
+        .ht-status-stored { color: #27ae60; font-weight: bold; }
+        .ht-status-process { color: #f39c12; font-weight: bold; }
+        .ht-status-destroyed { color: #e74c3c; font-weight: bold; }
+
+        /* Drag & Drop Zone */
+        .drop-zone {
+            border: 2px dashed #bdc3c7;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            background-color: #fafafa;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .drop-zone:hover { border-color: var(--accent-color); background-color: #f1f9fe; }
+        .drop-zone i { font-size: 2.5rem; color: #bdc3c7; margin-bottom: 15px; }
+
+        /* Loading Overlay */
+        #loadingOverlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 9999; display: flex; align-items: center; justify-content: center; visibility: hidden;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay">
+        <div class="spinner-border text-primary" role="status"></div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <i class="fas fa-dna me-2"></i>GenFish LIMS
+        </div>
+        <div class="d-flex flex-column">
+            <div class="nav-header">Overview</div>
+            <a href="lims_dashboard_design.html" class="nav-link"><i class="fas fa-chart-line"></i> Dashboard</a>
+            <a href="lims_project_collaboration.html" class="nav-link"><i class="fas fa-briefcase"></i> Projects & Collab</a>
+
+            <div class="nav-header">Bio Assets</div>
+            <a href="#" class="nav-link active"><i class="fas fa-vial"></i> Samples Registry</a>
+            <a href="lims_storage_reagents.html" class="nav-link"><i class="fas fa-boxes"></i> Storage & Reagents</a>
+            
+            <div class="nav-header">Field Work</div>
+            <a href="lims_field_events.html" class="nav-link"><i class="fas fa-map-marked-alt"></i> Sampling Events</a>
+            
+            <div class="nav-header">Lab Work</div>
+            <a href="lims_biology_fish.html" class="nav-link"><i class="fas fa-microscope"></i> Biology / Fish</a>
+            <a href="lims_molecular_biology.html" class="nav-link"><i class="fas fa-flask"></i> Molecular Lab</a>
+            <a href="lims_bioinformatics.html" class="nav-link"><i class="fas fa-laptop-code"></i> Bioinformatics</a>
+            
+            <div class="nav-header">Management</div>
+            <a href="lims_eln_booking.html" class="nav-link"><i class="fas fa-calendar-alt"></i> Booking / ELN</a>
+            <a href="lims_database_explorer.html" class="nav-link"><i class="fas fa-table"></i> DB Explorer</a>
+            <a href="lims_settings.html" class="nav-link"><i class="fas fa-cogs"></i> Settings</a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-1 small">
+                        <li class="breadcrumb-item"><a href="#" class="text-decoration-none text-muted">Bio Assets</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Samples Registry</li>
+                    </ol>
+                </nav>
+                <h4 class="text-secondary fw-bold mb-0">Samples Master Registry</h4>
+                <p class="text-muted small mb-0">Direct access to <code>bio_assets.samples_root</code></p>
+            </div>
+            <div class="d-flex gap-2">
+                <span class="badge bg-white text-secondary border p-2">Total: <span id="totalCount">Loading...</span></span>
+            </div>
+        </div>
+
+        <!-- Control Bar -->
+        <div class="control-bar">
+            <!-- Left: Search & Filter -->
+            <div class="d-flex gap-2 align-items-center flex-grow-1">
+                <div class="input-group" style="max-width: 350px;">
+                    <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                    <input type="text" class="form-control border-start-0 ps-0" id="searchField" placeholder="Search Sample ID, Project, or Type...">
+                </div>
+                <button class="btn btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#filterSidebar">
+                    <i class="fas fa-filter me-1"></i> Advanced Filter
+                </button>
+            </div>
+
+            <!-- Right: Actions -->
+            <div class="d-flex gap-2">
+                <div class="btn-group">
+                    <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#importModal"><i class="fas fa-file-excel me-1"></i> Import/Update (File)</button>
+                    <button class="btn btn-outline-primary" onclick="exportData()"><i class="fas fa-download me-1"></i> Export CSV</button>
+                </div>
+                <button class="btn btn-primary" onclick="commitChanges()">
+                    <i class="fas fa-save me-1"></i> Commit Changes
+                </button>
+            </div>
+        </div>
+
+        <!-- Data Grid (Handsontable) -->
+        <div class="grid-container">
+            <div class="grid-toolbar">
+                <div class="d-flex align-items-center gap-2">
+                    <h6 class="mb-0 fw-bold text-primary"><i class="fas fa-table me-2"></i>Live Data Editor</h6>
+                    <small class="text-muted ms-2"><i class="fas fa-info-circle"></i> Edit cells directly. Use '.' for decimals.</small>
+                </div>
+                <div>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteSelected()"><i class="fas fa-trash"></i> Delete Rows</button>
+                    <button class="btn btn-sm btn-success" onclick="addNewRow()"><i class="fas fa-plus"></i> New Row (Single Entry)</button>
+                </div>
+            </div>
+            <div style="flex-grow: 1; position: relative;">
+                <div id="hotTable"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- === IMPORT / UPDATE MODAL === -->
+    <div class="modal fade" id="importModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Bulk Import / Update</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <ul class="nav nav-tabs mb-3" id="importTab" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-upload">Upload File</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-help">Template & Help</button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="tab-upload">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Mode</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="importMode" id="modeUpsert" checked>
+                                    <label class="form-check-label" for="modeUpsert">Upsert (Update if Sample ID exists, else Insert)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="importMode" id="modeInsert">
+                                    <label class="form-check-label" for="modeInsert">Insert Only (Skip duplicates)</label>
+                                </div>
+                            </div>
+                            <div class="drop-zone">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p class="mb-1">Drag Excel (.xlsx) or CSV file here</p>
+                                <button class="btn btn-sm btn-outline-primary mt-2">Browse Files</button>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="tab-help">
+                            <p class="small text-muted">Please ensure your columns match the database schema exactly.</p>
+                            <table class="table table-sm table-bordered small">
+                                <thead class="bg-light"><tr><th>Column</th><th>Required</th><th>Format</th></tr></thead>
+                                <tbody>
+                                    <tr><td>sample_id</td><td>Yes</td><td>Unique Text (e.g., W25Wes_001)</td></tr>
+                                    <tr><td>project_id</td><td>Yes</td><td>Must exist in Projects (e.g., WESER-25)</td></tr>
+                                    <tr><td>collection_date</td><td>No</td><td>YYYY-MM-DD</td></tr>
+                                    <tr><td>sample_type_id</td><td>Yes</td><td>From Reference (e.g., WATER, DNA)</td></tr>
+                                </tbody>
+                            </table>
+                            <button class="btn btn-sm btn-link"><i class="fas fa-download"></i> Download Excel Template</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-success">Process Import</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- === FILTER SIDEBAR === -->
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="filterSidebar">
+        <div class="offcanvas-header bg-light">
+            <h5 class="offcanvas-title fw-bold">Filter Data</h5>
+            <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas"></button>
+        </div>
+        <div class="offcanvas-body">
+            <form>
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-uppercase">Project</label>
+                    <select class="form-select">
+                        <option selected>All Projects</option>
+                        <option>WESER-25</option>
+                        <option>NS-ECO</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-uppercase">Sample Type</label>
+                    <select class="form-select">
+                        <option selected>All Types</option>
+                        <option>DNA</option>
+                        <option>Tissue</option>
+                        <option>Water</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-uppercase">Collection Date</label>
+                    <div class="input-group mb-2">
+                        <span class="input-group-text small">From</span>
+                        <input type="date" class="form-control">
+                    </div>
+                    <div class="input-group">
+                        <span class="input-group-text small">To</span>
+                        <input type="date" class="form-control">
+                    </div>
+                </div>
+                <div class="d-grid gap-2 mt-4">
+                    <button class="btn btn-primary">Apply Filters</button>
+                    <button class="btn btn-outline-secondary">Reset</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        /**
+         * DBService: Mocks backend interaction with `bio_assets.samples_root` and related tables.
+         */
+        const DBService = {
+            // Fetch initial data simulating SELECT * FROM bio_assets.samples_root
+            getSamples: () => {
+                return [
+                    ['W25WesHB_001', 'EXT-99', 'WATER', 'WESER-25', '2025-06-15', 'Freezer 1 > Shelf A', 'Stored'],
+                    ['D25WesHB_001_1', '-', 'DNA', 'WESER-25', '2025-06-20', 'Freezer 3 > Box DNA-01', 'Stored'],
+                    ['F25NorSea_088', 'TI-22', 'FISH', 'NS-ECO', '2025-05-10', 'Waitroom B', 'Processing'],
+                    ['S25Elbe_012', 'ELB-01', 'SEDIMENT', 'ELBE-25', '2025-07-01', 'Cabinet 4 > Shelf 2', 'Registered']
+                ];
+            },
+            // Simulation of Reference Data for Dropdowns
+            getProjects: () => ['WESER-25', 'NS-ECO', 'ELBE-25', 'GEN-DIV'],
+            getTypes: () => ['WATER', 'DNA', 'FISH', 'SEDIMENT', 'TISSUE'],
+            getStatuses: () => ['Stored', 'Processing', 'Registered', 'Destroyed', 'Shipped']
+        };
+
+        // Handsontable Instance
+        let hot;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initGrid();
+        });
+
+        function initGrid() {
+            const container = document.getElementById('hotTable');
+            const data = DBService.getSamples();
+            
+            // Configuration strictly typed for Database Schema
+            hot = new Handsontable(container, {
+                data: data,
+                colHeaders: ['Sample ID (PK)', 'External Ref', 'Type (FK)', 'Project (FK)', 'Date', 'Storage Loc', 'Status'],
+                columns: [
+                    { type: 'text', className: 'fw-bold' }, // sample_id
+                    { type: 'text' }, // external_id
+                    { type: 'dropdown', source: DBService.getTypes() }, // sample_type_id
+                    { type: 'dropdown', source: DBService.getProjects() }, // project_id
+                    { type: 'date', dateFormat: 'YYYY-MM-DD', correctFormat: true }, // collection_date
+                    { type: 'text' }, // storage_id (simplified location string)
+                    { type: 'dropdown', source: DBService.getStatuses() } // status_id
+                ],
+                rowHeaders: true,
+                width: '100%',
+                height: '100%',
+                licenseKey: 'non-commercial-and-evaluation',
+                contextMenu: true,
+                manualColumnResize: true,
+                filters: true,
+                dropdownMenu: true,
+                multiColumnSorting: true,
+                minSpareRows: 0, // We use "New Row" button instead
+                allowInsertRow: true,
+                allowRemoveRow: true,
+                search: true
+            });
+
+            document.getElementById('totalCount').innerText = data.length;
+            
+            // Link Search Bar
+            const searchField = document.getElementById('searchField');
+            searchField.addEventListener('keyup', function(event) {
+                const searchResult = hot.getPlugin('search').query(this.value);
+                hot.render();
+            });
+        }
+
+        // --- ACTIONS ---
+
+        function addNewRow() {
+            // Adds a blank row at the bottom for single entry creation
+            hot.alter('insert_row_below', hot.countRows());
+            hot.scrollViewportTo(hot.countRows() - 1, 0);
+            // Optional: Pre-fill Project if defined in settings
+        }
+
+        function deleteSelected() {
+            const selected = hot.getSelected();
+            if (selected) {
+                if(confirm("Delete selected rows? This will update the database.")) {
+                    // Simple removal logic for demo; real app needs to handle non-contiguous selections
+                    const start = selected[0][0];
+                    const end = selected[0][2];
+                    const count = Math.abs(end - start) + 1;
+                    hot.alter('remove_row', Math.min(start, end), count);
+                }
+            } else {
+                alert("Please select rows to delete.");
+            }
+        }
+
+        function commitChanges() {
+            document.getElementById('loadingOverlay').style.visibility = 'visible';
+            
+            // In a real app: Calculate diffs (created, updated, deleted) and send to API
+            const currentData = hot.getData();
+            
+            setTimeout(() => {
+                document.getElementById('loadingOverlay').style.visibility = 'hidden';
+                alert(`Successfully synced ${currentData.length} records with the database.`);
+                // Here you would refresh table from DB to get generated IDs if any
+            }, 800);
+        }
+
+        function exportData() {
+            const exportPlugin = hot.getPlugin('exportFile');
+            exportPlugin.downloadFile('csv', {
+                bom: false,
+                columnDelimiter: ',',
+                columnHeaders: true,
+                exportHiddenColumns: true,
+                exportHiddenRows: true,
+                fileExtension: 'csv',
+                filename: 'LIMS_Samples_Export',
+                mimeType: 'text/csv',
+                rowDelimiter: '\r\n',
+                rowHeaders: true
+            });
+        }
+
+    </script>
+</body>
+</html>
