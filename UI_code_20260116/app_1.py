@@ -30,7 +30,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_READ_COMMITTED
 from dotenv import load_dotenv
 
 # Load environment variables
--- load_dotenv()
+load_dotenv()
 
 # ==============================================================================
 # 1. ENTERPRISE CONFIGURATION CLASS
@@ -39,7 +39,7 @@ class Config:
     # Database Configuration
     DB_HOST = os.getenv('DB_HOST', '0.0.0.0') 
     DB_NAME = os.getenv('DB_NAME', 'demo')
-    DB_USER = os.getenv('DB_USER', 'web_admin')
+    DB_USER = os.getenv('DB_USER', 'kasmi')
     DB_PASS = os.getenv('DB_PASS', 'password')
     DB_PORT = int(os.getenv('DB_PORT', 5432)) # Added missing DB_PORT
 
