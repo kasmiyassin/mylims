@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GenFish LIMS - Molecular Biology (High Throughput & qPCR)</title>
+    <title>GenFish LIMS - Molecular Biology</title>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <!-- Chart.js for qPCR Plots -->
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -31,7 +31,7 @@
             overflow-x: hidden;
         }
 
-        /* Sidebar (Consistent) */
+        /* Sidebar */
         .sidebar {
             height: 100vh;
             width: var(--sidebar-width);
@@ -48,7 +48,7 @@
         .sidebar-brand { font-size: 1.4rem; font-weight: 700; text-align: center; margin-bottom: 2rem; color: white; }
         .sidebar-brand i { color: var(--accent-color); }
         .nav-header { font-size: 0.75rem; text-transform: uppercase; color: #95a5a6; padding: 10px 20px 5px; font-weight: 700; }
-        .nav-link { color: #bdc3c7; padding: 10px 20px; font-size: 0.95rem; transition: all 0.3s; border-left: 4px solid transparent; }
+        .nav-link { color: #bdc3c7; padding: 10px 20px; font-size: 0.95rem; transition: all 0.3s; border-left: 4px solid transparent; text-decoration: none; display: block; }
         .nav-link:hover, .nav-link.active { color: white; background-color: rgba(255,255,255,0.05); border-left-color: var(--accent-color); }
         .nav-link i { width: 25px; text-align: center; margin-right: 5px; }
 
@@ -88,13 +88,13 @@
         .well:hover { border-color: var(--accent-color); transform: scale(1.2); z-index: 2; box-shadow: 0 0 5px rgba(0,0,0,0.2); }
         .well.selected { box-shadow: 0 0 0 2px var(--accent-color); z-index: 1; }
         
-        /* Well States */
+        /* Well States (Mapped to DB Status) */
         .well-empty { background-color: #f8f9fa; }
-        .well-filled { background-color: var(--accent-color); border-color: var(--accent-color); }
-        .well-std { background-color: var(--warning-color); border-color: var(--warning-color); } /* Standard Curve */
-        .well-ntc { background-color: var(--purple-color); border-color: var(--purple-color); } /* NTC */
-        .well-failed { background-color: #e74c3c; opacity: 0.5; position: relative; }
-        .well-failed::after { content: '×'; color: white; font-size: 1.2rem; font-weight: bold; line-height: 1; }
+        .well-sample { background-color: var(--accent-color); border-color: var(--accent-color); }
+        .well-control { background-color: var(--warning-color); border-color: var(--warning-color); }
+        .well-ntc { background-color: var(--purple-color); border-color: var(--purple-color); }
+        .well-fail { background-color: #e74c3c; opacity: 0.7; position: relative; }
+        .well-fail::after { content: '×'; color: white; font-size: 1.2rem; font-weight: bold; line-height: 1; position: absolute; }
 
         /* Workflow Steps */
         .step-wizard { display: flex; justify-content: space-between; margin-bottom: 20px; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
@@ -108,16 +108,16 @@
         /* Tools & Widgets */
         .tool-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
         .tool-title { font-size: 0.85rem; font-weight: 700; color: #7f8c8d; text-transform: uppercase; margin-bottom: 10px; display: flex; justify-content: space-between; }
-        .calc-result { background: #f8f9fa; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 0.9rem; border-left: 3px solid var(--accent-color); }
-
-        /* Scanner Input */
-        .scanner-input { border: 2px solid var(--accent-color); background-color: #ebf5fb; color: var(--primary-color); font-weight: bold; }
-        .scanner-input:focus { box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25); }
         
         /* Drag & Drop */
         .drop-zone { border: 2px dashed #bdc3c7; border-radius: 10px; padding: 30px; text-align: center; background-color: #fafafa; transition: all 0.2s; cursor: pointer; }
         .drop-zone:hover { border-color: var(--accent-color); background-color: #f1f9fe; }
         .drop-zone i { font-size: 2.5rem; color: #bdc3c7; margin-bottom: 10px; }
+
+        /* Gel Image Placeholder */
+        .gel-placeholder {
+            width: 100%; height: 200px; background: #2c3e50; border-radius: 5px; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3); font-family: monospace; letter-spacing: 2px;
+        }
 
     </style>
 </head>
@@ -144,6 +144,7 @@
             <div class="nav-header">Lab Work</div>
             <a href="lims_biology_fish.html" class="nav-link"><i class="fas fa-microscope"></i> Biology / Fish</a>
             <a href="#" class="nav-link active"><i class="fas fa-flask"></i> Molecular Lab</a>
+            <a href="lims_bioinformatics.html" class="nav-link"><i class="fas fa-laptop-code"></i> Bioinformatics</a>
         </div>
     </div>
 
@@ -154,14 +155,21 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h4 class="text-secondary fw-bold mb-0">High-Throughput Molecular Lab</h4>
-                <p class="text-muted small mb-0">Processing <strong>Batch_2026_01_EXT</strong> (1,240 Samples)</p>
+                <p class="text-muted small mb-0">
+                    Batch Context: <strong>{{ current_batch.name | default('No Batch Selected') }}</strong> 
+                    ({{ current_batch.sample_count | default(0) }} Samples)
+                </p>
             </div>
             <div class="d-flex gap-2">
-                <!-- Scanner Input for HT -->
-                <div class="input-group">
-                    <span class="input-group-text bg-white text-primary border-primary"><i class="fas fa-qrcode"></i></span>
-                    <input type="text" class="form-control scanner-input" placeholder="Scan Plate/Sample..." style="width: 200px;">
-                </div>
+                <!-- Batch Selector -->
+                <form action="" method="GET">
+                    <select class="form-select border-primary fw-bold" name="batch_id" onchange="this.form.submit()" style="width: 220px;">
+                        <option value="">Select Batch...</option>
+                        {% for b in batches %}
+                        <option value="{{ b.batch_id }}" {% if b.batch_id == current_batch.batch_id %}selected{% endif %}>{{ b.name }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
                 
                 <div class="btn-group">
                     <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#importModal"><i class="fas fa-file-import me-1"></i> Import/Update</button>
@@ -170,10 +178,9 @@
                         <li><a class="dropdown-item" href="#">Hamilton Star (.csv)</a></li>
                         <li><a class="dropdown-item" href="#">Opentrons (.json)</a></li>
                         <li><a class="dropdown-item" href="#">Illumina SampleSheet (.csv)</a></li>
-                        <li><a class="dropdown-item" href="#">Roche LightCycler (.txt)</a></li>
                     </ul>
                 </div>
-                <button class="btn btn-primary"><i class="fas fa-plus me-1"></i> New Batch</button>
+                <button class="btn btn-primary" onclick="createNewBatch()"><i class="fas fa-plus me-1"></i> New Batch</button>
             </div>
         </div>
 
@@ -182,7 +189,7 @@
             <div class="step-item active" onclick="switchTab('extraction')"><div class="step-icon"><i class="fas fa-vial"></i></div><div class="small">Extraction</div></div>
             <div class="step-item" onclick="switchTab('qc')"><div class="step-icon"><i class="fas fa-check-double"></i></div><div class="small">Mass QC</div></div>
             <div class="step-item" onclick="switchTab('qpcr')"><div class="step-icon"><i class="fas fa-chart-line"></i></div><div class="small fw-bold text-primary">qPCR (Real-Time)</div></div>
-            <div class="step-item" onclick="switchTab('pcr')"><div class="step-icon"><i class="fas fa-temperature-high"></i></div><div class="small">End-Point PCR</div></div>
+            <div class="step-item" onclick="switchTab('pcr')"><div class="step-icon"><i class="fas fa-temperature-high"></i></div><div class="small">PCR & Gel</div></div>
             <div class="step-item" onclick="switchTab('library')"><div class="step-icon"><i class="fas fa-random"></i></div><div class="small">Pooling</div></div>
             <div class="step-item" onclick="switchTab('sequencing')"><div class="step-icon"><i class="fas fa-dna"></i></div><div class="small">Sequencing</div></div>
         </div>
@@ -195,44 +202,28 @@
                 <div class="row">
                     <!-- Left: Tools & Batch Info -->
                     <div class="col-lg-3 mb-4">
-                        <!-- Navigation -->
                         <div class="tool-card">
-                            <div class="tool-title">Plate Navigator</div>
-                            <select class="form-select mb-2 fw-bold text-primary">
-                                <option>Plate 1 of 13 (A01-H12)</option>
-                                <option>Plate 2 of 13 (Samples 97-192)</option>
-                                <option>Plate 3 of 13 (Samples 193-288)</option>
-                            </select>
-                            <div class="form-check form-switch mb-2">
-                                <input class="form-check-input" type="checkbox" id="mode384">
-                                <label class="form-check-label small" for="mode384">384-Well Mode</label>
-                            </div>
-                            <div class="d-flex justify-content-between text-muted small mt-2">
-                                <span>Total Samples:</span>
-                                <span class="fw-bold text-dark">1,240</span>
-                            </div>
-                        </div>
-
-                        <!-- Extraction Details -->
-                        <div class="tool-card">
-                            <div class="tool-title">Extraction Params</div>
-                            <div class="mb-2">
-                                <label class="form-label small mb-0">Method</label>
-                                <select class="form-select form-select-sm"><option>Maxwell RSC</option><option>Qiagen DNeasy</option></select>
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label small mb-0">Elution Vol (µL)</label>
-                                <input type="number" class="form-control form-control-sm" value="50">
-                            </div>
-                             <div class="mb-2">
-                                <label class="form-label small mb-0">Buffer</label>
-                                <input type="text" class="form-control form-control-sm" value="AE Buffer">
-                            </div>
-                        </div>
-
-                        <!-- Bulk Actions -->
-                        <div class="d-grid gap-2">
-                             <button class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#retestModal"><i class="fas fa-recycle me-1"></i> Create Retest Batch</button>
+                            <div class="tool-title">Extraction Setup</div>
+                            <form action="/molecular/update_extraction_meta" method="POST">
+                                <input type="hidden" name="batch_id" value="{{ current_batch.batch_id }}">
+                                <div class="mb-2">
+                                    <label class="form-label small mb-0">Protocol</label>
+                                    <select class="form-select form-select-sm" name="method">
+                                        <option value="Maxwell RSC">Maxwell RSC</option>
+                                        <option value="Qiagen DNeasy">Qiagen DNeasy</option>
+                                        <option value="Manual Phenol">Manual Phenol/Chloroform</option>
+                                    </select>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label small mb-0">Elution Vol (µL)</label>
+                                    <input type="number" class="form-control form-control-sm" name="volume_ul" value="50">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label small mb-0">Kit Lot #</label>
+                                    <input type="text" class="form-control form-control-sm" name="kit_lot">
+                                </div>
+                                <button type="submit" class="btn btn-sm btn-outline-primary w-100 mt-2">Update Batch Info</button>
+                            </form>
                         </div>
                     </div>
 
@@ -240,34 +231,44 @@
                     <div class="col-lg-9 mb-4">
                         <div class="plate-container">
                             <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h6 class="fw-bold mb-0"><i class="fas fa-th me-2"></i>Visualizer: Plate 1 (96-Well)</h6>
+                                <h6 class="fw-bold mb-0"><i class="fas fa-th me-2"></i>Visualizer: Batch Plate</h6>
                                 <div class="small">
                                     <span class="me-3"><span class="badge bg-secondary rounded-pill me-1">&nbsp;</span> Empty</span>
                                     <span class="me-3"><span class="badge bg-primary rounded-pill me-1">&nbsp;</span> Sample</span>
-                                    <span class="me-3"><span class="badge bg-success rounded-pill me-1">&nbsp;</span> Ctrl+</span>
-                                    <span class="me-3"><span class="badge bg-danger rounded-pill me-1">&nbsp;</span> Fail</span>
+                                    <span class="me-3"><span class="badge bg-warning rounded-pill me-1">&nbsp;</span> Control</span>
+                                    <span class="me-3"><span class="badge bg-danger rounded-pill me-1">&nbsp;</span> Failed</span>
                                 </div>
                             </div>
 
                             <div class="plate-grid" id="plateGrid">
-                                <!-- Header Row -->
+                                <!-- Header Row (1-12) -->
                                 <div></div>
-                                <div class="plate-header">1</div><div class="plate-header">2</div><div class="plate-header">3</div><div class="plate-header">4</div><div class="plate-header">5</div><div class="plate-header">6</div><div class="plate-header">7</div><div class="plate-header">8</div><div class="plate-header">9</div><div class="plate-header">10</div><div class="plate-header">11</div><div class="plate-header">12</div>
+                                {% for i in range(1, 13) %}
+                                <div class="plate-header">{{ i }}</div>
+                                {% endfor %}
 
-                                <!-- Row A -->
-                                <div class="plate-row-label">A</div>
-                                <div class="well well-filled" title="Sample 001"></div>
-                                <div class="well well-filled" title="Sample 002"></div>
-                                <div class="well well-filled" title="Sample 003"></div>
-                                <div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-control-neg"></div>
+                                <!-- Rows A-H -->
+                                {% for row_char in ['A','B','C','D','E','F','G','H'] %}
+                                    <div class="plate-row-label">{{ row_char }}</div>
+                                    {% for col_num in range(1, 13) %}
+                                        {% set well_id = row_char ~ "%02d"|format(col_num) %}
+                                        {% set well_data = plate_data[well_id] if plate_data else none %}
+                                        
+                                        <!-- Logic to determine CSS Class -->
+                                        {% set well_class = 'well-empty' %}
+                                        {% if well_data %}
+                                            {% if well_data.status == 'Fail' %}{% set well_class = 'well-fail' %}
+                                            {% elif well_data.type == 'Control' %}{% set well_class = 'well-control' %}
+                                            {% elif well_data.type == 'NTC' %}{% set well_class = 'well-ntc' %}
+                                            {% else %}{% set well_class = 'well-sample' %}{% endif %}
+                                        {% endif %}
 
-                                <!-- Row B -->
-                                <div class="plate-row-label">B</div>
-                                <div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-failed" title="Failed: Low Conc"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-control-pos"></div>
-
-                                <!-- Simplified Rows -->
-                                <div class="plate-row-label">C</div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-filled"></div><div class="well well-empty"></div>
-                                <div class="plate-row-label">D</div><div class="well well-empty"></div><div class="well well-empty"></div><div class="well well-empty"></div><div class="well well-empty"></div><div class="well well-empty"></div><div class="well well-empty"></div><div class="well well-empty"></div><div class="well well-empty"></div><div class="well well-empty"></div><div class="well well-empty"></div><div class="well well-empty"></div><div class="well well-empty"></div>
+                                        <div class="well {{ well_class }}" 
+                                             title="{{ well_id }}: {{ well_data.sample_id | default('Empty') }}"
+                                             onclick="editWell('{{ well_id }}', '{{ well_data.sample_id }}')">
+                                        </div>
+                                    {% endfor %}
+                                {% endfor %}
                             </div>
                         </div>
                     </div>
@@ -279,66 +280,71 @@
                 <div class="card border-0 shadow-sm">
                     <div class="card-header bg-white d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center gap-3">
-                            <h5 class="mb-0 fw-bold">Mass QC</h5>
-                            <span class="badge bg-light text-dark border">1,240 Samples</span>
-                            <span class="badge bg-danger-subtle text-danger border border-danger">45 Failures</span>
+                            <h5 class="mb-0 fw-bold">QC Results (NanoDrop, Qubit, TapeStation)</h5>
+                            <span class="badge bg-light text-dark border">{{ qc_samples | length }} Samples</span>
                         </div>
                         <div class="btn-group">
                             <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#autoFailModal"><i class="fas fa-magic me-1"></i> Auto-Fail Tool</button>
-                            <button class="btn btn-sm btn-outline-secondary"><i class="fas fa-download me-1"></i> Export Report</button>
+                            <button class="btn btn-sm btn-outline-success" onclick="exportQC()"><i class="fas fa-file-excel me-1"></i> Export Table</button>
                         </div>
                     </div>
-                    <div class="card-body p-0">
-                        <!-- QC Table (Simplified) -->
-                         <div class="table-responsive" style="max-height: 500px;">
-                            <table class="table table-hover mb-0 align-middle table-sm">
-                                <thead class="bg-light sticky-top">
-                                    <tr><th><input type="checkbox"></th><th>Plate</th><th>Well</th><th>Sample ID</th><th>Conc. (ng/µL)</th><th>260/280</th><th>Status</th></tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td><input type="checkbox"></td><td>P01</td><td>A01</td><td>D25Wes_001_LIV</td><td class="fw-bold">45.2</td><td class="text-success">1.85</td><td><span class="badge bg-success">PASS</span></td></tr>
-                                    <tr class="table-danger"><td><input type="checkbox" checked></td><td>P01</td><td>B04</td><td>D25Wes_099_LIV</td><td class="fw-bold text-danger">2.1</td><td class="text-danger">1.20</td><td><span class="badge bg-danger">FAIL</span></td></tr>
-                                </tbody>
-                            </table>
-                        </div>
+                    <div class="table-responsive" style="max-height: 600px;">
+                        <table class="table table-hover mb-0 align-middle table-sm">
+                            <thead class="bg-light sticky-top">
+                                <tr><th>Sample ID</th><th>Method</th><th>Conc (ng/µL)</th><th>260/280</th><th>DIN/RIN</th><th>Status</th><th>Edit</th></tr>
+                            </thead>
+                            <tbody>
+                                {% if qc_samples %}
+                                    {% for row in qc_samples %}
+                                    <tr class="{{ 'table-danger' if row.qc_flag != 'Pass' else '' }}">
+                                        <td><strong>{{ row.sample_id }}</strong></td>
+                                        <td>{{ row.extraction_method }}</td>
+                                        <td>{{ row.extract_conc_qubit | default(row.extract_conc_nano, true) }}</td>
+                                        <td class="{{ 'text-danger fw-bold' if (row.a260_280 < 1.8 or row.a260_280 > 2.1) else 'text-success' }}">
+                                            {{ row.a260_280 }}
+                                        </td>
+                                        <td>{{ row.DIN_RIN_score }}</td>
+                                        <td>
+                                            <span class="badge bg-{{ 'success' if row.qc_flag == 'Pass' else 'danger' }}">
+                                                {{ row.qc_flag }}
+                                            </span>
+                                        </td>
+                                        <td><button class="btn btn-sm btn-light py-0"><i class="fas fa-pencil-alt text-muted"></i></button></td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr><td colspan="7" class="text-center text-muted py-3">No QC data available for this batch. Import NanoDrop/Qubit/TapeStation data.</td></tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
 
-            <!-- 3. qPCR (NEW FEATURE) -->
+            <!-- 3. qPCR (Real-Time) -->
             <div class="tab-pane fade" id="qpcr">
                 <div class="row">
-                    <!-- Left: qPCR Tools -->
+                    <!-- Left: Tools -->
                     <div class="col-lg-3">
                         <div class="tool-card border-primary">
                             <div class="tool-title text-primary"><i class="fas fa-tasks me-2"></i>Run Settings</div>
-                            <div class="mb-2"><label class="form-label small mb-0">Instrument</label><select class="form-select form-select-sm"><option>Roche LightCycler 480</option><option>Bio-Rad CFX96</option></select></div>
-                            <div class="mb-2"><label class="form-label small mb-0">Assay</label><select class="form-select form-select-sm"><option>eDNA_Fish_Universal</option><option>Pathogen_Vibrio</option></select></div>
-                            <div class="mb-2"><label class="form-label small mb-0">Cycles</label><input type="number" class="form-control form-control-sm" value="40"></div>
-                        </div>
-
-                        <div class="card border-0 shadow-sm mb-3">
-                            <div class="card-header bg-white fw-bold small">Plate Layout</div>
-                            <div class="card-body p-2">
-                                <div class="d-flex flex-wrap gap-2 mb-2">
-                                    <span class="badge bg-warning text-dark border pointer">Standard 1-5</span>
-                                    <span class="badge bg-purple-subtle text-purple border pointer" style="background:#e8daef; color:#8e44ad;">NTC</span>
-                                    <span class="badge bg-primary-subtle text-primary border pointer">Unknowns</span>
-                                </div>
-                                <button class="btn btn-sm btn-outline-secondary w-100">Apply Layout Template</button>
-                            </div>
+                            <form action="/molecular/save_qpcr_meta" method="POST">
+                                <div class="mb-2"><label class="form-label small mb-0">Assay Target</label><input type="text" name="target" class="form-control form-control-sm" placeholder="e.g. 16S_Uni"></div>
+                                <div class="mb-2"><label class="form-label small mb-0">Instrument</label><select name="instrument" class="form-control form-control-sm"><option>Roche LightCycler</option><option>Bio-Rad CFX</option></select></div>
+                                <div class="mb-2"><label class="form-label small mb-0">Cycles</label><input type="number" name="cycles" class="form-control form-control-sm" value="40"></div>
+                                <button class="btn btn-primary btn-sm w-100 mt-2">Save Run Config</button>
+                            </form>
                         </div>
                     </div>
 
-                    <!-- Right: Plots & Results -->
+                    <!-- Right: Results -->
                     <div class="col-lg-9">
-                        <!-- Charts Area -->
+                        <!-- Charts -->
                         <div class="row mb-4">
                             <div class="col-md-6">
                                 <div class="card border-0 shadow-sm h-100">
-                                    <div class="card-header bg-white small fw-bold">Amplification Plot (ΔRn vs Cycle)</div>
+                                    <div class="card-header bg-white small fw-bold">Amplification Plot (Ct)</div>
                                     <div class="card-body d-flex align-items-center justify-content-center bg-light" style="height: 250px;">
-                                        <!-- Mock Chart Placeholder -->
                                         <canvas id="ampChart"></canvas>
                                     </div>
                                 </div>
@@ -347,7 +353,6 @@
                                 <div class="card border-0 shadow-sm h-100">
                                     <div class="card-header bg-white small fw-bold">Melt Curve</div>
                                     <div class="card-body d-flex align-items-center justify-content-center bg-light" style="height: 250px;">
-                                        <!-- Mock Chart Placeholder -->
                                         <canvas id="meltChart"></canvas>
                                     </div>
                                 </div>
@@ -357,28 +362,33 @@
                         <!-- Results Table -->
                         <div class="card border-0 shadow-sm">
                             <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0 fw-bold">Results Data</h6>
-                                <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#importModal"><i class="fas fa-file-upload me-1"></i> Upload Result File</button>
+                                <h6 class="mb-0 fw-bold">qPCR Results (`moleculargenetics.qpcr`)</h6>
                             </div>
                             <div class="table-responsive" style="max-height: 300px;">
                                 <table class="table table-sm table-hover mb-0 small">
                                     <thead class="bg-light sticky-top">
-                                        <tr>
-                                            <th>Well</th>
-                                            <th>Sample Name</th>
-                                            <th>Task</th>
-                                            <th>Ct Mean</th>
-                                            <th>Tm (°C)</th>
-                                            <th>ΔCt</th>
-                                            <th>Result</th>
-                                        </tr>
+                                        <tr><th>Well</th><th>Sample ID</th><th>Target</th><th>Ct Value</th><th>Status</th></tr>
                                     </thead>
                                     <tbody>
-                                        <tr><td>A01</td><td>Std_1000</td><td><span class="badge bg-warning text-dark">STD</span></td><td>18.45</td><td>85.2</td><td>-</td><td>Pass</td></tr>
-                                        <tr><td>A02</td><td>Std_100</td><td><span class="badge bg-warning text-dark">STD</span></td><td>22.10</td><td>85.1</td><td>-</td><td>Pass</td></tr>
-                                        <tr><td>A03</td><td>NTC</td><td><span class="badge bg-purple-subtle text-purple" style="background:#e8daef; color:#8e44ad;">NTC</span></td><td>Undet.</td><td>-</td><td>-</td><td>Clean</td></tr>
-                                        <tr><td>B01</td><td>D25_Sample_01</td><td><span class="badge bg-primary-subtle text-primary">UNK</span></td><td>24.55</td><td>85.3</td><td>2.1</td><td>Positive</td></tr>
-                                        <tr><td>B02</td><td>D25_Sample_02</td><td><span class="badge bg-primary-subtle text-primary">UNK</span></td><td>38.90</td><td>84.0</td><td>16.5</td><td>Weak/Neg</td></tr>
+                                        {% if qpcr_results %}
+                                            {% for res in qpcr_results %}
+                                            <tr>
+                                                <td>{{ res.position }}</td>
+                                                <td>{{ res.sample_id }}</td>
+                                                <td>{{ res.target_gene_id }}</td>
+                                                <td class="fw-bold">{{ res.ct_value }}</td>
+                                                <td>
+                                                    {% if res.ct_value and res.ct_value < 35 %}
+                                                        <span class="text-success">Positive</span>
+                                                    {% else %}
+                                                        <span class="text-muted">Neg/Late</span>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        {% else %}
+                                            <tr><td colspan="5" class="text-center text-muted">No qPCR results linked.</td></tr>
+                                        {% endif %}
                                     </tbody>
                                 </table>
                             </div>
@@ -387,27 +397,118 @@
                 </div>
             </div>
 
-            <!-- 4. LIBRARY PREP -->
+            <!-- 4. END-POINT PCR & GEL (NEW) -->
+            <div class="tab-pane fade" id="pcr">
+                <div class="row">
+                    <!-- PCR Setup -->
+                    <div class="col-lg-4">
+                        <div class="card border-0 shadow-sm mb-4">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="fw-bold mb-0">PCR Config</h6>
+                                <button class="btn btn-sm btn-primary" onclick="alert('Save functionality...')">Save</button>
+                            </div>
+                            <div class="card-body">
+                                <form>
+                                    <div class="mb-2"><label class="form-label small mb-0">Fwd Primer</label><select class="form-select form-select-sm"><option>MiFish_U_F</option></select></div>
+                                    <div class="mb-2"><label class="form-label small mb-0">Rev Primer</label><select class="form-select form-select-sm"><option>MiFish_U_R</option></select></div>
+                                    <div class="mb-2"><label class="form-label small mb-0">Polymerase</label><input type="text" class="form-control form-control-sm" value="Taq Platinum"></div>
+                                    <div class="row">
+                                        <div class="col-6 mb-2"><label class="form-label small mb-0">Cycles</label><input type="number" class="form-control form-control-sm" value="35"></div>
+                                        <div class="col-6 mb-2"><label class="form-label small mb-0">Ann. Temp</label><input type="number" class="form-control form-control-sm" value="55"></div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-white fw-bold small">PCR Batch List</div>
+                            <div class="list-group list-group-flush small" style="max-height: 300px; overflow-y: auto;">
+                                {% if pcr_batch %}
+                                    {% for pcr in pcr_batch %}
+                                    <div class="list-group-item d-flex justify-content-between">
+                                        <span>{{ pcr.sample_id }}</span>
+                                        <span class="text-muted">{{ pcr.position }}</span>
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="list-group-item text-muted">No PCRs registered for this batch.</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Gel Electrophoresis -->
+                    <div class="col-lg-8">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="fw-bold mb-0">Gel Electrophoresis (`moleculargenetics.gelelectrophoresis`)</h6>
+                                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#importModal"><i class="fas fa-upload me-1"></i> Add Gel Image</button>
+                            </div>
+                            <div class="card-body">
+                                {% if gel_images %}
+                                    <div class="row g-2">
+                                        {% for img in gel_images %}
+                                        <div class="col-md-4">
+                                            <div class="border rounded p-1">
+                                                <img src="{{ img.path }}" class="img-fluid mb-1" style="height: 150px; object-fit: cover;">
+                                                <div class="small text-center fw-bold">{{ img.name }}</div>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <div class="gel-placeholder">
+                                        <span>[ NO GEL IMAGES UPLOADED ]</span>
+                                    </div>
+                                {% endif %}
+                                
+                                <div class="mt-4">
+                                    <h6 class="small fw-bold border-bottom pb-2">Band Analysis Results</h6>
+                                    <table class="table table-sm table-striped small">
+                                        <thead><tr><th>Sample</th><th>Well</th><th>Band Size (bp)</th><th>Pass/Fail</th></tr></thead>
+                                        <tbody>
+                                            <tr><td>D25Wes_001</td><td>1</td><td>350</td><td class="text-success">Pass</td></tr>
+                                            <tr><td>D25Wes_002</td><td>2</td><td>--</td><td class="text-danger">Fail</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. LIBRARY PREP -->
             <div class="tab-pane fade" id="library">
                 <div class="row">
                     <div class="col-lg-4">
                         <div class="tool-card border-primary">
                             <div class="tool-title text-primary"><i class="fas fa-flask me-2"></i>Pooling Calculator</div>
-                            <div class="mb-2"><label class="form-label small mb-0">Target Concentration (nM)</label><input type="number" class="form-control form-control-sm" value="4"></div>
-                            <div class="mb-2"><label class="form-label small mb-0">Total Pool Volume (µL)</label><input type="number" class="form-control form-control-sm" value="100"></div>
-                            <button class="btn btn-primary btn-sm w-100 mt-2">Calculate Norm. Vols</button>
+                            <div class="mb-2"><label class="form-label small mb-0">Target Conc (nM)</label><input type="number" class="form-control form-control-sm" value="4"></div>
+                            <div class="mb-2"><label class="form-label small mb-0">Total Vol (µL)</label><input type="number" class="form-control form-control-sm" value="100"></div>
+                            <button class="btn btn-primary btn-sm w-100 mt-2">Calculate Volumes</button>
                         </div>
-                        <div class="alert alert-warning small"><i class="fas fa-exclamation-triangle me-1"></i> 3 Samples have duplicate Indices in this Pool.</div>
                     </div>
                     <div class="col-lg-8">
                         <div class="card border-0 shadow-sm">
-                            <div class="card-header bg-white fw-bold">Library Indices (Plate 1)</div>
+                            <div class="card-header bg-white fw-bold">Library Index Assignments (`moleculargenetics.library`)</div>
                             <div class="card-body p-0">
                                 <table class="table table-sm table-bordered mb-0 small">
-                                    <thead class="bg-light"><tr><th>Well</th><th>Sample ID</th><th>i7 Index</th><th>i5 Index</th><th>Norm. Vol (µL)</th></tr></thead>
+                                    <thead class="bg-light"><tr><th>Library ID</th><th>Sample Count</th><th>Barcode</th><th>Conc (nM)</th><th>Status</th></tr></thead>
                                     <tbody>
-                                        <tr><td>A01</td><td>D25Wes_001_LIV</td><td>N701 (TCGCCTTA)</td><td>N501 (TAGATCGC)</td><td class="fw-bold text-end">4.5</td></tr>
-                                        <tr><td>A02</td><td>D25Wes_002_LIV</td><td>N702 (CTAGTACG)</td><td>N501 (TAGATCGC)</td><td class="fw-bold text-end">3.8</td></tr>
+                                        {% if libraries %}
+                                            {% for lib in libraries %}
+                                            <tr>
+                                                <td><strong>{{ lib.library_id }}</strong></td>
+                                                <td>{{ lib.sample_count }}</td>
+                                                <td>{{ lib.lib_barcode }}</td>
+                                                <td>{{ lib.molarity_nm }}</td>
+                                                <td><span class="badge bg-info">{{ lib.status_id }}</span></td>
+                                            </tr>
+                                            {% endfor %}
+                                        {% else %}
+                                            <tr><td colspan="5" class="text-center text-muted">No libraries created yet.</td></tr>
+                                        {% endif %}
                                     </tbody>
                                 </table>
                             </div>
@@ -416,83 +517,93 @@
                 </div>
             </div>
 
-            <!-- 5. SEQUENCING & PCR (Placeholder for completeness) -->
-            <div class="tab-pane fade" id="pcr">
-                <div class="alert alert-info">Standard End-Point PCR configuration...</div>
-            </div>
+            <!-- 6. SEQUENCING -->
             <div class="tab-pane fade" id="sequencing">
-                 <div class="alert alert-info">Illumina Run Registration...</div>
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white fw-bold">Sequencing Run Queue</div>
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light">
+                            <tr><th>Run ID</th><th>Flowcell</th><th>Library ID</th><th>Lane</th><th>Sequencer</th><th>Status</th></tr>
+                        </thead>
+                        <tbody>
+                            {% if sequencing_runs %}
+                                {% for seq in sequencing_runs %}
+                                <tr>
+                                    <td>{{ seq.run_id }}</td>
+                                    <td>{{ seq.flowcell_id }}</td>
+                                    <td>{{ seq.library_id }}</td>
+                                    <td>{{ seq.lane_number }}</td>
+                                    <td>{{ seq.sequencer_id }}</td>
+                                    <td><span class="badge bg-{{ 'success' if seq.run_status=='Completed' else 'warning' }}">{{ seq.run_status }}</span></td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr><td colspan="6" class="text-center text-muted py-3">No active sequencing runs.</td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
         </div> <!-- End Tab Content -->
     </div>
 
-    <!-- === ENHANCED IMPORT MODAL === -->
+    <!-- === UNIVERSAL IMPORT MODAL === -->
     <div class="modal fade" id="importModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Batch Data Import & Update</h5>
+                    <h5 class="modal-title"><i class="fas fa-file-import me-2"></i>Import / Update Molecular Data</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    
-                    <ul class="nav nav-pills mb-3 nav-fill small" id="importTabs" role="tablist">
-                        <li class="nav-item"><a class="nav-link active" data-bs-toggle="pill" href="#importGeneral">QC & Library</a></li>
-                        <li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#importQpcr">qPCR Results</a></li>
-                    </ul>
+                <form action="/molecular/import" method="POST" enctype="multipart/form-data">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">1. Data Category</label>
+                            <select class="form-select" name="target_table" id="importTarget" onchange="updateTemplateLink()">
+                                <option value="nucleic_acid">Extraction Data (Conc/Yield/Methods)</option>
+                                <option value="nanodrop">NanoDrop QC Results</option>
+                                <option value="qubit">Qubit QC Results</option>
+                                <option value="tapestation">TapeStation Results (Size/RIN)</option>
+                                <option value="qpcr">qPCR Ct Results</option>
+                                <option value="pcr">PCR Setup (Primers/Cycles)</option>
+                                <option value="gelelectrophoresis">Gel Analysis Results (Bands)</option>
+                                <option value="library">Library Prep (Indices/Molarity)</option>
+                            </select>
+                        </div>
 
-                    <div class="tab-content">
-                        <!-- General Import -->
-                        <div class="tab-pane fade show active" id="importGeneral">
-                            <div class="mb-3">
-                                <label class="form-label fw-bold small">Data Type</label>
-                                <select class="form-select">
-                                    <option value="qc_nanodrop">NanoDrop / Qubit</option>
-                                    <option value="library">Library Prep Indices</option>
-                                </select>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">2. Upload Spreadsheet</label>
+                            <div class="drop-zone">
+                                <i class="fas fa-file-excel text-success"></i>
+                                <p class="mb-1">Drag Excel (.xlsx) or CSV file here</p>
+                                <input type="file" name="file" class="form-control" style="opacity:0; position:absolute; height:100%; top:0; left:0; cursor:pointer;" required>
+                                <button type="button" class="btn btn-sm btn-outline-primary mt-2">Browse Files</button>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label fw-bold small">Upload File (CSV/Excel)</label>
-                                <div class="drop-zone"><i class="fas fa-file-csv"></i><p class="mb-0 small">Drag file here</p></div>
+                            <div class="form-text mt-2">
+                                <a href="#" id="templateLink" class="text-decoration-none"><i class="fas fa-download"></i> Download Template for Selected Category</a>
                             </div>
                         </div>
 
-                        <!-- qPCR Specific Import -->
-                        <div class="tab-pane fade" id="importQpcr">
-                             <div class="alert alert-light border small text-muted">
-                                <i class="fas fa-microchip me-1"></i> Maps results to samples based on <strong>Plate Name</strong> and <strong>Well Position</strong>.
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label fw-bold small">Instrument Format</label>
-                                <select class="form-select">
-                                    <option>Roche LightCycler 480 (.txt export)</option>
-                                    <option>Bio-Rad CFX (.csv)</option>
-                                    <option>Applied Biosystems QuantStudio (.xls)</option>
-                                    <option>Generic RDML</option>
-                                </select>
-                            </div>
-                             <div class="mb-3">
-                                <label class="form-label fw-bold small">Update Logic</label>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" checked>
-                                    <label class="form-check-label small">Overwrite existing Ct values if sample exists</label>
+                        <!-- Update Checkbox (Upsert Logic) -->
+                        <div class="alert alert-warning border-warning border d-flex align-items-center p-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="update_existing" id="updateCheck" value="true">
+                                <label class="form-check-label fw-bold text-dark" for="updateCheck">
+                                    Update existing records?
+                                </label>
+                                <div class="small text-muted mt-1">
+                                    If checked, rows with matching IDs (e.g., Sample ID) will be updated. 
+                                    <br><em>Unchecked: Duplicate IDs will likely raise an error.</em>
                                 </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" checked>
-                                    <label class="form-check-label small">Import Melt Temps (Tm)</label>
-                                </div>
-                            </div>
-                             <div class="mb-3">
-                                <div class="drop-zone border-primary"><i class="fas fa-file-medical-alt text-primary"></i><p class="mb-0 small">Upload Result File</p></div>
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary">Process Import</button>
-                </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-primary">Process Import</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -505,27 +616,25 @@
                     <h5 class="modal-title">Batch QC Automation</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <p class="small text-muted">Automatically mark samples as FAILED based on concentration thresholds.</p>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small">Concentration Threshold (ng/µL)</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><</span>
-                            <input type="number" class="form-control" value="5.0">
+                <form action="/molecular/auto_fail" method="POST">
+                    <input type="hidden" name="batch_id" value="{{ current_batch.batch_id }}">
+                    <div class="modal-body">
+                        <p class="small text-muted">Automatically mark samples as FAILED based on concentration or purity thresholds.</p>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Concentration Threshold (ng/µL)</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><</span>
+                                <input type="number" name="threshold_conc" class="form-control" value="5.0">
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-danger">Apply</button>
-                </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Apply Rules</button>
+                    </div>
+                </form>
             </div>
         </div>
-    </div>
-    
-    <!-- Retest Modal Placeholder -->
-    <div class="modal fade" id="retestModal" tabindex="-1">
-        <div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Create Retest Batch</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">Generates worklist for robot...</div><div class="modal-footer"><button class="btn btn-primary">Generate</button></div></div></div>
     </div>
 
     <!-- Scripts -->
@@ -535,17 +644,25 @@
             document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('show', 'active'));
             document.getElementById(tabId).classList.add('show', 'active');
             document.querySelectorAll('.step-item').forEach(el => el.classList.remove('active'));
+            
+            // Highlight current step in wizard
+            const items = document.querySelectorAll('.step-item');
+            if(tabId === 'extraction') items[0].classList.add('active');
+            if(tabId === 'qc') items[1].classList.add('active');
+            if(tabId === 'qpcr') items[2].classList.add('active');
+            if(tabId === 'pcr') items[3].classList.add('active');
+            if(tabId === 'library') items[4].classList.add('active');
+            if(tabId === 'sequencing') items[5].classList.add('active');
         }
-        document.querySelectorAll('.step-item').forEach(item => {
-            item.addEventListener('click', function() {
-                document.querySelectorAll('.step-item').forEach(el => el.classList.remove('active'));
-                this.classList.add('active');
-            });
-        });
-        
-        // Mock Chart.js for qPCR
+
+        function updateTemplateLink() {
+            const type = document.getElementById('importTarget').value;
+            document.getElementById('templateLink').href = "/molecular/template_download/" + type;
+        }
+
+        // Initialize Charts with Flask Data or Defaults
         document.addEventListener('DOMContentLoaded', function() {
-            // Amplification Chart
+            // Placeholder Charts for qPCR (Visual Only)
             const ctxAmp = document.getElementById('ampChart');
             if(ctxAmp) {
                 new Chart(ctxAmp, {
@@ -553,30 +670,9 @@
                     data: {
                         labels: Array.from({length: 40}, (_, i) => i + 1),
                         datasets: [{
-                            label: 'Sample A01 (Ct 18.4)',
-                            data: Array.from({length: 40}, (_, i) => i > 15 ? Math.pow(1.5, i-15) : 0),
+                            label: 'Sample Curve',
+                            data: Array.from({length: 40}, (_, i) => i > 20 ? Math.pow(1.6, i-20) : 0),
                             borderColor: '#3498db', borderWidth: 2, fill: false, pointRadius: 0
-                        }, {
-                            label: 'Sample B01 (Ct 24.5)',
-                            data: Array.from({length: 40}, (_, i) => i > 21 ? Math.pow(1.5, i-21) : 0),
-                            borderColor: '#e74c3c', borderWidth: 2, fill: false, pointRadius: 0
-                        }]
-                    },
-                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { display: false } }, plugins: { legend: { display: false } } }
-                });
-            }
-
-            // Melt Curve Chart
-            const ctxMelt = document.getElementById('meltChart');
-            if(ctxMelt) {
-                new Chart(ctxMelt, {
-                    type: 'line',
-                    data: {
-                        labels: [75, 80, 85, 90, 95],
-                        datasets: [{
-                            label: 'Derivative',
-                            data: [0, 5, 50, 5, 0],
-                            borderColor: '#27ae60', borderWidth: 2, fill: false, tension: 0.4, pointRadius: 0
                         }]
                     },
                     options: { responsive: true, maintainAspectRatio: false, scales: { y: { display: false } }, plugins: { legend: { display: false } } }

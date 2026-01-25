@@ -21,586 +21,426 @@
             --accent-color: #3498db;
             --success-color: #27ae60;
             --warning-color: #f39c12;
-            --danger-color: #e74c3c;
             --bg-light: #f8f9fa;
         }
 
         body {
             font-family: 'Roboto', sans-serif;
             background-color: var(--bg-light);
-            overflow-x: hidden;
+            overflow: hidden; /* Full screen app feel */
+            height: 100vh;
+            display: flex;
         }
 
-        /* Sidebar */
-        .sidebar {
-            height: 100vh;
+        /* DB Sidebar */
+        .db-sidebar {
             width: var(--sidebar-width);
-            position: fixed;
-            top: 0;
-            left: 0;
-            background-color: var(--primary-color);
+            background: #2c3e50;
             color: #ecf0f1;
-            padding-top: 1rem;
-            z-index: 1000;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
             display: flex;
             flex-direction: column;
-        }
-
-        .sidebar-brand { font-size: 1.4rem; font-weight: 700; text-align: center; margin-bottom: 1rem; color: white; }
-        .sidebar-brand i { color: var(--accent-color); }
-        .nav-header { font-size: 0.75rem; text-transform: uppercase; color: #95a5a6; padding: 10px 20px 5px; font-weight: 700; }
-        .nav-link { color: #bdc3c7; padding: 10px 20px; font-size: 0.95rem; transition: all 0.3s; border-left: 4px solid transparent; text-decoration: none; display: block; }
-        .nav-link:hover, .nav-link.active { color: white; background-color: rgba(255,255,255,0.05); border-left-color: var(--accent-color); }
-        .nav-link i { width: 25px; text-align: center; margin-right: 5px; }
-
-        /* Main Content */
-        .main-content { margin-left: var(--sidebar-width); padding: 20px 30px; }
-
-        /* Schema Browser (Dynamic Sidebar) */
-        .schema-container {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding-bottom: 20px;
+            border-right: 1px solid #1a252f;
         }
         
-        .schema-group { border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .schema-btn {
-            width: 100%; text-align: left; padding: 12px 20px; background: none; border: none; color: #ecf0f1; font-weight: 600; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; cursor: pointer;
-        }
-        .schema-btn:hover { background: rgba(255,255,255,0.05); }
-        .schema-btn i.fa-chevron-down { font-size: 0.7rem; transition: transform 0.3s; }
-        .schema-btn.collapsed i.fa-chevron-down { transform: rotate(-90deg); }
+        .db-header { padding: 15px; background: #1a252f; font-weight: bold; display: flex; align-items: center; justify-content: space-between; }
+        .db-search { padding: 10px; background: #34495e; }
+        .db-search input { background: #2c3e50; border: 1px solid #465c71; color: white; font-size: 0.9rem; }
         
-        .table-list { background: rgba(0,0,0,0.2); padding: 5px 0; }
-        .db-table-link {
-            padding: 8px 20px 8px 40px; color: #bdc3c7; font-size: 0.85rem; cursor: pointer; display: block; text-decoration: none; transition: 0.2s;
+        .schema-list { flex: 1; overflow-y: auto; padding: 10px 0; }
+        .schema-btn { 
+            width: 100%; text-align: left; background: none; border: none; color: #bdc3c7; padding: 8px 15px; font-size: 0.9rem; font-weight: 500; display: flex; justify-content: space-between; align-items: center;
         }
-        .db-table-link:hover, .db-table-link.active { color: white; background: rgba(52, 152, 219, 0.2); border-right: 3px solid var(--accent-color); }
-        .table-icon { opacity: 0.5; margin-right: 8px; font-size: 0.8rem; }
-
-        /* Data Panel */
-        .data-panel {
-            background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); padding: 0; overflow: hidden; height: calc(100vh - 120px); display: flex; flex-direction: column;
-        }
-        .data-toolbar {
-            padding: 10px 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fff;
-        }
-
-        /* Excel Mapping Visuals */
-        .excel-preview-table { font-family: 'Consolas', monospace; font-size: 0.85rem; }
-        .row-type-table { background-color: #2c3e50; color: white; }
-        .row-type-col { background-color: #ecf0f1; color: #2c3e50; font-weight: bold; border-bottom: 2px solid #bdc3c7; }
+        .schema-btn:hover { color: white; background: rgba(255,255,255,0.05); }
+        .schema-btn[aria-expanded="true"] { color: var(--accent-color); }
         
-        /* Loading Overlay */
-        #loadingOverlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 10; display: none; align-items: center; justify-content: center;
+        .table-list { padding-left: 0; list-style: none; background: #233140; margin-bottom: 0; }
+        .db-table-link { 
+            display: block; padding: 6px 15px 6px 35px; color: #95a5a6; text-decoration: none; font-size: 0.85rem; transition: 0.2s; cursor: pointer;
+        }
+        .db-table-link:hover { color: white; background: rgba(255,255,255,0.05); padding-left: 40px; }
+        .db-table-link.active { color: var(--success-color); background: rgba(39, 174, 96, 0.1); border-right: 3px solid var(--success-color); }
+
+        /* Main Workspace */
+        .workspace { flex: 1; display: flex; flex-direction: column; background: white; }
+        
+        /* Visual Query Builder Bar */
+        .builder-bar {
+            padding: 15px 20px; border-bottom: 1px solid #eee; background: #fff;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        
+        .active-tables {
+            display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+        }
+        
+        .table-badge {
+            background: #e3f2fd; color: var(--primary-color); border: 1px solid #bbdefb; padding: 5px 12px; border-radius: 20px; font-size: 0.85rem; display: flex; align-items: center; gap: 8px;
+        }
+        .table-badge .remove-btn { cursor: pointer; color: #999; }
+        .table-badge .remove-btn:hover { color: var(--danger-color); }
+        
+        .join-connector { color: #999; font-size: 0.8rem; text-transform: uppercase; font-weight: bold; }
+
+        .action-row { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; }
+
+        .grid-wrapper { flex: 1; overflow: hidden; position: relative; }
+        #hotGrid { width: 100%; height: 100%; }
+
+        /* Status Bar */
+        .status-bar { 
+            padding: 5px 20px; background: #f8f9fa; border-top: 1px solid #eee; font-size: 0.8rem; color: #7f8c8d; display: flex; justify-content: space-between;
         }
 
-        /* Changes Indicator */
-        .dirty-cell { background-color: #fff3cd !important; }
+        /* SQL Debug (Hidden by default) */
+        #sqlDebugContainer { display: none; padding: 10px; background: #f1f1f1; border-bottom: 1px solid #ddd; }
+        #generatedSql { width: 100%; font-family: monospace; font-size: 0.8rem; color: #555; border: 1px solid #ccc; background: #fff; padding: 5px; }
 
     </style>
 </head>
 <body>
 
-    <!-- Sidebar -->
-    <div class="sidebar">
-        <div class="sidebar-brand">
-            <i class="fas fa-database me-2"></i>GenFish DB
+    <!-- DB Sidebar -->
+    <div class="db-sidebar">
+        <div class="db-header">
+            <span><i class="fas fa-database me-2"></i>DB Explorer</span>
+            <a href="{{ url_for('dashboard') }}" class="text-white small" title="Back to Dashboard"><i class="fas fa-times"></i></a>
         </div>
-        
-        <div class="px-3 mb-2">
-            <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Filter tables..." id="tableFilter">
+        <div class="db-search">
+            <input type="text" class="form-control form-control-sm" placeholder="Filter tables..." id="tableFilter">
         </div>
-
-        <!-- Dynamic Schema Browser -->
-        <div class="schema-container" id="schemaBrowser">
-            <!-- Content generated by JS based on mylims_v5.sql -->
-        </div>
-
-        <div class="mt-auto p-3 border-top border-secondary">
-            <button class="btn btn-sm btn-outline-light w-100" onclick="window.location.href='lims_dashboard_design.html'">
-                <i class="fas fa-arrow-left me-2"></i> Back to Dashboard
-            </button>
+        <div class="schema-list" id="schemaList">
+            <!-- Schemas & Tables rendered via Jinja -->
+            {% for schema, tables in db_structure.items() %}
+            <div class="schema-item">
+                <button class="schema-btn" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ schema }}">
+                    <span><i class="fas fa-folder me-2"></i>{{ schema }}</span>
+                    <i class="fas fa-chevron-down small"></i>
+                </button>
+                <div class="collapse show" id="collapse-{{ schema }}">
+                    <ul class="table-list">
+                        {% for table in tables %}
+                        <li class="table-item">
+                            <div class="db-table-link" onclick="setPrimaryTable('{{ schema }}', '{{ table }}')">
+                                <i class="fas fa-table me-2 small"></i>{{ table }}
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endfor %}
         </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="main-content">
+    <!-- Main Workspace -->
+    <div class="workspace">
         
-        <!-- Mode Switcher (Hidden Logic) -->
-        <div id="gridMode">
-            <div class="data-panel">
-                <div class="data-toolbar">
-                    <div class="d-flex align-items-center gap-3">
-                        <h5 class="mb-0 fw-bold text-primary" id="currentTableName"><i class="fas fa-table me-2"></i>Select a Table</h5>
-                        <span class="badge bg-secondary" id="recordCount">0 Records</span>
-                        <small class="text-muted ms-2" style="font-size:0.75rem;"><i class="fas fa-info-circle"></i> Decimals use point (.) e.g. 12.34</small>
-                    </div>
-                    <div class="btn-group">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="refreshData()" title="Reload Data"><i class="fas fa-sync-alt"></i></button>
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteSelectedRows()" title="Delete Selected Rows"><i class="fas fa-trash"></i></button>
-                        <button class="btn btn-sm btn-success" onclick="addNewRow()" title="Add New Row"><i class="fas fa-plus"></i> Row</button>
-                        <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#bulkImportModal"><i class="fas fa-file-excel"></i> Import</button>
-                        <button class="btn btn-sm btn-outline-primary" onclick="exportData()"><i class="fas fa-download"></i> Export</button>
-                        <button class="btn btn-sm btn-primary" onclick="saveChanges()"><i class="fas fa-save"></i> Save</button>
-                    </div>
+        <!-- Visual Builder Toolbar -->
+        <div class="builder-bar">
+            <div class="active-tables" id="activeTablesContainer">
+                <span class="text-muted small fst-italic ms-2">Select a table from the sidebar to begin...</span>
+            </div>
+            
+            <div class="action-row">
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-primary btn-sm" id="btnJoin" onclick="openJoinModal()" disabled>
+                        <i class="fas fa-link me-1"></i> Combine / Join
+                    </button>
+                    <!-- SQL View is kept for debugging but can be hidden via CSS/JS logic if strictly no-code -->
+                    <!-- <button class="btn btn-outline-secondary btn-sm" onclick="toggleSqlView()">
+                        <i class="fas fa-code me-1"></i> Show SQL
+                    </button> -->
                 </div>
-                
-                <div style="position: relative; flex-grow: 1;">
-                    <div id="loadingOverlay"><div class="spinner-border text-primary"></div></div>
-                    <div id="hotGrid" style="width: 100%; height: 100%; overflow: hidden;"></div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#importModal" id="btnImport" disabled>
+                        <i class="fas fa-file-import me-1"></i> Import Excel
+                    </button>
+                    <button class="btn btn-primary btn-sm" onclick="exportData()" id="btnExport" disabled>
+                        <i class="fas fa-download me-1"></i> Export View
+                    </button>
                 </div>
             </div>
         </div>
 
-        <!-- Custom View Builder (Overlay) -->
-        <div id="viewBuilderOverlay" class="d-none" style="position: fixed; top: 0; left: var(--sidebar-width); right: 0; bottom: 0; background: white; z-index: 2000; padding: 20px; overflow-y: auto;">
-            <!-- ... (Keeping existing view builder code) ... -->
-            <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
-                <h4><i class="fas fa-magic text-purple me-2"></i>Custom Report Builder</h4>
-                <button class="btn btn-secondary" onclick="toggleViewBuilder()">Close</button>
-            </div>
-            <!-- ... Content from previous version ... -->
-             <div class="row">
-                <div class="col-md-3">
-                    <div class="card bg-light border-0">
-                        <div class="card-body">
-                            <h6 class="fw-bold">1. Base Table</h6>
-                            <select class="form-select mb-3" id="builderBaseTable">
-                                <option>bio_assets.samples_root</option>
-                                <option>field.sampling_event</option>
-                                <option>moleculargenetics.sequencing</option>
-                            </select>
-                            
-                            <h6 class="fw-bold">2. Join With</h6>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="joinTaxon" checked>
-                                <label class="form-check-label">reference.taxon (via taxon_id)</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="joinProject">
-                                <label class="form-check-label">lims.projects (via project_id)</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="joinResults">
-                                <label class="form-check-label">molecular.nucleic_acid (via sample_id)</label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-9">
-                    <div class="card">
-                        <div class="card-header bg-white fw-bold">Query Preview</div>
-                        <div class="card-body font-monospace bg-dark text-light p-3 rounded-bottom">
-                            SELECT <br>
-                            &nbsp;&nbsp;s.sample_id, s.collection_date,<br>
-                            &nbsp;&nbsp;t.scientific_name, t.common_name_en,<br>
-                            &nbsp;&nbsp;na.conc_qubit, na.a260_280<br>
-                            FROM bio_assets.samples_root s<br>
-                            LEFT JOIN reference.taxon t ON s.taxon_id = t.taxon_id<br>
-                            LEFT JOIN moleculargenetics.nucleic_acid na ON s.sample_id = na.sample_id<br>
-                            WHERE s.project_id = 'WESER-25';
-                        </div>
-                    </div>
-                    <button class="btn btn-success mt-3"><i class="fas fa-play me-1"></i> Execute & Export</button>
+        <!-- SQL Debug View (Hidden) -->
+        <div id="sqlDebugContainer">
+            <textarea id="generatedSql" rows="2" readonly></textarea>
+        </div>
+
+        <!-- Data Grid -->
+        <div class="grid-wrapper">
+            <div id="hotGrid"></div>
+            <!-- Empty State -->
+            <div id="emptyState" class="d-flex align-items-center justify-content-center h-100 text-muted">
+                <div class="text-center">
+                    <i class="fas fa-table fa-3x mb-3 opacity-25"></i>
+                    <p>Data Workspace</p>
                 </div>
             </div>
         </div>
 
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <span id="statusMsg">Ready</span>
+            <div id="loadingSpinner" style="display:none;">
+                <span class="spinner-border spinner-border-sm text-secondary me-2" role="status"></span>
+                Loading Data...
+            </div>
+            <span id="rowCount">0 rows</span>
+        </div>
     </div>
 
-    <!-- === SMART BULK IMPORT MODAL === -->
-    <div class="modal fade" id="bulkImportModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
+    <!-- Join Config Modal -->
+    <div class="modal fade" id="joinModal" tabindex="-1">
+        <div class="modal-dialog">
             <div class="modal-content">
-                <div class="modal-header bg-success text-white">
-                    <h5 class="modal-title"><i class="fas fa-file-csv me-2"></i>Multi-Table Bulk Import</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <div class="modal-header">
+                    <h5 class="modal-title">Combine Tables</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="row">
-                        <div class="col-md-4 border-end">
-                            <h6 class="fw-bold text-success mb-3">Upload Configuration</h6>
-                            
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">1. File Format</label>
-                                <select class="form-select" id="importFormat">
-                                    <option value="2row">2-Row Header (Table + Column)</option>
-                                    <option value="flat">Standard Header (Single Table)</option>
-                                </select>
-                                <div class="form-text small">
-                                    <strong>2-Row Mode:</strong> Allows updating multiple tables (e.g. <code>bio_assets</code> + <code>biologyfish</code>) in one sheet.
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">2. Import Strategy</label>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="strategy" checked>
-                                    <label class="form-check-label small">Upsert (Update if PK exists, else Insert)</label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="strategy">
-                                    <label class="form-check-label small">Insert Only (Error on duplicate)</label>
-                                </div>
-                            </div>
-
-                            <div class="border rounded p-4 text-center bg-light mt-4" style="border-style: dashed !important; cursor: pointer;">
-                                <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-2"></i>
-                                <p class="mb-0 fw-bold">Drag Excel (.xlsx) file</p>
-                                <button class="btn btn-sm btn-outline-success mt-2">Or Browse Files</button>
-                            </div>
-                            
-                            <div class="mt-3 text-center">
-                                <a href="#" class="small text-decoration-none"><i class="fas fa-download me-1"></i> Download Schema Template</a>
-                            </div>
-                        </div>
-
-                        <div class="col-md-8">
-                            <h6 class="fw-bold text-success mb-3">Structure Preview (2-Row Mode)</h6>
-                            <div class="alert alert-info small">
-                                <i class="fas fa-info-circle me-1"></i> The system uses <strong>Row 1</strong> to identify the Schema.Table and <strong>Row 2</strong> for the Column Name.
-                            </div>
-                            
-                            <div class="table-responsive border rounded">
-                                <table class="table table-bordered table-sm mb-0 excel-preview-table text-center">
-                                    <thead>
-                                        <tr class="row-type-table">
-                                            <td colspan="2" class="border-end">bio_assets.samples_root</td>
-                                            <td colspan="1" class="border-end">bio_assets.specimen_organisms</td>
-                                            <td colspan="1">moleculargenetics.nucleic_acid</td>
-                                        </tr>
-                                        <tr class="row-type-col">
-                                            <td>sample_id <i class="fas fa-key text-warning"></i></td>
-                                            <td>collection_date</td>
-                                            <td>weight_g</td>
-                                            <td>conc_qubit</td>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td>W25Wes_001</td>
-                                            <td>2026-01-15</td>
-                                            <td>185.5</td>
-                                            <td>45.2</td>
-                                        </tr>
-                                        <tr>
-                                            <td>W25Wes_002</td>
-                                            <td>2026-01-15</td>
-                                            <td>210.0</td>
-                                            <td>120.5</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            
-                            <div class="mt-3">
-                                <label class="form-label small fw-bold">Validation Status</label>
-                                <div class="progress" style="height: 20px;">
-                                    <div class="progress-bar bg-success" role="progressbar" style="width: 100%">Ready to Import</div>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Primary Table</label>
+                        <input type="text" class="form-control bg-light" id="joinPrimaryTable" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Join With (Secondary Table)</label>
+                        <select class="form-select" id="joinSecondarySelect">
+                            <option selected disabled>Select a table...</option>
+                            <!-- Populated via JS -->
+                            {% for schema, tables in db_structure.items() %}
+                                {% for table in tables %}
+                                <option value="{{ schema }}.{{ table }}">{{ schema }}.{{ table }}</option>
+                                {% endfor %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Common Column (ID)</label>
+                        <select class="form-select" id="joinColumnSelect">
+                            <option value="sample_id">sample_id</option>
+                            <option value="project_id">project_id</option>
+                            <option value="run_id">run_id</option>
+                            <option value="id">id</option>
+                        </select>
+                        <div class="form-text">Select the column that exists in both tables.</div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-success">Run Import</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="applyJoin()">Apply Join</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Universal Import Modal -->
+    <div class="modal fade" id="importModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Import Data</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/db/import_dynamic" method="POST" enctype="multipart/form-data">
+                    <div class="modal-body">
+                        <div class="alert alert-info py-2 small"><i class="fas fa-info-circle me-1"></i> Importing into: <strong id="importTargetLabel">None</strong></div>
+                        <input type="hidden" name="target_table" id="modalTargetTable">
+                        
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">File (Excel/CSV)</label>
+                            <input type="file" class="form-control" name="file" required accept=".csv, .xlsx, .xls">
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="update_existing" value="true" checked>
+                            <label class="form-check-label small">Update existing records (Match by ID)</label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <div class="me-auto">
+                            <a href="#" class="small text-decoration-none"><i class="fas fa-download me-1"></i> Template</a>
+                        </div>
+                        <button type="submit" class="btn btn-success">Upload</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
     <script>
-        // --- 1. FULL SCHEMA DEFINITION (From mylims_v5.sql) ---
-        // This object mirrors your exact PostgreSQL structure for the sidebar
-        const dbSchema = {
-            "bio_assets": [
-                { name: "samples_root", icon: "fa-vial" },
-                { name: "samples_reservation", icon: "fa-calendar-alt" },
-                { name: "specimen_organisms", icon: "fa-fish" },
-                { name: "tissue", icon: "fa-cut" },
-                { name: "water", icon: "fa-tint" },
-                { name: "sediments", icon: "fa-mountain" }
-            ],
-            "field": [
-                { name: "cruises", icon: "fa-ship" },
-                { name: "sampling_event", icon: "fa-map-pin" },
-                { name: "sampling_abiotic", icon: "fa-thermometer-half" },
-                { name: "fishing", icon: "fa-net" },
-                { name: "catch", icon: "fa-balance-scale" }
-            ],
-            "biologyfish": [
-                { name: "dissection", icon: "fa-utensils" },
-                { name: "otoliths", icon: "fa-circle-notch" },
-                { name: "tag_mark", icon: "fa-tag" }
-            ],
-            "moleculargenetics": [
-                { name: "nucleic_acid", icon: "fa-dna" },
-                { name: "pcr", icon: "fa-temperature-high" },
-                { name: "qpcr", icon: "fa-chart-line" },
-                { name: "gelelectrophoresis", icon: "fa-image" },
-                { name: "library", icon: "fa-book" },
-                { name: "sequencing", icon: "fa-align-justify" },
-                { name: "sequencing_flowcells", icon: "fa-microchip" },
-                { name: "nanodrop", icon: "fa-eye-dropper" },
-                { name: "qubit", icon: "fa-cube" },
-                { name: "tapestation", icon: "fa-wave-square" }
-            ],
-            "bioinformatics": [
-                { name: "seq_dataset", icon: "fa-database" },
-                { name: "assignments", icon: "fa-list" },
-                { name: "pipelines", icon: "fa-cogs" }
-            ],
-            "lims": [
-                { name: "projects", icon: "fa-project-diagram" },
-                { name: "experiments", icon: "fa-flask" },
-                { name: "storage", icon: "fa-box" },
-                { name: "reagents", icon: "fa-vial" },
-                { name: "sop", icon: "fa-file-medical" },
-                { name: "permits", icon: "fa-passport" }
-            ],
-            "core": [
-                { name: "persons", icon: "fa-users" },
-                { name: "organizations", icon: "fa-building" },
-                { name: "equipments", icon: "fa-tools" },
-                { name: "locations", icon: "fa-map-marker-alt" },
-                { name: "vessel", icon: "fa-ship" }
-            ],
-            "reference": [
-                { name: "taxon", icon: "fa-leaf" },
-                { name: "sample_type", icon: "fa-tags" },
-                { name: "region", icon: "fa-globe" },
-                { name: "ecosystem", icon: "fa-water" },
-                { name: "units", icon: "fa-ruler" },
-                { name: "genes", icon: "fa-dna" },
-                { name: "status", icon: "fa-check-circle" }
-            ],
-            "eln": [
-                { name: "batch", icon: "fa-layer-group" },
-                { name: "protocols", icon: "fa-file-alt" },
-                { name: "protocols_run", icon: "fa-play-circle" },
-                { name: "bookings", icon: "fa-calendar-check" },
-                { name: "bookable_resources", icon: "fa-microscope" }
-            ],
-            "communications": [
-                { name: "projects_chat", icon: "fa-comments" },
-                { name: "internal_plans", icon: "fa-tasks" },
-                { name: "reports", icon: "fa-file-pdf" }
-            ],
-            "audit": [
-                { name: "audit_log", icon: "fa-history" }
-            ]
+        let hotInstance;
+        let currentConfig = {
+            primary: null,
+            joins: [] // Array of { table: 'schema.table', on: 'col' }
         };
 
-        // --- 2. INITIALIZATION & SIDEBAR RENDERER ---
-        document.addEventListener('DOMContentLoaded', () => {
-            const container = document.getElementById('schemaBrowser');
-            let html = '';
+        // --- 1. Table Selection Logic ---
 
-            for (const [schema, tables] of Object.entries(dbSchema)) {
-                html += `
-                    <div class="schema-group">
-                        <button class="schema-btn" data-bs-toggle="collapse" data-bs-target="#grp-${schema}">
-                            <span><i class="fas fa-folder me-2"></i> ${schema.toUpperCase()}</span>
-                            <i class="fas fa-chevron-down"></i>
-                        </button>
-                        <div class="collapse show" id="grp-${schema}">
-                            <div class="table-list">
-                                ${tables.map(t => `
-                                    <div class="db-table-link" onclick="loadTable('${schema}.${t.name}')">
-                                        <i class="fas ${t.icon} table-icon"></i> ${t.name}
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-            container.innerHTML = html;
-
-            // Load default table (samples_root) on start
-            loadTable('bio_assets.samples_root');
-        });
-
-        // --- 3. DYNAMIC DATA LOADING (MOCK) ---
-        let hotInstance = null;
-
-        function loadTable(fullTableName) {
-            // Update UI
-            document.getElementById('currentTableName').innerHTML = `<i class="fas fa-table me-2"></i> ${fullTableName}`;
-            document.getElementById('loadingOverlay').style.display = 'flex';
+        function setPrimaryTable(schema, table) {
+            const fullName = `${schema}.${table}`;
+            currentConfig.primary = fullName;
+            currentConfig.joins = []; // Reset joins on new primary
             
-            // Highlight sidebar
-            document.querySelectorAll('.db-table-link').forEach(el => el.classList.remove('active'));
-            // (In real app, match current element)
-
-            // Simulate Network Delay & Fetch Schema Columns
-            setTimeout(() => {
-                const schemaName = fullTableName.split('.')[0];
-                const tableName = fullTableName.split('.')[1];
-                
-                // MOCK DATA GENERATOR based on Table Name
-                let colHeaders = [];
-                let rowData = [];
-                let columns = [];
-
-                if (tableName === 'samples_root') {
-                    colHeaders = ['sample_id', 'external_id', 'sample_type_id', 'project_id', 'collection_date', 'status_id'];
-                    // Auto-detection of types for grid
-                    columns = [
-                        {data: 0, type: 'text', readOnly: true},
-                        {data: 1, type: 'text'},
-                        {data: 2, type: 'text'},
-                        {data: 3, type: 'text'},
-                        {data: 4, type: 'date', dateFormat: 'YYYY-MM-DD'},
-                        {data: 5, type: 'dropdown', source: ['Stored', 'Processed', 'Destroyed']}
-                    ];
-                    rowData = [
-                        ['W25Wes_001', 'EXT-01', 'WATER', 'WESER-25', '2026-01-15', 'Stored'],
-                        ['W25Wes_002', 'EXT-02', 'WATER', 'WESER-25', '2026-01-15', 'Stored'],
-                        ['F25Nor_055', 'FISH-99', 'FISH', 'NS-ECO', '2026-01-10', 'Processing']
-                    ];
-                } else if (tableName === 'nucleic_acid') {
-                    colHeaders = ['sample_id', 'extraction_method', 'kit', 'conc_qubit', 'volume_uL', 'yield_ug'];
-                    // Force Numeric types with Dot separator
-                    columns = [
-                        {data: 0, type: 'text', readOnly: true},
-                        {data: 1, type: 'text'},
-                        {data: 2, type: 'text'},
-                        {data: 3, type: 'numeric', numericFormat: {pattern: '0.00', culture: 'en-US'}},
-                        {data: 4, type: 'numeric', numericFormat: {pattern: '0.00', culture: 'en-US'}},
-                        {data: 5, type: 'numeric', numericFormat: {pattern: '0.00', culture: 'en-US'}, readOnly: true}
-                    ];
-                    rowData = [
-                        ['W25Wes_001', 'Qiagen DNeasy', 'Lot-123', 45.2, 50, 2.26],
-                        ['W25Wes_002', 'Qiagen DNeasy', 'Lot-123', 120.5, 50, 6.02]
-                    ];
-                } else {
-                    // Generic fallback for other tables
-                    colHeaders = ['id', 'name', 'weight_g', 'notes'];
-                    columns = [
-                        {data: 0, type: 'text'},
-                        {data: 1, type: 'text'},
-                        {data: 2, type: 'numeric', numericFormat: {pattern: '0.00', culture: 'en-US'}},
-                        {data: 3, type: 'text'}
-                    ];
-                    rowData = [['1', 'Mock Data', 12.50, 'Generated for ' + tableName]];
-                }
-
-                // Initialize Handsontable
-                const container = document.getElementById('hotGrid');
-                container.innerHTML = ''; // Clear previous
-                
-                if (hotInstance) hotInstance.destroy();
-
-                hotInstance = new Handsontable(container, {
-                    data: rowData,
-                    colHeaders: colHeaders,
-                    columns: columns,
-                    rowHeaders: true,
-                    height: '100%',
-                    licenseKey: 'non-commercial-and-evaluation',
-                    columnSorting: true,
-                    contextMenu: true,
-                    manualColumnResize: true,
-                    filters: true,
-                    dropdownMenu: true,
-                    minSpareRows: 0, // Disable automatic spare rows, use button instead
-                    afterChange: (changes) => {
-                        if(changes) {
-                            changes.forEach(([row, prop, oldValue, newValue]) => {
-                                // Add dirty indicator logic here if needed
-                            });
-                        }
-                    }
-                });
-
-                document.getElementById('recordCount').innerText = `${rowData.length} Records`;
-                document.getElementById('loadingOverlay').style.display = 'none';
-
-            }, 300);
+            updateBuilderUI();
+            executeQuery();
+            
+            // Enable buttons
+            document.getElementById('btnJoin').disabled = false;
+            document.getElementById('btnImport').disabled = false;
+            document.getElementById('btnExport').disabled = false;
+            
+            // Set Import Target
+            document.getElementById('modalTargetTable').value = fullName;
+            document.getElementById('importTargetLabel').innerText = fullName;
         }
 
-        // --- 4. UTILS & ACTIONS ---
-        
-        function addNewRow() {
-            if(hotInstance) {
-                hotInstance.alter('insert_row_below', hotInstance.countRows());
-                // Scroll to bottom
-                hotInstance.scrollViewportTo(hotInstance.countRows() - 1, 0);
+        function updateBuilderUI() {
+            const container = document.getElementById('activeTablesContainer');
+            if(!currentConfig.primary) {
+                container.innerHTML = '<span class="text-muted small fst-italic ms-2">Select a table from the sidebar...</span>';
+                return;
+            }
+
+            let html = `<div class="table-badge bg-primary text-white border-primary"><i class="fas fa-database"></i> ${currentConfig.primary}</div>`;
+            
+            currentConfig.joins.forEach((join, idx) => {
+                html += `<div class="join-connector"><i class="fas fa-link"></i> ON ${join.on}</div>`;
+                html += `
+                    <div class="table-badge">
+                        <i class="fas fa-table"></i> ${join.table}
+                        <i class="fas fa-times remove-btn ms-2" onclick="removeJoin(${idx})"></i>
+                    </div>`;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // --- 2. Join Logic ---
+
+        function openJoinModal() {
+            if(!currentConfig.primary) return;
+            document.getElementById('joinPrimaryTable').value = currentConfig.primary;
+            // Reset fields
+            document.getElementById('joinSecondarySelect').selectedIndex = 0;
+            
+            const modal = new bootstrap.Modal(document.getElementById('joinModal'));
+            modal.show();
+        }
+
+        function applyJoin() {
+            const secondary = document.getElementById('joinSecondarySelect').value;
+            const col = document.getElementById('joinColumnSelect').value;
+            
+            if(secondary && col) {
+                currentConfig.joins.push({ table: secondary, on: col });
+                updateBuilderUI();
+                executeQuery();
+                
+                // Hide modal
+                const el = document.getElementById('joinModal');
+                const modal = bootstrap.Modal.getInstance(el);
+                modal.hide();
             }
         }
 
-        function deleteSelectedRows() {
-            if(!hotInstance) return;
-            const selected = hotInstance.getSelected();
-            if(selected) {
-                if(confirm("Are you sure you want to delete the selected rows? This action cannot be undone.")) {
-                    // Handsontable selection is array of arrays [startRow, startCol, endRow, endCol]
-                    // We need to handle multiple non-contiguous selections ideally, but simple version:
-                    const startRow = selected[0][0];
-                    const endRow = selected[0][2];
-                    const amount = Math.abs(endRow - startRow) + 1;
-                    const index = Math.min(startRow, endRow);
-                    hotInstance.alter('remove_row', index, amount);
+        function removeJoin(index) {
+            currentConfig.joins.splice(index, 1);
+            updateBuilderUI();
+            executeQuery();
+        }
+
+        // --- 3. Query Execution ---
+
+        function executeQuery() {
+            if(!currentConfig.primary) return;
+
+            // Generate SQL
+            let sql = `SELECT * FROM ${currentConfig.primary} t1`;
+            currentConfig.joins.forEach((join, i) => {
+                const alias = `t${i+2}`;
+                sql += `\nLEFT JOIN ${join.table} ${alias} ON t1.${join.on} = ${alias}.${join.on}`;
+            });
+            sql += `\nLIMIT 500`; // Safety limit
+
+            // Update Debug View (for developer reference, user doesn't need to see)
+            document.getElementById('generatedSql').value = sql;
+
+            // Fetch Data
+            setLoading(true);
+            document.getElementById('emptyState').style.display = 'none';
+
+            fetch('/db/execute_sql', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ sql: sql })
+            })
+            .then(r => r.json())
+            .then(data => {
+                setLoading(false);
+                if(data.error) {
+                    alert('Database Error: ' + data.error);
+                    return;
                 }
-            } else {
-                alert("Please select rows to delete.");
-            }
+                renderGrid(data.columns, data.rows);
+                document.getElementById('rowCount').innerText = `${data.rows.length} rows loaded`;
+                document.getElementById('statusMsg').innerText = `Query executed in ${data.duration.toFixed(3)}s`;
+            })
+            .catch(e => {
+                setLoading(false);
+                console.error(e);
+                alert('Network Error');
+            });
         }
 
-        function saveChanges() {
-            if(!hotInstance) return;
-            // In a real app, track changes via hotInstance.getChanges() or send full dataset
-            const data = hotInstance.getData();
-            console.log("Saving data:", data);
-            alert("Changes saved to database (Mock Action). PostgreSQL updates triggered.");
+        // --- 4. Grid Rendering ---
+
+        function renderGrid(colHeaders, data) {
+            const container = document.getElementById('hotGrid');
+            container.innerHTML = ''; 
+
+            hotInstance = new Handsontable(container, {
+                data: data,
+                colHeaders: colHeaders,
+                rowHeaders: true,
+                width: '100%',
+                height: '100%',
+                licenseKey: 'non-commercial-and-evaluation',
+                filters: true,
+                dropdownMenu: true,
+                manualColumnResize: true,
+                columnSorting: true,
+                readOnly: true // Edit mode disabled for joined views to prevent ambiguity
+            });
         }
 
-        function refreshData() {
-            const current = document.getElementById('currentTableName').innerText.trim().replace('Select a Table', '');
-            if(current) loadTable(current); 
+        function setLoading(isLoading) {
+            const spinner = document.getElementById('loadingSpinner');
+            spinner.style.display = isLoading ? 'block' : 'none';
         }
 
-        function toggleViewBuilder() {
-            const el = document.getElementById('viewBuilderOverlay');
-            el.classList.toggle('d-none');
-        }
-        
         function exportData() {
             if(hotInstance) {
                 const exportPlugin = hotInstance.getPlugin('exportFile');
                 exportPlugin.downloadFile('csv', {
-                    bom: false,
-                    columnDelimiter: ',',
-                    columnHeaders: true,
-                    exportHiddenColumns: true,
-                    exportHiddenRows: true,
-                    fileExtension: 'csv',
-                    filename: 'LIMS_Export_[YYYY]-[MM]-[DD]',
-                    mimeType: 'text/csv',
-                    rowDelimiter: '\r\n',
-                    rowHeaders: true
+                    bom: false, columnDelimiter: ',', columnHeaders: true, exportHiddenColumns: true, exportHiddenRows: true,
+                    fileExtension: 'csv', filename: 'LIMS_View_Export', mimeType: 'text/csv', rowDelimiter: '\r\n', rowHeaders: true
                 });
             }
         }
 
-        // Filter Sidebar tables
+        // Sidebar Filter
         document.getElementById('tableFilter').addEventListener('keyup', function(e) {
             const term = e.target.value.toLowerCase();
             document.querySelectorAll('.db-table-link').forEach(el => {
                 const text = el.innerText.toLowerCase();
+                const item = el.closest('li');
                 if(text.includes(term)) {
-                    el.style.display = 'block';
+                    item.style.display = 'block';
                     el.closest('.collapse').classList.add('show');
                 } else {
-                    el.style.display = 'none';
+                    item.style.display = 'none';
                 }
             });
         });

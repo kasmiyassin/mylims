@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GenFish LIMS - Sample Reservations</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --sidebar-width: 250px;
+            --primary-color: #2c3e50;
+            --accent-color: #e67e22; /* Orange accent for Booking/Reservation */
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --bg-light: #f8f9fa;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--bg-light);
+            overflow-x: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            height: 100vh;
+            width: var(--sidebar-width);
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: var(--primary-color);
+            color: #ecf0f1;
+            padding-top: 1rem;
+            z-index: 1000;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .sidebar-brand { font-size: 1.4rem; font-weight: 700; text-align: center; margin-bottom: 2rem; color: white; }
+        .sidebar-brand i { color: var(--accent-color); }
+        .nav-header { font-size: 0.75rem; text-transform: uppercase; color: #95a5a6; padding: 10px 20px 5px; font-weight: 700; }
+        .nav-link { color: #bdc3c7; padding: 10px 20px; font-size: 0.95rem; transition: all 0.3s; border-left: 4px solid transparent; }
+        .nav-link:hover, .nav-link.active { color: white; background-color: rgba(255,255,255,0.05); border-left-color: var(--accent-color); }
+        .nav-link i { width: 25px; text-align: center; margin-right: 5px; }
+
+        /* Main Content */
+        .main-content { margin-left: var(--sidebar-width); padding: 20px 30px; }
+
+        /* Cart/Basket Styles */
+        .cart-panel {
+            background: white; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); height: calc(100vh - 120px); display: flex; flex-direction: column; border-top: 4px solid var(--accent-color);
+        }
+        .cart-header { padding: 15px 20px; border-bottom: 1px solid #eee; background: #fff; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center; }
+        .cart-body { flex: 1; overflow-y: auto; padding: 0; background: #fdfdfd; }
+        .cart-footer { padding: 15px 20px; border-top: 1px solid #eee; background: #fff; border-radius: 0 0 10px 10px; }
+
+        .cart-item { padding: 12px 20px; border-bottom: 1px solid #f1f1f1; display: flex; align-items: center; transition: 0.1s; }
+        .cart-item:hover { background-color: #fff8e1; }
+        .cart-item:last-child { border-bottom: none; }
+        
+        .item-icon { font-size: 1.2rem; margin-right: 15px; color: var(--accent-color); }
+        .item-details { flex: 1; }
+        .item-meta { font-size: 0.8rem; color: #7f8c8d; }
+        
+        /* Search Area */
+        .search-card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); margin-bottom: 20px; }
+        
+        /* Active Reservations Table */
+        .res-table th { font-size: 0.85rem; text-transform: uppercase; color: #7f8c8d; background: #f8f9fa; }
+        .res-status-active { background: #e8f5e9; color: #27ae60; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; border: 1px solid #c8e6c9; }
+        .res-status-checkout { background: #fff3e0; color: #e67e22; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; border: 1px solid #ffe0b2; }
+        .res-status-overdue { background: #ffebee; color: #c62828; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; border: 1px solid #ffcdd2; }
+
+        /* Drag & Drop Zone */
+        .drop-zone {
+            border: 2px dashed #bdc3c7;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            background-color: #fafafa;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .drop-zone:hover { border-color: var(--accent-color); background-color: #f1f9fe; }
+        .drop-zone i { font-size: 2.5rem; color: #bdc3c7; margin-bottom: 10px; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <i class="fas fa-dna me-2"></i>GenFish LIMS
+        </div>
+        <div class="d-flex flex-column">
+            <div class="nav-header">Overview</div>
+            <a href="lims_dashboard_design.html" class="nav-link"><i class="fas fa-chart-line"></i> Dashboard</a>
+            
+            <div class="nav-header">Management</div>
+            <a href="#" class="nav-link active"><i class="fas fa-calendar-check"></i> Reservations</a>
+            <a href="lims_eln_booking.html" class="nav-link"><i class="fas fa-calendar-alt"></i> ELN & Instruments</a>
+
+            <div class="nav-header">Bio Assets</div>
+            <a href="lims_samples_registry.html" class="nav-link"><i class="fas fa-vial"></i> Bio Assets</a>
+            <a href="lims_storage_reagents.html" class="nav-link"><i class="fas fa-boxes"></i> Storage</a>
+            
+            <div class="nav-header">Lab Work</div>
+            <a href="lims_molecular_biology.html" class="nav-link"><i class="fas fa-flask"></i> Molecular</a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h4 class="text-secondary fw-bold mb-0">Sample Reservations</h4>
+                <p class="text-muted small mb-0">Book samples (`bio_assets.samples_reservation`) for future experiments.</p>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#importModal"><i class="fas fa-file-excel me-1"></i> Bulk Import</button>
+                <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#scanModal"><i class="fas fa-barcode me-1"></i> Scan to Cart</button>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Left: Search & Active Reservations -->
+            <div class="col-lg-8">
+                
+                <!-- Search Samples -->
+                <div class="search-card">
+                    <h6 class="fw-bold text-secondary mb-3">Find Samples to Reserve</h6>
+                    <div class="input-group mb-3">
+                        <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+                        <input type="text" class="form-control" id="sampleSearch" placeholder="Search Sample ID, Project, or Type...">
+                        <button class="btn btn-primary" onclick="performSearch()">Search</button>
+                    </div>
+                    
+                    <div class="table-responsive" style="max-height: 300px;">
+                        <table class="table table-hover align-middle mb-0" id="resultsTable">
+                            <thead class="res-table">
+                                <tr>
+                                    <th>Sample ID</th>
+                                    <th>Type</th>
+                                    <th>Location</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultsBody">
+                                <!-- Populated by JS -->
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">Search to find samples...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- My Active Reservations -->
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h6 class="fw-bold mb-0">My Active Reservations</h6>
+                        <span class="badge bg-light text-dark border">User: Dr. Scientist</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="res-table">
+                                <tr>
+                                    <th>Sample ID</th>
+                                    <th>Reserved For</th>
+                                    <th>Dates</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="activeReservationsBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right: Reservation Cart -->
+            <div class="col-lg-4">
+                <div class="cart-panel">
+                    <div class="cart-header">
+                        <h6 class="fw-bold mb-0"><i class="fas fa-shopping-basket me-2 text-warning"></i>Reservation Cart</h6>
+                        <span class="badge bg-warning rounded-pill text-dark" id="cartCount">0</span>
+                    </div>
+                    
+                    <div class="cart-body" id="cartContainer">
+                        <div class="text-center text-muted mt-5 p-4">
+                            <i class="fas fa-arrow-left mb-2"></i>
+                            <p class="small">Add samples from the search list to build a reservation batch.</p>
+                        </div>
+                    </div>
+
+                    <div class="cart-footer">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Purpose / Experiment</label>
+                            <input type="text" class="form-control form-control-sm" placeholder="e.g. Batch DNA Extraction">
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col">
+                                <label class="form-label small fw-bold">From</label>
+                                <input type="date" class="form-control form-control-sm">
+                            </div>
+                            <div class="col">
+                                <label class="form-label small fw-bold">To</label>
+                                <input type="date" class="form-control form-control-sm">
+                            </div>
+                        </div>
+                        <button class="btn btn-warning w-100 fw-bold text-white" onclick="confirmReservation()">Confirm Reservation</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- === IMPORT MODAL === -->
+    <div class="modal fade" id="importModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Bulk Reservation Import</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-light border small">
+                        <i class="fas fa-info-circle me-2"></i> Import reservations from Excel/CSV. Ensure dates are in YYYY-MM-DD format.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">1. Upload File</label>
+                        <div class="drop-zone">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <p class="mb-1">Drag Excel (.xlsx) or CSV file here</p>
+                            <button class="btn btn-sm btn-outline-primary mt-2">Browse Files</button>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">2. Required Columns</label>
+                        <table class="table table-sm table-bordered small mb-0">
+                            <thead class="bg-light"><tr><th>Column</th><th>Description</th><th>Example</th></tr></thead>
+                            <tbody>
+                                <tr><td>sample_id</td><td>Existing ID from Bio Assets</td><td>W25Wes_001</td></tr>
+                                <tr><td>reserved_by</td><td>User ID (core.persons)</td><td>P001</td></tr>
+                                <tr><td>start_date</td><td>Start of reservation</td><td>2026-02-01</td></tr>
+                                <tr><td>end_date</td><td>End of reservation</td><td>2026-02-03</td></tr>
+                                <tr><td>purpose</td><td>Reason for booking</td><td>Extraction</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-success">Process Import</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        /**
+         * DBService: Interface for Database Connection
+         * Tables: bio_assets.samples_root, bio_assets.samples_reservation, core.persons
+         */
+        const DBService = {
+            // Mock Data mimicking DB tables
+            samples: [
+                { id: 'W25Wes_002', type: 'Water', loc: 'Freezer 1 > Shelf A', status: 'Available' },
+                { id: 'W25Wes_003', type: 'Water', loc: 'Freezer 1 > Shelf A', status: 'Available' },
+                { id: 'D25Wes_001_1', type: 'DNA', loc: 'Freezer 3 > Box 1', status: 'Reserved' },
+                { id: 'F25Nor_099', type: 'Fish', loc: 'Freezer 2 > Bin 4', status: 'Available' }
+            ],
+            
+            reservations: [
+                { id: 'RES_001', sample_id: 'W25Wes_001', user: 'Dr. Scientist', start: '2026-01-25', end: '2026-01-26', purpose: 'DNA Extraction', status: 'Reserved' },
+                { id: 'RES_002', sample_id: 'F25Nor_088', user: 'Dr. Scientist', start: '2026-01-20', end: '2026-01-20', purpose: 'Dissection', status: 'Checked Out' },
+                { id: 'RES_003', sample_id: 'S25Elbe_012', user: 'Dr. Scientist', start: '2026-01-10', end: '2026-01-11', purpose: 'Microscopy', status: 'Overdue' }
+            ],
+
+            searchSamples: function(query) {
+                // Simulates: SELECT * FROM bio_assets.samples_root WHERE sample_id ILIKE %query% ...
+                query = query.toLowerCase();
+                return this.samples.filter(s => s.id.toLowerCase().includes(query) || s.type.toLowerCase().includes(query));
+            },
+
+            getReservations: function(userId) {
+                // Simulates: SELECT * FROM bio_assets.samples_reservation WHERE person_id = userId
+                return this.reservations; // Return all for demo, usually filtered by user
+            }
+        };
+
+        // --- UI LOGIC ---
+
+        let cart = [];
+
+        function init() {
+            renderReservations();
+        }
+
+        function performSearch() {
+            const query = document.getElementById('sampleSearch').value;
+            const tbody = document.getElementById('resultsBody');
+            tbody.innerHTML = '';
+
+            const results = DBService.searchSamples(query);
+
+            if (results.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No matching samples found.</td></tr>';
+                return;
+            }
+
+            results.forEach(s => {
+                const btnHtml = s.status === 'Available' 
+                    ? `<button class="btn btn-sm btn-outline-primary" onclick="addToCart('${s.id}', '${s.type}')"><i class="fas fa-plus"></i> Add</button>`
+                    : `<span class="text-muted small">Unavailable</span>`;
+                
+                const row = `
+                    <tr>
+                        <td class="fw-bold">${s.id}</td>
+                        <td><span class="badge bg-light text-dark border">${s.type}</span></td>
+                        <td class="small text-muted">${s.loc}</td>
+                        <td>${s.status === 'Available' ? '<span class="text-success small fw-bold">Available</span>' : '<span class="text-warning small fw-bold">' + s.status + '</span>'}</td>
+                        <td class="text-end">${btnHtml}</td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+        }
+
+        function renderReservations() {
+            const tbody = document.getElementById('activeReservationsBody');
+            tbody.innerHTML = '';
+            
+            DBService.getReservations().forEach(res => {
+                let statusClass = 'res-status-active';
+                if(res.status === 'Checked Out') statusClass = 'res-status-checkout';
+                if(res.status === 'Overdue') statusClass = 'res-status-overdue';
+
+                const row = `
+                    <tr>
+                        <td class="fw-bold text-primary">${res.sample_id}</td>
+                        <td>${res.purpose}</td>
+                        <td>${res.start}</td>
+                        <td><span class="${statusClass}">${res.status}</span></td>
+                        <td class="text-end">
+                            ${res.status === 'Reserved' ? `<button class="btn btn-sm btn-outline-warning" onclick="checkoutSample(this)">Check Out</button>` : ''}
+                            ${res.status === 'Checked Out' || res.status === 'Overdue' ? `<button class="btn btn-sm btn-outline-success" onclick="returnSample(this)">Return</button>` : ''}
+                        </td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+        }
+
+        function addToCart(id, type) {
+            if (cart.find(c => c.id === id)) return; // Prevent duplicates
+            cart.push({ id, type });
+            updateCartUI();
+        }
+
+        function removeFromCart(id) {
+            cart = cart.filter(c => c.id !== id);
+            updateCartUI();
+        }
+
+        function updateCartUI() {
+            const container = document.getElementById('cartContainer');
+            document.getElementById('cartCount').innerText = cart.length;
+            container.innerHTML = '';
+
+            if (cart.length === 0) {
+                container.innerHTML = `<div class="text-center text-muted mt-5 p-4"><p class="small">Cart is empty.</p></div>`;
+                return;
+            }
+
+            cart.forEach(item => {
+                const icon = item.type === 'DNA' ? 'fa-dna' : (item.type === 'Fish' ? 'fa-fish' : 'fa-vial');
+                const html = `
+                    <div class="cart-item">
+                        <div class="item-icon"><i class="fas ${icon}"></i></div>
+                        <div class="item-details">
+                            <div class="fw-bold text-dark">${item.id}</div>
+                            <div class="item-meta">${item.type}</div>
+                        </div>
+                        <button class="btn btn-sm text-danger" onclick="removeFromCart('${item.id}')"><i class="fas fa-times"></i></button>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', html);
+            });
+        }
+
+        function confirmReservation() {
+            if (cart.length === 0) {
+                alert("Cart is empty!");
+                return;
+            }
+            alert(`Successfully reserved ${cart.length} samples. Records added to bio_assets.samples_reservation.`);
+            cart = [];
+            updateCartUI();
+        }
+
+        function checkoutSample(btn) {
+            // Visual logic for demo
+            alert("Sample checked out. Location updated to 'User Bench'.");
+            init(); // Reload list
+        }
+
+        function returnSample(btn) {
+            if(confirm("Mark sample as returned to storage?")) {
+                alert("Sample returned.");
+                init();
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', init);
+
+    </script>
+</body>
+</html>

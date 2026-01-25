@@ -44,7 +44,7 @@
         .sidebar-brand { font-size: 1.4rem; font-weight: 700; text-align: center; margin-bottom: 2rem; color: white; }
         .sidebar-brand i { color: var(--accent-color); }
         .nav-header { font-size: 0.75rem; text-transform: uppercase; color: #95a5a6; padding: 10px 20px 5px; font-weight: 700; }
-        .nav-link { color: #bdc3c7; padding: 10px 20px; font-size: 0.95rem; transition: all 0.3s; border-left: 4px solid transparent; }
+        .nav-link { color: #bdc3c7; padding: 10px 20px; font-size: 0.95rem; transition: all 0.3s; border-left: 4px solid transparent; text-decoration: none; display: block; }
         .nav-link:hover, .nav-link.active { color: white; background-color: rgba(255,255,255,0.05); border-left-color: var(--accent-color); }
         .nav-link i { width: 25px; text-align: center; margin-right: 5px; }
 
@@ -66,7 +66,40 @@
         }
         .large-search-box input:focus { border-color: var(--accent-color); box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.1); outline: none; }
         .large-search-box i { position: absolute; left: 25px; top: 18px; font-size: 1.2rem; color: var(--accent-color); }
-        .search-spinner { position: absolute; right: 20px; top: 18px; color: #999; display: none; }
+        .search-button { 
+            position: absolute; right: 10px; top: 10px; border-radius: 20px; padding: 8px 20px;
+        }
+        
+        /* Search History Dropdown */
+        .search-history-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 20px;
+            right: 20px;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-top: none;
+            border-radius: 0 0 15px 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            z-index: 100;
+            display: none;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .history-item {
+            padding: 8px 20px;
+            cursor: pointer;
+            color: #666;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .history-item:hover { background-color: #f8f9fa; color: var(--accent-color); }
+        .history-item:last-child { border-radius: 0 0 15px 15px; }
+        .history-delete { color: #ccc; font-size: 0.8rem; }
+        .history-delete:hover { color: var(--danger-color); }
+
 
         /* Filters Panel */
         .filters-card {
@@ -83,23 +116,43 @@
         .result-card:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.08); }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* Type Styling */
-        .border-Sample { border-left-color: var(--accent-color); }
-        .border-Project { border-left-color: var(--success-color); }
-        .border-Person { border-left-color: var(--warning-color); }
-        .border-Protocol { border-left-color: #9b59b6; }
-        .border-Cruise { border-left-color: #1abc9c; }
+        /* Type Styling (Mapped to Schema Tables) */
+        .border-samples_root { border-left-color: var(--accent-color); }
+        .border-projects { border-left-color: var(--success-color); }
+        .border-persons { border-left-color: var(--warning-color); }
+        .border-protocols { border-left-color: #9b59b6; }
+        .border-sampling_event { border-left-color: #1abc9c; }
+        .border-default { border-left-color: #95a5a6; }
+
+        /* Colors for icons */
+        .text-samples_root { color: var(--accent-color); }
+        .text-projects { color: var(--success-color); }
+        .text-persons { color: var(--warning-color); }
+        .text-protocols { color: #9b59b6; }
+        .text-sampling_event { color: #1abc9c; }
 
         .result-type { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; display: inline-block; padding: 2px 6px; border-radius: 4px; background: #f8f9fa; color: #666; }
         .result-title { font-size: 1.1rem; font-weight: 600; color: var(--primary-color); margin-bottom: 5px; text-decoration: none; display: block; }
         .result-title:hover { color: var(--accent-color); text-decoration: underline; }
-        .result-meta { font-size: 0.85rem; color: #7f8c8d; margin-bottom: 10px; display: flex; gap: 15px; align-items: center; }
-        .result-snippet { font-size: 0.9rem; color: #555; background-color: #fcfcfc; padding: 10px; border-radius: 5px; border: 1px solid #f0f0f0; margin-top: 10px; }
+        .result-meta { font-size: 0.85rem; color: #7f8c8d; margin-bottom: 10px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+        .result-snippet { font-size: 0.9rem; color: #555; background-color: #fcfcfc; padding: 10px; border-radius: 5px; border: 1px solid #f0f0f0; margin-top: 10px; overflow-wrap: break-word; }
         .highlight { background-color: #fff3cd; font-weight: 600; padding: 0 2px; border-radius: 2px; color: #333; }
 
         /* JSON Data Tags */
-        .data-tag { display: inline-block; font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; background: #eef2f7; color: #4a5568; border: 1px solid #e2e8f0; margin-right: 5px; }
+        .data-tag { display: inline-block; font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; background: #eef2f7; color: #4a5568; border: 1px solid #e2e8f0; margin-right: 5px; margin-bottom: 2px; }
         .data-key { font-weight: 600; margin-right: 3px; }
+        
+        /* Copy Button */
+        .btn-copy {
+            padding: 0 5px;
+            font-size: 0.75rem;
+            color: #bdc3c7;
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .btn-copy:hover { color: var(--accent-color); }
 
     </style>
 </head>
@@ -136,15 +189,38 @@
         <!-- Search Header -->
         <div class="search-header">
             <h4 class="mb-3 text-secondary fw-bold">Global Database Search</h4>
-            <p class="text-muted small mb-3">Executes <code>dashboard.fn_global_search()</code> across Samples, Projects, Field Events, and Protocols.</p>
-            <div class="large-search-box">
-                <i class="fas fa-search"></i>
-                <input type="text" class="form-control" id="searchInput" placeholder="Search for ID (e.g. W25), Species, Person, or Keyword..." autocomplete="off">
-                <div class="search-spinner" id="searchSpinner"><div class="spinner-border spinner-border-sm" role="status"></div></div>
-            </div>
-            <div class="mt-2 text-muted small d-flex justify-content-between">
-                <span id="resultsStats">Ready to search.</span>
-                <span class="text-end">Press <strong>Enter</strong> to search</span>
+            <p class="text-muted small mb-3">Executes <code>dashboard.fn_global_search('{{ query }}')</code></p>
+            
+            <!-- Standard Form Submit to Flask Route -->
+            <form action="" method="GET" id="searchForm">
+                <div class="large-search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" name="q" class="form-control" id="searchInput" 
+                           placeholder="Search for ID, Species, Person, or Keyword..." 
+                           value="{{ query | default('') }}" autocomplete="off">
+                    <button type="submit" class="btn btn-primary search-button">Search</button>
+                    
+                    <!-- Search History Dropdown -->
+                    <div class="search-history-dropdown" id="searchHistory">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </form>
+
+            <div class="mt-2 text-muted small d-flex justify-content-between align-items-center">
+                <span id="resultsStats">
+                    {% if query %}
+                        Found <strong>{{ results|length }}</strong> results for "<span id="queryText">{{ query }}</span>"
+                    {% else %}
+                        Enter a search term to begin.
+                    {% endif %}
+                </span>
+                
+                {% if results %}
+                <button class="btn btn-sm btn-outline-secondary" onclick="exportResults()">
+                    <i class="fas fa-download me-1"></i> Export CSV
+                </button>
+                {% endif %}
             </div>
         </div>
 
@@ -152,25 +228,24 @@
             <!-- Sidebar Filters -->
             <div class="col-lg-3 mb-4">
                 <div class="filters-card">
-                    <div class="filter-group-title">Source Type</div>
+                    <div class="filter-group-title">Source Table</div>
                     <div id="typeFilters">
-                        <!-- Populated dynamically -->
-                        <div class="text-muted small fst-italic">Perform a search to see filters.</div>
+                        <!-- Populated dynamically by JS based on Rendered Results -->
+                        {% if not results %}
+                        <div class="text-muted small fst-italic">No results to filter.</div>
+                        {% endif %}
                     </div>
 
+                    <!-- Project Context Filter (Dynamic) -->
                     <div class="mt-4 filter-group-title">Project Context</div>
                     <select class="form-select form-select-sm mb-2" id="projectFilter" disabled>
                         <option value="all">All Projects</option>
                     </select>
 
-                    <div class="mt-4 filter-group-title">Status</div>
+                    <div class="mt-4 filter-group-title">Display Options</div>
                     <div class="form-check mb-1">
-                        <input class="form-check-input" type="checkbox" id="statusActive" checked disabled>
-                        <label class="form-check-label small" for="statusActive">Active / Stored</label>
-                    </div>
-                    <div class="form-check mb-1">
-                        <input class="form-check-input" type="checkbox" id="statusArchived" disabled>
-                        <label class="form-check-label small" for="statusArchived">Archived / Destroyed</label>
+                        <input class="form-check-input" type="checkbox" id="showDetails" checked>
+                        <label class="form-check-label small" for="showDetails">Show Details JSON</label>
                     </div>
                 </div>
             </div>
@@ -178,21 +253,72 @@
             <!-- Results List -->
             <div class="col-lg-9">
                 <div id="resultsContainer">
-                    <!-- Results will be injected here via JS -->
-                    <div class="text-center py-5 text-muted">
-                        <i class="fas fa-database fa-3x mb-3 opacity-25"></i>
-                        <p>No results to display yet.</p>
-                    </div>
+                    
+                    {% if results %}
+                        {% for item in results %}
+                            <!-- 
+                                Logic to determine Display Name and Description based on table source 
+                                The SQL function returns 'matching_data' as a JSONB object
+                            -->
+                            {% set type = item.table_name %}
+                            {% set data = item.matching_data %}
+                            
+                            <!-- Determine generic Title/Desc -->
+                            {% set display_name = data.title or data.name or data.scientific_name or (data.first_name ~ ' ' ~ data.last_name) or item.primary_key_id %}
+                            {% set desc = data.description or data.notes or data.message_body or 'No description available' %}
+
+                            <!-- Determine Icon -->
+                            {% set icon = 'fa-database' %}
+                            {% if type == 'samples_root' %}{% set icon = 'fa-vial' %}
+                            {% elif type == 'projects' %}{% set icon = 'fa-briefcase' %}
+                            {% elif type == 'persons' %}{% set icon = 'fa-user' %}
+                            {% elif type == 'protocols' %}{% set icon = 'fa-file-alt' %}
+                            {% elif type == 'sampling_event' %}{% set icon = 'fa-map-marked-alt' %}
+                            {% endif %}
+
+                            <div class="result-card border-{{ type }} border-default-fallback" 
+                                 data-source-type="{{ type }}" 
+                                 data-project="{{ data.project_id | default('') }}">
+                                <div class="result-type text-{{ type }}">
+                                    <i class="fas {{ icon }} me-1"></i> {{ type | replace('_', ' ') }}
+                                </div>
+                                <a href="#" class="result-title">{{ display_name }}</a>
+                                <div class="result-meta">
+                                    <span>
+                                        <i class="far fa-id-badge me-1"></i> 
+                                        <span class="id-text">{{ item.primary_key_id }}</span>
+                                        <button class="btn-copy" onclick="copyToClipboard('{{ item.primary_key_id }}', this)" title="Copy ID">
+                                            <i class="far fa-copy"></i>
+                                        </button>
+                                    </span>
+                                    
+                                    <!-- Loop through some interesting keys for badges -->
+                                    {% for key, val in data.items() %}
+                                        {% if key not in ['title', 'name', 'description', 'notes', 'first_name', 'last_name', 'search_vector'] and val %}
+                                            <span class="data-tag"><span class="data-key">{{ key|replace('_', ' ')|capitalize }}:</span> {{ val|string|truncate(30) }}</span>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                                <div class="result-snippet text-muted small">
+                                    {{ desc|string|truncate(200) }}
+                                </div>
+                            </div>
+                        {% endfor %}
+
+                    {% elseif query %}
+                        <div class="text-center py-5 text-muted">
+                            <i class="fas fa-search fa-3x mb-3 text-warning opacity-50"></i>
+                            <p>No matches found in the database for "<strong>{{ query }}</strong>".</p>
+                            <p class="small">Try searching for a Sample ID (e.g. W25), Project Acronym, or Organism Name.</p>
+                        </div>
+                    {% else %}
+                         <div class="text-center py-5 text-muted">
+                            <i class="fas fa-database fa-3x mb-3 opacity-25"></i>
+                            <p>Enter a keyword above to search across all LIMS tables.</p>
+                        </div>
+                    {% endif %}
+
                 </div>
-                
-                <!-- Pagination (Hidden by default) -->
-                <nav aria-label="Search results pages" class="mt-4 d-none" id="pagination">
-                    <ul class="pagination justify-content-center">
-                        <li class="page-item disabled"><a class="page-link" href="#">Previous</a></li>
-                        <li class="page-item active"><a class="page-link" href="#">1</a></li>
-                        <li class="page-item disabled"><a class="page-link" href="#">Next</a></li>
-                    </ul>
-                </nav>
             </div>
         </div>
     </div>
@@ -201,221 +327,224 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
-        /**
-         * DBService: Simulates the SQL function dashboard.fn_global_search(:q)
-         * Data structure strictly mirrors the PostgreSQL schema return type.
-         */
-        const DBService = {
-            // Internal "Database"
-            db: [
-                // PROJECTS
-                { source_type: 'Project', primary_id: 'WESER-25', display_name: 'Ecological Monitoring of Weser Estuary', description: 'Long-term monitoring of fish and water quality in the Weser river.', matching_data: { status: 'Active', pi: 'Dr. Hans Miller', start_date: '2025-01-01' } },
-                { source_type: 'Project', primary_id: 'NS-ECO', display_name: 'North Sea Biodiversity Survey', description: 'Trawl survey in the German Bight.', matching_data: { status: 'Completed', pi: 'Prof. A. Fisher', start_date: '2024-01-01' } },
-                
-                // SAMPLES (Hierarchy)
-                { source_type: 'Sample', primary_id: 'W25WesHB_001', display_name: 'Water Sample - Weser Point A', description: 'Surface water collected at high tide.', matching_data: { type: 'Water', project: 'WESER-25', location: 'Freezer 1', date: '2026-01-15' } },
-                { source_type: 'Sample', primary_id: 'D25WesHB_001_1', display_name: 'DNA Extract - Weser Point A', description: 'eDNA extracted from W25WesHB_001 filter.', matching_data: { type: 'DNA', parent: 'W25WesHB_001', conc: '45.2 ng/ul', project: 'WESER-25' } },
-                { source_type: 'Sample', primary_id: 'F25NorSea_088', display_name: 'Platichthys flesus (Flounder)', description: 'Whole specimen from North Sea trawl.', matching_data: { type: 'Fish', weight: '245g', sex: 'Female', project: 'NS-ECO' } },
-                
-                // FIELD EVENTS
-                { source_type: 'Cruise', primary_id: 'C25_Weser', display_name: 'Weser Spring Campaign 2025', description: 'Vessel: RV Explorer. Targeting estuarine species.', matching_data: { vessel: 'RV Explorer', dates: 'Jan 10 - Jan 20' } },
-                { source_type: 'Event', primary_id: '26WesHB_001', display_name: 'Sampling Event: Weser Point A', description: 'Water sampling and CTD cast.', matching_data: { cruise: 'C25_Weser', lat: 53.551, lon: 8.571 } },
-                
-                // ELN
-                { source_type: 'Protocol', primary_id: 'SOP_DNA_01', display_name: 'Standard DNA Extraction (Kit A)', description: 'SOP for extracting DNA from water filters using Qiagen kit.', matching_data: { version: '2.3', author: 'Dr. Scientist' } },
-                
-                // PEOPLE
-                { source_type: 'Person', primary_id: 'P_001', display_name: 'Dr. Hans Miller', description: 'Principal Investigator / Lab Head', matching_data: { email: 'h.miller@genfish.org', role: 'Admin' } }
-            ],
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            const results = document.querySelectorAll('.result-card');
+            const typeFiltersContainer = document.getElementById('typeFilters');
+            const projectFilter = document.getElementById('projectFilter');
+            const searchInput = document.getElementById('searchInput');
+            const searchForm = document.getElementById('searchForm');
+            const searchHistory = document.getElementById('searchHistory');
+            
+            // --- 1. FILTER LOGIC ---
+            if (results.length > 0) {
+                // Generate Source Filters
+                const typeCounts = {};
+                // Generate Project Set
+                const projects = new Set();
 
-            // Mimic SQL Query: SELECT * FROM fn_global_search(query)
-            search: function(query) {
-                return new Promise(resolve => {
-                    setTimeout(() => {
-                        if (!query) {
-                            resolve([]);
-                            return;
-                        }
-                        const lowerQ = query.toLowerCase();
-                        const results = this.db.filter(item => 
-                            item.primary_id.toLowerCase().includes(lowerQ) ||
-                            item.display_name.toLowerCase().includes(lowerQ) ||
-                            item.description.toLowerCase().includes(lowerQ) ||
-                            JSON.stringify(item.matching_data).toLowerCase().includes(lowerQ)
-                        );
-                        resolve(results);
-                    }, 300); // Simulate network latency
+                results.forEach(card => {
+                    const type = card.getAttribute('data-source-type');
+                    const proj = card.getAttribute('data-project');
+                    
+                    typeCounts[type] = (typeCounts[type] || 0) + 1;
+                    if(proj) projects.add(proj);
                 });
+
+                // Populate Source Checkboxes
+                let filterHtml = `
+                    <div class="form-check mb-2">
+                        <input class="form-check-input filter-cb" type="checkbox" id="type_all" checked>
+                        <label class="form-check-label w-100" for="type_all">
+                            All Types <span class="badge-count">${results.length}</span>
+                        </label>
+                    </div>
+                    <hr class="my-2 opacity-25">
+                `;
+
+                Object.keys(typeCounts).sort().forEach(type => {
+                    const label = type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    filterHtml += `
+                        <div class="form-check mb-2">
+                            <input class="form-check-input filter-cb" type="checkbox" value="${type}" checked>
+                            <label class="form-check-label w-100">
+                                ${label} <span class="badge-count">${typeCounts[type]}</span>
+                            </label>
+                        </div>
+                    `;
+                });
+                typeFiltersContainer.innerHTML = filterHtml;
+                
+                // Populate Project Dropdown
+                if (projects.size > 0) {
+                    projects.forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p;
+                        opt.text = p;
+                        projectFilter.appendChild(opt);
+                    });
+                    projectFilter.disabled = false;
+                }
+
+                // Attach Event Listeners
+                document.querySelectorAll('.filter-cb').forEach(cb => {
+                    cb.addEventListener('change', filterResults);
+                });
+                projectFilter.addEventListener('change', filterResults);
+                
+                // --- 2. HIGHLIGHT LOGIC ---
+                highlightSearchTerm();
             }
-        };
 
-        // --- UI Logic ---
+            // Filtering Function
+            function filterResults() {
+                const allCheckbox = document.getElementById('type_all');
+                const typeCheckboxes = document.querySelectorAll('.filter-cb:not(#type_all)');
+                const selectedProject = projectFilter.value;
+                
+                const checkedTypes = Array.from(typeCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
+                const isAllChecked = allCheckbox.checked;
 
-        const searchInput = document.getElementById('searchInput');
-        const resultsContainer = document.getElementById('resultsContainer');
-        const searchSpinner = document.getElementById('searchSpinner');
-        const resultsStats = document.getElementById('resultsStats');
-        const typeFilters = document.getElementById('typeFilters');
-        const projectFilter = document.getElementById('projectFilter');
+                results.forEach(card => {
+                    const type = card.getAttribute('data-source-type');
+                    const proj = card.getAttribute('data-project');
+                    
+                    const typeMatch = isAllChecked || checkedTypes.includes(type);
+                    const projMatch = selectedProject === 'all' || proj === selectedProject;
 
-        let currentResults = [];
+                    if (typeMatch && projMatch) {
+                        card.style.display = 'block';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+                
+                // Handle "All" checkbox behavior
+                if (this === allCheckbox) {
+                    typeCheckboxes.forEach(cb => cb.checked = allCheckbox.checked);
+                    // Re-run to respect project filter
+                    filterResults.call(projectFilter); 
+                } else if (this !== projectFilter && this !== allCheckbox) {
+                     if (!isAllChecked && checkedTypes.length === typeCheckboxes.length) {
+                        allCheckbox.checked = true;
+                     } else if (isAllChecked && checkedTypes.length !== typeCheckboxes.length) {
+                        allCheckbox.checked = false;
+                     }
+                }
+            }
+            
+            // --- 3. SEARCH HISTORY LOGIC ---
+            
+            // Load history on focus
+            searchInput.addEventListener('focus', () => {
+                const history = JSON.parse(localStorage.getItem('lims_search_history') || '[]');
+                if (history.length > 0) {
+                    searchHistory.innerHTML = '';
+                    history.forEach(term => {
+                        const div = document.createElement('div');
+                        div.className = 'history-item';
+                        div.innerHTML = `
+                            <span onclick="applySearch('${term}')"><i class="fas fa-history me-2 small"></i>${term}</span>
+                            <i class="fas fa-times history-delete" onclick="removeHistory('${term}', event)"></i>
+                        `;
+                        searchHistory.appendChild(div);
+                    });
+                    searchHistory.style.display = 'block';
+                }
+            });
 
-        // Listen for Search
-        searchInput.addEventListener('keyup', (e) => {
-            if (e.key === 'Enter') {
-                performSearch();
+            // Hide history on click outside
+            document.addEventListener('click', (e) => {
+                if (!searchInput.contains(e.target) && !searchHistory.contains(e.target)) {
+                    searchHistory.style.display = 'none';
+                }
+            });
+
+            // Save history on submit
+            searchForm.addEventListener('submit', () => {
+                const val = searchInput.value.trim();
+                if (val) {
+                    let history = JSON.parse(localStorage.getItem('lims_search_history') || '[]');
+                    history = history.filter(h => h !== val); // remove duplicate
+                    history.unshift(val); // add to top
+                    if (history.length > 5) history.pop(); // keep last 5
+                    localStorage.setItem('lims_search_history', JSON.stringify(history));
+                }
+            });
+
+            // Toggle Details
+            const detailToggle = document.getElementById('showDetails');
+            if(detailToggle) {
+                detailToggle.addEventListener('change', function() {
+                    const snippets = document.querySelectorAll('.result-snippet');
+                    snippets.forEach(el => el.style.display = this.checked ? 'block' : 'none');
+                });
             }
         });
 
-        async function performSearch() {
-            const query = searchInput.value.trim();
-            if (!query) return;
+        // --- GLOBAL FUNCTIONS ---
 
-            // UI State: Loading
-            searchSpinner.style.display = 'block';
-            resultsContainer.style.opacity = '0.5';
-            
-            // Fetch Data
-            currentResults = await DBService.search(query);
-            
-            // UI State: Done
-            searchSpinner.style.display = 'none';
-            resultsContainer.style.opacity = '1';
-            
-            updateFilters(currentResults);
-            renderResults(currentResults);
+        function applySearch(term) {
+            document.getElementById('searchInput').value = term;
+            document.getElementById('searchForm').submit();
         }
 
-        function highlightText(text, query) {
-            if (!query) return text;
-            const regex = new RegExp(`(${query})`, 'gi');
-            return text.replace(regex, '<span class="highlight">$1</span>');
+        function removeHistory(term, e) {
+            e.stopPropagation();
+            let history = JSON.parse(localStorage.getItem('lims_search_history') || '[]');
+            history = history.filter(h => h !== term);
+            localStorage.setItem('lims_search_history', JSON.stringify(history));
+            document.getElementById('searchInput').focus(); // Refocus to refresh list
         }
 
-        function renderResults(data) {
-            const query = searchInput.value.trim();
-            resultsStats.innerHTML = `Found <strong>${data.length}</strong> results for "${query}"`;
-            resultsContainer.innerHTML = '';
-
-            if (data.length === 0) {
-                resultsContainer.innerHTML = `
-                    <div class="text-center py-5 text-muted">
-                        <i class="fas fa-search fa-3x mb-3 text-warning"></i>
-                        <p>No matches found in the database.</p>
-                    </div>`;
-                return;
-            }
-
-            data.forEach(item => {
-                // Build JSON Data Badges (e.g. Project: WESER-25)
-                let metaHtml = '';
-                if (item.matching_data) {
-                    Object.entries(item.matching_data).forEach(([key, val]) => {
-                        // Skip internal keys or long text
-                        if (key !== 'description') {
-                            metaHtml += `<span class="data-tag"><span class="data-key">${key}:</span> ${val}</span>`;
-                        }
-                    });
-                }
-
-                // Determine Icon
-                let icon = 'fa-database';
-                if (item.source_type === 'Sample') icon = 'fa-vial';
-                if (item.source_type === 'Project') icon = 'fa-briefcase';
-                if (item.source_type === 'Person') icon = 'fa-user';
-                if (item.source_type === 'Protocol') icon = 'fa-file-alt';
-                if (item.source_type === 'Cruise') icon = 'fa-ship';
-
-                const card = document.createElement('div');
-                card.className = `result-card border-${item.source_type}`;
-                card.innerHTML = `
-                    <div class="result-type text-${item.source_type === 'Sample' ? 'primary' : 'secondary'}">
-                        <i class="fas ${icon} me-1"></i> ${item.source_type}
-                    </div>
-                    <a href="#" class="result-title">${highlightText(item.display_name, query)}</a>
-                    <div class="result-meta">
-                        <span><i class="far fa-id-badge me-1"></i> ${highlightText(item.primary_id, query)}</span>
-                        ${metaHtml}
-                    </div>
-                    <div class="result-snippet">${highlightText(item.description, query)}</div>
-                `;
-                resultsContainer.appendChild(card);
+        function copyToClipboard(text, btn) {
+            navigator.clipboard.writeText(text).then(() => {
+                const icon = btn.querySelector('i');
+                icon.className = 'fas fa-check text-success';
+                setTimeout(() => {
+                    icon.className = 'far fa-copy';
+                }, 1500);
             });
         }
 
-        function updateFilters(data) {
-            // 1. Update Type Counts
-            const typeCounts = data.reduce((acc, item) => {
-                acc[item.source_type] = (acc[item.source_type] || 0) + 1;
-                return acc;
-            }, {});
-
-            let filterHtml = `
-                <div class="form-check mb-2">
-                    <input class="form-check-input filter-cb" type="checkbox" id="type_all" checked onchange="filterResults()">
-                    <label class="form-check-label w-100" for="type_all">
-                        All Types <span class="badge-count">${data.length}</span>
-                    </label>
-                </div>
-                <hr class="my-2 opacity-25">
-            `;
-
-            Object.keys(typeCounts).sort().forEach(type => {
-                filterHtml += `
-                    <div class="form-check mb-2">
-                        <input class="form-check-input filter-cb" type="checkbox" value="${type}" checked onchange="filterResults()">
-                        <label class="form-check-label w-100">
-                            ${type}s <span class="badge-count">${typeCounts[type]}</span>
-                        </label>
-                    </div>
-                `;
+        function exportResults() {
+            let csv = 'Type,ID,Title,Description\n';
+            const visibleCards = Array.from(document.querySelectorAll('.result-card')).filter(c => c.style.display !== 'none');
+            
+            visibleCards.forEach(card => {
+                const type = card.getAttribute('data-source-type');
+                const title = card.querySelector('.result-title').innerText.replace(/,/g, ' ');
+                const id = card.querySelector('.id-text').innerText;
+                const desc = card.querySelector('.result-snippet').innerText.replace(/[\n,]/g, ' ');
+                csv += `${type},${id},${title},${desc}\n`;
             });
-            typeFilters.innerHTML = filterHtml;
 
-            // 2. Update Project Filter (Extract unique projects from matching_data)
-            const projects = new Set();
-            data.forEach(item => {
-                if (item.matching_data && item.matching_data.project) {
-                    projects.add(item.matching_data.project);
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('hidden', '');
+            a.setAttribute('href', url);
+            a.setAttribute('download', 'search_results.csv');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        function highlightSearchTerm() {
+            const querySpan = document.getElementById('queryText');
+            if (!querySpan) return;
+            const term = querySpan.innerText.toLowerCase();
+            if (term.length < 2) return;
+
+            const targets = document.querySelectorAll('.result-title, .result-snippet');
+            targets.forEach(el => {
+                const text = el.innerText;
+                const regex = new RegExp(`(${term})`, 'gi');
+                if (text.match(regex)) {
+                    el.innerHTML = text.replace(regex, '<span class="highlight">$1</span>');
                 }
             });
-            
-            projectFilter.innerHTML = '<option value="all">All Projects</option>';
-            projects.forEach(p => {
-                const opt = document.createElement('option');
-                opt.value = p;
-                opt.text = p;
-                projectFilter.appendChild(opt);
-            });
-            projectFilter.disabled = projects.size === 0;
-            projectFilter.onchange = filterResults;
         }
-
-        function filterResults() {
-            // Get selected types
-            const typeCheckboxes = document.querySelectorAll('.filter-cb:not(#type_all)');
-            const selectedTypes = Array.from(typeCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
-            const allChecked = document.getElementById('type_all').checked;
-
-            // Get selected project
-            const selectedProject = projectFilter.value;
-
-            const filtered = currentResults.filter(item => {
-                // Type Filter
-                const typeMatch = allChecked || selectedTypes.includes(item.source_type);
-                
-                // Project Filter
-                let projMatch = true;
-                if (selectedProject !== 'all') {
-                    projMatch = item.matching_data && item.matching_data.project === selectedProject;
-                }
-
-                return typeMatch && projMatch;
-            });
-
-            renderResults(filtered);
-        }
-
     </script>
 </body>
 </html>

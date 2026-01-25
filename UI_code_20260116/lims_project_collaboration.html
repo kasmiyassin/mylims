@@ -48,7 +48,7 @@
         .sidebar-brand { font-size: 1.4rem; font-weight: 700; text-align: center; margin-bottom: 2rem; color: white; }
         .sidebar-brand i { color: var(--accent-color); }
         .nav-header { font-size: 0.75rem; text-transform: uppercase; color: #95a5a6; padding: 10px 20px 5px; font-weight: 700; }
-        .nav-link { color: #bdc3c7; padding: 10px 20px; font-size: 0.95rem; transition: all 0.3s; border-left: 4px solid transparent; }
+        .nav-link { color: #bdc3c7; padding: 10px 20px; font-size: 0.95rem; transition: all 0.3s; border-left: 4px solid transparent; text-decoration: none; display: block; }
         .nav-link:hover, .nav-link.active { color: white; background-color: rgba(255,255,255,0.05); border-left-color: var(--accent-color); }
         .nav-link i { width: 25px; text-align: center; margin-right: 5px; }
 
@@ -154,18 +154,61 @@
                 <p class="text-muted small mb-0">Connected to <code>lims.projects</code> and <code>communications</code> schemas</p>
             </div>
             <div class="d-flex gap-2">
-                <!-- Dynamic Project Selector -->
-                <select class="form-select fw-bold border-primary" style="width: 250px;" id="projectSelector" onchange="loadProjectData()">
-                    <!-- Populated by JS -->
-                </select>
+                <!-- Project Selector (Standard GET Navigation) -->
+                <form action="" method="GET">
+                    <select class="form-select fw-bold border-primary" style="width: 250px;" name="project_id" onchange="this.form.submit()">
+                        {% for p in projects %}
+                        <option value="{{ p.id }}" {% if p.id == current_project.id %}selected{% endif %}>
+                            {{ p.id }} ({{ p.status }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </form>
                 <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newProjectModal"><i class="fas fa-plus me-1"></i> New Project</button>
             </div>
         </div>
 
-        <!-- Project Overview Banner (Dynamic Content) -->
-        <div id="projectBannerArea" class="fade-in">
-            <!-- Populated by JS -->
+        <!-- Project Overview Banner -->
+        {% if current_project %}
+        <div class="project-banner fade-in">
+            <div class="row">
+                <div class="col-md-8">
+                    <h3 class="fw-bold text-primary mb-1">{{ current_project.title }}</h3>
+                    <div class="d-flex align-items-center gap-3 text-muted mb-3">
+                        <small><i class="fas fa-hashtag me-1"></i> ID: <strong>{{ current_project.id }}</strong></small>
+                        <small><i class="fas fa-user-tie me-1"></i> PI: <strong>{{ current_project.pi }}</strong></small>
+                        <small><i class="fas fa-money-check-alt me-1"></i> Grant: <strong>{{ current_project.grant_nr }}</strong></small>
+                    </div>
+                    
+                    <div class="mb-2 d-flex justify-content-between small text-muted">
+                        <span>Start: {{ current_project.start_date }}</span>
+                        <span class="fw-bold text-dark">Today</span>
+                        <span>End: {{ current_project.end_date }}</span>
+                    </div>
+                    
+                    <!-- Progress Calculation Logic assumed in backend or simple template math -->
+                    <div class="timeline-container">
+                        <div class="timeline-progress" style="width: {{ current_project.progress_percent | default('0') }}%;"></div>
+                        <div class="timeline-marker" style="left: {{ current_project.progress_percent | default('0') }}%; border-left: 2px dashed red; background: none;"></div>
+                    </div>
+                </div>
+                <div class="col-md-4 border-start ps-4">
+                    <h6 class="fw-bold text-secondary small text-uppercase mb-3">Project Team</h6>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="avatar-stack">
+                            <!-- Initials Logic -->
+                            <div class="avatar bg-primary" title="Principal Investigator">{{ current_project.pi[:2].upper() }}</div>
+                            <div class="avatar bg-success">TM</div>
+                            <div class="avatar bg-secondary">+2</div>
+                        </div>
+                        <button class="btn btn-sm btn-outline-secondary">Manage Team</button>
+                    </div>
+                </div>
+            </div>
         </div>
+        {% else %}
+        <div class="alert alert-warning">No project selected. Please choose a project from the dropdown.</div>
+        {% endif %}
 
         <!-- Main Tabs -->
         <ul class="nav nav-tabs mb-4" id="collabTabs" role="tablist">
@@ -195,8 +238,42 @@
                     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newTaskModal"><i class="fas fa-plus me-1"></i> Add Task</button>
                 </div>
                 
-                <div class="kanban-board" id="kanbanBoardArea">
-                    <!-- Populated by JS -->
+                <div class="kanban-board">
+                    <!-- Standard Columns -->
+                    {% for status in ['Backlog', 'In Progress', 'Review', 'Done'] %}
+                    <div class="kanban-col">
+                        <div class="kanban-header">
+                            <span>{{ status }}</span>
+                            <!-- Count tasks in this status -->
+                            {% set count = tasks | selectattr("status", "equalto", status) | list | length %}
+                            <span class="badge bg-secondary rounded-pill">{{ count }}</span>
+                        </div>
+                        <div class="kanban-body">
+                            {% for task in tasks if task.status == status %}
+                            <div class="kanban-card p-{{ task.priority }}">
+                                <h6 class="mb-1 fw-bold text-dark">{{ task.title }}</h6>
+                                <div class="d-flex align-items-center justify-content-between mt-2">
+                                    <small class="text-muted"><i class="far fa-clock me-1"></i> {{ task.due_date }}</small>
+                                    <div class="avatar bg-secondary" style="width:24px;height:24px;font-size:0.7rem;">
+                                        {{ task.assignee[:1].upper() }}
+                                    </div>
+                                </div>
+                                <div class="mt-2 text-end">
+                                    <!-- Action Button (would need endpoint to actually move) -->
+                                    {% if status != 'Done' %}
+                                    <form action="/tasks/move/{{ task.id }}" method="POST" style="display:inline;">
+                                        <button type="submit" class="btn btn-sm p-0 text-primary" title="Advance Task"><i class="fas fa-arrow-right"></i></button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% else %}
+                            <!-- Empty State for Column -->
+                            <div class="text-center text-muted small mt-4 opacity-50">No tasks</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
 
@@ -209,24 +286,58 @@
                         <div class="channel-item"># sampling-logistics</div>
                         <div class="channel-item"># bioinfo-results</div>
                         <div class="mt-4 text-uppercase small fw-bold text-muted mb-3">Members</div>
-                        <div id="chatMembersArea">
-                            <!-- Populated by JS -->
+                        
+                        <!-- Dynamic User List -->
+                        {% for user in users %}
+                        <div class="channel-item">
+                            <div class="d-flex align-items-center">
+                                <div class="status-dot dot-active me-2" style="height:8px;width:8px;border-radius:50%;background:#27ae60;"></div> 
+                                {{ user }}
+                            </div>
                         </div>
+                        {% endfor %}
                     </div>
                     <div class="chat-main">
                         <div class="p-3 border-bottom bg-white d-flex justify-content-between align-items-center">
-                            <h6 class="mb-0 fw-bold" id="currentChannelName"># general</h6>
-                            <small class="text-muted">Project Discussion</small>
+                            <h6 class="mb-0 fw-bold"># general</h6>
+                            <small class="text-muted">Project Discussion - {{ current_project.id }}</small>
                         </div>
+                        
                         <div class="chat-history" id="chatHistoryArea">
-                            <!-- Populated by JS -->
+                            {% for msg in chat_messages %}
+                                {% set is_me = (msg.sender_id == session.user_id) %} 
+                                <div class="message {{ 'msg-out' if is_me else 'msg-in' }}">
+                                    {% if not is_me %}
+                                    <div class="avatar bg-primary me-2 flex-shrink-0" title="{{ msg.sender_name }}">{{ msg.sender_name[:2] }}</div>
+                                    {% endif %}
+                                    
+                                    <div>
+                                        {% if not is_me %}
+                                        <div class="small fw-bold mb-1">{{ msg.sender_name }} <span class="text-muted fw-normal ms-2">{{ msg.sent_at }}</span></div>
+                                        {% endif %}
+                                        
+                                        <div class="msg-content">{{ msg.message_body }}</div>
+                                        
+                                        {% if is_me %}
+                                        <div class="small text-muted text-end mt-1">{{ msg.sent_at }} <i class="fas fa-check-double"></i></div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% else %}
+                                <div class="text-center text-muted my-5">No messages yet. Start the conversation!</div>
+                            {% endfor %}
                         </div>
+
+                        <!-- Chat Input Form -->
                         <div class="chat-input">
-                            <div class="input-group">
-                                <button class="btn btn-light border"><i class="fas fa-paperclip"></i></button>
-                                <input type="text" class="form-control" id="chatMessageInput" placeholder="Type a message..." onkeypress="handleChatEnter(event)">
-                                <button class="btn btn-primary" onclick="sendChatMessage()"><i class="fas fa-paper-plane"></i></button>
-                            </div>
+                            <form action="/chat/send" method="POST">
+                                <input type="hidden" name="project_id" value="{{ current_project.id }}">
+                                <div class="input-group">
+                                    <button type="button" class="btn btn-light border"><i class="fas fa-paperclip"></i></button>
+                                    <input type="text" name="message" class="form-control" placeholder="Type a message..." required autocomplete="off">
+                                    <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i></button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 </div>
@@ -239,8 +350,35 @@
                     <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#newPermitModal"><i class="fas fa-plus"></i> Log New Permit</button>
                 </div>
                 
-                <div class="row" id="permitsArea">
-                    <!-- Populated by JS -->
+                <div class="row">
+                    {% if permits %}
+                        {% for p in permits %}
+                            {% set icon = 'fa-fish' if 'Fishing' in p.name else 'fa-file-contract' %}
+                            {% set color = 'success' if p.status == 'Valid' else 'warning' %}
+                            
+                            <div class="col-md-6">
+                                <div class="permit-card">
+                                    <div class="permit-status status-{{ p.status }}">{{ p.status }}</div>
+                                    <div class="d-flex align-items-center mb-3">
+                                        <div class="bg-{{ color }}-subtle text-{{ color }} rounded p-3 me-3"><i class="fas {{ icon }} fa-2x"></i></div>
+                                        <div>
+                                            <h5 class="mb-1 fw-bold">{{ p.name }}</h5>
+                                            <div class="text-muted small">Ref: #{{ p.permit_number }} | {{ p.issuing_authority }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex justify-content-between small text-muted">
+                                        <span>Expires: {{ p.valid_to }}</span>
+                                        <a href="#" class="fw-bold text-dark text-decoration-underline">View Details</a>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="col-12 text-center text-muted p-5 border rounded bg-light">
+                            <i class="fas fa-passport fa-2x mb-3 opacity-25"></i>
+                            <p>No permits found for this project.</p>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
 
@@ -264,8 +402,23 @@
                                 <th class="text-end">Action</th>
                             </tr>
                         </thead>
-                        <tbody id="docsTableBody">
-                            <!-- Populated by JS -->
+                        <tbody>
+                            {% if documents %}
+                                {% for doc in documents %}
+                                    {% set icon = 'fa-file-pdf text-danger' if doc.type == 'pdf' else 'fa-file-excel text-success' %}
+                                    <tr>
+                                        <td class="text-center"><i class="fas {{ icon }} fa-lg"></i></td>
+                                        <td><a href="#" class="text-decoration-none fw-bold text-dark">{{ doc.title }}</a></td>
+                                        <td><span class="badge bg-light text-dark border">{{ doc.type }}</span></td>
+                                        <td class="text-muted small">{{ doc.generation_date }}</td>
+                                        <td class="text-end"><button class="btn btn-sm btn-light"><i class="fas fa-download"></i></button></td>
+                                    </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">No documents uploaded yet.</td>
+                                </tr>
+                            {% endif %}
                         </tbody>
                     </table>
                 </div>
@@ -276,7 +429,7 @@
 
     <!-- === MODALS === -->
 
-    <!-- New Task Modal -->
+    <!-- New Task Modal (POST Form) -->
     <div class="modal fade" id="newTaskModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -284,43 +437,46 @@
                     <h5 class="modal-title">New Task (Internal Plan)</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <form id="newTaskForm">
+                <form action="/tasks/create" method="POST">
+                    <input type="hidden" name="project_id" value="{{ current_project.id }}">
+                    <div class="modal-body">
                         <div class="mb-3">
                             <label class="form-label">Title</label>
-                            <input type="text" class="form-control" id="taskTitle" required>
+                            <input type="text" name="title" class="form-control" required>
                         </div>
                         <div class="row mb-3">
                             <div class="col">
                                 <label class="form-label">Assignee</label>
-                                <select class="form-select" id="taskAssignee">
-                                    <!-- Populated by JS -->
+                                <select class="form-select" name="assignee_id">
+                                    {% for user in users %}
+                                    <option value="{{ user }}">{{ user }}</option>
+                                    {% endfor %}
                                 </select>
                             </div>
                             <div class="col">
                                 <label class="form-label">Due Date</label>
-                                <input type="date" class="form-control" id="taskDueDate">
+                                <input type="date" name="due_date" class="form-control">
                             </div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Priority</label>
-                            <select class="form-select" id="taskPriority">
+                            <select class="form-select" name="priority">
                                 <option value="Low">Low</option>
                                 <option value="Medium" selected>Medium</option>
                                 <option value="High">High</option>
                             </select>
                         </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="submitNewTask()">Create</button>
-                </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Create</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 
-    <!-- New Project Modal -->
+    <!-- New Project Modal (POST Form) -->
     <div class="modal fade" id="newProjectModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -328,373 +484,62 @@
                     <h5 class="modal-title">Initialize New Project</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <form>
+                <form action="/projects/create" method="POST">
+                    <div class="modal-body">
                         <div class="row mb-3">
                             <div class="col-md-3">
                                 <label class="form-label">Project ID</label>
-                                <input type="text" class="form-control fw-bold" placeholder="e.g. WESER-26">
+                                <input type="text" name="project_id" class="form-control fw-bold" placeholder="e.g. WESER-26" required>
                             </div>
                             <div class="col-md-9">
                                 <label class="form-label">Project Name</label>
-                                <input type="text" class="form-control" placeholder="Full Title">
+                                <input type="text" name="title" class="form-control" placeholder="Full Title" required>
                             </div>
                         </div>
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label">PI (Principal Investigator)</label>
-                                <select class="form-select"><option>Dr. Scientist</option></select>
+                                <select class="form-select" name="pi_id">
+                                    {% for user in users %}
+                                    <option value="{{ user }}">{{ user }}</option>
+                                    {% endfor %}
+                                </select>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Funding Source</label>
-                                <input type="text" class="form-control" placeholder="Grant No.">
+                                <input type="text" name="grant_nr" class="form-control" placeholder="Grant No.">
                             </div>
                         </div>
                         <div class="row">
                             <div class="col-md-6">
                                 <label class="form-label">Start Date</label>
-                                <input type="date" class="form-control">
+                                <input type="date" name="start_date" class="form-control">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">End Date</label>
-                                <input type="date" class="form-control">
+                                <input type="date" name="end_date" class="form-control">
                             </div>
                         </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button class="btn btn-primary">Save Project</button>
-                </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Project</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
     <script>
-        /**
-         * DBService: Simulates connection to PostgreSQL tables
-         * Maps to schemas: lims, communications, core, reference
-         */
-        const DBService = {
-            // TABLE: lims.projects
-            projects: [
-                { id: 'WESER-25', name: 'Ecological Monitoring of Weser', pi: 'Dr. Hans Miller', start: '2025-01-01', end: '2026-12-31', grant: 'DFG-2024-X', status: 'Active' },
-                { id: 'NS-ECO', name: 'North Sea Biodiversity Survey', pi: 'Prof. A. Fisher', start: '2024-01-01', end: '2025-06-30', grant: 'EU-HORIZON', status: 'Completed' },
-                { id: 'GEN-DIV', name: 'Genetic Diversity of Sticklebacks', pi: 'Dr. Hans Miller', start: '2026-03-01', end: '2028-02-28', grant: 'Pending', status: 'Planning' }
-            ],
-
-            // TABLE: communications.internal_plans
-            tasks: [
-                { id: 1, project_id: 'WESER-25', title: 'Prepare Sampling Kits', status: 'Backlog', priority: 'High', due: '2026-01-25', assignee: 'Bioinfo Lead' },
-                { id: 2, project_id: 'WESER-25', title: 'DNA Extraction (Batch A)', status: 'In Progress', priority: 'High', due: '2026-01-22', assignee: 'Dr. Scientist' },
-                { id: 3, project_id: 'WESER-25', title: 'Q1 Report Draft', status: 'Review', priority: 'Medium', due: '2026-02-01', assignee: 'Bioinfo Lead' },
-                { id: 4, project_id: 'WESER-25', title: 'Submit Ethics App', status: 'Done', priority: 'Low', due: '2025-12-15', assignee: 'Dr. Scientist' },
-                { id: 5, project_id: 'NS-ECO', title: 'Final Data Archive', status: 'In Progress', priority: 'Medium', due: '2026-02-15', assignee: 'Dr. Scientist' }
-            ],
-
-            // TABLE: communications.projects_chat
-            messages: [
-                { id: 1, project_id: 'WESER-25', user: 'Dr. Scientist', text: 'Permit has been approved!', time: '09:30 AM', type: 'in' },
-                { id: 2, project_id: 'WESER-25', user: 'Me', text: 'Great news! I will prep the gear.', time: '09:35 AM', type: 'out' }
-            ],
-
-            // TABLE: lims.permits
-            permits: [
-                { id: 'P01', project_id: 'WESER-25', name: 'Fishing Permit (Weser)', ref: '99-AF-2025', valid_to: '2026-12-31', status: 'Valid', type: 'Fishing' },
-                { id: 'P02', project_id: 'WESER-25', name: 'Animal Welfare (Ethics)', ref: 'ETH-02', valid_to: '2026-02-15', status: 'Expiring', type: 'Ethics' }
-            ],
-
-            // TABLE: communications.reports
-            docs: [
-                { id: 1, project_id: 'WESER-25', name: 'Weser_Permit_2025.pdf', category: 'Legal', date: '2026-01-10', type: 'pdf' },
-                { id: 2, project_id: 'WESER-25', name: 'Raw_Catch_Data.xlsx', category: 'Data', date: '2026-01-12', type: 'excel' }
-            ],
-
-            // TABLE: core.persons
-            users: ['Dr. Scientist', 'Bioinfo Lead', 'Field Tech', 'Lab Manager']
+        // Auto-scroll chat to bottom on load
+        window.onload = function() {
+            const chatHistory = document.getElementById('chatHistoryArea');
+            if(chatHistory) {
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+            }
         };
-
-        // --- UI LOGIC ---
-
-        let currentProjectId = 'WESER-25';
-
-        document.addEventListener('DOMContentLoaded', () => {
-            loadProjectSelector();
-            loadProjectData();
-        });
-
-        function loadProjectSelector() {
-            const select = document.getElementById('projectSelector');
-            select.innerHTML = '';
-            DBService.projects.forEach(p => {
-                const opt = document.createElement('option');
-                opt.value = p.id;
-                opt.text = `${p.id} (${p.status})`;
-                if(p.id === currentProjectId) opt.selected = true;
-                select.appendChild(opt);
-            });
-        }
-
-        function loadProjectData() {
-            currentProjectId = document.getElementById('projectSelector').value;
-            const project = DBService.projects.find(p => p.id === currentProjectId);
-            
-            if(!project) return;
-
-            // 1. Render Banner
-            const now = new Date();
-            const start = new Date(project.start);
-            const end = new Date(project.end);
-            const totalTime = end - start;
-            const elapsedTime = now - start;
-            let progress = Math.min(100, Math.max(0, (elapsedTime / totalTime) * 100));
-            if (project.status === 'Planning') progress = 0;
-            if (project.status === 'Completed') progress = 100;
-
-            const bannerHTML = `
-                <div class="project-banner fade-in">
-                    <div class="row">
-                        <div class="col-md-8">
-                            <h3 class="fw-bold text-primary mb-1">${project.name}</h3>
-                            <div class="d-flex align-items-center gap-3 text-muted mb-3">
-                                <small><i class="fas fa-hashtag me-1"></i> ID: <strong>${project.id}</strong></small>
-                                <small><i class="fas fa-user-tie me-1"></i> PI: <strong>${project.pi}</strong></small>
-                                <small><i class="fas fa-money-check-alt me-1"></i> Grant: <strong>${project.grant}</strong></small>
-                            </div>
-                            <div class="mb-2 d-flex justify-content-between small text-muted">
-                                <span>Start: ${project.start}</span>
-                                <span class="fw-bold text-dark">Today</span>
-                                <span>End: ${project.end}</span>
-                            </div>
-                            <div class="timeline-container">
-                                <div class="timeline-progress" style="width: ${progress}%;"></div>
-                                <div class="timeline-marker" style="left: ${progress}%; border-left: 2px dashed red; background: none;"></div>
-                            </div>
-                        </div>
-                        <div class="col-md-4 border-start ps-4">
-                            <h6 class="fw-bold text-secondary small text-uppercase mb-3">Project Team</h6>
-                            <div class="d-flex align-items-center justify-content-between">
-                                <div class="avatar-stack">
-                                    <div class="avatar bg-primary" title="${project.pi}">DS</div>
-                                    <div class="avatar bg-success">BL</div>
-                                    <div class="avatar bg-secondary">+2</div>
-                                </div>
-                                <button class="btn btn-sm btn-outline-secondary">Manage Team</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            document.getElementById('projectBannerArea').innerHTML = bannerHTML;
-
-            // 2. Load Modules
-            renderKanban();
-            renderChat();
-            renderPermits();
-            renderDocs();
-            populateAssignees();
-        }
-
-        function renderKanban() {
-            const tasks = DBService.tasks.filter(t => t.project_id === currentProjectId);
-            const columns = ['Backlog', 'In Progress', 'Review', 'Done'];
-            const board = document.getElementById('kanbanBoardArea');
-            board.innerHTML = '';
-
-            columns.forEach(status => {
-                const colTasks = tasks.filter(t => t.status === status);
-                const colHTML = `
-                    <div class="kanban-col">
-                        <div class="kanban-header">
-                            <span>${status}</span>
-                            <span class="badge bg-secondary rounded-pill">${colTasks.length}</span>
-                        </div>
-                        <div class="kanban-body">
-                            ${colTasks.map(t => `
-                                <div class="kanban-card p-${t.priority}">
-                                    <h6 class="mb-1 fw-bold text-dark">${t.title}</h6>
-                                    <div class="d-flex align-items-center justify-content-between mt-2">
-                                        <small class="text-muted"><i class="far fa-clock me-1"></i> ${t.due}</small>
-                                        <div class="avatar bg-secondary" style="width:24px;height:24px;font-size:0.7rem;">
-                                            ${t.assignee.split(' ').map(n=>n[0]).join('')}
-                                        </div>
-                                    </div>
-                                    <div class="mt-2 text-end">
-                                        ${status !== 'Done' ? `<button class="btn btn-sm p-0 text-primary" onclick="moveTask(${t.id}, '${getNextStatus(status)}')"><i class="fas fa-arrow-right"></i></button>` : ''}
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                `;
-                board.insertAdjacentHTML('beforeend', colHTML);
-            });
-        }
-
-        function getNextStatus(current) {
-            const flow = ['Backlog', 'In Progress', 'Review', 'Done'];
-            const idx = flow.indexOf(current);
-            return idx < flow.length - 1 ? flow[idx + 1] : current;
-        }
-
-        function moveTask(id, newStatus) {
-            const task = DBService.tasks.find(t => t.id === id);
-            if(task) {
-                task.status = newStatus;
-                renderKanban();
-            }
-        }
-
-        function renderChat() {
-            const msgs = DBService.messages.filter(m => m.project_id === currentProjectId);
-            const container = document.getElementById('chatHistoryArea');
-            container.innerHTML = `<div class="text-center small text-muted my-3">-- Project: ${currentProjectId} --</div>`;
-            
-            msgs.forEach(m => {
-                const html = `
-                    <div class="message msg-${m.type}">
-                        ${m.type === 'in' ? `<div class="avatar bg-primary me-2 flex-shrink-0">${m.user.substring(0,2)}</div>` : ''}
-                        <div>
-                            ${m.type === 'in' ? `<div class="small fw-bold mb-1">${m.user} <span class="text-muted fw-normal ms-2">${m.time}</span></div>` : ''}
-                            <div class="msg-content">${m.text}</div>
-                            ${m.type === 'out' ? `<div class="small text-muted text-end mt-1">${m.time} <i class="fas fa-check-double"></i></div>` : ''}
-                        </div>
-                    </div>
-                `;
-                container.insertAdjacentHTML('beforeend', html);
-            });
-            
-            // Scroll to bottom
-            container.scrollTop = container.scrollHeight;
-
-            // Members list
-            document.getElementById('chatMembersArea').innerHTML = DBService.users.map(u => `
-                <div class="channel-item"><div class="d-flex align-items-center"><div class="status-dot dot-active me-2"></div> ${u}</div></div>
-            `).join('');
-        }
-
-        function sendChatMessage() {
-            const input = document.getElementById('chatMessageInput');
-            const text = input.value.trim();
-            if (!text) return;
-
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-            DBService.messages.push({
-                id: Date.now(),
-                project_id: currentProjectId,
-                user: 'Me',
-                text: text,
-                time: timeStr,
-                type: 'out'
-            });
-
-            input.value = '';
-            renderChat();
-        }
-
-        function handleChatEnter(e) {
-            if(e.key === 'Enter') sendChatMessage();
-        }
-
-        function renderPermits() {
-            const permits = DBService.permits.filter(p => p.project_id === currentProjectId);
-            const container = document.getElementById('permitsArea');
-            container.innerHTML = '';
-
-            if(permits.length === 0) {
-                container.innerHTML = '<div class="col-12 text-center text-muted p-4">No permits linked to this project.</div>';
-                return;
-            }
-
-            permits.forEach(p => {
-                const icon = p.type === 'Fishing' ? 'fa-fish' : 'fa-heart';
-                const color = p.status === 'Valid' ? 'success' : 'warning';
-                
-                const html = `
-                    <div class="col-md-6">
-                        <div class="permit-card">
-                            <div class="permit-status status-${p.status}">${p.status}</div>
-                            <div class="d-flex align-items-center mb-3">
-                                <div class="bg-${color}-subtle text-${color} rounded p-3 me-3"><i class="fas ${icon} fa-2x"></i></div>
-                                <div>
-                                    <h5 class="mb-1 fw-bold">${p.name}</h5>
-                                    <div class="text-muted small">Ref: #${p.ref} | ${p.authority}</div>
-                                </div>
-                            </div>
-                            <div class="d-flex justify-content-between small text-muted">
-                                <span>Expires: ${p.valid_to}</span>
-                                <a href="#" class="fw-bold text-dark text-decoration-underline">View Details</a>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                container.insertAdjacentHTML('beforeend', html);
-            });
-        }
-
-        function renderDocs() {
-            const docs = DBService.docs.filter(d => d.project_id === currentProjectId);
-            const tbody = document.getElementById('docsTableBody');
-            tbody.innerHTML = '';
-
-            docs.forEach(d => {
-                const icon = d.type === 'pdf' ? 'fa-file-pdf text-danger' : 'fa-file-excel text-success';
-                const html = `
-                    <tr>
-                        <td class="text-center"><i class="fas ${icon} fa-lg"></i></td>
-                        <td><a href="#" class="text-decoration-none fw-bold text-dark">${d.name}</a></td>
-                        <td><span class="badge bg-light text-dark border">${d.category}</span></td>
-                        <td class="text-muted small">${d.date}</td>
-                        <td class="text-end"><button class="btn btn-sm btn-light"><i class="fas fa-download"></i></button></td>
-                    </tr>
-                `;
-                tbody.insertAdjacentHTML('beforeend', html);
-            });
-        }
-
-        function populateAssignees() {
-            const sel = document.getElementById('taskAssignee');
-            sel.innerHTML = '';
-            DBService.users.forEach(u => {
-                const opt = document.createElement('option');
-                opt.value = u;
-                opt.text = u;
-                sel.appendChild(opt);
-            });
-        }
-
-        function submitNewTask() {
-            const title = document.getElementById('taskTitle').value;
-            const assignee = document.getElementById('taskAssignee').value;
-            const due = document.getElementById('taskDueDate').value || 'TBD';
-            const priority = document.getElementById('taskPriority').value;
-
-            if(!title) return;
-
-            DBService.tasks.push({
-                id: Date.now(),
-                project_id: currentProjectId,
-                title: title,
-                status: 'Backlog',
-                priority: priority,
-                due: due,
-                assignee: assignee
-            });
-
-            renderKanban();
-            // Close modal
-            const modalEl = document.getElementById('newTaskModal');
-            const modal = bootstrap.Modal.getInstance(modalEl);
-            modal.hide();
-            // Reset form
-            document.getElementById('newTaskForm').reset();
-        }
-
     </script>
 </body>
 </html>

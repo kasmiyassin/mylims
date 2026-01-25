@@ -1,360 +1,335 @@
 import os
 import json
+import decimal
+import datetime
 import pandas as pd
-from datetime import datetime
-from flask import Flask, render_template, request, jsonify, send_from_directory
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import text, inspect
-from sqlalchemy.ext.automap import automap_base
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, g, send_file
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
-# --- CONFIGURATION ---
+# ==========================================
+# CONFIGURATION
+# ==========================================
+class Config:
+    SECRET_KEY = os.getenv('SECRET_KEY', 'genfish-secret-key-2026')
+    TIFI_COMMON_PASS = os.getenv('TIFI_PASS', 'admin') # Shared Secret Gate
+    
+    UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
+    MAX_CONTENT_LENGTH = 32 * 1024 * 1024 # 32MB
+
+    # Database 1: Main LIMS Data (mylims)
+    DB_HOST = os.getenv('DB_HOST', 'localhost')
+    DB_NAME = os.getenv('DB_NAME', 'mylims')
+    DB_USER = os.getenv('DB_USER', 'web_admin')
+    DB_PASS = os.getenv('DB_PASS', 'password')
+
+    # Database 2: Authentication (musr)
+    AUTH_HOST = os.getenv('AUTH_DB_HOST', 'localhost')
+    AUTH_NAME = os.getenv('AUTH_DB_NAME', 'musr')
+    AUTH_USER = os.getenv('AUTH_DB_USER', 'auth_user')
+    AUTH_PASS = os.getenv('AUTH_DB_PASS', 'auth_password')
+
 app = Flask(__name__)
-
-# Database Connection (Update with your actual credentials)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'postgresql://genfish_user:secure_pass@localhost:5432/mylims_v5')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['UPLOAD_FOLDER'] = './uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
-
-# Ensure directories exist
+app.config.from_object(Config)
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'gels'), exist_ok=True)
-os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'otoliths'), exist_ok=True)
-os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'docs'), exist_ok=True)
 
-db = SQLAlchemy(app)
+# --- JSON SERIALIZER ---
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (datetime.date, datetime.datetime)):
+            return obj.isoformat()
+        if isinstance(obj, decimal.Decimal):
+            return float(obj)
+        if isinstance(obj, datetime.timedelta):
+            return str(obj)
+        return super().default(obj)
 
-# --- DATABASE REFLECTION ---
-# Automap allows simple ORM access, but we will primarily use raw SQL for complex multi-schema operations
-Base = automap_base()
+app.json_encoder = CustomJSONEncoder
 
-def reflect_db():
-    with app.app_context():
-        try:
-            # Reflect all tables for basic ORM usage if needed
-            Base.prepare(db.engine, reflect=True)
-            print("Database Schema Reflected Successfully.")
-        except Exception as e:
-            print(f"Warning during reflection: {e}")
+# ==========================================
+# DATABASE HELPERS
+# ==========================================
+def get_lims_db():
+    if 'db_lims' not in g:
+        g.db_lims = psycopg2.connect(
+            host=app.config['DB_HOST'], database=app.config['DB_NAME'],
+            user=app.config['DB_USER'], password=app.config['DB_PASS'],
+            cursor_factory=RealDictCursor
+        )
+    return g.db_lims
 
-# Call reflection
-try:
-    reflect_db()
-except Exception as e:
-    print(f"DB Connection Error: {e}")
+def get_auth_db():
+    if 'db_auth' not in g:
+        g.db_auth = psycopg2.connect(
+            host=app.config['AUTH_HOST'], database=app.config['AUTH_NAME'],
+            user=app.config['AUTH_USER'], password=app.config['AUTH_PASS'],
+            cursor_factory=RealDictCursor
+        )
+    return g.db_auth
 
+@app.teardown_appcontext
+def close_dbs(error):
+    if 'db_lims' in g: g.db_lims.close()
+    if 'db_auth' in g: g.db_auth.close()
 
-# --- HTML PAGE ROUTES ---
+def query_db(db_func, query, args=(), one=False):
+    conn = db_func()
+    with conn.cursor() as cur:
+        cur.execute(query, args)
+        rv = cur.fetchall()
+    return (rv[0] if rv else None) if one else rv
 
-@app.route('/')
-def index(): return render_template('lims_dashboard_design.html')
+def execute_db(db_func, query, args=()):
+    conn = db_func()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(query, args)
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"DB Error: {e}")
+        return False
+
+# ==========================================
+# AUTHENTICATION
+# ==========================================
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+class User(UserMixin):
+    def __init__(self, user_id, email, first_name, last_name, role, initials):
+        self.id = user_id
+        self.email = email
+        self.first_name = first_name
+        self.last_name = last_name
+        self.name = f"{first_name} {last_name}"
+        self.role = role
+        self.initials = initials
+
+@login_manager.user_loader
+def load_user(user_id):
+    # Cross-reference 'musr' login with 'mylims' profile
+    u = query_db(get_lims_db, """
+        SELECT p.person_id, p.email, p.first_name, p.last_name, p.role_in_org as role
+        FROM core.persons p
+        WHERE p.person_id::text = %s OR p.email = %s
+    """, (user_id, user_id), one=True)
+    if u:
+        initials = f"{u['first_name'][0]}{u['last_name'][0]}" if u['first_name'] else "U"
+        return User(u['person_id'], u['email'], u['first_name'], u['last_name'], u['role'], initials)
+    return None
+
+@app.route('/', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+        
+    if request.method == 'POST':
+        login_id = request.form.get('login_id')
+        password = request.form.get('password')
+        tifi_pass = request.form.get('tifi_password')
+        
+        if tifi_pass != app.config['TIFI_COMMON_PASS']:
+             flash("Invalid TIFI Common Password.", "danger")
+             return render_template('lims_login.html')
+
+        # Auth DB Check
+        auth = query_db(get_auth_db, "SELECT pswd_hash FROM aaa.lg_fi WHERE login = %s", (login_id,), one=True)
+        if auth and check_password_hash(auth['pswd_hash'], password):
+            user = load_user(login_id)
+            if user:
+                login_user(user)
+                execute_db(get_lims_db, "INSERT INTO audit.logged_actions (app_user, action, table_name, row_data) VALUES (%s, 'LOGIN', 'core.persons', 'Web Login')", (user.email,))
+                return redirect(url_for('dashboard'))
+            flash("User profile not found in LIMS database.", "warning")
+        else:
+            flash("Invalid credentials.", "danger")
+            
+    return render_template('lims_login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+# ==========================================
+# MODULES ROUTES
+# ==========================================
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    kpi = query_db(get_lims_db, """
+        SELECT 
+            (SELECT COUNT(*) FROM bio_assets.samples_root) as samples,
+            (SELECT COUNT(*) FROM lims.projects WHERE status_id = 'Active') as projects,
+            (SELECT COUNT(*) FROM eln.protocols_run) as batches,
+            '14.2' as reads
+    """, one=True)
+    
+    alerts = query_db(get_lims_db, "SELECT * FROM lims.view_reagent_alerts LIMIT 5")
+    instruments = query_db(get_lims_db, "SELECT name, is_active FROM eln.bookable_resources ORDER BY name")
+    for i in instruments:
+        i['dot_class'] = 'dot-active' if i['is_active'] else 'dot-offline'
+        i['status_text'] = 'Online' if i['is_active'] else 'Maintenance'
+
+    audit_log = query_db(get_lims_db, "SELECT action_tstamp_tx as time_ago, app_user as actor, action, table_name FROM audit.logged_actions ORDER BY action_tstamp_tx DESC LIMIT 5")
+    
+    chart_data = {
+        "labels": ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
+        "datasets": [{"label": "Throughput", "data": [10, 25, 18, 40, 35, 50], "borderColor": "#3498db"}]
+    }
+
+    return render_template('lims_dashboard.html', kpi=kpi, alerts=alerts, instruments=instruments, audit_log=audit_log, chart_data=chart_data)
 
 @app.route('/samples')
-def samples_registry(): return render_template('lims_samples_registry.html')
+@login_required
+def samples():
+    samples_data = query_db(get_lims_db, "SELECT * FROM bio_assets.samples_root ORDER BY collection_date DESC LIMIT 500")
+    projects = [p['project_id'] for p in query_db(get_lims_db, "SELECT project_id FROM lims.projects")]
+    types = [t['sample_type_id'] for t in query_db(get_lims_db, "SELECT sample_type_id FROM reference.sample_type")]
+    return render_template('lims_samples_registry.html', samples_json=json.dumps(samples_data, cls=CustomJSONEncoder), projects=projects, sample_types=types)
 
-@app.route('/field')
-def field_events(): return render_template('lims_field_events.html')
-
-@app.route('/molecular')
-def molecular_lab(): return render_template('lims_molecular_biology.html')
-
-@app.route('/biology')
-def biology_fish(): return render_template('lims_biology_fish.html')
+@app.route('/samples/lineage/<sample_id>')
+@login_required
+def lineage(sample_id):
+    # Calls the recursive view in mylims_v5.sql
+    data = query_db(get_lims_db, "SELECT * FROM bio_assets.view_downstream_lineage WHERE ancestor_sample_id = %s", (sample_id,))
+    html = f"<ul><li><div class='lineage-node'><strong>{sample_id}</strong> <span class='badge bg-primary'>Root</span></div>"
+    if data:
+        html += "<ul>"
+        for item in data:
+            html += f"<li><div class='lineage-node'><strong>{item['descendant_sample_id']}</strong> <span class='badge bg-info'>{item['descendant_type']}</span></div></li>"
+        html += "</ul>"
+    html += "</li></ul>"
+    return jsonify(success=True, html=html)
 
 @app.route('/storage')
-def storage(): return render_template('lims_storage_reagents.html')
+@login_required
+def storage():
+    rooms = query_db(get_lims_db, "SELECT * FROM lims.storage WHERE parent_storage_id IS NULL")
+    tree = []
+    for r in rooms:
+        node = {'id': r['storage_id'], 'name': r['name'], 'children': []}
+        freezers = query_db(get_lims_db, "SELECT * FROM lims.storage WHERE parent_storage_id = %s", (r['storage_id'],))
+        for f in freezers:
+            f_node = {'id': f['storage_id'], 'name': f['name'], 'children': []}
+            shelves = query_db(get_lims_db, "SELECT * FROM lims.storage WHERE parent_storage_id = %s", (f['storage_id'],))
+            for s in shelves:
+                f_node['children'].append({'id': s['storage_id'], 'name': s['name']})
+            node['children'].append(f_node)
+        tree.append(node)
+    
+    reagents = query_db(get_lims_db, "SELECT *, (expiry_date - CURRENT_DATE) as days_left FROM lims.reagents")
+    return render_template('lims_storage_reagents.html', storage_tree=tree, reagents=reagents, alerts=[r for r in reagents if r['days_left'] and r['days_left'] < 30])
 
-@app.route('/bioinformatics')
-def bioinformatics(): return render_template('lims_bioinformatics.html')
+@app.route('/field')
+@login_required
+def field():
+    cruises = query_db(get_lims_db, "SELECT * FROM field.cruises")
+    events = query_db(get_lims_db, "SELECT sampling_id, latitude, longitude, sampling_date FROM field.sampling_event")
+    map_features = []
+    for e in events:
+        map_features.append({
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [e['longitude'], e['latitude']]},
+            "properties": {"id": e['sampling_id'], "date": str(e['sampling_date'])}
+        })
+    return render_template('lims_field_events.html', cruises=cruises, map_data=json.dumps(map_features))
 
-@app.route('/projects')
-def projects(): return render_template('lims_project_collaboration.html')
+@app.route('/biology')
+@login_required
+def biology():
+    # Logic for Fish Biology module
+    specimens = query_db(get_lims_db, "SELECT * FROM biologyfish.specimen LIMIT 100")
+    return render_template('lims_biology_fish.html', specimens=specimens)
 
-@app.route('/eln')
-def eln(): return render_template('lims_eln_booking.html')
+@app.route('/molecular')
+@login_required
+def molecular():
+    batches = query_db(get_lims_db, "SELECT * FROM eln.protocols_run ORDER BY run_date DESC")
+    return render_template('lims_molecular_biology.html', batches=batches)
 
 @app.route('/explorer')
-def db_explorer(): return render_template('lims_database_explorer.html')
+@login_required
+def explorer():
+    # List available schemas for the explorer sidebar
+    schemas = ['bio_assets', 'lims', 'moleculargenetics', 'biologyfish', 'field', 'bioinformatics', 'core']
+    return render_template('lims_database_explorer.html', schemas=schemas)
+
+@app.route('/explorer/data/<table>')
+@login_required
+def explorer_data(table):
+    # Dynamic table querying for explorer
+    schema, tname = table.split('.')
+    data = query_db(get_lims_db, f"SELECT * FROM {schema}.{tname} LIMIT 200")
+    return jsonify(data)
+
+@app.route('/search')
+@login_required
+def search():
+    query = request.args.get('q', '')
+    results = []
+    if query:
+        # Integrated with SQL global search function
+        results = query_db(get_lims_db, "SELECT * FROM dashboard.fn_global_search(%s)", (query,))
+    return render_template('lims_search_page.html', query=query, results=results)
 
 @app.route('/settings')
-def settings(): return render_template('lims_settings.html')
+@login_required
+def settings():
+    logs = query_db(get_lims_db, "SELECT * FROM audit.logged_actions ORDER BY action_tstamp_tx DESC LIMIT 100")
+    return render_template('lims_settings.html', audit_logs=logs)
 
-
-# --- API: CORE SYSTEM ---
-
-@app.route('/api/schema')
-def get_schema_info():
+# ==========================================
+# UPLOAD / IMPORT VIEW
+# ==========================================
+@app.route('/<module>/import', methods=['POST'])
+@login_required
+def generic_import(module):
     """
-    Dynamically returns the database structure (Schemas > Tables) 
-    to populate the Database Explorer sidebar.
+    Handles file uploads for any module.
+    Maps Excel/CSV columns to database tables.
     """
-    try:
-        sql = text("""
-            SELECT table_schema, table_name 
-            FROM information_schema.tables 
-            WHERE table_schema NOT IN ('information_schema', 'pg_catalog') 
-            ORDER BY table_schema, table_name
-        """)
-        result = db.session.execute(sql).fetchall()
-        
-        schema_tree = {}
-        for row in result:
-            schema = row.table_schema
-            table = row.table_name
-            if schema not in schema_tree:
-                schema_tree[schema] = []
-            schema_tree[schema].append({'name': table, 'icon': 'fa-table'})
-            
-        return jsonify(schema_tree)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/search')
-def global_search():
-    """
-    Executes the PL/pgSQL function dashboard.fn_global_search(:q)
-    """
-    query = request.args.get('q', '')
-    if not query: return jsonify([])
+    file = request.files.get('file')
+    target = request.form.get('target_table') # e.g. 'bio_assets.samples_root'
     
-    try:
-        sql = text("SELECT * FROM dashboard.fn_global_search(:q)")
-        # Execute and map result to dictionary
-        results = db.session.execute(sql, {'q': query}).fetchall()
-        data = [dict(row._mapping) for row in results]
-        return jsonify(data)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    if not file or not target:
+        flash("Missing file or target table selection.", "danger")
+        return redirect(request.referrer)
 
-@app.route('/api/dashboard/kpis')
-def get_dashboard_stats():
-    """
-    Aggregates stats from various schemas for the main dashboard.
-    """
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
+
     try:
-        kpis = {
-            'samples': db.session.execute(text("SELECT COUNT(*) FROM bio_assets.samples_root WHERE status_id != 'Destroyed'")).scalar(),
-            'projects': db.session.execute(text("SELECT COUNT(*) FROM lims.projects WHERE status_id = 'Active'")).scalar(),
-            'batches': db.session.execute(text("SELECT COUNT(*) FROM eln.batch WHERE status_id = 'Open'")).scalar(),
-            'reads': round((db.session.execute(text("SELECT COALESCE(SUM(read_count_filtered), 0) FROM bioinformatics.seq_dataset")).scalar() or 0) / 1000000, 1)
-        }
+        df = pd.read_excel(filepath) if filename.endswith('.xlsx') else pd.read_csv(filepath)
+        # Convert NaN to None for SQL
+        df = df.where(pd.notnull(df), None)
         
-        # Monthly throughput from materialized view
-        # Ensure 'dashboard.monthly_lab_throughput_mv' exists in your SQL or create a fallback query
-        try:
-            tp_sql = text("SELECT * FROM dashboard.monthly_lab_throughput_mv ORDER BY month_period DESC LIMIT 6")
-            throughput = [dict(row._mapping) for row in db.session.execute(tp_sql).fetchall()]
-        except:
-            throughput = [] # Fallback if view doesn't exist yet
-
-        return jsonify({'kpis': kpis, 'throughput': throughput})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-# --- API: DATA MANAGEMENT (CRUD & IMPORT) ---
-
-@app.route('/api/table/<schema>/<table>', methods=['GET'])
-def get_table_data(schema, table):
-    """
-    Generic table viewer with pagination/limit.
-    """
-    try:
-        # Basic SQL injection protection (whitelist schemas if necessary)
-        if schema not in ['bio_assets', 'field', 'biologyfish', 'moleculargenetics', 'bioinformatics', 'lims', 'core', 'reference', 'eln', 'communications', 'audit']:
-            return jsonify({'error': 'Invalid schema'}), 403
+        conn = get_lims_db()
+        with conn.cursor() as cur:
+            for _, row in df.iterrows():
+                columns = row.index.tolist()
+                values = row.values.tolist()
+                
+                query = f"INSERT INTO {target} ({', '.join(columns)}) VALUES ({', '.join(['%s']*len(values))}) "
+                query += "ON CONFLICT DO UPDATE SET " + ", ".join([f"{col}=EXCLUDED.{col}" for col in columns])
+                
+                cur.execute(query, values)
+            conn.commit()
             
-        limit = request.args.get('limit', 1000)
-        sql = text(f'SELECT * FROM "{schema}"."{table}" LIMIT :limit')
-        result = db.session.execute(sql, {'limit': limit}).fetchall()
+        flash(f"Successfully processed {len(df)} records into {target}.", "success")
+    except Exception as e:
+        flash(f"Import Error: {str(e)}", "danger")
         
-        # Handle UUIDs and Dates serialization by converting to simple dicts (Flask jsonify handles most types)
-        data = [dict(row._mapping) for row in result]
-        return jsonify(data)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    return redirect(request.referrer)
 
-@app.route('/api/crud/<schema>/<table>', methods=['POST', 'PUT', 'DELETE'])
-def generic_crud(schema, table):
-    """
-    Generic Insert/Update/Delete handler.
-    Ideally, use specific routes for complex logic, but this serves the Database Explorer.
-    """
-    data = request.json
-    try:
-        if request.method == 'POST':
-            # INSERT
-            cols = data.keys()
-            vals = [f":{c}" for c in cols]
-            sql = text(f'INSERT INTO "{schema}"."{table}" ({", ".join(cols)}) VALUES ({", ".join(vals)}) RETURNING *')
-            res = db.session.execute(sql, data)
-            db.session.commit()
-            return jsonify({'status': 'success', 'data': dict(res.fetchone()._mapping)}), 201
-
-        elif request.method == 'PUT':
-            # UPDATE (Expects 'pk_column' and 'pk_value' in query params, or infer from data)
-            # Simplified: Assumes ID is in data payload and matches table name pattern or is generic 'id'
-            # In production, use introspection to find PK.
-            
-            # Extract PK (simplistic approach)
-            pk = next((k for k in data.keys() if 'id' in k), 'id')
-            pk_val = data.pop(pk)
-            
-            updates = [f"{k} = :{k}" for k in data.keys()]
-            sql = text(f'UPDATE "{schema}"."{table}" SET {", ".join(updates)} WHERE {pk} = :pk_val')
-            data['pk_val'] = pk_val
-            db.session.execute(sql, data)
-            db.session.commit()
-            return jsonify({'status': 'updated'}), 200
-            
-        elif request.method == 'DELETE':
-            # DELETE
-            pk = request.args.get('pk', 'id')
-            val = request.args.get('val')
-            sql = text(f'DELETE FROM "{schema}"."{table}" WHERE {pk} = :val')
-            db.session.execute(sql, {'val': val})
-            db.session.commit()
-            return jsonify({'status': 'deleted'}), 200
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/import/bulk', methods=['POST'])
-def bulk_import():
-    """
-    Advanced Import: Handles standard headers AND 2-row headers (Table/Column).
-    """
-    if 'file' not in request.files: return jsonify({'error': 'No file'}), 400
-    file = request.files['file']
-    if file.filename == '': return jsonify({'error': 'No selected file'}), 400
-
-    import_format = request.form.get('format', 'flat') # 'flat' or '2row'
-    mode = request.form.get('mode', 'upsert') 
-    
-    try:
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-
-        # 1. Handle Multi-Table Import (2-Row Header)
-        if import_format == '2row':
-            # Read header rows: Row 0 is Table Name, Row 1 is Column Name
-            df = pd.read_excel(filepath, header=[0, 1])
-            
-            # Iterate through the top-level columns (Tables)
-            tables = df.columns.get_level_values(0).unique()
-            
-            results = {}
-            with db.engine.begin() as conn:
-                for table_key in tables:
-                    # Extract sub-dataframe for this table
-                    sub_df = df[table_key].dropna(how='all') # Remove empty rows
-                    if sub_df.empty: continue
-                    
-                    # Split schema.table
-                    if '.' in table_key:
-                        sch, tbl = table_key.split('.')
-                    else:
-                        sch, tbl = 'public', table_key
-                    
-                    # Insert logic
-                    # Using pandas to_sql is easiest for 'append', custom SQL needed for 'upsert'
-                    if mode == 'insert':
-                        sub_df.to_sql(tbl, conn, schema=sch, if_exists='append', index=False)
-                        results[table_key] = f"Inserted {len(sub_df)}"
-                    else:
-                        # For Upsert, we usually need a temp table strategy
-                        temp_name = f"tmp_{tbl}_{int(datetime.now().timestamp())}"
-                        sub_df.to_sql(temp_name, conn, schema=sch, if_exists='replace', index=False)
-                        
-                        # Construct Upsert SQL (On Conflict Do Update)
-                        # NOTE: Requires knowing PK. This is a generic fallback.
-                        columns = list(sub_df.columns)
-                        pk_col = columns[0] # ASSUMPTION: First column is PK
-                        update_set = ", ".join([f"{c} = EXCLUDED.{c}" for c in columns if c != pk_col])
-                        
-                        sql = text(f"""
-                            INSERT INTO "{sch}"."{tbl}" ({", ".join(columns)})
-                            SELECT {", ".join(columns)} FROM "{sch}"."{temp_name}"
-                            ON CONFLICT ({pk_col}) DO UPDATE SET {update_set};
-                            DROP TABLE "{sch}"."{temp_name}";
-                        """)
-                        conn.execute(sql)
-                        results[table_key] = f"Upserted {len(sub_df)}"
-
-            return jsonify({'message': 'Multi-table import successful', 'details': results})
-
-        # 2. Handle Single Table Import (Flat Header)
-        else:
-            target_schema = request.form.get('schema', 'public')
-            target_table = request.form.get('table')
-            
-            if filename.endswith('.csv'): df = pd.read_csv(filepath)
-            else: df = pd.read_excel(filepath)
-            
-            df.to_sql(target_table, db.engine, schema=target_schema, if_exists='append', index=False)
-            return jsonify({'message': f'Imported {len(df)} rows into {target_schema}.{target_table}'})
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/upload', methods=['POST'])
-def upload_file():
-    """
-    Generic file uploader for images/docs.
-    Returns the file path relative to storage.
-    """
-    if 'file' not in request.files: return jsonify({'error': 'No file'}), 400
-    file = request.files['file']
-    category = request.form.get('category', 'docs') # gels, otoliths, docs
-    
-    if file:
-        filename = secure_filename(f"{int(datetime.now().timestamp())}_{file.filename}")
-        save_path = os.path.join(app.config['UPLOAD_FOLDER'], category, filename)
-        file.save(save_path)
-        
-        # Return path for DB storage
-        return jsonify({'path': save_path, 'filename': filename})
-    return jsonify({'error': 'Upload failed'}), 500
-
-
-# --- API: MODULE SPECIFICS ---
-
-@app.route('/api/storage/tree')
-def get_storage_tree_data():
-    """
-    Returns storage locations formatted for hierarchical view.
-    Parsing 'ltree' path logic happens here or on client.
-    """
-    try:
-        sql = text("SELECT storage_id, name, storage_type_id, path::text, parent_storage_id, current_capacity, total_capacity FROM lims.storage ORDER BY path")
-        result = db.session.execute(sql).fetchall()
-        data = [dict(row._mapping) for row in result]
-        return jsonify(data)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/molecular/plate/<plate_id>')
-def get_plate_data(plate_id):
-    """
-    Fetches samples associated with a specific plate/batch for the visualizer.
-    """
-    try:
-        # Simplified query: assuming samples linked to batch or storage container
-        sql = text("""
-            SELECT s.sample_id, s.storage_id, na.conc_qubit, na.a260_280, p.well_position 
-            FROM bio_assets.samples_root s
-            JOIN moleculargenetics.nucleic_acid na ON s.sample_id = na.sample_id
-            LEFT JOIN eln.plate_map p ON s.sample_id = p.sample_id
-            WHERE p.plate_id = :pid
-        """)
-        result = db.session.execute(sql, {'pid': plate_id}).fetchall()
-        return jsonify([dict(row._mapping) for row in result])
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# --- MAIN ---
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)

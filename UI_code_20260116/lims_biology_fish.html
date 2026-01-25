@@ -28,7 +28,7 @@
             overflow-x: hidden;
         }
 
-        /* Sidebar (Consistent) */
+        /* Sidebar */
         .sidebar {
             height: 100vh;
             width: var(--sidebar-width);
@@ -45,7 +45,7 @@
         .sidebar-brand { font-size: 1.4rem; font-weight: 700; text-align: center; margin-bottom: 2rem; color: white; }
         .sidebar-brand i { color: var(--accent-color); }
         .nav-header { font-size: 0.75rem; text-transform: uppercase; color: #95a5a6; padding: 10px 20px 5px; font-weight: 700; }
-        .nav-link { color: #bdc3c7; padding: 10px 20px; font-size: 0.95rem; transition: all 0.3s; border-left: 4px solid transparent; }
+        .nav-link { color: #bdc3c7; padding: 10px 20px; font-size: 0.95rem; transition: all 0.3s; border-left: 4px solid transparent; text-decoration: none; display: block; }
         .nav-link:hover, .nav-link.active { color: white; background-color: rgba(255,255,255,0.05); border-left-color: var(--accent-color); }
         .nav-link i { width: 25px; text-align: center; margin-right: 5px; }
 
@@ -68,6 +68,7 @@
             border: 1px solid #e9ecef;
             border-radius: 8px;
             padding: 10px;
+            min-width: 100px;
             text-align: center;
             transition: all 0.2s;
         }
@@ -85,7 +86,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><path d="M10,25 Q30,5 60,25 T95,25 L85,35 Q60,45 30,35 T10,25 Z" fill="%23f0f0f0" stroke="%23ccc" stroke-width="1"/></svg>');
+            /* Simple SVG Fish Placeholder */
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><path d="M10,25 Q30,5 60,25 T95,25 L85,35 Q60,45 30,35 T10,25 Z" fill="%23f8f9fa" stroke="%23ccc" stroke-width="1"/></svg>');
             background-repeat: no-repeat;
             background-position: center;
             background-size: 80%;
@@ -93,17 +95,17 @@
         
         .tissue-point {
             position: absolute;
-            width: 14px;
-            height: 14px;
-            background: var(--danger-color);
-            border: 2px solid white;
+            width: 16px;
+            height: 16px;
+            background: var(--bg-light);
+            border: 2px solid #bdc3c7;
             border-radius: 50%;
             cursor: pointer;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
             transition: transform 0.2s;
         }
-        .tissue-point:hover { transform: scale(1.3); }
-        .tissue-point.taken { background: var(--success-color); }
+        .tissue-point:hover { transform: scale(1.3); border-color: var(--accent-color); }
+        .tissue-point.taken { background: var(--success-color); border-color: white; }
 
         /* Form Sections */
         .biometric-group {
@@ -112,6 +114,7 @@
             border-radius: 10px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.03);
             margin-bottom: 20px;
+            height: 100%;
         }
         .section-title {
             font-size: 0.9rem;
@@ -131,7 +134,7 @@
             border: 1px solid #ddd;
         }
 
-        /* Drag & Drop Zone (Added) */
+        /* Drag & Drop Zone */
         .drop-zone {
             border: 2px dashed #bdc3c7;
             border-radius: 10px;
@@ -168,390 +171,440 @@
             
             <div class="nav-header">Lab Work</div>
             <a href="#" class="nav-link active"><i class="fas fa-microscope"></i> Biology / Fish</a>
-            <a href="#" class="nav-link"><i class="fas fa-flask"></i> Molecular Lab</a>
+            <a href="lims_molecular_biology.html" class="nav-link"><i class="fas fa-flask"></i> Molecular Lab</a>
+            <a href="lims_bioinformatics.html" class="nav-link"><i class="fas fa-laptop-code"></i> Bioinformatics</a>
         </div>
     </div>
 
     <!-- Main Content -->
     <div class="main-content">
         
-        <!-- Top Toolbar: Specimen Selection & Import -->
+        <!-- Top Toolbar -->
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h4 class="text-secondary fw-bold mb-0">Fish Biology Lab</h4>
-                <p class="text-muted small mb-0">Dissection, Biometrics, and Tissue Sampling (`biologyfish` schema)</p>
+                <p class="text-muted small mb-0">Dissection & Biometrics (`biologyfish` schema)</p>
             </div>
             <div class="d-flex gap-2">
-                <div class="input-group">
-                    <span class="input-group-text bg-white"><i class="fas fa-barcode"></i></span>
-                    <input type="text" class="form-control" placeholder="Scan Specimen ID..." value="F25Wes_001">
-                    <button class="btn btn-primary">Load</button>
-                </div>
-                <!-- New Import Button -->
+                <!-- Sample Search Form -->
+                <form action="" method="GET" class="d-flex">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white"><i class="fas fa-barcode"></i></span>
+                        <input type="text" name="sample_id" class="form-control" placeholder="Scan Specimen ID..." value="{{ specimen.sample_id | default('') }}">
+                        <button class="btn btn-primary" type="submit">Load</button>
+                    </div>
+                </form>
+                
+                <!-- Action Buttons -->
+                <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#newSpecimenModal">
+                    <i class="fas fa-plus me-1"></i> New Specimen
+                </button>
                 <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#importModal">
-                    <i class="fas fa-file-excel me-1"></i> Import Excel
+                    <i class="fas fa-file-excel me-1"></i> Import/Update
                 </button>
             </div>
         </div>
 
         <!-- Specimen Context Header -->
-        <div class="specimen-header d-flex justify-content-between align-items-center">
+        {% if specimen %}
+        <div class="specimen-header d-flex justify-content-between align-items-center fade-in">
             <div class="d-flex align-items-center">
                 <div class="me-4 text-center">
                     <div class="display-6 text-primary"><i class="fas fa-fish"></i></div>
-                    <span class="badge bg-primary">Processing</span>
+                    <span class="badge bg-primary">{{ specimen.status | default('In Progress') }}</span>
                 </div>
                 <div>
-                    <h5 class="fw-bold mb-1">F25Wes_001</h5>
-                    <div class="text-muted mb-1"><i class="fas fa-dna me-1"></i> Species: <em>Platichthys flesus</em> (Flounder)</div>
+                    <h5 class="fw-bold mb-1">{{ specimen.sample_id }}</h5>
+                    <div class="text-muted mb-1">
+                        <i class="fas fa-dna me-1"></i> Taxon: <em>{{ specimen.scientific_name }}</em> ({{ specimen.common_name }})
+                    </div>
                     <div class="small text-muted">
-                        <span class="me-3"><i class="fas fa-map-marker-alt me-1"></i> Weser Estuary</span>
-                        <span class="me-3"><i class="fas fa-calendar me-1"></i> Caught: 2026-01-15</span>
-                        <span><i class="fas fa-user me-1"></i> Dissector: Dr. Scientist</span>
+                        <span class="me-3"><i class="fas fa-map-marker-alt me-1"></i> {{ specimen.region_abrv }} / {{ specimen.ecosystem_abrv }}</span>
+                        <span class="me-3"><i class="fas fa-calendar me-1"></i> Caught: {{ specimen.collection_date }}</span>
+                        <span><i class="fas fa-user me-1"></i> Processor: {{ specimen.processor_name }}</span>
                     </div>
                 </div>
             </div>
             <!-- Live Calculated Indices -->
             <div class="d-flex gap-2">
                 <div class="index-card">
-                    <div class="index-value" id="val-k">1.12</div>
+                    <div class="index-value" id="val-k">{{ indices.k | default('--') }}</div>
                     <div class="index-label">Fulton's K</div>
                 </div>
                 <div class="index-card">
-                    <div class="index-value" id="val-hsi">1.8%</div>
+                    <div class="index-value" id="val-hsi">{{ indices.hsi | default('--') }}%</div>
                     <div class="index-label">HSI Index</div>
                 </div>
                 <div class="index-card">
-                    <div class="index-value" id="val-gsi">3.4%</div>
+                    <div class="index-value" id="val-gsi">{{ indices.gsi | default('--') }}%</div>
                     <div class="index-label">GSI Index</div>
                 </div>
             </div>
         </div>
+        {% else %}
+        <div class="alert alert-info text-center py-4 mb-4">
+            <i class="fas fa-info-circle me-2"></i> No specimen loaded. Scan a barcode, select from search, or <a href="#" data-bs-toggle="modal" data-bs-target="#newSpecimenModal">create new</a>.
+        </div>
+        {% endif %}
 
         <!-- Main Workspace Tabs -->
-        <ul class="nav nav-tabs mb-3" id="bioTabs" role="tablist">
-            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#biometrics">Biometrics & Tissues</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#otoliths">Otoliths & Ageing</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#stomach">Stomach Contents</button></li>
-        </ul>
+        <form action="/biology/save/{{ specimen.sample_id }}" method="POST" id="mainForm">
+            <ul class="nav nav-tabs mb-3" id="bioTabs" role="tablist">
+                <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#biometrics" type="button">Biometrics & Tissues</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#otoliths" type="button">Otoliths & Ageing</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#stomach" type="button">Stomach Contents</button></li>
+            </ul>
 
-        <div class="tab-content" id="bioTabsContent">
-            
-            <!-- TAB 1: BIOMETRICS & DISSECTION -->
-            <div class="tab-pane fade show active" id="biometrics">
-                <div class="row">
-                    <!-- Left Column: Measurements Form -->
-                    <div class="col-lg-4">
-                        <div class="biometric-group">
-                            <div class="section-title"><i class="fas fa-ruler-horizontal me-2"></i>Morphometrics</div>
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">Total Length (mm)</label>
-                                <div class="input-group">
-                                    <input type="number" class="form-control" value="245">
-                                    <span class="input-group-text">mm</span>
+            <div class="tab-content" id="bioTabsContent">
+                
+                <!-- TAB 1: BIOMETRICS & DISSECTION -->
+                <div class="tab-pane fade show active" id="biometrics">
+                    <div class="row g-4">
+                        <!-- Left Column: Measurements Form -->
+                        <div class="col-lg-4">
+                            <div class="biometric-group">
+                                <div class="section-title"><i class="fas fa-ruler-horizontal me-2"></i>Morphometrics</div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Total Length (mm)</label>
+                                    <div class="input-group">
+                                        <input type="number" step="0.1" name="total_length_mm" id="input_tl" class="form-control" value="{{ specimen.total_length_mm }}" oninput="recalcIndices()">
+                                        <span class="input-group-text">mm</span>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Standard Length (mm)</label>
+                                    <div class="input-group">
+                                        <input type="number" step="0.1" name="standard_length_mm" class="form-control" value="{{ specimen.standard_length_mm }}">
+                                        <span class="input-group-text">mm</span>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">Standard Length (mm)</label>
-                                <div class="input-group">
-                                    <input type="number" class="form-control" value="220">
-                                    <span class="input-group-text">mm</span>
+
+                            <div class="biometric-group">
+                                <div class="section-title"><i class="fas fa-weight-hanging me-2"></i>Gravimetrics</div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Total Wet Weight (g)</label>
+                                    <div class="input-group">
+                                        <input type="number" step="0.01" name="weight_g" id="input_w" class="form-control" value="{{ specimen.weight_g }}" oninput="recalcIndices()">
+                                        <span class="input-group-text">g</span>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Liver Weight (g)</label>
+                                    <div class="input-group">
+                                        <input type="number" step="0.001" name="liver_weight_g" id="input_lw" class="form-control" value="{{ specimen.liver_weight_g }}" oninput="recalcIndices()">
+                                        <span class="input-group-text">g</span>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Gonad Weight (g)</label>
+                                    <div class="input-group">
+                                        <input type="number" step="0.001" name="gonad_weight_g" id="input_gw" class="form-control" value="{{ specimen.gonad_weight_g }}" oninput="recalcIndices()">
+                                        <span class="input-group-text">g</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="biometric-group">
+                                <div class="section-title"><i class="fas fa-venus-mars me-2"></i>Determination</div>
+                                <div class="row">
+                                    <div class="col-6 mb-3">
+                                        <label class="form-label small fw-bold">Sex</label>
+                                        <select class="form-select" name="sex">
+                                            <option value="U" {% if specimen.sex == 'U' %}selected{% endif %}>Unknown</option>
+                                            <option value="F" {% if specimen.sex == 'F' %}selected{% endif %}>Female</option>
+                                            <option value="M" {% if specimen.sex == 'M' %}selected{% endif %}>Male</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-6 mb-3">
+                                        <label class="form-label small fw-bold">Maturity</label>
+                                        <select class="form-select" name="reproductive_state">
+                                            <option value="1" {% if specimen.reproductive_state == 1 %}selected{% endif %}>I (Immature)</option>
+                                            <option value="2" {% if specimen.reproductive_state == 2 %}selected{% endif %}>II (Maturing)</option>
+                                            <option value="3" {% if specimen.reproductive_state == 3 %}selected{% endif %}>III (Spawning)</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="biometric-group">
-                            <div class="section-title"><i class="fas fa-weight-hanging me-2"></i>Gravimetrics</div>
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">Total Wet Weight (g)</label>
-                                <div class="input-group">
-                                    <input type="number" class="form-control" value="185.5">
-                                    <span class="input-group-text">g</span>
+                        <!-- Right Column: Visual Dissection & Sampling -->
+                        <div class="col-lg-8">
+                            <div class="biometric-group h-100">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <div class="section-title mb-0"><i class="fas fa-syringe me-2"></i>Tissue Sampling Map</div>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#barcodeModal"><i class="fas fa-print me-1"></i> Print All Labels</button>
                                 </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">Liver Weight (g)</label>
-                                <div class="input-group">
-                                    <input type="number" class="form-control" value="3.4">
-                                    <span class="input-group-text">g</span>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">Gonad Weight (g)</label>
-                                <div class="input-group">
-                                    <input type="number" class="form-control" value="6.2">
-                                    <span class="input-group-text">g</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="biometric-group">
-                            <div class="section-title"><i class="fas fa-venus-mars me-2"></i>Determination</div>
-                            <div class="row">
-                                <div class="col-6 mb-3">
-                                    <label class="form-label small fw-bold">Sex</label>
-                                    <select class="form-select"><option>Female</option><option>Male</option><option>Juv/Indet</option></select>
-                                </div>
-                                <div class="col-6 mb-3">
-                                    <label class="form-label small fw-bold">Maturity</label>
-                                    <select class="form-select"><option>II (Maturing)</option><option>III (Spawning)</option></select>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Right Column: Visual Dissection & Sampling -->
-                    <div class="col-lg-8">
-                        <div class="biometric-group h-100">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <div class="section-title mb-0"><i class="fas fa-syringe me-2"></i>Tissue Sampling Map</div>
-                                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#barcodeModal"><i class="fas fa-print me-1"></i> Print All Labels</button>
-                            </div>
-                            
-                            <!-- Visual Interactive Map -->
-                            <div class="fish-map-container mb-4">
-                                <div class="text-muted small position-absolute top-0 start-0 m-2">Click points to register sample</div>
                                 
-                                <!-- Liver Point -->
-                                <div class="tissue-point taken" style="top: 45%; left: 35%;" title="Liver Sample (Registered)" data-bs-toggle="tooltip"></div>
-                                <!-- Muscle Point -->
-                                <div class="tissue-point" style="top: 30%; left: 45%;" title="Muscle Sample" data-bs-toggle="tooltip"></div>
-                                <!-- Fin Clip -->
-                                <div class="tissue-point taken" style="top: 60%; left: 80%;" title="Fin Clip (Registered)" data-bs-toggle="tooltip"></div>
-                                <!-- Gonad -->
-                                <div class="tissue-point" style="top: 55%; left: 40%;" title="Gonad Sample" data-bs-toggle="tooltip"></div>
-                                <!-- Otolith -->
-                                <div class="tissue-point" style="top: 25%; left: 15%;" title="Otolith Extraction" data-bs-toggle="tooltip"></div>
-                            </div>
+                                <!-- Visual Interactive Map -->
+                                <div class="fish-map-container mb-4">
+                                    <div class="text-muted small position-absolute top-0 start-0 m-2">Click points to check status</div>
+                                    
+                                    <!-- Conditional class 'taken' based on sub_samples existence -->
+                                    <div class="tissue-point {% if 'LIV' in sub_samples_codes %}taken{% endif %}" style="top: 45%; left: 35%;" title="Liver" data-bs-toggle="tooltip"></div>
+                                    <div class="tissue-point {% if 'MUS' in sub_samples_codes %}taken{% endif %}" style="top: 30%; left: 45%;" title="Muscle" data-bs-toggle="tooltip"></div>
+                                    <div class="tissue-point {% if 'FIN' in sub_samples_codes %}taken{% endif %}" style="top: 60%; left: 80%;" title="Fin Clip" data-bs-toggle="tooltip"></div>
+                                    <div class="tissue-point {% if 'GON' in sub_samples_codes %}taken{% endif %}" style="top: 55%; left: 40%;" title="Gonad" data-bs-toggle="tooltip"></div>
+                                    <div class="tissue-point {% if 'OTO' in sub_samples_codes %}taken{% endif %}" style="top: 25%; left: 15%;" title="Otolith" data-bs-toggle="tooltip"></div>
+                                </div>
 
-                            <!-- Generated Sub-Samples Table -->
-                            <h6 class="fw-bold small text-secondary">Registered Sub-Samples (`bio_assets` children)</h6>
-                            <table class="table table-hover table-sm border">
-                                <thead class="bg-light">
-                                    <tr>
-                                        <th>Sub-Sample ID</th>
-                                        <th>Tissue Type</th>
-                                        <th>Vial/Container</th>
-                                        <th>Status</th>
-                                        <th>Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>D25Wes_001_LIV</td>
-                                        <td>Liver</td>
-                                        <td>Cryo Tube 2ml</td>
-                                        <td><span class="badge bg-success">Registered</span></td>
-                                        <td><button class="btn btn-sm btn-light text-danger"><i class="fas fa-times"></i></button></td>
-                                    </tr>
-                                    <tr>
-                                        <td>D25Wes_001_FIN</td>
-                                        <td>Fin Clip</td>
-                                        <td>Ethanol Tube</td>
-                                        <td><span class="badge bg-success">Registered</span></td>
-                                        <td><button class="btn btn-sm btn-light text-danger"><i class="fas fa-times"></i></button></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                            <div class="mt-3">
-                                <button class="btn btn-outline-secondary btn-sm"><i class="fas fa-plus me-1"></i> Add Manual Sample</button>
+                                <!-- Generated Sub-Samples Table -->
+                                <h6 class="fw-bold small text-secondary">Registered Sub-Samples (`bio_assets` children)</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-sm border">
+                                        <thead class="bg-light">
+                                            <tr>
+                                                <th>Sub-Sample ID</th>
+                                                <th>Tissue Type</th>
+                                                <th>Vial/Container</th>
+                                                <th>Storage</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% if sub_samples %}
+                                                {% for sub in sub_samples %}
+                                                <tr>
+                                                    <td>{{ sub.sample_id }}</td>
+                                                    <td>{{ sub.tissue_type }}</td>
+                                                    <td>{{ sub.container_type }}</td>
+                                                    <td><span class="badge bg-light text-dark border">{{ sub.storage_location }}</span></td>
+                                                    <td>
+                                                        <button type="button" class="btn btn-sm btn-light text-danger"><i class="fas fa-times"></i></button>
+                                                    </td>
+                                                </tr>
+                                                {% endfor %}
+                                            {% else %}
+                                                <tr><td colspan="5" class="text-center text-muted">No tissues sampled yet.</td></tr>
+                                            {% endif %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="mt-3">
+                                    <div class="input-group w-50">
+                                        <select class="form-select form-select-sm" id="newTissueType">
+                                            <option value="LIV">Liver (LIV)</option>
+                                            <option value="FIN">Fin Clip (FIN)</option>
+                                            <option value="MUS">Muscle (MUS)</option>
+                                            <option value="OTO">Otolith (OTO)</option>
+                                        </select>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"><i class="fas fa-plus me-1"></i> Register Tissue</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- TAB 2: OTOLITHS & AGEING -->
-            <div class="tab-pane fade" id="otoliths">
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="biometric-group">
-                            <div class="section-title">Age Determination</div>
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">Readability</label>
-                                <select class="form-select">
-                                    <option>Good (Clear Rings)</option>
-                                    <option>Difficult (Ambiguous)</option>
-                                    <option>Unreadable (Crystallized)</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">Age (Years)</label>
-                                <input type="number" class="form-control form-control-lg fw-bold text-primary" value="3">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">Edge Type</label>
-                                <select class="form-select">
-                                    <option>Hyaline (Winter)</option>
-                                    <option>Opaque (Summer)</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">Reader</label>
-                                <input type="text" class="form-control" value="Dr. Scientist" readonly>
-                            </div>
-                            <button class="btn btn-success w-100">Save Age Data</button>
-                        </div>
-                    </div>
-                    <div class="col-md-8">
-                        <div class="biometric-group h-100">
-                            <div class="section-title">Otolith Imagery</div>
-                            <div class="row mb-3">
-                                <div class="col-md-4">
-                                    <img src="https://via.placeholder.com/300x200?text=Left+Otolith" class="otolith-thumb mb-2">
-                                    <div class="text-center small text-muted">Left Otolith (Reflected)</div>
+                <!-- TAB 2: OTOLITHS & AGEING -->
+                <div class="tab-pane fade" id="otoliths">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="biometric-group h-100">
+                                <div class="section-title">Age Determination</div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Readability</label>
+                                    <select class="form-select" name="otolith_readability">
+                                        <option>Good (Clear Rings)</option>
+                                        <option>Difficult (Ambiguous)</option>
+                                        <option>Unreadable (Crystallized)</option>
+                                    </select>
                                 </div>
-                                <div class="col-md-4">
-                                    <div class="border rounded d-flex align-items-center justify-content-center bg-light" style="height: 150px; cursor: pointer;">
-                                        <div class="text-center text-muted">
-                                            <i class="fas fa-plus fa-2x mb-2"></i>
-                                            <div class="small">Upload Right Otolith</div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Age (Years)</label>
+                                    <input type="number" name="otolith_age" class="form-control form-control-lg fw-bold text-primary" value="{{ otolith.age_read }}">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Edge Type</label>
+                                    <select class="form-select" name="otolith_edge">
+                                        <option>Hyaline (Winter)</option>
+                                        <option>Opaque (Summer)</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Reader</label>
+                                    <input type="text" class="form-control" value="Current User" readonly>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="biometric-group h-100">
+                                <div class="section-title">Otolith Imagery</div>
+                                <div class="row mb-3">
+                                    <div class="col-md-4">
+                                        <img src="{{ otolith.image_path | default('https://via.placeholder.com/300x200?text=No+Image', true) }}" class="otolith-thumb mb-2">
+                                        <div class="text-center small text-muted">Left Otolith</div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="border rounded d-flex align-items-center justify-content-center bg-light h-100" style="min-height: 150px; cursor: pointer;">
+                                            <div class="text-center text-muted">
+                                                <i class="fas fa-cloud-upload-alt fa-2x mb-2"></i>
+                                                <div class="small">Upload Right Otolith</div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="alert alert-info small">
-                                <i class="fas fa-info-circle me-1"></i> Tip: Use the annotation tool (coming soon) to mark annual rings on the image.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: STOMACH CONTENTS -->
+                <div class="tab-pane fade" id="stomach">
+                    <div class="biometric-group">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="section-title mb-0">Dietary Analysis</div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="stomach_empty" id="emptyStomach">
+                                <label class="form-check-label small" for="emptyStomach">Stomach Empty</label>
                             </div>
                         </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <label class="form-label small">Stomach Fullness (0-5)</label>
+                                <select class="form-select" name="stomach_fullness">
+                                    <option value="0">0 - Empty</option>
+                                    <option value="3">3 - Half Full</option>
+                                    <option value="5">5 - Distended</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small">Digestion Stage</label>
+                                <select class="form-select" name="stomach_digestion">
+                                    <option value="1">1 - Fresh</option>
+                                    <option value="2">2 - Partly Digested</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <table class="table table-bordered table-hover" id="preyTable">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>Prey Category / Taxon</th>
+                                    <th>Count</th>
+                                    <th>Weight (g)</th>
+                                    <th>Notes</th>
+                                    <th style="width:50px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in prey_items %}
+                                <tr>
+                                    <td><input type="text" class="form-control form-control-sm" value="{{ item.taxon }}" name="prey_taxon[]"></td>
+                                    <td><input type="number" class="form-control form-control-sm" value="{{ item.count }}" name="prey_count[]"></td>
+                                    <td><input type="number" step="0.01" class="form-control form-control-sm" value="{{ item.weight }}" name="prey_weight[]"></td>
+                                    <td><input type="text" class="form-control form-control-sm" value="{{ item.notes }}" name="prey_notes[]"></td>
+                                    <td><button type="button" class="btn btn-sm text-danger" onclick="this.closest('tr').remove()"><i class="fas fa-trash"></i></button></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addPreyRow()"><i class="fas fa-plus me-1"></i> Add Prey Item</button>
                     </div>
                 </div>
+
             </div>
-
-            <!-- TAB 3: STOMACH CONTENTS -->
-            <div class="tab-pane fade" id="stomach">
-                <div class="biometric-group">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <div class="section-title mb-0">Dietary Analysis</div>
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="emptyStomach">
-                            <label class="form-check-label small" for="emptyStomach">Stomach Empty</label>
-                        </div>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-md-3">
-                            <label class="form-label small">Stomach Fullness (0-5)</label>
-                            <select class="form-select"><option>3 - Half Full</option></select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label small">Digestion Stage</label>
-                            <select class="form-select"><option>2 - Partly Digested</option></select>
-                        </div>
-                    </div>
-
-                    <table class="table table-bordered table-hover">
-                        <thead class="bg-light">
-                            <tr>
-                                <th>Prey Category / Taxon</th>
-                                <th>Count</th>
-                                <th>Weight (g)</th>
-                                <th>Notes</th>
-                                <th style="width:50px;"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td><select class="form-select form-select-sm"><option>Gammaridae (Amphipods)</option></select></td>
-                                <td><input type="number" class="form-control form-control-sm" value="12"></td>
-                                <td><input type="number" class="form-control form-control-sm" value="0.45"></td>
-                                <td><input type="text" class="form-control form-control-sm"></td>
-                                <td><button class="btn btn-sm text-danger"><i class="fas fa-trash"></i></button></td>
-                            </tr>
-                            <tr>
-                                <td><select class="form-select form-select-sm"><option>Polychaeta</option></select></td>
-                                <td><input type="number" class="form-control form-control-sm" value="2"></td>
-                                <td><input type="number" class="form-control form-control-sm" value="0.12"></td>
-                                <td><input type="text" class="form-control form-control-sm"></td>
-                                <td><button class="btn btn-sm text-danger"><i class="fas fa-trash"></i></button></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <button class="btn btn-sm btn-outline-secondary"><i class="fas fa-plus me-1"></i> Add Prey Item</button>
+            
+            <!-- Bottom Action Bar -->
+            <div class="fixed-bottom bg-white border-top p-3" style="left: var(--sidebar-width);">
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-secondary" onclick="window.location.reload()">Discard Changes</button>
+                    <button type="submit" class="btn btn-success"><i class="fas fa-save me-1"></i> Save Specimen Data</button>
                 </div>
             </div>
-
-        </div>
-        
-        <!-- Bottom Action Bar -->
-        <div class="fixed-bottom bg-white border-top p-3" style="left: var(--sidebar-width);">
-            <div class="d-flex justify-content-end gap-2">
-                <button class="btn btn-secondary">Discard Changes</button>
-                <button class="btn btn-success"><i class="fas fa-save me-1"></i> Save Specimen Data</button>
-            </div>
-        </div>
+        </form>
 
     </div>
 
-    <!-- === IMPORT EXCEL MODAL === -->
+    <!-- === IMPORT EXCEL MODAL (UPDATED) === -->
     <div class="modal fade" id="importModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Import Biological Data</h5>
+                    <h5 class="modal-title"><i class="fas fa-file-import me-2"></i>Import / Update Biological Data</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small">1. Select Data Type</label>
-                        <select class="form-select">
-                            <option value="biometrics">Batch Morphometrics (Length/Weight)</option>
-                            <option value="stomach">Stomach Contents (Prey Data)</option>
-                            <option value="otoliths">Age Reading Data</option>
-                        </select>
-                        <div class="form-text">Choose the target table in `biologyfish` schema.</div>
-                    </div>
+                <form action="/biology/import" method="POST" enctype="multipart/form-data">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">1. Select Data Type</label>
+                            <select class="form-select" name="data_type">
+                                <option value="biometrics">Batch Morphometrics (Length/Weight/Sex)</option>
+                                <option value="stomach">Stomach Contents (Prey Data)</option>
+                                <option value="otoliths">Age Reading Data</option>
+                            </select>
+                            <div class="form-text">Choose the target table in `biologyfish` schema.</div>
+                        </div>
 
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small">2. Upload Spreadsheet</label>
-                        <div class="drop-zone">
-                            <i class="fas fa-file-excel"></i>
-                            <p class="mb-1">Drag Excel (.xlsx) or CSV file here</p>
-                            <button class="btn btn-sm btn-outline-primary mt-2">Browse Files</button>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">2. Upload Spreadsheet</label>
+                            <input type="file" class="form-control" name="file" accept=".xlsx, .csv" required>
+                            <div class="form-text mt-2">
+                                <a href="/biology/template_download" class="text-decoration-none"><i class="fas fa-download"></i> Download Excel Template</a>
+                            </div>
+                        </div>
+
+                        <!-- Update Checkbox (Requested Feature) -->
+                        <div class="alert alert-warning border-warning border d-flex align-items-center p-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="update_existing" id="updateCheck" value="true">
+                                <label class="form-check-label fw-bold text-dark" for="updateCheck">
+                                    Update existing records?
+                                </label>
+                                <div class="small text-muted mt-1">
+                                    If checked, the system will look for matching <strong>Sample IDs</strong> in the file and overwrite their data. 
+                                    <br><em>Unchecked: Duplicate IDs will be skipped or raise an error.</em>
+                                </div>
+                            </div>
                         </div>
                     </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-cloud-upload-alt me-1"></i> Import Data</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small">3. Column Mapping Preview</label>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-bordered small">
-                                <thead class="bg-light">
-                                    <tr>
-                                        <th>File Header</th>
-                                        <th>Target DB Column</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>Fish_ID</td>
-                                        <td><strong>sample_id</strong> (FK)</td>
-                                        <td class="text-success"><i class="fas fa-check-circle"></i> Matched</td>
-                                    </tr>
-                                    <tr>
-                                        <td>TL_mm</td>
-                                        <td><strong>total_length_mm</strong></td>
-                                        <td class="text-success"><i class="fas fa-check-circle"></i> Matched</td>
-                                    </tr>
-                                    <tr>
-                                        <td>W_g</td>
-                                        <td><strong>wet_weight_g</strong></td>
-                                        <td class="text-success"><i class="fas fa-check-circle"></i> Matched</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Liver_W</td>
-                                        <td><strong>liver_weight_g</strong></td>
-                                        <td class="text-success"><i class="fas fa-check-circle"></i> Matched</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+    <!-- === NEW SPECIMEN MODAL === -->
+    <div class="modal fade" id="newSpecimenModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Specimen</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/biology/create" method="POST">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Project</label>
+                            <select class="form-select" name="project_id">
+                                <option value="WESER-25">WESER-25</option>
+                                <option value="NS-ECO">NS-ECO</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Sampling Event</label>
+                            <input type="text" class="form-control" name="sampling_id" placeholder="e.g. 26WesHB_001">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Taxon (Species)</label>
+                            <select class="form-select" name="taxon_id">
+                                <option value="Platichthys flesus">Platichthys flesus (Flounder)</option>
+                                <option value="Osmerus eperlanus">Osmerus eperlanus (Smelt)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Temporary Label (Optional)</label>
+                            <input type="text" class="form-control" name="temp_label">
                         </div>
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary"><i class="fas fa-cloud-upload-alt me-1"></i> Import Data</button>
-                </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-primary">Create ID & Open</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -559,7 +612,52 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Simple mock script to enable tooltips
+        // --- 1. Live Index Calculation Logic ---
+        function recalcIndices() {
+            const tl = parseFloat(document.getElementById('input_tl').value) || 0;
+            const w = parseFloat(document.getElementById('input_w').value) || 0;
+            const lw = parseFloat(document.getElementById('input_lw').value) || 0;
+            const gw = parseFloat(document.getElementById('input_gw').value) || 0;
+
+            // Fulton's K = (100 * Weight) / Length^3
+            // Note: Length usually in cm for K, but schema uses mm. Adjust divisor accordingly.
+            // If TL is in mm, L^3 is huge. K is usually based on cm. (mm/10)^3
+            let k = 0;
+            if (tl > 0) {
+                const tl_cm = tl / 10;
+                k = (100 * w) / Math.pow(tl_cm, 3);
+            }
+            document.getElementById('val-k').innerText = k > 0 ? k.toFixed(2) : '--';
+
+            // HSI = (Liver Weight / Total Weight) * 100
+            let hsi = 0;
+            if (w > 0) {
+                hsi = (lw / w) * 100;
+            }
+            document.getElementById('val-hsi').innerText = hsi > 0 ? hsi.toFixed(2) + '%' : '--';
+
+            // GSI = (Gonad Weight / Total Weight) * 100
+            let gsi = 0;
+            if (w > 0) {
+                gsi = (gw / w) * 100;
+            }
+            document.getElementById('val-gsi').innerText = gsi > 0 ? gsi.toFixed(2) + '%' : '--';
+        }
+
+        // --- 2. Dynamic Table Row Addition ---
+        function addPreyRow() {
+            const table = document.getElementById('preyTable').getElementsByTagName('tbody')[0];
+            const newRow = table.insertRow();
+            newRow.innerHTML = `
+                <td><input type="text" class="form-control form-control-sm" name="prey_taxon[]" placeholder="Taxon"></td>
+                <td><input type="number" class="form-control form-control-sm" name="prey_count[]" value="1"></td>
+                <td><input type="number" step="0.01" class="form-control form-control-sm" name="prey_weight[]"></td>
+                <td><input type="text" class="form-control form-control-sm" name="prey_notes[]"></td>
+                <td><button type="button" class="btn btn-sm text-danger" onclick="this.closest('tr').remove()"><i class="fas fa-trash"></i></button></td>
+            `;
+        }
+
+        // Tooltip Initialization
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
         var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
           return new bootstrap.Tooltip(tooltipTriggerEl)

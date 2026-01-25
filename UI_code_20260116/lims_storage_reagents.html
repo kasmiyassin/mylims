@@ -30,7 +30,7 @@
             overflow-x: hidden;
         }
 
-        /* Sidebar (Consistent) */
+        /* Sidebar */
         .sidebar {
             height: 100vh;
             width: var(--sidebar-width);
@@ -47,112 +47,47 @@
         .sidebar-brand { font-size: 1.4rem; font-weight: 700; text-align: center; margin-bottom: 2rem; color: white; }
         .sidebar-brand i { color: var(--accent-color); }
         .nav-header { font-size: 0.75rem; text-transform: uppercase; color: #95a5a6; padding: 10px 20px 5px; font-weight: 700; }
-        .nav-link { color: #bdc3c7; padding: 10px 20px; font-size: 0.95rem; transition: all 0.3s; border-left: 4px solid transparent; }
+        .nav-link { color: #bdc3c7; padding: 10px 20px; font-size: 0.95rem; transition: all 0.3s; border-left: 4px solid transparent; text-decoration: none; display: block; }
         .nav-link:hover, .nav-link.active { color: white; background-color: rgba(255,255,255,0.05); border-left-color: var(--accent-color); }
         .nav-link i { width: 25px; text-align: center; margin-right: 5px; }
 
         /* Main Content */
         .main-content { margin-left: var(--sidebar-width); padding: 20px 30px; }
 
-        /* --- STORAGE TREE STYLES --- */
-        .storage-tree-panel {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            height: calc(100vh - 180px);
-            overflow-y: auto;
-            border: 1px solid #e0e0e0;
+        /* Storage Tree */
+        .storage-tree {
+            background: white; border-radius: 10px; padding: 15px; height: calc(100vh - 120px); overflow-y: auto; box-shadow: 0 2px 5px rgba(0,0,0,0.03); border-right: 4px solid #eee;
         }
+        .tree-item { padding: 8px 12px; cursor: pointer; border-radius: 5px; margin-bottom: 2px; color: #555; transition: 0.2s; display: flex; align-items: center; }
+        .tree-item:hover { background-color: #f0f2f5; color: var(--accent-color); }
+        .tree-item.active { background-color: #e3f2fd; color: var(--accent-color); font-weight: 600; }
+        .tree-icon { margin-right: 10px; width: 20px; text-align: center; }
+        .tree-level-1 { padding-left: 10px; font-weight: 700; color: var(--primary-color); text-transform: uppercase; font-size: 0.85rem; margin-top: 10px; }
+        .tree-level-2 { padding-left: 30px; }
+        .tree-level-3 { padding-left: 50px; font-size: 0.9rem; }
 
-        .tree-item {
-            padding: 8px 15px;
-            cursor: pointer;
-            border-left: 3px solid transparent;
-            transition: all 0.2s;
-            font-size: 0.9rem;
-            display: flex;
-            align-items: center;
+        /* Box Grid Visualizer */
+        .box-grid {
+            display: grid; grid-template-columns: repeat(9, 1fr); gap: 5px; width: 100%; max-width: 500px; margin: 0 auto;
         }
-        .tree-item:hover { background-color: #f1f9fe; color: var(--accent-color); }
-        .tree-item.active { background-color: #e3f2fd; border-left-color: var(--accent-color); font-weight: 500; color: #1565c0; }
-        
-        .tree-indent-1 { padding-left: 15px; }
-        .tree-indent-2 { padding-left: 35px; }
-        .tree-indent-3 { padding-left: 55px; }
-        .tree-indent-4 { padding-left: 75px; }
-
-        .tree-icon { width: 20px; text-align: center; margin-right: 8px; color: #95a5a6; }
-        .active .tree-icon { color: var(--accent-color); }
-        .capacity-bar-mini { height: 4px; width: 40px; background: #eee; border-radius: 2px; margin-left: auto; }
-        .capacity-fill-mini { height: 100%; border-radius: 2px; transition: width 0.5s; }
-
-        /* --- VISUAL GRID (BOX VIEW) --- */
-        .box-grid-container {
-            display: grid;
-            grid-template-columns: repeat(9, 1fr); /* Standard 9x9 Box */
-            gap: 5px;
-            background: #ecf0f1;
-            padding: 15px;
-            border-radius: 8px;
-            width: fit-content;
-            margin: 0 auto;
-            box-shadow: inset 0 2px 5px rgba(0,0,0,0.05);
+        .box-slot {
+            aspect-ratio: 1; border: 1px solid #e0e0e0; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; cursor: pointer; transition: 0.2s; background: #fff;
         }
+        .box-slot:hover { transform: scale(1.1); box-shadow: 0 2px 5px rgba(0,0,0,0.1); z-index: 2; border-color: var(--accent-color); }
+        .slot-occupied { background-color: var(--accent-color); color: white; border-color: var(--accent-color); }
+        .slot-empty { background-color: #f9f9f9; color: #ccc; }
 
-        .box-cell {
-            width: 45px;
-            height: 45px;
-            background: white;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.7rem;
-            color: #bdc3c7;
-            cursor: pointer;
-            transition: transform 0.1s;
-            position: relative;
-            border: 1px solid #e0e0e0;
-        }
-        
-        .box-cell:hover { transform: scale(1.15); z-index: 10; box-shadow: 0 4px 8px rgba(0,0,0,0.15); border-color: #aaa; }
-        
-        /* Cell Status Colors */
-        .cell-dna { background-color: #3498db; color: white; border-color: #2980b9; }
-        .cell-tissue { background-color: #9b59b6; color: white; border-color: #8e44ad; }
-        .cell-water { background-color: #1abc9c; color: white; border-color: #16a085; }
-        .cell-empty { background-color: white; border: 1px dashed #bdc3c7; }
+        /* Reagent Status Badges */
+        .expiry-badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 12px; font-weight: 600; }
+        .expiry-ok { background: #e8f5e9; color: #27ae60; }
+        .expiry-soon { background: #fff3cd; color: #856404; }
+        .expiry-expired { background: #f8d7da; color: #721c24; }
 
-        /* --- REAGENT TABLE --- */
-        .expiry-badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 12px; font-weight: 500; }
-        .expiry-ok { background-color: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
-        .expiry-warn { background-color: #fff3e0; color: #ef6c00; border: 1px solid #ffe0b2; }
-        .expiry-crit { background-color: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
+        /* Alert Panel */
+        .alert-panel { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); border-left: 4px solid var(--danger-color); }
 
-        /* --- TABS --- */
-        .storage-tabs .nav-link {
-            color: var(--primary-color);
-            border: none;
-            border-bottom: 3px solid transparent;
-            padding: 12px 20px;
-            font-weight: 500;
-        }
-        .storage-tabs .nav-link.active {
-            color: var(--accent-color);
-            background: none;
-            border-bottom: 3px solid var(--accent-color);
-        }
-
-        /* Drag & Drop Zone */
-        .drop-zone {
-            border: 2px dashed #bdc3c7;
-            border-radius: 10px;
-            padding: 30px;
-            text-align: center;
-            background-color: #fafafa;
-            transition: all 0.2s;
-            cursor: pointer;
-        }
+        /* Drag & Drop */
+        .drop-zone { border: 2px dashed #bdc3c7; border-radius: 10px; padding: 30px; text-align: center; background-color: #fafafa; transition: all 0.2s; cursor: pointer; }
         .drop-zone:hover { border-color: var(--accent-color); background-color: #f1f9fe; }
         .drop-zone i { font-size: 2.5rem; color: #bdc3c7; margin-bottom: 10px; }
 
@@ -168,8 +103,7 @@
         <div class="d-flex flex-column">
             <div class="nav-header">Overview</div>
             <a href="lims_dashboard_design.html" class="nav-link"><i class="fas fa-chart-line"></i> Dashboard</a>
-            <a href="lims_search_page.html" class="nav-link"><i class="fas fa-search"></i> Global Search</a>
-            <a href="lims_eln_booking.html" class="nav-link"><i class="fas fa-calendar-alt"></i> Booking / ELN</a>
+            <a href="lims_project_collaboration.html" class="nav-link"><i class="fas fa-briefcase"></i> Projects & Collab</a>
 
             <div class="nav-header">Bio Assets</div>
             <a href="lims_samples_registry.html" class="nav-link"><i class="fas fa-vial"></i> Samples Registry</a>
@@ -182,6 +116,11 @@
             <a href="lims_biology_fish.html" class="nav-link"><i class="fas fa-microscope"></i> Biology / Fish</a>
             <a href="lims_molecular_biology.html" class="nav-link"><i class="fas fa-flask"></i> Molecular Lab</a>
             <a href="lims_bioinformatics.html" class="nav-link"><i class="fas fa-laptop-code"></i> Bioinformatics</a>
+            
+            <div class="nav-header">Management</div>
+            <a href="lims_eln_booking.html" class="nav-link"><i class="fas fa-calendar-alt"></i> Booking / ELN</a>
+            <a href="lims_database_explorer.html" class="nav-link"><i class="fas fa-table"></i> DB Explorer</a>
+            <a href="lims_settings.html" class="nav-link"><i class="fas fa-cogs"></i> Settings</a>
         </div>
     </div>
 
@@ -192,148 +131,168 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h4 class="text-secondary fw-bold mb-0">Storage & Inventory</h4>
-                <p class="text-muted small mb-0">Manage hierarchical storage (`lims.storage`) and chemical inventory (`lims.reagents`)</p>
+                <p class="text-muted small mb-0">Manage Freezers (`lims.storage`) and Consumables (`lims.reagents`)</p>
             </div>
-            <div class="btn-group">
-                <button class="btn btn-outline-primary"><i class="fas fa-barcode me-1"></i> Scan Item</button>
-                <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#importModal"><i class="fas fa-file-excel me-1"></i> Import / Update</button>
-                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newItemModal"><i class="fas fa-plus me-1"></i> Add Item</button>
+            <div class="d-flex gap-2">
+                <div class="input-group">
+                    <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
+                    <input type="text" class="form-control" placeholder="Search Item, Box, or Location...">
+                </div>
+                <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#importModal"><i class="fas fa-file-excel me-1"></i> Import/Update</button>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newItemModal"><i class="fas fa-plus me-1"></i> New Item</button>
             </div>
         </div>
 
-        <!-- Navigation Tabs -->
-        <ul class="nav nav-tabs storage-tabs mb-4" id="storageTab" role="tablist">
-            <li class="nav-item">
-                <button class="nav-link active" id="browser-tab" data-bs-toggle="tab" data-bs-target="#browser"><i class="fas fa-sitemap me-2"></i>Storage Browser</button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link" id="reagents-tab" data-bs-toggle="tab" data-bs-target="#reagents"><i class="fas fa-flask me-2"></i>Reagents & Chemicals</button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link" id="alerts-tab" data-bs-toggle="tab" data-bs-target="#alerts">
-                    <i class="fas fa-bell me-2"></i>Alerts <span class="badge bg-danger rounded-pill ms-1" id="alertCountBadge">0</span>
-                </button>
-            </li>
-        </ul>
-
-        <div class="tab-content" id="storageTabContent">
+        <div class="row h-100">
             
-            <!-- === TAB 1: STORAGE BROWSER (Hierarchical) === -->
-            <div class="tab-pane fade show active" id="browser">
-                <div class="row g-4">
-                    <!-- Left: Tree Navigation (lims.storage) -->
-                    <div class="col-lg-3">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="fw-bold text-secondary text-uppercase small">Storage Hierarchy</h6>
-                            <button class="btn btn-sm btn-link text-decoration-none" onclick="DBService.loadTree()"><i class="fas fa-sync-alt"></i></button>
-                        </div>
-                        <div class="storage-tree-panel p-2" id="storageTreeContainer">
-                            <!-- Populated by JS -->
-                            <div class="text-center p-3 text-muted"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
-                        </div>
+            <!-- Left Column: Storage Browser -->
+            <div class="col-lg-3">
+                <div class="storage-tree">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="text-uppercase small fw-bold text-muted">Browser</span>
+                        <button class="btn btn-sm btn-light text-primary"><i class="fas fa-sync-alt"></i></button>
                     </div>
+                    
+                    <!-- Dynamic Tree Rendering -->
+                    {% for room in storage_tree %}
+                        <div class="tree-item tree-level-1"><i class="fas fa-building tree-icon"></i> {{ room.name }}</div>
+                        {% for freezer in room.children %}
+                            <div class="tree-item tree-level-2" onclick="window.location.href='?freezer_id={{ freezer.id }}'">
+                                <i class="fas fa-snowflake tree-icon text-info"></i> {{ freezer.name }}
+                            </div>
+                            {% for shelf in freezer.children %}
+                                <div class="tree-item tree-level-3" onclick="loadBox('{{ shelf.id }}')">
+                                    <i class="fas fa-layer-group tree-icon text-muted"></i> {{ shelf.name }}
+                                </div>
+                            {% endfor %}
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-muted small text-center mt-4">No storage locations defined.</div>
+                    {% endfor %}
+                </div>
+            </div>
 
-                    <!-- Middle: Content View (Visual Grid) -->
-                    <div class="col-lg-6">
-                        <div class="card border-0 shadow-sm h-100">
-                            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+            <!-- Right Column: Content Area -->
+            <div class="col-lg-9">
+                
+                <!-- Alerts Section -->
+                {% if alerts %}
+                <div class="alert-panel">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="fw-bold text-danger mb-0"><i class="fas fa-bell me-2"></i>Critical Alerts</h6>
+                        <span class="badge bg-danger rounded-pill">{{ alerts | length }} Items</span>
+                    </div>
+                    <div class="row g-2">
+                        {% for alert in alerts %}
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center bg-light p-2 rounded">
+                                <i class="fas fa-exclamation-circle text-danger me-3 fs-4"></i>
                                 <div>
-                                    <h5 class="fw-bold mb-0" id="selectedContainerName">Select a Container</h5>
-                                    <small class="text-muted" id="selectedContainerMeta">--</small>
+                                    <div class="fw-bold small">{{ alert.name }}</div>
+                                    <div class="text-muted small" style="font-size: 0.75rem;">Exp: {{ alert.expiry }} ({{ alert.days_left }} days left)</div>
                                 </div>
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">Actions</button>
-                                    <ul class="dropdown-menu">
-                                        <li><a class="dropdown-item" href="#">Move Box</a></li>
-                                        <li><a class="dropdown-item" href="#">Export Manifest</a></li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li><a class="dropdown-item text-danger" href="#">Archive Box</a></li>
-                                    </ul>
-                                </div>
-                            </div>
-                            <div class="card-body d-flex flex-column align-items-center justify-content-center bg-light" id="gridArea">
-                                <p class="text-muted">Select a box from the tree to view contents.</p>
                             </div>
                         </div>
+                        {% endfor %}
                     </div>
+                </div>
+                {% endif %}
 
-                    <!-- Right: Selected Item Details -->
-                    <div class="col-lg-3">
-                        <div class="card border-0 shadow-sm mb-3">
-                            <div class="card-header bg-white border-bottom fw-bold">Selection Details</div>
-                            <div class="card-body text-center" id="selectionDetails">
-                                <p class="text-muted my-4">Click a cell to view details.</p>
-                            </div>
-                        </div>
-                        
-                        <!-- Free Space Widget -->
+                <!-- Tabs -->
+                <ul class="nav nav-tabs mb-4" id="storageTabs" role="tablist">
+                    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#inventory">Reagent Inventory</button></li>
+                    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#visualizer">Box Visualizer</button></li>
+                </ul>
+
+                <div class="tab-content">
+                    
+                    <!-- TAB 1: REAGENT INVENTORY -->
+                    <div class="tab-pane fade show active" id="inventory">
                         <div class="card border-0 shadow-sm">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="bg-light">
+                                        <tr>
+                                            <th>Item Name</th>
+                                            <th>Lot Number</th>
+                                            <th>Location</th>
+                                            <th>Quantity</th>
+                                            <th>Expiry</th>
+                                            <th>Status</th>
+                                            <th class="text-end">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% if reagents %}
+                                            {% for r in reagents %}
+                                            <tr>
+                                                <td><div class="fw-bold">{{ r.name }}</div><div class="small text-muted">{{ r.catalog_number }}</div></td>
+                                                <td>{{ r.lot_number }}</td>
+                                                <td>{{ r.location_path }}</td>
+                                                <td>
+                                                    <div class="progress" style="height:6px; width:60px;">
+                                                        <div class="progress-bar bg-info" style="width: {{ r.percent_remaining }}%"></div>
+                                                    </div> 
+                                                    <small>{{ r.quantity }} {{ r.unit }}</small>
+                                                </td>
+                                                <td>{{ r.expiry_date }}</td>
+                                                <td>
+                                                    {% if r.days_left < 0 %}
+                                                        <span class="expiry-badge expiry-expired">Expired</span>
+                                                    {% elif r.days_left < 30 %}
+                                                        <span class="expiry-badge expiry-soon">Soon</span>
+                                                    {% else %}
+                                                        <span class="expiry-badge expiry-ok">Valid</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="text-end">
+                                                    <button class="btn btn-sm btn-light text-primary"><i class="fas fa-edit"></i></button>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        {% else %}
+                                            <tr><td colspan="7" class="text-center text-muted py-4">No reagents found. Add items or check filters.</td></tr>
+                                        {% endif %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2: BOX VISUALIZER -->
+                    <div class="tab-pane fade" id="visualizer">
+                        {% if current_box %}
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="fw-bold mb-0">Box View: {{ current_box.name }}</h6>
+                                <span class="badge bg-light text-dark border">9x9 Format</span>
+                            </div>
                             <div class="card-body">
-                                <h6 class="fw-bold small text-muted text-uppercase mb-2">Unit Capacity</h6>
-                                <div class="progress mb-2" style="height: 10px;">
-                                    <div class="progress-bar bg-success" role="progressbar" style="width: 0%" id="capacityBar"></div>
+                                <div class="box-grid">
+                                    {% for i in range(1, 82) %}
+                                        {% set slot = current_box.slots | selectattr("pos", "equalto", i) | first %}
+                                        {% if slot %}
+                                            <div class="box-slot slot-occupied" title="{{ slot.sample_id }}" data-bs-toggle="tooltip">
+                                                {{ i }}
+                                            </div>
+                                        {% else %}
+                                            <div class="box-slot slot-empty">{{ i }}</div>
+                                        {% endif %}
+                                    {% endfor %}
                                 </div>
-                                <div class="d-flex justify-content-between small">
-                                    <span class="fw-bold" id="capacityText">--</span>
-                                    <span class="text-muted">Slots Used</span>
-                                </div>
                             </div>
                         </div>
+                        {% else %}
+                        <div class="alert alert-light border text-center p-5">
+                            <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+                            <h5>No Box Selected</h5>
+                            <p class="text-muted">Select a shelf or box from the sidebar tree to visualize contents.</p>
+                        </div>
+                        {% endif %}
                     </div>
+
                 </div>
             </div>
-
-            <!-- === TAB 2: REAGENTS & CHEMICALS === -->
-            <div class="tab-pane fade" id="reagents">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body">
-                        <!-- Toolbar -->
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <div class="input-group w-25">
-                                <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
-                                <input type="text" class="form-control" placeholder="Search Reagents...">
-                            </div>
-                            <div class="d-flex gap-2">
-                                <select class="form-select form-select-sm" style="width: auto;">
-                                    <option>All Types</option>
-                                    <option>Enzyme</option>
-                                    <option>Buffer</option>
-                                    <option>Kit</option>
-                                </select>
-                                <button class="btn btn-sm btn-outline-secondary"><i class="fas fa-file-download me-1"></i> Export Inventory</button>
-                            </div>
-                        </div>
-
-                        <!-- Table -->
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead class="bg-light">
-                                    <tr>
-                                        <th>Reagent Name</th>
-                                        <th>Lot Number</th>
-                                        <th>Location</th>
-                                        <th>Quantity</th>
-                                        <th>Expiry Date</th>
-                                        <th>Status</th>
-                                        <th class="text-end">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="reagentTableBody">
-                                    <!-- Populated by JS -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- === TAB 3: ALERTS === -->
-            <div class="tab-pane fade" id="alerts">
-                <div class="row" id="alertsArea">
-                    <!-- Populated by JS -->
-                </div>
-            </div>
-
         </div>
     </div>
 
@@ -342,339 +301,68 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Bulk Import / Update Reagents</h5>
+                    <h5 class="modal-title">Bulk Inventory Import</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <div class="alert alert-light border small">
-                        <i class="fas fa-info-circle me-2 text-primary"></i>
-                        Use this tool to add new chemical inventory or update quantities/locations for existing batches.
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small">1. Import Mode</label>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="reagentImportMode" id="modeReagentUpsert" checked>
-                            <label class="form-check-label small" for="modeReagentUpsert">
-                                <strong>Upsert (Add or Update)</strong> - Matches by 'Lot Number' + 'Reagent Name'. Updates quantity/location if found.
-                            </label>
+                <form action="/storage/import" method="POST" enctype="multipart/form-data">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">1. Data Type</label>
+                            <select class="form-select" name="target_table" id="importTarget" onchange="updateTemplateLink()">
+                                <option value="reagents">Consumables / Reagents</option>
+                                <option value="storage_map">Storage Locations (Box/Slot Mapping)</option>
+                            </select>
                         </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="reagentImportMode" id="modeReagentInsert">
-                            <label class="form-check-label small" for="modeReagentInsert">
-                                <strong>Insert Only</strong> - Skip if Lot Number already exists.
-                            </label>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">2. Upload File</label>
+                            <div class="drop-zone">
+                                <i class="fas fa-file-excel text-success"></i>
+                                <p class="mb-1">Drag Excel (.xlsx) or CSV file here</p>
+                                <input type="file" name="file" class="form-control" style="opacity:0; position:absolute; height:100%; top:0; left:0; cursor:pointer;" required>
+                                <button type="button" class="btn btn-sm btn-outline-primary mt-2">Browse Files</button>
+                            </div>
+                            <div class="form-text mt-2">
+                                <a href="#" id="templateLink" class="text-decoration-none"><i class="fas fa-download"></i> Download Template</a>
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small">2. Upload File</label>
-                        <div class="drop-zone">
-                            <i class="fas fa-cloud-upload-alt"></i>
-                            <p class="mb-1">Drag Excel (.xlsx) or CSV file here</p>
-                            <button class="btn btn-sm btn-outline-primary mt-2">Browse Files</button>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small">Required Columns (Schema Match)</label>
-                        <table class="table table-sm table-bordered small mb-0">
-                            <thead class="bg-light"><tr><th>Column Header</th><th>Description</th><th>Example</th></tr></thead>
-                            <tbody>
-                                <tr><td>reagent_name</td><td>Name of chemical/kit</td><td>Taq Polymerase</td></tr>
-                                <tr><td>lot_number</td><td>Manufacturer Lot ID</td><td>LOT-9921</td></tr>
-                                <tr><td>storage_id</td><td>Location Name or ID</td><td>Freezer A</td></tr>
-                                <tr><td>current_quantity</td><td>Amount remaining</td><td>50</td></tr>
-                                <tr><td>expiry_date</td><td>YYYY-MM-DD</td><td>2026-12-31</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-success">Process Import</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- === NEW ITEM MODAL (Single Entry) === -->
-    <div class="modal fade" id="newItemModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Add Inventory Item</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <ul class="nav nav-pills mb-3 nav-fill small" id="pills-tab" role="tablist">
-                        <li class="nav-item"><a class="nav-link active" data-bs-toggle="pill" href="#addReagent">Reagent</a></li>
-                        <li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#addBox">New Box</a></li>
-                    </ul>
-                    <div class="tab-content">
-                        <!-- Add Reagent Form -->
-                        <div class="tab-pane fade show active" id="addReagent">
-                            <form>
-                                <div class="mb-2"><label class="form-label">Name</label><input type="text" class="form-control"></div>
-                                <div class="row mb-2">
-                                    <div class="col"><label class="form-label">Lot No.</label><input type="text" class="form-control"></div>
-                                    <div class="col"><label class="form-label">Expiry</label><input type="date" class="form-control"></div>
+                        <!-- Update Checkbox (Upsert Logic) -->
+                        <div class="alert alert-warning border-warning border d-flex align-items-center p-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="update_existing" id="updateCheck" value="true">
+                                <label class="form-check-label fw-bold text-dark" for="updateCheck">
+                                    Update existing items?
+                                </label>
+                                <div class="small text-muted mt-1">
+                                    If checked, rows with matching IDs/Lots will be updated. 
+                                    <br><em>Unchecked: Duplicates will be skipped or error.</em>
                                 </div>
-                                <div class="mb-2"><label class="form-label">Location</label><select class="form-select"><option>Select Shelf...</option></select></div>
-                            </form>
-                        </div>
-                        <!-- Add Box Form -->
-                        <div class="tab-pane fade" id="addBox">
-                            <form>
-                                <div class="mb-2"><label class="form-label">Box Name/ID</label><input type="text" class="form-control"></div>
-                                <div class="mb-2"><label class="form-label">Type</label><select class="form-select"><option>9x9 Standard Cryo</option><option>10x10</option></select></div>
-                                <div class="mb-2"><label class="form-label">Parent Location</label><select class="form-select"><option>Select Freezer/Shelf...</option></select></div>
-                            </form>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary">Save</button>
-                </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-success">Process Import</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
     <script>
-        /**
-         * DBService: Mimics connection to PostgreSQL tables
-         * Tables: lims.storage, lims.reagents, bio_assets.samples_root
-         */
-        const DBService = {
-            // TABLE: lims.storage (Hierarchical)
-            storageData: [
-                { id: 'S001', name: 'Main Lab Building', type: 'Building', parent: null, path: 'S001' },
-                { id: 'S002', name: 'Room 101 (Molecular)', type: 'Room', parent: 'S001', path: 'S001.S002' },
-                { id: 'S003', name: 'Freezer -80°C (A)', type: 'Freezer', parent: 'S002', path: 'S001.S002.S003', capacity: 500, used: 460 },
-                { id: 'S004', name: 'Shelf 1', type: 'Shelf', parent: 'S003', path: 'S001.S002.S003.S004' },
-                { id: 'S005', name: 'Box W25_DNA_01', type: 'Box', parent: 'S004', path: 'S001.S002.S003.S004.S005', capacity: 81, used: 45 },
-                { id: 'S006', name: 'Chemical Cabinet', type: 'Cabinet', parent: 'S002', path: 'S001.S002.S006' }
-            ],
-
-            // TABLE: lims.reagents
-            reagents: [
-                { id: 'R001', name: 'Taq Polymerase', lot: 'LOT-998', loc: 'Freezer -80°C (A)', qty: 20, unit: '%', expiry: '2026-01-25' }, // Expiring soon
-                { id: 'R002', name: 'Ethanol 96%', lot: 'LOT-112', loc: 'Chemical Cabinet', qty: 80, unit: '%', expiry: '2028-01-01' },
-                { id: 'R003', name: 'Proteinase K', lot: 'LOT-OLD', loc: 'Freezer -80°C (A)', qty: 10, unit: '%', expiry: '2025-12-01' }  // Expired
-            ],
-
-            // TABLE: bio_assets.samples_root (Joined with storage)
-            boxContents: {
-                'S005': [
-                    { well: 'A1', id: 'D25WesHB_001', type: 'DNA' },
-                    { well: 'A2', id: 'D25WesHB_002', type: 'DNA' },
-                    { well: 'A3', id: 'D25WesHB_003', type: 'DNA' },
-                    { well: 'B1', id: 'T25WesHB_001', type: 'Tissue' },
-                    { well: 'C1', id: 'W25WesHB_001', type: 'Water' }
-                ]
-            },
-
-            loadTree: function() {
-                const container = document.getElementById('storageTreeContainer');
-                container.innerHTML = '';
-                
-                // Recursive render function
-                const renderNode = (parentId, indentLevel) => {
-                    const children = this.storageData.filter(item => item.parent === parentId);
-                    children.forEach(item => {
-                        // Icon Logic
-                        let icon = 'fa-box';
-                        if (item.type === 'Building') icon = 'fa-building';
-                        if (item.type === 'Room') icon = 'fa-door-open';
-                        if (item.type === 'Freezer') icon = 'fa-snowflake';
-                        if (item.type === 'Shelf') icon = 'fa-layer-group';
-
-                        // Capacity Bar (Mini)
-                        let capHtml = '';
-                        if (item.capacity) {
-                            const pct = Math.round((item.used / item.capacity) * 100);
-                            const color = pct > 90 ? 'bg-danger' : 'bg-success';
-                            capHtml = `<div class="capacity-bar-mini ms-auto"><div class="capacity-fill-mini ${color}" style="width: ${pct}%;"></div></div>`;
-                        }
-
-                        const el = document.createElement('div');
-                        el.className = `tree-item tree-indent-${indentLevel}`;
-                        el.innerHTML = `<span class="tree-icon"><i class="fas ${icon}"></i></span><span>${item.name}</span>${capHtml}`;
-                        el.onclick = (e) => {
-                            // Highlight
-                            document.querySelectorAll('.tree-item').forEach(i => i.classList.remove('active'));
-                            el.classList.add('active');
-                            this.loadContainer(item);
-                        };
-                        container.appendChild(el);
-                        
-                        renderNode(item.id, indentLevel + 1); // Recurse
-                    });
-                };
-
-                renderNode(null, 1);
-            },
-
-            loadContainer: function(item) {
-                // Update Header
-                document.getElementById('selectedContainerName').innerText = item.name;
-                document.getElementById('selectedContainerMeta').innerText = `Type: ${item.type} | Path: ${item.path}`;
-                
-                // Update Capacity Bar
-                if (item.capacity) {
-                    const pct = Math.round((item.used / item.capacity) * 100);
-                    const bar = document.getElementById('capacityBar');
-                    bar.style.width = `${pct}%`;
-                    bar.className = `progress-bar ${pct > 90 ? 'bg-danger' : 'bg-success'}`;
-                    bar.innerText = `${pct}%`;
-                    document.getElementById('capacityText').innerText = `${item.used} / ${item.capacity}`;
-                } else {
-                    document.getElementById('capacityBar').style.width = '0%';
-                    document.getElementById('capacityText').innerText = '--';
-                }
-
-                // Load Grid or Message
-                const gridArea = document.getElementById('gridArea');
-                gridArea.innerHTML = '';
-
-                if (item.type === 'Box') {
-                    this.renderBoxGrid(item.id, gridArea);
-                } else {
-                    gridArea.innerHTML = `<div class="text-center text-muted p-5"><i class="fas fa-folder-open fa-3x mb-3 opacity-25"></i><p>Select a specific Box to view contents grid.</p></div>`;
-                }
-            },
-
-            renderBoxGrid: function(boxId, container) {
-                // Legend
-                const legend = document.createElement('div');
-                legend.className = 'd-flex gap-3 mb-3 small w-100 justify-content-center';
-                legend.innerHTML = `
-                    <div class="d-flex align-items-center"><div class="box-cell cell-dna" style="width:15px;height:15px;margin-right:5px;"></div> DNA</div>
-                    <div class="d-flex align-items-center"><div class="box-cell cell-tissue" style="width:15px;height:15px;margin-right:5px;"></div> Tissue</div>
-                    <div class="d-flex align-items-center"><div class="box-cell cell-water" style="width:15px;height:15px;margin-right:5px;"></div> Water</div>
-                `;
-                container.appendChild(legend);
-
-                // Grid
-                const grid = document.createElement('div');
-                grid.className = 'box-grid-container';
-                
-                const contents = this.boxContents[boxId] || [];
-                const rows = ['A','B','C','D','E','F','G','H','I']; // 9x9
-                
-                rows.forEach(row => {
-                    for (let i = 1; i <= 9; i++) {
-                        const cellId = `${row}${i}`;
-                        const sample = contents.find(s => s.well === cellId);
-                        
-                        const cell = document.createElement('div');
-                        cell.innerText = cellId;
-                        
-                        if (sample) {
-                            cell.className = `box-cell cell-occupied cell-${sample.type.toLowerCase()}`;
-                            cell.title = `${cellId}: ${sample.id}`;
-                            cell.onclick = () => this.showDetails(sample, cellId);
-                        } else {
-                            cell.className = 'box-cell cell-empty';
-                        }
-                        grid.appendChild(cell);
-                    }
-                });
-                container.appendChild(grid);
-            },
-
-            showDetails: function(sample, well) {
-                const panel = document.getElementById('selectionDetails');
-                panel.innerHTML = `
-                    <div class="text-center mb-3">
-                        <div class="display-6 text-primary"><i class="fas fa-${sample.type === 'DNA' ? 'dna' : 'vial'}"></i></div>
-                        <h6 class="fw-bold mt-2">${sample.id}</h6>
-                        <span class="badge bg-light text-dark border">${sample.type}</span>
-                    </div>
-                    <ul class="list-group list-group-flush small mb-3 text-start">
-                        <li class="list-group-item d-flex justify-content-between px-0"><span class="text-muted">Position</span> <span class="fw-bold">${well}</span></li>
-                        <li class="list-group-item d-flex justify-content-between px-0"><span class="text-muted">Project</span> <span>WESER-25</span></li>
-                    </ul>
-                    <div class="d-grid gap-2">
-                        <button class="btn btn-sm btn-outline-primary">Full Record</button>
-                        <button class="btn btn-sm btn-outline-danger">Check Out</button>
-                    </div>
-                `;
-            },
-
-            loadReagents: function() {
-                const tbody = document.getElementById('reagentTableBody');
-                const alertsArea = document.getElementById('alertsArea');
-                tbody.innerHTML = '';
-                alertsArea.innerHTML = '';
-                
-                let alertCount = 0;
-                const today = new Date();
-
-                this.reagents.forEach(r => {
-                    const expiryDate = new Date(r.expiry);
-                    const diffDays = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-                    
-                    let statusHtml = '';
-                    let statusClass = '';
-                    
-                    if (diffDays < 0) {
-                        statusHtml = '<span class="expiry-badge expiry-crit">Expired</span>';
-                        statusClass = 'table-danger';
-                        alertCount++;
-                        // Add to Alerts Tab
-                        alertsArea.insertAdjacentHTML('beforeend', `
-                            <div class="col-md-6 mb-3">
-                                <div class="alert alert-danger d-flex align-items-center mb-0">
-                                    <i class="fas fa-exclamation-circle fa-2x me-3"></i>
-                                    <div><div class="fw-bold">${r.name}</div>Expired on ${r.expiry}. Lot: ${r.lot}</div>
-                                </div>
-                            </div>
-                        `);
-                    } else if (diffDays < 30) {
-                        statusHtml = '<span class="expiry-badge expiry-warn">Expiring Soon</span>';
-                        alertCount++;
-                        // Add to Alerts Tab
-                        alertsArea.insertAdjacentHTML('beforeend', `
-                            <div class="col-md-6 mb-3">
-                                <div class="alert alert-warning d-flex align-items-center mb-0">
-                                    <i class="fas fa-clock fa-2x me-3"></i>
-                                    <div><div class="fw-bold">${r.name}</div>Expires in ${diffDays} days.</div>
-                                </div>
-                            </div>
-                        `);
-                    } else {
-                        statusHtml = '<span class="expiry-badge expiry-ok">Valid</span>';
-                    }
-
-                    const row = `
-                        <tr>
-                            <td><div class="fw-bold">${r.name}</div></td>
-                            <td>${r.lot}</td>
-                            <td>${r.loc}</td>
-                            <td><div class="progress" style="height:6px; width:60px;"><div class="progress-bar bg-info" style="width:${r.qty}%"></div></div> <small>${r.qty}${r.unit}</small></td>
-                            <td>${r.expiry}</td>
-                            <td>${statusHtml}</td>
-                            <td class="text-end"><button class="btn btn-sm btn-light text-primary"><i class="fas fa-edit"></i></button></td>
-                        </tr>
-                    `;
-                    tbody.insertAdjacentHTML('beforeend', row);
-                });
-                
-                document.getElementById('alertCountBadge').innerText = alertCount;
-            }
-        };
-
-        // --- INIT ---
-        document.addEventListener('DOMContentLoaded', () => {
-            DBService.loadTree();
-            DBService.loadReagents();
-        });
-
+        function updateTemplateLink() {
+            const type = document.getElementById('importTarget').value;
+            document.getElementById('templateLink').href = "/storage/template_download/" + type;
+        }
+        
+        // Tooltip Init
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+          return new bootstrap.Tooltip(tooltipTriggerEl)
+        })
     </script>
 </body>
 </html>
