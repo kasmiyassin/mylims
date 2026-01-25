@@ -1,23 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-GenFish Enterprise LIMS Backend System
-Version: 5.0.2 (Production / Enterprise)
-Author: System Administrator
-Date: 2026-01-25
-
-Description:
-This is the monolithic backend service for the GenFish LIMS. 
-It connects the HTML5 frontend to the PostgreSQL v16+ database (mylims_v5).
-
-Key Capabilities:
-1. High-Concurrency Threaded Connection Pooling (psycopg2)
-2. Row-Level Security (RLS) Context Injection
-3. PostGIS GeoJSON Serialization for Field Maps
-4. Dynamic Schema Introspection for the Database Explorer
-5. Enterprise Job Queuing for Bioinformatics
-6. JSONB Handling for ELN Dynamic Forms
-"""
-
 import os
 import sys
 import json
@@ -56,22 +36,22 @@ load_dotenv()
 # 1. ENTERPRISE CONFIGURATION CLASS
 # ==============================================================================
 class Config:
-    """
-    Central configuration for the LIMS.
-    Adjust these values in your .env file for production deployment.
-    """
-    # Security
-    SECRET_KEY = os.getenv('SECRET_KEY', 'GENFISH_LIMS_ENTERPRISE_KEY_998877')
-    SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SECURE = os.getenv('FLASK_ENV') == 'production'
-    SESSION_LIFETIME = timedelta(hours=12)
+
     
-    # Database Connection (PostgreSQL)
-    DB_HOST = os.getenv('DB_HOST', 'localhost')
-    DB_NAME = os.getenv('DB_NAME', 'mylims')
+    # Load environment variables or defaults
+    DB_HOST = os.getenv('DB_HOST', '0.0.0.0') 
+    DB_NAME = os.getenv('DB_NAME', 'mylims_v5') # Updated to v5 based on file uploads
     DB_USER = os.getenv('DB_USER', 'web_admin')
     DB_PASS = os.getenv('DB_PASS', 'password')
-    DB_PORT = os.getenv('DB_PORT', '5432')
+
+    # Secondary Authentication Database (musr)
+    AUTH_DB_HOST = os.getenv('AUTH_DB_HOST', '0.0.0.0')
+    AUTH_DB_NAME = os.getenv('AUTH_DB_NAME', 'musr')
+    AUTH_DB_USER = os.getenv('AUTH_DB_USER', 'auth_user')
+    AUTH_DB_PASS = os.getenv('AUTH_DB_PASS', 'auth_password')
+
+    STATIC_FOLDER = 'static'
+    API_PREFIX = os.getenv('API_PREFIX', '/api')
     
     # Connection Pool Tuning (Critical for >100 users)
     # MIN_CONN: Keep these open and ready
@@ -80,7 +60,6 @@ class Config:
     DB_MAX_CONN = int(os.getenv('DB_MAX_CONN', 60))
     
     # Application Settings
-    API_PREFIX = "/api/v1"
     UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
     MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500 MB max upload for BAM/FASTQ
 

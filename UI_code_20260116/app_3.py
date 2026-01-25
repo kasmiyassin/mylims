@@ -40,33 +40,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger("GenFishLIMS")
 
-class Config:
-    """Central Configuration."""
-    # Security
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-enterprise-key-998877')
-    SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SECURE = False # Set True in Production with HTTPS
-    
-    # Database Config
-    DB_HOST = os.environ.get('DB_HOST', 'localhost')
-    DB_PORT = os.environ.get('DB_PORT', '5432')
-    DB_NAME = os.environ.get('DB_NAME', 'mylims_v5')
-    DB_USER = os.environ.get('DB_USER', 'postgres')
-    DB_PASS = os.environ.get('DB_PASS', 'password')
-    
-    # Connection Pool Settings
-    DB_MIN_CONN = 5
-    DB_MAX_CONN = 50
-    
-    # File Storage
-    UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
-    TEMP_FOLDER = os.path.join(os.getcwd(), 'temp')
-    MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500MB Limit
-    ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'csv', 'xlsx', 'fastq', 'fasta', 'bam', 'vcf', 'json'}
 
-# Ensure directories exist
-os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(Config.TEMP_FOLDER, exist_ok=True)
+# Load environment variables or defaults
+DB_HOST = os.getenv('DB_HOST', '0.0.0.0') 
+DB_NAME = os.getenv('DB_NAME', 'mylims_v5') # Updated to v5 based on file uploads
+DB_USER = os.getenv('DB_USER', 'web_admin')
+DB_PASS = os.getenv('DB_PASS', 'password')
+
+# Secondary Authentication Database (musr)
+AUTH_DB_HOST = os.getenv('AUTH_DB_HOST', '0.0.0.0')
+AUTH_DB_NAME = os.getenv('AUTH_DB_NAME', 'musr')
+AUTH_DB_USER = os.getenv('AUTH_DB_USER', 'auth_user')
+AUTH_DB_PASS = os.getenv('AUTH_DB_PASS', 'auth_password')
+
+SECRET_KEY = os.getenv('SECRET_KEY', 'enterprise_secret_key_998877')
+STATIC_FOLDER = 'static'
+API_PREFIX = os.getenv('API_PREFIX', '/api')
+
+# File Upload Config
+UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
+ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'csv', 'xlsx', 'json'}
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 
 # ==============================================================================
 # 2. UTILITIES & HELPERS
