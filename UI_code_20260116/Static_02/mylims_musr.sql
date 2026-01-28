@@ -1,6 +1,6 @@
 -- Create the password user
 CREATE USER auth_user WITH PASSWORD 'auth_password'; 
-
+--
 -- Create the database 'musr' 
 CREATE DATABASE musr OWNER kasmi;
 
