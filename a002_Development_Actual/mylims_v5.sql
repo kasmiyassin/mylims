@@ -3,7 +3,17 @@
 -- For genetic and fish biology lab
 -- V5., 2025-12-20
 -- -------------------------------------------------
+-- this is complete whole database without passowrd
 
+
+-- Create the password user
+CREATE USER BioDiv WITH PASSWORD 'auth_password'; 
+
+-- Create the database 'musr' 
+CREATE DATABASE mylims OWNER kasmi;
+
+-- Create the schema and table (Run while connected to the musr database)
+\c mylims; 
 
 -- =========================================
 -- 1. EXTENSIONS
