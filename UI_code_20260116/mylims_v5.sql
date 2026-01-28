@@ -3,7 +3,17 @@
 -- For genetic and fish biology lab
 -- V5., 2025-12-20
 -- -------------------------------------------------
+-- this is complete whole database without passowrd
 
+
+-- Create the password user
+CREATE USER BioDiv WITH PASSWORD 'auth_password'; 
+
+-- Create the database 'musr' 
+CREATE DATABASE mylims OWNER kasmi;
+
+-- Create the schema and table (Run while connected to the musr database)
+\c mylims; 
 
 -- =========================================
 -- 1. EXTENSIONS
@@ -695,7 +705,6 @@ CREATE TABLE IF NOT EXISTS "moleculargenetics"."nanodrop" (
 CREATE TABLE IF NOT EXISTS "moleculargenetics"."qubit" (
     "measurement_id" text PRIMARY KEY, --sampleid_qubit_00
     "sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
-    "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
     "processing_date" date,
     "concentration" numeric,
     "conc_unit" text DEFAULT 'ng_ul',
@@ -706,7 +715,6 @@ CREATE TABLE IF NOT EXISTS "moleculargenetics"."qubit" (
 CREATE TABLE IF NOT EXISTS "moleculargenetics"."tapestation" (
     "measurement_id" serial PRIMARY KEY, --sampleid_Tapestation_00
     "sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
-    "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
     "processing_date" date,
     "avg_size_bp" numeric,
     "concentration" numeric,
@@ -774,7 +782,6 @@ CREATE TABLE IF NOT EXISTS "moleculargenetics"."gelelectrophoresis" (
 
 CREATE TABLE "moleculargenetics"."library" (
     "library_id" text PRIMARY KEY REFERENCES "bio_assets"."samples_root"("sample_id"),
-    "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
     "prep_kit" text,
     "processing_date" date,
     "avg_fragment_size" numeric,
@@ -795,7 +802,6 @@ CREATE TABLE "moleculargenetics"."library_samples" (
 
 CREATE TABLE IF NOT EXISTS "moleculargenetics"."sequencing_flowcells" (
     "flowcell_id" text PRIMARY KEY, -- manual basing on workflow id producer
-    "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
     "processing_date" date,
     "type" text,
     "sequencer_id" text REFERENCES "core"."equipments"("equipment_id"),
@@ -833,7 +839,6 @@ CREATE TABLE IF NOT EXISTS "bioinformatics"."pipelines" (
 
 CREATE TABLE IF NOT EXISTS "bioinformatics"."seq_dataset" (
     "dataset_id" text PRIMARY KEY, -- Prj25DS_000
-    "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
     "description" text,
     "file_path" text,
     "file_format" text,
@@ -848,7 +853,6 @@ CREATE TABLE "bioinformatics"."seq_sample_assignment" (
     "dataset_id" text REFERENCES "bioinformatics"."seq_dataset"("dataset_id"),
     "sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
     "library_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
-    "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
     "barcode" text, -- copy from library_samples
     "read_count" bigint,
     PRIMARY KEY ("dataset_id", "sample_id")
@@ -856,7 +860,6 @@ CREATE TABLE "bioinformatics"."seq_sample_assignment" (
 
 CREATE TABLE IF NOT EXISTS "bioinformatics"."assignments" (
     "assignment_id" bigserial PRIMARY KEY, -- sampleid_assign_000000
-    "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
     "sample_id" text REFERENCES "bio_assets"."samples_root"("sample_id"),
     "dataset_id" text REFERENCES "bioinformatics"."seq_dataset"("dataset_id"),
     "pipeline_id" text REFERENCES "bioinformatics"."pipelines"("pipeline_id"),
