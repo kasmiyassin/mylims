@@ -7,6 +7,7 @@ import base64
 import json
 import uuid
 import decimal
+import sys
 from typing import Any, Dict, List, Optional, Tuple, Union
 from datetime import datetime, timedelta, time, date
 import psycopg2
@@ -14,23 +15,26 @@ from psycopg2 import sql, extras
 
 # --- Configuration ---
 # Main LIMS Database (mylims V5)
-DB_HOST: str = os.getenv('DB_HOST', '0.0.0.0') 
+DB_HOST: str = os.getenv('DB_HOST', '127.0.0.1') 
 DB_NAME: str = os.getenv('DB_NAME', 'mylims') # V5 Database
-DB_USER: str = os.getenv('DB_USER', 'kasmi') # Ensure this user has access to V5 schemas
+DB_USER: str = os.getenv('DB_USER', 'web_admin') 
 DB_PASS: str = os.getenv('DB_PASS', 'password')
 
 # Secondary Authentication Database (musr)
-# Preserved from V4 architecture. 
-AUTH_DB_HOST: str = os.getenv('AUTH_DB_HOST', '0.0.0.0')
+AUTH_DB_HOST: str = os.getenv('AUTH_DB_HOST', '127.0.0.1')
 AUTH_DB_NAME: str = os.getenv('AUTH_DB_NAME', 'musr')
 AUTH_DB_USER: str = os.getenv('AUTH_DB_USER', 'auth_user')
 AUTH_DB_PASS: str = os.getenv('AUTH_DB_PASS', 'auth_password')
 
 SECRET_KEY: str = os.getenv('SECRET_KEY', 'CHANGEME_IN_PRODUCTION_' + str(uuid.uuid4()))
-STATIC_FOLDER: str = os.getenv('STATIC_FOLDER', 'static')
+
+# --- STATIC FOLDER CONFIGURATION ---
+# CHANGED: Detect the directory where app.py is running.
+# This allows serving HTML files from the SAME folder as the python script.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_FOLDER = os.getenv('STATIC_FOLDER', BASE_DIR)
 
 # Schemas introduced in MyLims V5
-# We explicitly whitelist these to prevent access to system schemas
 ALLOWED_SCHEMAS = {
     'reference', 
     'core', 
@@ -47,17 +51,10 @@ ALLOWED_SCHEMAS = {
 
 app = Flask(__name__, static_folder=STATIC_FOLDER)
 app.secret_key = SECRET_KEY
-CORS(app, supports_credentials=True) # Enable CORS for frontend development
+CORS(app, supports_credentials=True)
 
 # --- Custom JSON Encoder for V5 Data Types ---
 class CustomJSONEncoder(json.JSONEncoder):
-    """
-    Handles serialization of PostgreSQL V5 specific types:
-    - UUIDs (used extensively in V5)
-    - Datetime/Date
-    - Decimals
-    - Bytes (e.g., geometry/blob)
-    """
     def default(self, obj):
         if isinstance(obj, uuid.UUID):
             return str(obj)
@@ -66,20 +63,17 @@ class CustomJSONEncoder(json.JSONEncoder):
         if isinstance(obj, decimal.Decimal):
             return float(obj)
         if isinstance(obj, bytes):
-            # Attempt to decode bytes to utf-8, fallback to base64 or skip
             try:
                 return obj.decode('utf-8')
             except:
-                return "<binary_data>" # Placeholder for non-text binary
+                return "<binary_data>"
         return super().default(obj)
 
-# Assign the custom encoder to the app
 app.json_encoder = CustomJSONEncoder
 
 # --- Database Connection Helpers ---
 
 def get_db_connection():
-    """Connects to the main mylims V5 database."""
     try:
         conn = psycopg2.connect(
             host=DB_HOST,
@@ -87,7 +81,6 @@ def get_db_connection():
             user=DB_USER,
             password=DB_PASS
         )
-        # Register UUID adapter globally for this connection
         extras.register_uuid()
         return conn
     except Exception as e:
@@ -95,7 +88,6 @@ def get_db_connection():
         return None
 
 def get_auth_db_connection():
-    """Connects to the authentication database (musr)."""
     try:
         conn = psycopg2.connect(
             host=AUTH_DB_HOST,
@@ -111,16 +103,11 @@ def get_auth_db_connection():
 # --- Utility Functions ---
 
 def get_pk_column(schema: str, table: str) -> Optional[str]:
-    """
-    Detects the Primary Key column for a table.
-    Works with V5's UUID keys and standard integer keys.
-    """
     conn = get_db_connection()
     if not conn:
         return None
     try:
         with conn.cursor() as cursor:
-            # Query information_schema for the PK constraint
             cursor.execute("""
                 SELECT kcu.column_name
                 FROM information_schema.table_constraints tc
@@ -141,7 +128,6 @@ def get_pk_column(schema: str, table: str) -> Optional[str]:
         conn.close()
 
 def is_schema_allowed(schema: str) -> bool:
-    """Security check to ensure we only access allowed V5 schemas."""
     return schema in ALLOWED_SCHEMAS
 
 # --- Routes: Authentication ---
@@ -161,8 +147,6 @@ def login():
 
     try:
         with conn.cursor(cursor_factory=extras.RealDictCursor) as cursor:
-            # Check against musr.public.auth_users
-            # NOTE: If you migrated auth to mylims.core.users, update this query.
             cursor.execute("SELECT * FROM public.auth_users WHERE username = %s", (username,))
             user = cursor.fetchone()
 
@@ -194,21 +178,15 @@ def get_user_info():
         })
     return jsonify({'logged_in': False})
 
-# --- Routes: Generic Metadata (V5 Compatible) ---
+# --- Routes: Generic Metadata ---
 
 @app.route('/get_tables', methods=['GET'])
 def get_tables():
-    """
-    Returns a dictionary of schemas and their tables.
-    Filtered by the V5 ALLOWED_SCHEMAS list.
-    """
     conn = get_db_connection()
     if not conn:
         return jsonify({'error': 'Database connection failed'}), 500
-
     try:
         with conn.cursor() as cursor:
-            # Fetch tables only from allowed schemas
             cursor.execute("""
                 SELECT table_schema, table_name 
                 FROM information_schema.tables 
@@ -222,7 +200,6 @@ def get_tables():
                 if schema not in structure:
                     structure[schema] = []
                 structure[schema].append(table)
-                
             return jsonify(structure)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -240,7 +217,6 @@ def get_columns(schema, table):
 
     try:
         with conn.cursor(cursor_factory=extras.RealDictCursor) as cursor:
-            # Get standard column info
             cursor.execute("""
                 SELECT column_name, data_type, is_nullable, column_default
                 FROM information_schema.columns 
@@ -249,7 +225,6 @@ def get_columns(schema, table):
             """, (schema, table))
             columns = cursor.fetchall()
 
-            # Get Foreign Key details
             cursor.execute("""
                 SELECT
                     kcu.column_name, 
@@ -264,11 +239,7 @@ def get_columns(schema, table):
                 WHERE kcu.table_schema = %s AND kcu.table_name = %s;
             """, (schema, table))
             fks = cursor.fetchall()
-            
-            # Map FKs for easier frontend consumption
             fk_map = {fk['column_name']: fk for fk in fks}
-            
-            # Identify PK
             pk_col = get_pk_column(schema, table)
 
             enriched_columns = []
@@ -287,102 +258,66 @@ def get_columns(schema, table):
 
 @app.route('/get_dropdown_options', methods=['POST'])
 def get_dropdown_options():
-    """
-    Dynamic dropdown fetcher.
-    Upgraded for V5 to better guess "display names" for new schemas.
-    """
     data = request.json
     schema = data.get('schema')
     table = data.get('table')
     
-    if not schema or not table:
-        return jsonify({'error': 'Missing schema or table'}), 400
-        
     if not is_schema_allowed(schema):
         return jsonify({'error': 'Schema not allowed'}), 403
 
     conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'DB Connection failed'}), 500
+    if not conn: return jsonify({'error': 'DB Connection failed'}), 500
 
     try:
         pk_col = get_pk_column(schema, table)
-        if not pk_col:
-            return jsonify({'error': 'No PK found for table'}), 400
+        if not pk_col: return jsonify({'error': 'No PK found'}), 400
 
         with conn.cursor(cursor_factory=extras.RealDictCursor) as cursor:
-            # 1. Get all column names to find a suitable display column
             cursor.execute(sql.SQL("SELECT * FROM {}.{} LIMIT 1").format(
-                sql.Identifier(schema),
-                sql.Identifier(table)
-            ))
+                sql.Identifier(schema), sql.Identifier(table)))
             cols = [desc[0] for desc in cursor.description]
             
-            # 2. Heuristics for V5 display name (Priority Order)
-            # Checked against common LIMS/Bio patterns
-            candidates = [
-                'name', 'title', 'label',  # Generic
-                'scientific_name', 'taxon_name', # Reference/Bio
-                'project_name', # Projects
-                'sample_id', 'sample_code', # Bio Assets
-                'username', 'fullname', 'lastname', # Core/People
-                'instrument_name', 'method_name', # Lims
-                'code', 'id' # Fallback
-            ]
+            candidates = ['name', 'title', 'label', 'scientific_name', 'taxon_name', 
+                          'project_name', 'sample_id', 'sample_code', 'username', 
+                          'fullname', 'lastname', 'instrument_name', 'method_name', 'code', 'id']
             
-            display_col = pk_col # Default to PK
+            display_col = pk_col 
             for c in candidates:
                 if c in cols:
                     display_col = c
                     break
             
-            # 3. Handle specific case for People/Users (concat names)
             if 'firstname' in cols and 'lastname' in cols:
                 query = sql.SQL("SELECT {} AS value, firstname || ' ' || lastname AS label FROM {}.{} ORDER BY label ASC LIMIT 500").format(
-                    sql.Identifier(pk_col),
-                    sql.Identifier(schema),
-                    sql.Identifier(table)
-                )
+                    sql.Identifier(pk_col), sql.Identifier(schema), sql.Identifier(table))
             else:
-                # Standard Query
                 query = sql.SQL("SELECT {} AS value, {} AS label FROM {}.{} ORDER BY label ASC LIMIT 500").format(
-                    sql.Identifier(pk_col),
-                    sql.Identifier(display_col),
-                    sql.Identifier(schema),
-                    sql.Identifier(table)
-                )
+                    sql.Identifier(pk_col), sql.Identifier(display_col), sql.Identifier(schema), sql.Identifier(table))
 
             cursor.execute(query)
             options = cursor.fetchall()
             return jsonify(options)
 
     except Exception as e:
-        print(f"Dropdown error for {schema}.{table}: {e}")
         return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
 
-# --- Routes: Generic CRUD (V5 Compatible) ---
+# --- Routes: Generic CRUD ---
 
 @app.route('/list_records/<schema>/<table>', methods=['GET'])
 def list_records(schema, table):
-    if not is_schema_allowed(schema):
-        return jsonify({'error': 'Schema not allowed'}), 403
-
+    if not is_schema_allowed(schema): return jsonify({'error': 'Schema not allowed'}), 403
     conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'DB Connection failed'}), 500
+    if not conn: return jsonify({'error': 'DB Connection failed'}), 500
 
     try:
         with conn.cursor(cursor_factory=extras.RealDictCursor) as cursor:
-            # Simple select all (limit 1000 for performance)
             query = sql.SQL("SELECT * FROM {}.{} LIMIT 1000").format(
-                sql.Identifier(schema),
-                sql.Identifier(table)
-            )
+                sql.Identifier(schema), sql.Identifier(table))
             cursor.execute(query)
             rows = cursor.fetchall()
-            return jsonify(rows) # CustomJSONEncoder handles UUIDs/Dates here
+            return jsonify(rows)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
@@ -390,25 +325,16 @@ def list_records(schema, table):
 
 @app.route('/get_record/<schema>/<table>/<pk_value>', methods=['GET'])
 def get_record(schema, table, pk_value):
-    if not is_schema_allowed(schema):
-        return jsonify({'error': 'Schema not allowed'}), 403
-
+    if not is_schema_allowed(schema): return jsonify({'error': 'Schema not allowed'}), 403
     pk_col = get_pk_column(schema, table)
-    if not pk_col:
-        return jsonify({'error': 'PK not found'}), 400
-
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=extras.RealDictCursor) as cursor:
             query = sql.SQL("SELECT * FROM {}.{} WHERE {} = %s").format(
-                sql.Identifier(schema),
-                sql.Identifier(table),
-                sql.Identifier(pk_col)
-            )
+                sql.Identifier(schema), sql.Identifier(table), sql.Identifier(pk_col))
             cursor.execute(query, (pk_value,))
             row = cursor.fetchone()
-            if row:
-                return jsonify(row)
+            if row: return jsonify(row)
             return jsonify({'error': 'Record not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -417,74 +343,47 @@ def get_record(schema, table, pk_value):
 
 @app.route('/add_record/<schema>/<table>', methods=['POST'])
 def add_record(schema, table):
-    if not is_schema_allowed(schema):
-        return jsonify({'error': 'Schema not allowed'}), 403
-
+    if not is_schema_allowed(schema): return jsonify({'error': 'Schema not allowed'}), 403
     data = request.json
-    if not data:
-        return jsonify({'error': 'No data provided'}), 400
-
     conn = get_db_connection()
     try:
-        # Filter out empty strings for numeric/date fields or let DB handle defaults
-        clean_data = {}
-        for k, v in data.items():
-            if v == "": 
-                clean_data[k] = None
-            else:
-                clean_data[k] = v
-
+        clean_data = {k: (None if v == "" else v) for k, v in data.items()}
         columns = clean_data.keys()
         values = [clean_data[col] for col in columns]
 
         with conn.cursor() as cursor:
             query = sql.SQL("INSERT INTO {}.{} ({}) VALUES ({}) RETURNING *").format(
-                sql.Identifier(schema),
-                sql.Identifier(table),
+                sql.Identifier(schema), sql.Identifier(table),
                 sql.SQL(', ').join(map(sql.Identifier, columns)),
-                sql.SQL(', ').join(sql.Placeholder() * len(columns))
-            )
+                sql.SQL(', ').join(sql.Placeholder() * len(columns)))
             cursor.execute(query, values)
             conn.commit()
-            # Fetch the inserted ID (generic)
-            new_id = cursor.fetchone()[0] # Usually the first column or PK
+            new_id = cursor.fetchone()[0]
             return jsonify({'success': True, 'id': new_id}), 201
     except Exception as e:
         if conn: conn.rollback()
-        print(f"Add Error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         if conn: conn.close()
 
 @app.route('/update_record/<schema>/<table>/<pk_value>', methods=['PUT'])
 def update_record(schema, table, pk_value):
-    if not is_schema_allowed(schema):
-        return jsonify({'error': 'Schema not allowed'}), 403
-
+    if not is_schema_allowed(schema): return jsonify({'error': 'Schema not allowed'}), 403
     data = request.json
     pk_col = get_pk_column(schema, table)
-    if not pk_col:
-        return jsonify({'error': 'PK not found'}), 400
-
     conn = get_db_connection()
     try:
         clean_data = {k: (None if v == "" else v) for k, v in data.items()}
-        
-        # Remove PK from update data if present to prevent errors
-        if pk_col in clean_data:
-            del clean_data[pk_col]
-
+        if pk_col in clean_data: del clean_data[pk_col]
         columns = clean_data.keys()
         values = [clean_data[col] for col in columns]
-        values.append(pk_value) # Add PK for WHERE clause
+        values.append(pk_value)
 
         with conn.cursor() as cursor:
             query = sql.SQL("UPDATE {}.{} SET {} WHERE {} = %s").format(
-                sql.Identifier(schema),
-                sql.Identifier(table),
+                sql.Identifier(schema), sql.Identifier(table),
                 sql.SQL(', ').join([sql.SQL("{} = %s").format(sql.Identifier(k)) for k in columns]),
-                sql.Identifier(pk_col)
-            )
+                sql.Identifier(pk_col))
             cursor.execute(query, values)
             conn.commit()
             return jsonify({'success': True}), 200
@@ -494,14 +393,32 @@ def update_record(schema, table, pk_value):
     finally:
         if conn: conn.close()
 
-# --- Server Entry Point ---
+# --- Server Entry Point (Serving Root Directory) ---
+
+def check_startup_connections():
+    """Tests database connectivity on server startup."""
+    print(" -> Checking database connections...")
+    try:
+        conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
+        conn.close()
+        print(f"   [SUCCESS] Connected to Data DB '{DB_NAME}' at {DB_HOST}")
+    except Exception as e:
+        print(f"   [FAILED] Could not connect to Data DB '{DB_NAME}' at {DB_HOST}")
+        print(f"   Error: {e}")
 
 @app.route('/')
 def root():
+    # Redirect root URL to the login page (assumed to be in the same folder)
     return redirect(url_for('serve_static', filename='login.html'))
 
 @app.route('/<path:filename>')
 def serve_static(filename: str):
+    # SECURITY: Prevent users from downloading source code or config files
+    # since we are serving the root directory.
+    if filename.endswith('.py') or filename.endswith('.env') or filename.endswith('.sql') or filename.endswith('.md'):
+         return "Access Denied: Protected File", 403
+         
+    # Serve files from the current directory (BASE_DIR)
     return send_from_directory(app.static_folder, filename)
 
 if __name__ == '__main__':
@@ -510,11 +427,8 @@ if __name__ == '__main__':
     
     print("="*60)
     print(" TIFI LIMS V5 Backend Server ".center(60, "="))
-    print(" Compatible with Schema V5 (UUID, Core, BioAssets) ".center(60, "="))
-    print("="*60)
+    print(f" -> Root Directory Mode: {BASE_DIR}")
     print(f" -> Serving on http://{host_ip}:{port_num}")
-    print(f" -> Connecting to Data DB: {DB_NAME} (User: {DB_USER})")
-    print(f" -> Connecting to Auth DB: {AUTH_DB_NAME} (User: {AUTH_DB_USER})")
     
-    # Use Waitress for production-ready serving
+    check_startup_connections()
     serve(app, host=host_ip, port=port_num)
