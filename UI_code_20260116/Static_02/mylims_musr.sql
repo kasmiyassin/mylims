@@ -1,4 +1,3 @@
--- password database
 -- Create the password user
 CREATE USER auth_user WITH PASSWORD 'auth_password'; 
 
