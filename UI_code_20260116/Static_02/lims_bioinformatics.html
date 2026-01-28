@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GenFish LIMS - Bioinformatics</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        :root {
+            --sidebar-width: 250px;
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --info-color: #17a2b8;
+            --bg-light: #f8f9fa;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--bg-light);
+            overflow-x: hidden;
+        }
+
+        /* Sidebar (Consistent) */
+        .sidebar {
+            height: 100vh;
+            width: var(--sidebar-width);
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: var(--primary-color);
+            color: #ecf0f1;
+            padding-top: 1rem;
+            z-index: 1000;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .sidebar-brand { font-size: 1.4rem; font-weight: 700; text-align: center; margin-bottom: 2rem; color: white; }
+        .sidebar-brand i { color: var(--accent-color); }
+        .nav-header { font-size: 0.75rem; text-transform: uppercase; color: #95a5a6; padding: 10px 20px 5px; font-weight: 700; }
+        .nav-link { color: #bdc3c7; padding: 10px 20px; font-size: 0.95rem; transition: all 0.3s; border-left: 4px solid transparent; text-decoration: none; display: block; }
+        .nav-link:hover, .nav-link.active { color: white; background-color: rgba(255,255,255,0.05); border-left-color: var(--accent-color); }
+        .nav-link i { width: 25px; text-align: center; margin-right: 5px; }
+
+        /* Main Content */
+        .main-content { margin-left: var(--sidebar-width); padding: 20px 30px; }
+
+        /* Job Status Badges */
+        .job-card { background: white; border-left: 4px solid transparent; transition: 0.2s; }
+        .job-card:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .job-running { border-color: var(--warning-color); }
+        .job-completed { border-color: var(--success-color); }
+        .job-failed { border-color: #e74c3c; }
+        .job-queued { border-color: #95a5a6; }
+        
+        /* Stats Widget */
+        .bio-stat { text-align: center; padding: 15px; border-radius: 8px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
+        .bio-stat-val { font-size: 1.5rem; font-weight: 700; color: var(--primary-color); }
+        .bio-stat-label { font-size: 0.8rem; color: #7f8c8d; text-transform: uppercase; }
+
+        /* Visualization Panel */
+        .viz-card {
+            background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px; height: 100%;
+        }
+
+        /* Taxonomy Table */
+        .tax-badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 12px; background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; }
+        
+        /* Code Block Mock */
+        .console-output {
+            background: #282c34; color: #abb2bf; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 0.85rem; max-height: 200px; overflow-y: auto;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <i class="fas fa-dna me-2"></i>GenFish LIMS
+        </div>
+        <div class="d-flex flex-column">
+            <div class="nav-header">Overview</div>
+            <a href="lims_dashboard_design.html" class="nav-link"><i class="fas fa-chart-line"></i> Dashboard</a>
+            <a href="lims_search_page.html" class="nav-link"><i class="fas fa-search"></i> Global Search</a>
+            <a href="lims_eln_booking.html" class="nav-link"><i class="fas fa-calendar-alt"></i> Booking / ELN</a>
+
+            <div class="nav-header">Bio Assets</div>
+            <a href="lims_samples_registry.html" class="nav-link"><i class="fas fa-vial"></i> Samples Registry</a>
+            <a href="lims_storage_reagents.html" class="nav-link"><i class="fas fa-boxes"></i> Storage & Reagents</a>
+            
+            <div class="nav-header">Field Work</div>
+            <a href="lims_field_events.html" class="nav-link"><i class="fas fa-map-marked-alt"></i> Sampling Events</a>
+            
+            <div class="nav-header">Lab Work</div>
+            <a href="lims_biology_fish.html" class="nav-link"><i class="fas fa-microscope"></i> Biology / Fish</a>
+            <a href="lims_molecular_biology.html" class="nav-link"><i class="fas fa-flask"></i> Molecular Lab</a>
+            <a href="#" class="nav-link active"><i class="fas fa-laptop-code"></i> Bioinformatics</a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        
+        <!-- Header & Run Selector -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h4 class="text-secondary fw-bold mb-0">Bioinformatics Hub</h4>
+                <p class="text-muted small mb-0">Analysis Pipelines & Taxonomic Assignments (`bioinformatics` schema)</p>
+            </div>
+            <div class="d-flex gap-2">
+                <form action="" method="GET" class="d-flex align-items-center">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white"><i class="fas fa-server"></i></span>
+                        <select class="form-select" name="run_id" style="width: 250px;" onchange="this.form.submit()">
+                            <option value="all">All Runs</option>
+                            {% for run in runs %}
+                            <option value="{{ run.run_id }}" {% if run.run_id == current_run_id %}selected{% endif %}>
+                                {{ run.run_id }} ({{ run.status_id }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </form>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newPipelineModal"><i class="fas fa-play me-1"></i> Launch Pipeline</button>
+            </div>
+        </div>
+
+        <!-- Top Stats (Run Metrics) -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-2">
+                <div class="bio-stat">
+                    <div class="bio-stat-val">{{ kpi.reads | default('0') }}</div>
+                    <div class="bio-stat-label">Raw Reads</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="bio-stat">
+                    <div class="bio-stat-val text-success">{{ kpi.q30_score | default('0') }}%</div>
+                    <div class="bio-stat-label">Q30 Score</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="bio-stat">
+                    <div class="bio-stat-val">{{ kpi.asv_count | default('0') }}</div>
+                    <div class="bio-stat-label">ASVs Detected</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="bio-stat">
+                    <div class="bio-stat-val text-primary">{{ kpi.top_genus | default('---') }}</div>
+                    <div class="bio-stat-label">Top Genus</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-white border-0 shadow-sm h-100">
+                    <div class="card-body d-flex align-items-center justify-content-between">
+                        <div>
+                            <h6 class="mb-0 fw-bold">Job Queue</h6>
+                            <small class="text-muted">Cluster: slurm-node-01</small>
+                        </div>
+                        <div class="text-end">
+                            {% set running_jobs = active_jobs | selectattr('status', 'equalto', 'Running') | list | length %}
+                            {% set queued_jobs = active_jobs | selectattr('status', 'equalto', 'Queued') | list | length %}
+                            <span class="badge bg-success">{{ running_jobs }} Running</span>
+                            <span class="badge bg-secondary">{{ queued_jobs }} Queued</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Tabs -->
+        <ul class="nav nav-tabs mb-4" id="bioTabs" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#pipelines">Pipelines & Jobs</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#results">Results & Taxonomy</button>
+            </li>
+             <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#files">Files & Datasets</button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="bioTabsContent">
+            
+            <!-- TAB 1: PIPELINES -->
+            <div class="tab-pane fade show active" id="pipelines">
+                <div class="row">
+                    <!-- Active Jobs -->
+                    <div class="col-lg-8">
+                        <h6 class="fw-bold text-secondary mb-3">Active & Recent Jobs</h6>
+                        
+                        {% if active_jobs %}
+                            {% for job in active_jobs %}
+                            <div class="card job-card job-{{ job.status|lower }} mb-3 shadow-sm">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <h6 class="fw-bold mb-1">
+                                                {% if job.status == 'Running' %}<i class="fas fa-cog fa-spin me-2 text-warning"></i>
+                                                {% elif job.status == 'Completed' %}<i class="fas fa-check-circle me-2 text-success"></i>
+                                                {% elif job.status == 'Failed' %}<i class="fas fa-times-circle me-2 text-danger"></i>
+                                                {% else %}<i class="fas fa-clock me-2 text-secondary"></i>{% endif %}
+                                                {{ job.name }}
+                                            </h6>
+                                            <div class="text-muted small">ID: {{ job.job_id }} | User: {{ job.user }} | {{ job.time }}</div>
+                                            {% if job.status == 'Running' %}
+                                            <div class="mt-2">
+                                                <span class="badge bg-light text-dark border">Step: {{ job.current_step }}</span>
+                                                <div class="progress mt-1" style="height: 4px; width: 150px;">
+                                                    <div class="progress-bar bg-warning" role="progressbar" style="width: {{ job.progress }}%"></div>
+                                                </div>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                        <div>
+                                            {% if job.status == 'Running' %}
+                                                <button class="btn btn-sm btn-outline-danger">Cancel</button>
+                                                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#log_{{ job.job_id }}">Log</button>
+                                            {% elif job.status == 'Completed' %}
+                                                <a href="/bioinformatics/reports/{{ job.job_id }}" class="btn btn-sm btn-success"><i class="fas fa-download me-1"></i> Report</a>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="collapse mt-3" id="log_{{ job.job_id }}">
+                                        <div class="console-output">{{ job.log_tail }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="text-center text-muted py-4">No active jobs found.</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Pipeline Templates -->
+                    <div class="col-lg-4">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-white fw-bold">Quick Launch</div>
+                            <div class="list-group list-group-flush">
+                                <button class="list-group-item list-group-item-action py-3" onclick="selectPipeline('Metabarcoding')">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h6 class="mb-1 fw-bold text-primary">Standard Metabarcoding</h6>
+                                        <small class="text-muted">v2.1</small>
+                                    </div>
+                                    <p class="mb-1 small text-muted">Trimming -> DADA2 -> Taxonomy (Silva).</p>
+                                </button>
+                                <button class="list-group-item list-group-item-action py-3" onclick="selectPipeline('Pathogen')">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h6 class="mb-1 fw-bold text-primary">Viral Pathogen Scan</h6>
+                                        <small class="text-muted">v1.0</small>
+                                    </div>
+                                    <p class="mb-1 small text-muted">Host removal -> Kraken2 -> Report.</p>
+                                </button>
+                                 <button class="list-group-item list-group-item-action py-3" onclick="selectPipeline('Assembly')">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h6 class="mb-1 fw-bold text-primary">Genome Assembly</h6>
+                                        <small class="text-muted">Long-read</small>
+                                    </div>
+                                    <p class="mb-1 small text-muted">Flye -> Medaka -> Busco.</p>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: RESULTS & TAXONOMY -->
+            <div class="tab-pane fade" id="results">
+                <div class="row mb-4">
+                    <!-- Taxonomy Bar Chart -->
+                    <div class="col-lg-8">
+                        <div class="viz-card">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="fw-bold mb-0">Taxonomic Composition (Top Genus)</h6>
+                                <div>
+                                    <select class="form-select form-select-sm d-inline-block w-auto">
+                                        <option>Phylum</option>
+                                        <option selected>Genus</option>
+                                        <option>Species</option>
+                                    </select>
+                                    <button class="btn btn-sm btn-outline-secondary"><i class="fas fa-download"></i> SVG</button>
+                                </div>
+                            </div>
+                            <div style="height: 300px; width: 100%;">
+                                <canvas id="taxChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quality Metrics -->
+                    <div class="col-lg-4">
+                        <div class="viz-card">
+                            <h6 class="fw-bold mb-3">Run Quality (MultiQC)</h6>
+                            <ul class="list-group list-group-flush small">
+                                <li class="list-group-item d-flex justify-content-between px-0">
+                                    <span>Total Reads</span>
+                                    <strong>{{ kpi.reads }}</strong>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between px-0">
+                                    <span>% Duplicates</span>
+                                    <span class="text-warning">14.5%</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between px-0">
+                                    <span>GC Content</span>
+                                    <strong>45%</strong>
+                                </li>
+                            </ul>
+                            <button class="btn btn-outline-info btn-sm w-100 mt-3">Open Full MultiQC Report <i class="fas fa-external-link-alt ms-1"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Assignment Table -->
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0 fw-bold">Assignment Browser (`bioinformatics.assignments`)</h6>
+                            <small class="text-muted">Linked Experiment: <strong>{{ current_run_id }}</strong></small>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                                <i class="fas fa-edit me-1"></i> Modify Data
+                            </button>
+                            <button class="btn btn-sm btn-outline-success"><i class="fas fa-file-csv me-1"></i> Export Table</button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0 small">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>Feature ID (ASV)</th>
+                                    <th>Sample ID</th>
+                                    <th>Project</th>
+                                    <th>Reads</th>
+                                    <th>Phylum</th>
+                                    <th>Genus / Species</th>
+                                    <th>Confidence</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if assignments %}
+                                    {% for row in assignments %}
+                                    <tr>
+                                        <td><code>{{ row.otu_id }}</code></td>
+                                        <td><a href="/samples/view/{{ row.sample_id }}" class="text-decoration-none">{{ row.sample_id }}</a></td>
+                                        <td>{{ row.project_id }}</td>
+                                        <td>{{ row.count }}</td>
+                                        <td>{{ row.phylum }}</td>
+                                        <td><span class="fst-italic">{{ row.scientific_name }}</span></td>
+                                        <td>
+                                            {% if row.confidence >= 95 %}
+                                                <span class="badge bg-success">{{ row.confidence }}%</span>
+                                            {% elif row.confidence >= 80 %}
+                                                <span class="badge bg-warning text-dark">{{ row.confidence }}%</span>
+                                            {% else %}
+                                                <span class="badge bg-danger">{{ row.confidence }}%</span>
+                                            {% endif %}
+                                        </td>
+                                        <td><button class="btn btn-sm btn-light py-0"><i class="fas fa-pencil-alt text-muted"></i></button></td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr><td colspan="8" class="text-center text-muted py-3">No assignments found for this run.</td></tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: FILES -->
+            <div class="tab-pane fade" id="files">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                         <div>
+                             <h6 class="mb-0 fw-bold">Dataset Manager (`bioinformatics.seq_dataset`)</h6>
+                             <small class="text-muted">Manage raw files and analysis outputs</small>
+                         </div>
+                         <div class="d-flex gap-2">
+                             <input type="text" class="form-control form-control-sm" placeholder="Search Experiment ID..." style="width: 150px;">
+                             <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal"><i class="fas fa-cloud-upload-alt me-1"></i> Register Dataset</button>
+                         </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>Dataset Name</th>
+                                    <th>Experiment / Run ID</th>
+                                    <th>Type</th>
+                                    <th>Path</th>
+                                    <th>Size</th>
+                                    <th>Date</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if datasets %}
+                                    {% for ds in datasets %}
+                                    <tr>
+                                        <td><i class="fas fa-folder text-warning me-2"></i> {{ ds.description }}</td>
+                                        <td>
+                                            <span class="d-block small fw-bold">{{ ds.experiment_id }}</span>
+                                            <span class="d-block small text-muted">{{ ds.run_id }}</span>
+                                        </td>
+                                        <td>{{ ds.file_format }}</td>
+                                        <td><code>{{ ds.file_path }}</code></td>
+                                        <td>--</td>
+                                        <td>--</td>
+                                        <td><button class="btn btn-sm btn-light"><i class="fas fa-download"></i></button></td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr><td colspan="7" class="text-center text-muted py-3">No datasets registered.</td></tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div> <!-- End Tab Content -->
+
+    </div>
+
+    <!-- === LAUNCH PIPELINE MODAL === -->
+    <div class="modal fade" id="newPipelineModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Launch Analysis Pipeline</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/bioinformatics/jobs/create" method="POST">
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">1. Select Pipeline</label>
+                                <select class="form-select" name="pipeline_type" id="pipelineSelect">
+                                    <option value="DADA2">DADA2 (R-based)</option>
+                                    <option value="QIIME2">QIIME2 (VSEARCH)</option>
+                                    <option value="Mothur">Mothur</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">2. Select Reference DB</label>
+                                <select class="form-select" name="reference_db">
+                                    <option>Silva 138 (16S)</option>
+                                    <option>Midori 2 (COI)</option>
+                                    <option>PR2 (18S)</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-bold">3. Target Run</label>
+                                <select class="form-select" name="run_id">
+                                    {% for run in runs %}
+                                    <option value="{{ run.run_id }}">{{ run.run_id }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-bold">4. Parameters</label>
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <label class="small text-muted">Trunc Len (Fwd)</label>
+                                        <input type="number" name="param_trunc_fwd" class="form-control" value="240">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="small text-muted">Trunc Len (Rev)</label>
+                                        <input type="number" name="param_trunc_rev" class="form-control" value="200">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="small text-muted">Threads</label>
+                                        <input type="number" name="param_threads" class="form-control" value="16">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-rocket me-1"></i> Submit Job</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- === UNIVERSAL UPLOAD/MODIFY MODAL === -->
+    <div class="modal fade" id="uploadModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-cloud-upload-alt me-2"></i>Data Management</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Tabs for Upload Method -->
+                    <ul class="nav nav-tabs mb-3" id="uploadTabs" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabFile">Bulk Upload (File)</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabManual">Manual Entry</button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content">
+                        <!-- 1. BULK UPLOAD TAB -->
+                        <div class="tab-pane fade show active" id="tabFile">
+                            <form action="/bioinformatics/upload" method="POST" enctype="multipart/form-data">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Select Target Table</label>
+                                    <select class="form-select" name="target_table">
+                                        <option value="seq_dataset">Datasets (seq_dataset)</option>
+                                        <option value="assignments">Taxonomy Assignments (assignments)</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Select File (CSV or Excel)</label>
+                                    <input type="file" class="form-control" name="file" accept=".csv, .xlsx" required>
+                                    <div class="form-text">
+                                        <a href="/bioinformatics/template/seq_dataset"><i class="fas fa-file-download me-1"></i>Download Template</a> for correct schema.
+                                    </div>
+                                </div>
+                                <div class="alert alert-light border p-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="update_existing" id="updateCheck" value="true">
+                                        <label class="form-check-label fw-bold" for="updateCheck">
+                                            Update existing data?
+                                        </label>
+                                        <div class="small text-muted">If checked, records with matching IDs will be updated. Otherwise, duplicates will be skipped or trigger errors.</div>
+                                    </div>
+                                </div>
+                                <div class="text-end">
+                                    <button type="submit" class="btn btn-success"><i class="fas fa-upload me-1"></i> Upload & Process</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- 2. MANUAL ENTRY TAB -->
+                        <div class="tab-pane fade" id="tabManual">
+                            <form action="/bioinformatics/manual_create" method="POST">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Experiment Link</label>
+                                        <input type="text" class="form-control" name="experiment_id" placeholder="e.g. Exp_2025_01">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Sequencing Run Link</label>
+                                        <select class="form-select" name="run_id">
+                                            {% for run in runs %}
+                                            <option value="{{ run.run_id }}">{{ run.run_id }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Dataset Description</label>
+                                        <input type="text" class="form-control" name="description" placeholder="e.g. Raw FASTQ Files for Project X">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label">File Path (Server)</label>
+                                        <input type="text" class="form-control" name="file_path" placeholder="/server/data/...">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Format</label>
+                                        <select class="form-select" name="file_format">
+                                            <option>FASTQ</option>
+                                            <option>FASTA</option>
+                                            <option>BAM</option>
+                                            <option>VCF</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12 text-end mt-4">
+                                        <button type="submit" class="btn btn-primary">Save Record</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Chart with Data from Flask
+            const ctx = document.getElementById('taxChart').getContext('2d');
+            
+            // Default placeholder if chart_data is not passed
+            const chartData = {{ chart_data | default('{"labels": [], "datasets": []}') | safe }};
+            
+            if (chartData.labels.length > 0) {
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: chartData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: { stacked: true },
+                            y: { stacked: true, beginAtZero: true, max: 100 }
+                        },
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        }
+                    }
+                });
+            } else {
+                // Show empty state if no data
+                ctx.font = "14px Roboto";
+                ctx.fillText("No taxonomy data available for this run.", 10, 50);
+            }
+        });
+
+        // Helper to fill pipeline modal
+        function selectPipeline(name) {
+            const select = document.getElementById('pipelineSelect');
+            if(name === 'Metabarcoding') select.value = 'DADA2';
+            else if(name === 'Pathogen') select.value = 'QIIME2';
+            else select.value = 'Mothur';
+            
+            const modal = new bootstrap.Modal(document.getElementById('newPipelineModal'));
+            modal.show();
+        }
+    </script>
+</body>
+</html>
