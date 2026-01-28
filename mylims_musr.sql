@@ -1,3 +1,5 @@
+-- this database is accessible only by one person the superadmin and it store the password of users
+
 -- Create the password user
 CREATE USER auth_user WITH PASSWORD 'auth_password'; 
 
