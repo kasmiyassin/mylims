@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GenFish LIMS - Sample Reservations</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --sidebar-width: 250px;
+            --primary-color: #2c3e50;
+            --accent-color: #e67e22; /* Orange accent for Booking/Reservation */
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --bg-light: #f8f9fa;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--bg-light);
+            overflow-x: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            height: 100vh;
+            width: var(--sidebar-width);
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: var(--primary-color);
+            color: #ecf0f1;
+            padding-top: 1rem;
+            z-index: 1000;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .sidebar-brand { font-size: 1.4rem; font-weight: 700; text-align: center; margin-bottom: 2rem; color: white; }
+        .sidebar-brand i { color: var(--accent-color); }
+        .nav-header { font-size: 0.75rem; text-transform: uppercase; color: #95a5a6; padding: 10px 20px 5px; font-weight: 700; }
+        .nav-link { color: #bdc3c7; padding: 10px 20px; font-size: 0.95rem; transition: all 0.3s; border-left: 4px solid transparent; text-decoration: none; display: block; }
+        .nav-link:hover, .nav-link.active { color: white; background-color: rgba(255,255,255,0.05); border-left-color: var(--accent-color); }
+        .nav-link i { width: 25px; text-align: center; margin-right: 5px; }
+
+        /* Main Content */
+        .main-content { margin-left: var(--sidebar-width); padding: 20px 30px; }
+
+        /* Cart/Basket Styles */
+        .cart-panel {
+            background: white; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); height: calc(100vh - 120px); display: flex; flex-direction: column; border-top: 4px solid var(--accent-color);
+        }
+        .cart-header { padding: 15px 20px; border-bottom: 1px solid #eee; background: #fff; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center; }
+        .cart-body { flex: 1; overflow-y: auto; padding: 0; background: #fdfdfd; }
+        .cart-footer { padding: 15px 20px; border-top: 1px solid #eee; background: #fff; border-radius: 0 0 10px 10px; }
+
+        .cart-item { padding: 12px 20px; border-bottom: 1px solid #f1f1f1; display: flex; align-items: center; transition: 0.1s; }
+        .cart-item:hover { background-color: #fff8e1; }
+        .cart-item:last-child { border-bottom: none; }
+        
+        .item-icon { font-size: 1.2rem; margin-right: 15px; color: var(--accent-color); }
+        .item-details { flex: 1; }
+        .item-meta { font-size: 0.8rem; color: #7f8c8d; }
+        
+        /* Tool Card */
+        .tool-card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); margin-bottom: 20px; }
+        
+        /* Active Reservations Table */
+        .res-table th { font-size: 0.85rem; text-transform: uppercase; color: #7f8c8d; background: #f8f9fa; }
+        .res-status-Planned { background: #e3f2fd; color: #1976d2; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; border: 1px solid #bbdefb; }
+        .res-status-Valid { background: #e8f5e9; color: #27ae60; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; border: 1px solid #c8e6c9; }
+        .res-status-Overdue { background: #ffebee; color: #c62828; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; border: 1px solid #ffcdd2; }
+
+        /* Drag & Drop Zone */
+        .drop-zone {
+            border: 2px dashed #bdc3c7;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            background-color: #fafafa;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .drop-zone:hover { border-color: var(--accent-color); background-color: #f1f9fe; }
+        .drop-zone i { font-size: 2.5rem; color: #bdc3c7; margin-bottom: 10px; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <i class="fas fa-dna me-2"></i>GenFish LIMS
+        </div>
+        <div class="d-flex flex-column">
+            <div class="nav-header">Overview</div>
+            <a href="lims_dashboard_design.html" class="nav-link"><i class="fas fa-chart-line"></i> Dashboard</a>
+            <a href="lims_project_collaboration.html" class="nav-link"><i class="fas fa-briefcase"></i> Projects</a>
+            
+            <div class="nav-header">Management</div>
+            <a href="#" class="nav-link active"><i class="fas fa-calendar-check"></i> Reservations</a>
+            <a href="lims_eln_booking.html" class="nav-link"><i class="fas fa-calendar-alt"></i> ELN & Instruments</a>
+
+            <div class="nav-header">Bio Assets</div>
+            <a href="lims_samples_registry.html" class="nav-link"><i class="fas fa-vial"></i> Bio Assets</a>
+            <a href="lims_storage_reagents.html" class="nav-link"><i class="fas fa-boxes"></i> Storage</a>
+            
+            <div class="nav-header">Lab Work</div>
+            <a href="lims_molecular_biology.html" class="nav-link"><i class="fas fa-flask"></i> Molecular</a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h4 class="text-secondary fw-bold mb-0">Sample Reservations</h4>
+                <p class="text-muted small mb-0">Plan new samples or book existing ones (`bio_assets.samples_reservation`).</p>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#importModal"><i class="fas fa-file-excel me-1"></i> Bulk Import/Update</button>
+                <button class="btn btn-primary" onclick="triggerCartSubmit()"><i class="fas fa-save me-1"></i> Save Reservations</button>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Left: Planning Tools & Active List -->
+            <div class="col-lg-8">
+                
+                <!-- Tool 1: Plan New Samples (Generate IDs) -->
+                <div class="tool-card">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold text-primary mb-0"><i class="fas fa-plus-circle me-2"></i>Plan New Samples (Pre-allocation)</h6>
+                        <span class="badge bg-light text-dark">Generates IDs</span>
+                    </div>
+                    <form id="planForm" class="row g-2 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Project</label>
+                            <select class="form-select form-select-sm" id="planProject">
+                                {% for p in projects %}
+                                <option value="{{ p.project_id }}">{{ p.acronym }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Sample Type</label>
+                            <select class="form-select form-select-sm" id="planType">
+                                {% for t in sample_types %}
+                                <option value="{{ t.sample_type_id }}">{{ t.abbreviation }} - {{ t.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">Quantity</label>
+                            <input type="number" class="form-control form-control-sm" id="planQty" value="10" min="1">
+                        </div>
+                        <div class="col-md-4">
+                            <button type="button" class="btn btn-outline-primary btn-sm w-100" onclick="addToCart('plan')">Add to Cart</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Tool 2: Book Existing Samples -->
+                <div class="tool-card">
+                    <h6 class="fw-bold text-secondary mb-3"><i class="fas fa-search me-2"></i>Book Existing Inventory</h6>
+                    <div class="input-group">
+                        <input type="text" class="form-control form-control-sm" id="searchExisting" placeholder="Scan or Type Sample ID...">
+                        <button class="btn btn-outline-secondary btn-sm" onclick="addToCart('existing')">Check & Reserve</button>
+                    </div>
+                </div>
+
+                <!-- My Active Reservations -->
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h6 class="fw-bold mb-0">Active Reservation Log</h6>
+                        <div class="small">
+                            <span class="me-2"><i class="fas fa-circle text-primary small"></i> Planned: <strong>{{ stats.planned }}</strong></span>
+                            <span class="me-2"><i class="fas fa-circle text-success small"></i> Active: <strong>{{ stats.active }}</strong></span>
+                            <span><i class="fas fa-circle text-danger small"></i> Overdue: <strong>{{ stats.overdue }}</strong></span>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="res-table">
+                                <tr>
+                                    <th>Reservation ID</th>
+                                    <th>Sample Type</th>
+                                    <th>Project</th>
+                                    <th>Planned Date</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if reservations %}
+                                    {% for res in reservations %}
+                                    <tr>
+                                        <td class="fw-bold text-primary">{{ res.reservation_sample_id }}</td>
+                                        <td>{{ res.sample_type_id }}</td>
+                                        <td>{{ res.project_id }}</td>
+                                        <td>{{ res.planned_date }}</td>
+                                        <td><span class="res-status-{{ res.status_id }}">{{ res.status_id }}</span></td>
+                                        <td class="text-end">
+                                            <div class="btn-group">
+                                                <button class="btn btn-sm btn-light" title="Print Label"><i class="fas fa-print"></i></button>
+                                                <button class="btn btn-sm btn-light text-danger" title="Cancel"><i class="fas fa-times"></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr><td colspan="6" class="text-center text-muted py-4">No active reservations found.</td></tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right: Reservation Cart -->
+            <div class="col-lg-4">
+                <form action="/reservations/create_batch" method="POST" id="cartForm">
+                    <div class="cart-panel">
+                        <div class="cart-header">
+                            <h6 class="fw-bold mb-0"><i class="fas fa-shopping-basket me-2 text-warning"></i>Reservation Draft</h6>
+                            <span class="badge bg-warning rounded-pill text-dark" id="cartCount">0</span>
+                        </div>
+                        
+                        <div class="cart-body" id="cartContainer">
+                            <div class="text-center text-muted mt-5 p-4" id="cartEmptyState">
+                                <i class="fas fa-arrow-left mb-2"></i>
+                                <p class="small">Use the planning tools to add items to this reservation batch.</p>
+                            </div>
+                            <!-- Cart Items injected via JS -->
+                        </div>
+
+                        <div class="cart-footer">
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Experiment / Purpose</label>
+                                <input type="text" name="notes" class="form-control form-control-sm" placeholder="e.g. Sampling Campaign Jan 2026">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Planned Date</label>
+                                <input type="date" name="planned_date" class="form-control form-control-sm" required>
+                            </div>
+                            <!-- Hidden input to store JSON cart data -->
+                            <input type="hidden" name="cart_data" id="cartDataInput">
+                            
+                            <button type="submit" class="btn btn-warning w-100 fw-bold text-white">Confirm & Generate IDs</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- === IMPORT / UPDATE MODAL === -->
+    <div class="modal fade" id="importModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Bulk Reservation Import</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/reservations/import" method="POST" enctype="multipart/form-data">
+                    <div class="modal-body">
+                        <div class="alert alert-info border-info small">
+                            <i class="fas fa-info-circle me-2"></i> Use this to bulk create planned IDs or update statuses of existing reservations.
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">1. Upload File</label>
+                            <div class="drop-zone">
+                                <i class="fas fa-file-excel text-success"></i>
+                                <p class="mb-1">Drag Excel (.xlsx) or CSV file here</p>
+                                <input type="file" name="file" class="form-control" style="opacity:0; position:absolute; height:100%; top:0; left:0; cursor:pointer;" required>
+                                <button type="button" class="btn btn-sm btn-outline-primary mt-2">Browse Files</button>
+                            </div>
+                        </div>
+
+                        <!-- Update Checkbox (Upsert Logic) -->
+                        <div class="alert alert-warning border-warning border d-flex align-items-center p-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="update_existing" id="updateCheck" value="true">
+                                <label class="form-check-label fw-bold text-dark" for="updateCheck">
+                                    Update existing reservations?
+                                </label>
+                                <div class="small text-muted mt-1">
+                                    If checked, rows with matching <strong>reservation_sample_id</strong> will be updated. 
+                                    <br><em>Unchecked: New records will be created (new IDs generated if omitted).</em>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Required Columns</label>
+                            <table class="table table-sm table-bordered small mb-0">
+                                <thead class="bg-light"><tr><th>Column</th><th>Description</th></tr></thead>
+                                <tbody>
+                                    <tr><td>sample_type_id</td><td>Required for new IDs (e.g. Water, DNA)</td></tr>
+                                    <tr><td>project_id</td><td>Linked Project</td></tr>
+                                    <tr><td>planned_date</td><td>YYYY-MM-DD</td></tr>
+                                    <tr><td>reservation_sample_id</td><td>Only if updating existing</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-success">Process Import</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Cart Logic
+        let cart = [];
+
+        function addToCart(source) {
+            const container = document.getElementById('cartContainer');
+            const emptyState = document.getElementById('cartEmptyState');
+            if(emptyState) emptyState.style.display = 'none';
+
+            let item = {};
+
+            if (source === 'plan') {
+                const proj = document.getElementById('planProject').value;
+                const type = document.getElementById('planType').value;
+                const qty = document.getElementById('planQty').value;
+                
+                item = {
+                    mode: 'new',
+                    project_id: proj,
+                    sample_type_id: type,
+                    quantity: parseInt(qty),
+                    id: `New: ${qty} x ${type} (${proj})`
+                };
+            } else if (source === 'existing') {
+                const id = document.getElementById('searchExisting').value;
+                if(!id) return;
+                
+                item = {
+                    mode: 'book',
+                    sample_id: id,
+                    id: `Book: ${id}`
+                };
+                document.getElementById('searchExisting').value = '';
+            }
+
+            cart.push(item);
+            renderCartItem(item, cart.length - 1);
+            updateCartCount();
+        }
+
+        function renderCartItem(item, index) {
+            const container = document.getElementById('cartContainer');
+            const icon = item.mode === 'new' ? 'fa-plus-circle text-primary' : 'fa-bookmark text-success';
+            
+            const html = `
+                <div class="cart-item" id="cart-item-${index}">
+                    <div class="item-icon"><i class="fas ${icon}"></i></div>
+                    <div class="item-details">
+                        <div class="fw-bold text-dark small">${item.id}</div>
+                        <div class="item-meta small">${item.mode === 'new' ? 'Will generate IDs' : 'Link existing'}</div>
+                    </div>
+                    <button type="button" class="btn btn-sm text-danger" onclick="removeFromCart(${index})"><i class="fas fa-times"></i></button>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
+        }
+
+        function removeFromCart(index) {
+            // In a real app with IDs this is cleaner, here simple array splice for demo
+            document.getElementById(`cart-item-${index}`).remove();
+            delete cart[index]; // soft delete to keep indices or rebuild
+            updateCartCount();
+        }
+
+        function updateCartCount() {
+            const count = cart.filter(i => i).length;
+            document.getElementById('cartCount').innerText = count;
+        }
+
+        function triggerCartSubmit() {
+            // Serialize cart to hidden input
+            const validCart = cart.filter(i => i);
+            if(validCart.length === 0) {
+                alert("Cart is empty!");
+                return;
+            }
+            document.getElementById('cartDataInput').value = JSON.stringify(validCart);
+            // Submit form
+            document.getElementById('cartForm').submit();
+        }
+    </script>
+</body>
+</html>
