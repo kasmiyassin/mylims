@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GenFish LIMS - ELN & Booking</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- FullCalendar CSS -->
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js'></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --sidebar-width: 250px;
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --bg-light: #f8f9fa;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--bg-light);
+            overflow-x: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            height: 100vh;
+            width: var(--sidebar-width);
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: var(--primary-color);
+            color: #ecf0f1;
+            padding-top: 1rem;
+            z-index: 1000;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .sidebar-brand { font-size: 1.4rem; font-weight: 700; text-align: center; margin-bottom: 2rem; color: white; }
+        .sidebar-brand i { color: var(--accent-color); }
+        .nav-header { font-size: 0.75rem; text-transform: uppercase; color: #95a5a6; padding: 10px 20px 5px; font-weight: 700; }
+        .nav-link { color: #bdc3c7; padding: 10px 20px; font-size: 0.95rem; transition: all 0.3s; border-left: 4px solid transparent; text-decoration: none; display: block; }
+        .nav-link:hover, .nav-link.active { color: white; background-color: rgba(255,255,255,0.05); border-left-color: var(--accent-color); }
+        .nav-link i { width: 25px; text-align: center; margin-right: 5px; }
+
+        /* Main Content */
+        .main-content { margin-left: var(--sidebar-width); padding: 20px 30px; }
+
+        /* Calendar Styles */
+        #calendar { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); min-height: 600px; }
+        .fc-toolbar-title { font-size: 1.2rem !important; font-weight: 700; color: var(--primary-color); }
+        .fc-button-primary { background-color: var(--accent-color) !important; border-color: var(--accent-color) !important; }
+        .fc-event { cursor: pointer; border-radius: 4px; border: none; padding: 2px 4px; font-size: 0.85rem; }
+        
+        /* Resource List */
+        .resource-card { background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); overflow: hidden; margin-bottom: 15px; transition: 0.2s; border-left: 4px solid transparent; cursor: pointer; }
+        .resource-card:hover { transform: translateX(5px); }
+        .resource-card.status-true { border-left-color: var(--success-color); }
+        .resource-card.status-false { border-left-color: var(--danger-color); opacity: 0.7; }
+        
+        .res-icon { font-size: 1.2rem; color: #7f8c8d; margin-right: 10px; width: 30px; text-align: center; }
+        .res-name { font-weight: 600; color: var(--primary-color); }
+        .res-meta { font-size: 0.8rem; color: #999; }
+
+        /* ELN Notebook Card */
+        .eln-entry { background: white; border: 1px solid #eee; border-radius: 8px; margin-bottom: 15px; transition: 0.2s; position: relative; }
+        .eln-entry:hover { box-shadow: 0 5px 15px rgba(0,0,0,0.05); border-color: var(--accent-color); }
+        .eln-header { padding: 15px; border-bottom: 1px solid #f9f9f9; display: flex; justify-content: space-between; align-items: center; }
+        .eln-body { padding: 15px; font-size: 0.9rem; color: #555; }
+        .eln-footer { padding: 10px 15px; background: #fcfcfc; border-top: 1px solid #f9f9f9; display: flex; justify-content: space-between; align-items: center; }
+        
+        .tag-batch { background: #e8f5e9; color: #2e7d32; font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; border: 1px solid #c8e6c9; }
+        .tag-generic { background: #f3e5f5; color: #7b1fa2; font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; border: 1px solid #e1bee7; }
+
+        /* Dynamic Form Builder */
+        .json-field-group { background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #eee; margin-bottom: 15px; }
+        .json-label { font-weight: 600; font-size: 0.85rem; color: #555; margin-bottom: 5px; display: block; }
+        
+        /* Form Designer Styles */
+        .field-row { background: #fff; border: 1px dashed #ccc; padding: 10px; margin-bottom: 10px; border-radius: 4px; display: flex; align-items: center; gap: 10px; }
+        .field-handle { color: #ccc; cursor: move; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <i class="fas fa-dna me-2"></i>GenFish LIMS
+        </div>
+        <div class="d-flex flex-column">
+            <div class="nav-header">Overview</div>
+            <a href="lims_dashboard_design.html" class="nav-link"><i class="fas fa-chart-line"></i> Dashboard</a>
+            <a href="lims_search_page.html" class="nav-link"><i class="fas fa-search"></i> Global Search</a>
+            <a href="#" class="nav-link active"><i class="fas fa-calendar-alt"></i> Booking / ELN</a>
+
+            <div class="nav-header">Bio Assets</div>
+            <a href="lims_samples_registry.html" class="nav-link"><i class="fas fa-vial"></i> Samples Registry</a>
+            <a href="lims_storage_reagents.html" class="nav-link"><i class="fas fa-boxes"></i> Storage & Reagents</a>
+            
+            <div class="nav-header">Field Work</div>
+            <a href="lims_field_events.html" class="nav-link"><i class="fas fa-map-marked-alt"></i> Sampling Events</a>
+            
+            <div class="nav-header">Lab Work</div>
+            <a href="lims_biology_fish.html" class="nav-link"><i class="fas fa-microscope"></i> Biology / Fish</a>
+            <a href="lims_molecular_biology.html" class="nav-link"><i class="fas fa-flask"></i> Molecular Lab</a>
+            <a href="lims_bioinformatics.html" class="nav-link"><i class="fas fa-laptop-code"></i> Bioinformatics</a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h4 class="text-secondary fw-bold mb-0">Lab Notebook & Booking</h4>
+                <p class="text-muted small mb-0">Manage resources (`eln.bookings`) and universal experiments (`eln.protocols`)</p>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bookingModal"><i class="fas fa-calendar-plus me-1"></i> New Booking</button>
+                <button class="btn btn-primary" onclick="initiateRun('', 'New Experiment')"><i class="fas fa-flask me-1"></i> Run Experiment</button>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <ul class="nav nav-tabs mb-4" id="elnTab" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#calendarView"><i class="far fa-calendar-alt me-2"></i>Resource Calendar</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#notebookView"><i class="fas fa-book me-2"></i>My Lab Notebook</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#protocolView"><i class="fas fa-sliders-h me-2"></i>Protocol Designer</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#sopView"><i class="fas fa-file-contract me-2"></i>SOP Library</button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="elnTabContent">
+            
+            <!-- TAB 1: CALENDAR (FullCalendar) -->
+            <div class="tab-pane fade show active" id="calendarView">
+                <div class="row">
+                    <!-- Resource Sidebar -->
+                    <div class="col-lg-3">
+                        <h6 class="fw-bold text-secondary mb-3 text-uppercase small">Lab Instruments</h6>
+                        
+                        <!-- List Resources from eln.bookable_resources -->
+                        {% for res in resources %}
+                        <div class="resource-card status-{{ res.is_active | lower }} p-3">
+                            <div class="d-flex align-items-center">
+                                <div class="res-icon">
+                                    {% if 'Cycler' in res.name %}<i class="fas fa-temperature-high"></i>
+                                    {% elif 'Seq' in res.name %}<i class="fas fa-dna"></i>
+                                    {% elif 'Micro' in res.name %}<i class="fas fa-microscope"></i>
+                                    {% else %}<i class="fas fa-flask"></i>{% endif %}
+                                </div>
+                                <div>
+                                    <div class="res-name">{{ res.name }}</div>
+                                    <div class="res-meta">
+                                        {% if res.is_active %}
+                                            <span class="text-success">Available</span>
+                                        {% else %}
+                                            <span class="text-danger">Maintenance</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="text-muted small">No resources defined.</div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Calendar Area -->
+                    <div class="col-lg-9">
+                        <div id="calendar"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: NOTEBOOK (Runs) -->
+            <div class="tab-pane fade" id="notebookView">
+                <div class="row">
+                    <div class="col-lg-8">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold text-secondary">Experiment Log (`eln.protocols_run`)</h6>
+                            
+                            <!-- Universal Search Form -->
+                            <form action="" method="GET" class="d-flex w-50">
+                                <input type="hidden" name="tab" value="notebook">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
+                                    <input type="text" name="q" class="form-control" placeholder="Search by Run ID, Project, Sample, or Protocol..." value="{{ query }}">
+                                </div>
+                            </form>
+                        </div>
+
+                        {% if notebook_runs %}
+                            {% for run in notebook_runs %}
+                            <div class="eln-entry">
+                                <div class="eln-header">
+                                    <div class="d-flex align-items-center">
+                                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
+                                            <i class="fas fa-flask"></i>
+                                        </div>
+                                        <div>
+                                            <strong class="text-primary fs-5">{{ run.title }}</strong>
+                                            <div class="text-muted small">
+                                                ID: <strong>{{ run.run_id }}</strong> • {{ run.run_date }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge bg-secondary mb-1">Status: {{ run.status }}</span><br>
+                                        <small class="text-muted">{{ run.protocol_name }}</small>
+                                    </div>
+                                </div>
+                                <div class="eln-body">
+                                    <div class="mb-2 d-flex gap-2">
+                                        <span class="tag-batch"><i class="fas fa-briefcase me-1"></i> {{ run.project_id }}</span>
+                                        {% if run.sample_count %}
+                                        <span class="tag-generic"><i class="fas fa-vial me-1"></i> {{ run.sample_count }} Samples</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="p-2 bg-light rounded border small text-muted fst-italic">
+                                        {{ run.notes | default('No additional notes.', true) }}
+                                    </div>
+                                </div>
+                                <div class="eln-footer">
+                                    <div class="small">
+                                        <i class="fas fa-user-circle me-1"></i> {{ run.person_name }}
+                                    </div>
+                                    <div class="btn-group">
+                                        <a href="#" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye me-1"></i> Details</a>
+                                        <button class="btn btn-sm btn-outline-secondary"><i class="fas fa-file-pdf"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="alert alert-light text-center border mt-4 py-5">
+                                <i class="fas fa-book-open fa-3x mb-3 text-muted opacity-50"></i>
+                                <h5>Notebook Empty</h5>
+                                <p class="text-muted">No experiments found matching your criteria.<br>Start a new run to populate this list.</p>
+                                <button class="btn btn-primary btn-sm mt-2" onclick="initiateRun('', 'New Experiment')">Start First Experiment</button>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Right: Quick Stats -->
+                    <div class="col-lg-4">
+                        <div class="card border-0 shadow-sm mb-3">
+                            <div class="card-header bg-white fw-bold">Notebook Summary</div>
+                            <div class="card-body">
+                                <ul class="list-group list-group-flush small">
+                                    <li class="list-group-item d-flex justify-content-between px-0">
+                                        <span>Total Runs</span>
+                                        <strong>{{ notebook_runs | length }}</strong>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between px-0">
+                                        <span>Projects Linked</span>
+                                        <strong>{{ notebook_runs | map(attribute='project_id') | unique | list | length }}</strong>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: UNIVERSAL PROTOCOL DESIGNER -->
+            <div class="tab-pane fade" id="protocolView">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="fw-bold mb-0">Universal Protocol Library</h6>
+                            <small class="text-muted">Define custom templates for any experiment type</small>
+                        </div>
+                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#designerModal"><i class="fas fa-magic me-1"></i> Design New Protocol</button>
+                    </div>
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light">
+                            <tr><th>Protocol Name</th><th>Category</th><th>Version</th><th>Custom Fields</th><th>Action</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for p in protocols %}
+                            <tr>
+                                <td><span class="fw-bold">{{ p.title }}</span></td>
+                                <td><span class="badge bg-light text-dark border">{{ p.category }}</span></td>
+                                <td>v{{ p.version }}</td>
+                                <td class="text-muted small">
+                                    {{ p.field_count }} fields defined
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-success" onclick="initiateRun('{{ p.protocol_id }}', '{{ p.title }}', '{{ p.category }}')"><i class="fas fa-play me-1"></i> Run</button>
+                                    <button class="btn btn-sm btn-light border"><i class="fas fa-edit"></i></button>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="5" class="text-center text-muted py-4">No protocols defined. Click "Design New Protocol" to start.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB 4: SOP Library -->
+            <div class="tab-pane fade" id="sopView">
+                <div class="row">
+                    {% for sop in sops %}
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 border-0 shadow-sm">
+                            <div class="card-body text-center">
+                                <i class="fas fa-file-pdf text-danger fa-3x mb-3"></i>
+                                <h6 class="fw-bold">{{ sop.title }}</h6>
+                                <p class="small text-muted">Version {{ sop.version }} • {{ sop.sop_nr_lab }}</p>
+                                {% if sop.attachment_link %}
+                                <a href="{{ sop.attachment_link }}" class="btn btn-sm btn-outline-secondary w-100" target="_blank">Download</a>
+                                {% else %}
+                                <button class="btn btn-sm btn-outline-secondary w-100" disabled>No File</button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="col-12 text-center text-muted">No Standard Operating Procedures uploaded.</div>
+                    {% endfor %}
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- === MODALS === -->
+
+    <!-- Booking Modal -->
+    <div class="modal fade" id="bookingModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Book Resource</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/bookings/create" method="POST">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Resource</label>
+                            <select class="form-select" name="resource_id" required>
+                                {% for res in resources %}
+                                <option value="{{ res.resource_id }}">{{ res.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col">
+                                <label class="form-label">Start</label>
+                                <input type="datetime-local" class="form-control" name="start_time" required>
+                            </div>
+                            <div class="col">
+                                <label class="form-label">End</label>
+                                <input type="datetime-local" class="form-control" name="end_time" required>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Project Context</label>
+                            <select class="form-select" name="project_id">
+                                {% for prj in projects %}
+                                <option value="{{ prj.project_id }}">{{ prj.title }} ({{ prj.acronym }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Notes</label>
+                            <textarea class="form-control" name="notes" rows="2"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Confirm Booking</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Run Generic Experiment Modal -->
+    <div class="modal fade" id="runProtocolModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="fas fa-flask me-2"></i>Execute Experiment</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/experiments/create" method="POST" id="experimentForm">
+                    <div class="modal-body">
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Select Protocol Template</label>
+                                <select class="form-select" name="protocol_id" id="protocolSelector" onchange="updateFormFields(this)">
+                                    <option value="generic" data-cat="General">Generic / Ad-hoc</option>
+                                    {% for p in protocols %}
+                                    <option value="{{ p.protocol_id }}" data-cat="{{ p.category }}">{{ p.title }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Project Context</label>
+                                <select class="form-select" name="project_id">
+                                    <option value="">-- No Project --</option>
+                                    {% for prj in projects %}
+                                    <option value="{{ prj.project_id }}">{{ prj.acronym }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Dynamic Fields Area -->
+                        <div id="dynamicFormArea" class="border rounded p-3 bg-light">
+                            <!-- JS will inject fields here -->
+                            <div class="text-center text-muted">Loading protocol fields...</div>
+                        </div>
+                        
+                        <!-- Link Samples -->
+                        <div class="mt-4">
+                            <label class="form-label fw-bold">Link Samples</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-barcode"></i></span>
+                                <input type="text" name="sample_ids" class="form-control" placeholder="Scan Sample IDs (comma separated)...">
+                            </div>
+                            <div class="form-text">Supports barcodes from samples, reagents, or batches.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success">Save Run</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Protocol Designer Modal (Form Builder) -->
+    <div class="modal fade" id="designerModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-magic me-2"></i>Protocol Designer</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/protocols/create" method="POST">
+                    <div class="modal-body">
+                        <div class="row mb-3">
+                            <div class="col-md-8">
+                                <label class="form-label">Protocol Title</label>
+                                <input type="text" class="form-control" name="title" placeholder="e.g., DNA Extraction v2" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Category</label>
+                                <input type="text" class="form-control" name="category" list="catOptions" placeholder="e.g. PCR">
+                                <datalist id="catOptions">
+                                    <option value="Extraction">
+                                    <option value="PCR">
+                                    <option value="Sequencing">
+                                    <option value="Microscopy">
+                                    <option value="Field Work">
+                                </datalist>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Form Fields Schema</label>
+                            <p class="small text-muted">Define the data fields required for this experiment.</p>
+                            
+                            <div id="builderFields">
+                                <!-- Default Field -->
+                                <div class="field-row">
+                                    <i class="fas fa-grip-vertical field-handle"></i>
+                                    <input type="text" class="form-control form-control-sm" name="field_labels[]" value="Observation / Notes" placeholder="Field Label">
+                                    <select class="form-select form-select-sm" name="field_types[]" style="width: 120px;">
+                                        <option value="textarea">Long Text</option>
+                                        <option value="text">Short Text</option>
+                                        <option value="number">Number</option>
+                                        <option value="date">Date</option>
+                                        <option value="checkbox">Checkbox</option>
+                                    </select>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="field_req[]" checked>
+                                        <label class="form-check-label small">Req</label>
+                                    </div>
+                                    <button type="button" class="btn btn-sm text-danger" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+                                </div>
+                            </div>
+                            
+                            <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addFieldRow()">
+                                <i class="fas fa-plus"></i> Add Field
+                            </button>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Template</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Calendar with Server-Side Events
+            var calendarEl = document.getElementById('calendar');
+            var dbEvents = {{ booking_events | default([], true) | tojson }}; 
+
+            var calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'timeGridWeek',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                },
+                slotMinTime: '08:00:00',
+                slotMaxTime: '19:00:00',
+                height: 650,
+                events: dbEvents,
+                eventClick: function(info) {
+                    alert('Booking: ' + info.event.title);
+                }
+            });
+            calendar.render();
+            
+            var tabEl = document.querySelector('button[data-bs-target="#calendarView"]');
+            tabEl.addEventListener('shown.bs.tab', function (event) {
+                calendar.render();
+            });
+        });
+
+        // --- CLIENT-SIDE LOGIC FOR DYNAMIC FORMS ---
+
+        // 1. Initiate Run (Open Modal & Pre-select)
+        function initiateRun(protoId, protoTitle, cat) {
+            const modalEl = document.getElementById('runProtocolModal');
+            const select = document.getElementById('protocolSelector');
+            
+            // Set dropdown value
+            if (protoId) {
+                select.value = protoId;
+            } else {
+                select.value = 'generic';
+            }
+            
+            // Trigger update to render fields
+            updateFormFields(select);
+            
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+
+        // 2. Mock Logic to Render Fields based on selection
+        // In a real app, this would fetch the JSON schema from the server
+        function updateFormFields(select) {
+            const container = document.getElementById('dynamicFormArea');
+            const cat = select.options[select.selectedIndex].getAttribute('data-cat') || 'General';
+            let html = `<h6 class="text-secondary border-bottom pb-2 mb-3">${cat} Experiment Data</h6>`;
+
+            // Simulation of different schemas
+            if (cat === 'PCR') {
+                html += `
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-bold">Cycles</label>
+                            <input type="number" name="custom_cycles" class="form-control form-control-sm" value="30">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-bold">Annealing Temp (°C)</label>
+                            <input type="number" name="custom_temp" class="form-control form-control-sm" value="55">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Mastermix Lot #</label>
+                        <input type="text" name="custom_lot" class="form-control form-control-sm">
+                    </div>`;
+            } else if (cat === 'Extraction') {
+                html += `
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Kit Used</label>
+                        <select class="form-select form-select-sm" name="custom_kit">
+                            <option>Qiagen DNeasy</option>
+                            <option>Promega Wizard</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Elution Volume (uL)</label>
+                        <input type="number" name="custom_vol" class="form-control form-control-sm" value="50">
+                    </div>`;
+            } else {
+                // Generic Fallback
+                html += `
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Observation / Data</label>
+                        <textarea name="custom_data" class="form-control form-control-sm" rows="3"></textarea>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="custom_success" checked>
+                        <label class="form-check-label small">Procedure Successful</label>
+                    </div>`;
+            }
+            container.innerHTML = html;
+        }
+
+        // 3. Form Designer: Add Row
+        function addFieldRow() {
+            const container = document.getElementById('builderFields');
+            const div = document.createElement('div');
+            div.className = 'field-row';
+            div.innerHTML = `
+                <i class="fas fa-grip-vertical field-handle"></i>
+                <input type="text" class="form-control form-control-sm" name="field_labels[]" placeholder="Field Label">
+                <select class="form-select form-select-sm" name="field_types[]" style="width: 120px;">
+                    <option value="text">Short Text</option>
+                    <option value="textarea">Long Text</option>
+                    <option value="number">Number</option>
+                    <option value="date">Date</option>
+                    <option value="checkbox">Checkbox</option>
+                </select>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="field_req[]">
+                    <label class="form-check-label small">Req</label>
+                </div>
+                <button type="button" class="btn btn-sm text-danger" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+            `;
+            container.appendChild(div);
+        }
+    </script>
+</body>
+</html>
