@@ -20,7 +20,7 @@
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
         
-        /* Sidebar (Matched to Dashboard) */
+        /* Sidebar (Matched to Projects) */
         .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.5rem; }
         .sidebar-nav-container::-webkit-scrollbar { width: 6px; }
         .sidebar-nav-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
@@ -46,15 +46,26 @@
         .fc .fc-toolbar-title { font-size: 1.25rem; font-weight: 600; color: #1e293b; }
         .fc .fc-button-primary { background-color: #4f46e5; border-color: #4f46e5; }
         .fc .fc-button-primary:hover { background-color: #4338ca; border-color: #4338ca; }
+        .fc-event { cursor: pointer; border: none; }
         
-        /* Modal Transitions */
+        /* Loading & Modals */
+        .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.7); backdrop-filter: blur(2px); display: flex; justify-content: center; align-items: center; z-index: 50; }
         .modal { opacity: 0; visibility: hidden; transition: opacity 0.2s ease-in-out; }
         .modal.open { opacity: 1; visibility: visible; }
         .modal-content { transform: scale(0.95); transition: transform 0.2s ease-in-out; }
         .modal.open .modal-content { transform: scale(1); }
+        .hidden { display: none !important; }
     </style>
 </head>
-<body class="flex h-screen overflow-hidden">
+<body class="flex h-screen overflow-hidden text-slate-800">
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2"></div>
 
     <!-- Sidebar -->
     <div class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-sm flex-shrink-0">
@@ -103,10 +114,10 @@
                 <p class="text-sm text-slate-500">Manage resources and experiments</p>
             </div>
             <div class="flex gap-3">
-                <button onclick="openModal('bookingModal')" class="flex items-center px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium transition text-sm">
+                <button onclick="openBookingModal()" class="flex items-center px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium transition text-sm">
                     <i data-lucide="calendar-plus" class="w-4 h-4 mr-2"></i> New Booking
                 </button>
-                <button onclick="openModal('runProtocolModal')" class="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm font-medium transition text-sm">
+                <button onclick="openRunProtocolModal()" class="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm font-medium transition text-sm">
                     <i data-lucide="flask-conical" class="w-4 h-4 mr-2"></i> Run Experiment
                 </button>
             </div>
@@ -129,12 +140,13 @@
                 <div class="w-1/4 space-y-4">
                     <h3 class="font-bold text-slate-700 text-sm uppercase tracking-wide">Lab Instruments</h3>
                     <div id="resourceList" class="space-y-3">
-                        <div class="animate-pulse bg-white h-16 rounded-lg"></div>
+                        <div class="animate-pulse bg-white h-16 rounded-lg border border-slate-100"></div>
                     </div>
                 </div>
                 <!-- Calendar -->
-                <div class="w-3/4 bg-white rounded-xl shadow-sm border border-slate-200 p-4 h-full">
-                    <div id="calendar" class="h-full"></div>
+                <div class="w-3/4 bg-white rounded-xl shadow-sm border border-slate-200 p-4 h-full flex flex-col">
+                    <div class="text-xs text-slate-400 mb-2 italic"><i data-lucide="info" class="w-3 h-3 inline"></i> Click a time slot to book. Click an event to view details.</div>
+                    <div id="calendar" class="flex-1"></div>
                 </div>
             </div>
 
@@ -143,7 +155,7 @@
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-lg font-bold text-slate-800">Experiment Log</h2>
                     <div class="relative w-64">
-                        <input type="text" id="notebookSearch" placeholder="Search experiments..." class="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <input type="text" id="notebookSearch" oninput="filterNotebook()" placeholder="Search experiments..." class="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
                         <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
                     </div>
                 </div>
@@ -182,6 +194,13 @@
 
             <!-- SOP VIEW -->
             <div id="sopView" class="tab-content hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-lg font-bold text-slate-800">Standard Operating Procedures</h2>
+                    <div class="relative w-64">
+                        <input type="text" id="sopSearch" oninput="filterSOPs()" placeholder="Filter SOPs..." class="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <i data-lucide="filter" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+                    </div>
+                </div>
                 <div id="sopGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <!-- SOP Cards -->
                 </div>
@@ -200,6 +219,7 @@
                 <button onclick="closeModal('bookingModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
             <form id="bookingForm" class="p-6 space-y-4">
+                <input type="hidden" id="bookingId"> <!-- For updates/deletes later if implemented -->
                 <div>
                     <label class="block text-xs font-bold text-slate-500 mb-1">Resource</label>
                     <select id="bookingResource" class="w-full p-2 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 outline-none"></select>
@@ -226,6 +246,16 @@
                 </div>
                 <button type="submit" class="w-full py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition">Confirm Booking</button>
             </form>
+        </div>
+    </div>
+
+    <!-- Booking Details Modal (Read/Delete) -->
+    <div id="bookingDetailsModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-sm rounded-xl shadow-2xl p-6 relative">
+            <button onclick="closeModal('bookingDetailsModal')" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <h3 class="font-bold text-lg text-slate-800 mb-4">Booking Details</h3>
+            <div id="bookingDetailsContent" class="space-y-3 text-sm text-slate-600 mb-6"></div>
+            <button id="deleteBookingBtn" class="w-full py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg font-bold hover:bg-red-100 transition hidden">Delete Booking</button>
         </div>
     </div>
 
@@ -264,10 +294,61 @@
         </div>
     </div>
 
+    <!-- Run Experiment Modal -->
+    <div id="runProtocolModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 class="font-bold text-slate-800">Run Experiment</h3>
+                <button onclick="closeModal('runProtocolModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="runForm" class="flex-1 overflow-y-auto p-6 space-y-4">
+                
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">Select Protocol</label>
+                    <select id="runProtocolSelect" class="w-full p-2 border border-slate-300 rounded text-sm bg-white" onchange="renderProtocolFields(this.value)">
+                        <option value="" disabled selected>Select a template...</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">Linked Experiment (LIMS)</label>
+                    <select id="runExperimentSelect" class="w-full p-2 border border-slate-300 rounded text-sm bg-white">
+                        <option value="">-- Optional --</option>
+                    </select>
+                </div>
+
+                <div id="dynamicRunFields" class="space-y-3 pt-2 border-t border-slate-100 hidden">
+                    <h4 class="text-xs font-bold text-indigo-600 uppercase mb-2">Protocol Data</h4>
+                    <!-- Fields injected here based on JSON schema -->
+                </div>
+
+                <div class="pt-2">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">General Notes</label>
+                    <textarea id="runNotes" class="w-full p-2 border border-slate-300 rounded text-sm" rows="2"></textarea>
+                </div>
+
+                <div class="pt-2">
+                    <button type="submit" class="w-full py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition">Save Run Data</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script>
-        const API_PREFIX = '/mylims/api';
+        // --- Dynamic API Path for Proxy support ---
+        const getApiBase = () => {
+            const path = window.location.pathname;
+            // If path contains /mylims, assume we are behind proxy and prepend it to API calls
+            if (path.includes('/mylims')) return '/mylims/api';
+            return '/api';
+        };
+        const API_PREFIX = getApiBase();
+        
         let calendarInstance;
+        let availableProtocols = [];
+        let notebookData = [];
+        let sopData = [];
 
         document.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
@@ -293,7 +374,8 @@
                 loadProjects(),
                 loadNotebook(),
                 loadProtocols(),
-                loadSOPs()
+                loadSOPs(),
+                loadExperiments()
             ]);
 
             // 5. Add initial field to designer
@@ -308,21 +390,26 @@
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
             document.getElementById(`tab-${tabId}`).classList.add('active');
 
-            if (tabId === 'calendarView' && calendarInstance) calendarInstance.render();
+            if (tabId === 'calendarView' && calendarInstance) setTimeout(() => calendarInstance.render(), 50);
         }
 
         // --- API Helper ---
         async function apiFetch(endpoint, options = {}) {
             const token = sessionStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...options.headers };
-            if(options.body) options.body = JSON.stringify(options.body);
+            const headers = { 'Authorization': `Bearer ${token}`, ...options.headers };
+            // Auto JSON body if needed
+            if(options.body && typeof options.body === 'object') {
+                headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(options.body);
+            }
             
             try {
                 const res = await fetch(`${API_PREFIX}/${endpoint}`, { ...options, headers });
-                if(!res.ok) throw new Error("API Error");
+                if(!res.ok) throw new Error(`API Error ${res.status}`);
                 return res.json();
             } catch(e) {
                 console.error(e);
+                showToast("Connection Error", "error");
                 return null;
             }
         }
@@ -337,11 +424,10 @@
             
             if(resources) {
                 resources.forEach(res => {
-                    // Populate Sidebar List
                     const statusColor = res.is_active ? 'border-l-4 border-emerald-500' : 'border-l-4 border-red-500 opacity-60';
-                    const icon = res.name.includes('Seq') ? 'dna' : 'microscope';
+                    const icon = res.name.toLowerCase().includes('seq') ? 'dna' : 'microscope';
                     list.innerHTML += `
-                        <div class="bg-white p-3 rounded-md shadow-sm ${statusColor} cursor-pointer hover:translate-x-1 transition-transform">
+                        <div class="bg-white p-3 rounded-md shadow-sm ${statusColor} border border-slate-100 cursor-pointer hover:shadow-md transition">
                             <div class="flex items-center">
                                 <i data-lucide="${icon}" class="w-5 h-5 text-slate-400 mr-3"></i>
                                 <div>
@@ -351,7 +437,6 @@
                             </div>
                         </div>
                     `;
-                    // Populate Select
                     if(res.is_active) select.add(new Option(res.name, res.resource_id));
                 });
                 lucide.createIcons();
@@ -365,15 +450,28 @@
                 headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
                 slotMinTime: '08:00:00', slotMaxTime: '20:00:00',
                 height: '100%',
+                allDaySlot: false,
+                selectable: true,
+                select: (info) => {
+                    openBookingModal(info.startStr, info.endStr);
+                },
+                eventClick: (info) => {
+                    showBookingDetails(info.event);
+                },
                 events: async (info, successCallback, failureCallback) => {
                     const bookings = await apiFetch('table/eln/bookings');
                     if (bookings) {
                         const events = bookings.map(b => ({
+                            id: b.booking_id,
                             title: b.project_id || 'Reserved',
                             start: b.start_time,
                             end: b.end_time,
                             color: '#4f46e5',
-                            resourceId: b.resource_id
+                            extendedProps: {
+                                resourceId: b.resource_id,
+                                personId: b.person_id,
+                                notes: b.notes
+                            }
                         }));
                         successCallback(events);
                     } else {
@@ -384,86 +482,265 @@
             calendarInstance.render();
         }
 
-        // --- Notebook ---
+        function showBookingDetails(event) {
+            const props = event.extendedProps;
+            const currentUser = JSON.parse(sessionStorage.getItem('user')).person_id;
+            
+            let html = `
+                <p><strong>Time:</strong> ${event.start.toLocaleString()} - ${event.end.toLocaleString()}</p>
+                <p><strong>User:</strong> ${props.personId}</p>
+                <p><strong>Project:</strong> ${event.title}</p>
+                <p><strong>Notes:</strong> ${props.notes || '-'}</p>
+            `;
+            
+            document.getElementById('bookingDetailsContent').innerHTML = html;
+            
+            const btn = document.getElementById('deleteBookingBtn');
+            if (props.personId === currentUser) {
+                btn.classList.remove('hidden');
+                btn.onclick = () => deleteBooking(event.id);
+            } else {
+                btn.classList.add('hidden');
+            }
+            
+            openModal('bookingDetailsModal');
+        }
+
+        async function deleteBooking(id) {
+            if(!confirm("Cancel this booking?")) return;
+            const res = await apiFetch(`table/eln/bookings?booking_id=${id}`, { method: 'DELETE' });
+            if(res) {
+                showToast("Booking cancelled");
+                closeModal('bookingDetailsModal');
+                calendarInstance.refetchEvents();
+            }
+        }
+
+        // --- Notebook & Runs ---
         async function loadNotebook() {
-            const runs = await apiFetch('table/eln/protocols_run');
+            const runs = await apiFetch('table/eln/protocols_run?sort_by=run_date&sort_order=desc');
             const container = document.getElementById('notebookEntries');
             container.innerHTML = '';
+            notebookData = runs || [];
 
-            if (runs && runs.length > 0) {
-                runs.forEach(run => {
-                    container.innerHTML += `
-                        <div class="bg-white border border-slate-200 rounded-lg p-4 hover:border-indigo-300 transition shadow-sm">
-                            <div class="flex justify-between items-start mb-2">
-                                <div class="flex items-center">
-                                    <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 mr-3">
-                                        <i data-lucide="flask-conical" class="w-5 h-5"></i>
-                                    </div>
-                                    <div>
-                                        <h4 class="font-bold text-slate-800">${run.experiment_id || 'Untitled Experiment'}</h4>
-                                        <p class="text-xs text-slate-500">${new Date(run.run_date).toLocaleString()}</p>
-                                    </div>
-                                </div>
-                                <span class="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded-full font-medium">${run.person_id}</span>
-                            </div>
-                            <p class="text-sm text-slate-600 bg-slate-50 p-3 rounded mb-3 italic">
-                                ${run.notes || 'No notes provided.'}
-                            </p>
-                            <div class="flex gap-2">
-                                <span class="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded border border-emerald-100">Proto: ${run.protocol_id || 'N/A'}</span>
-                            </div>
-                        </div>
-                    `;
-                });
-                lucide.createIcons();
+            if (notebookData.length > 0) {
+                renderNotebookEntries(notebookData);
             } else {
                 container.innerHTML = `<div class="text-center py-10 text-slate-400">No notebook entries found.</div>`;
             }
         }
 
+        function renderNotebookEntries(entries) {
+            const container = document.getElementById('notebookEntries');
+            container.innerHTML = '';
+            entries.forEach(run => {
+                // Parse the stored JSON data for display
+                let dataDisplay = '';
+                try {
+                    const parsed = typeof run.data_json === 'string' ? JSON.parse(run.data_json) : run.data_json;
+                    if(parsed) {
+                        dataDisplay = '<div class="grid grid-cols-2 gap-2 mt-2 text-xs bg-slate-50 p-2 rounded border border-slate-100">';
+                        for (const [key, val] of Object.entries(parsed)) {
+                            dataDisplay += `<div><span class="font-semibold text-slate-500">${key}:</span> <span class="text-slate-700">${val}</span></div>`;
+                        }
+                        dataDisplay += '</div>';
+                    }
+                } catch(e) {}
+
+                container.innerHTML += `
+                    <div class="bg-white border border-slate-200 rounded-lg p-4 hover:border-indigo-300 transition shadow-sm">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="flex items-center">
+                                <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 mr-3">
+                                    <i data-lucide="flask-conical" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-slate-800 text-sm">Run: ${run.run_id}</h4>
+                                    <p class="text-xs text-slate-500">${new Date(run.run_date).toLocaleString()} • by ${run.person_id}</p>
+                                </div>
+                            </div>
+                            <span class="bg-emerald-50 text-emerald-700 text-xs px-2 py-1 rounded border border-emerald-100">Proto: ${run.protocol_id || 'N/A'}</span>
+                        </div>
+                        <div class="text-sm text-slate-600 mb-2">
+                            ${run.notes ? `<p class="italic mb-2">"${run.notes}"</p>` : ''}
+                            ${dataDisplay}
+                        </div>
+                    </div>
+                `;
+            });
+            lucide.createIcons();
+        }
+
+        function filterNotebook() {
+            const term = document.getElementById('notebookSearch').value.toLowerCase();
+            const filtered = notebookData.filter(r => 
+                (r.run_id && r.run_id.toLowerCase().includes(term)) || 
+                (r.notes && r.notes.toLowerCase().includes(term)) ||
+                (r.protocol_id && r.protocol_id.toLowerCase().includes(term))
+            );
+            renderNotebookEntries(filtered);
+        }
+
+        async function loadExperiments() {
+            try {
+                const exps = await apiFetch('table/lims/experiments?limit=500');
+                const sel = document.getElementById('runExperimentSelect');
+                if(exps) exps.forEach(e => sel.add(new Option(e.title || e.experiment_id, e.experiment_id)));
+            } catch(e) {}
+        }
+
         // --- Protocols ---
         async function loadProtocols() {
             const protocols = await apiFetch('table/eln/protocols');
+            availableProtocols = protocols || [];
+            
+            // Populate Table
             const tbody = document.getElementById('protocolTableBody');
             tbody.innerHTML = '';
+            
+            // Populate Run Dropdown
+            const runSelect = document.getElementById('runProtocolSelect');
+            runSelect.innerHTML = '<option value="" disabled selected>Select a template...</option>';
 
-            if (protocols) {
-                protocols.forEach(p => {
+            if (availableProtocols.length > 0) {
+                availableProtocols.forEach(p => {
+                    // Table Row
                     tbody.innerHTML += `
                         <tr class="hover:bg-slate-50 transition border-b border-slate-100 last:border-0">
                             <td class="px-6 py-3 font-medium text-slate-700">${p.title}</td>
                             <td class="px-6 py-3 text-slate-500 font-mono text-xs">${p.protocol_id}</td>
                             <td class="px-6 py-3 text-slate-500 text-xs">${p.created_at}</td>
                             <td class="px-6 py-3 text-right">
-                                <button class="text-indigo-600 hover:text-indigo-800 text-xs font-bold border border-indigo-200 px-2 py-1 rounded bg-indigo-50">View</button>
+                                <button onclick="openRunProtocolModal('${p.protocol_id}')" class="text-indigo-600 hover:text-indigo-800 text-xs font-bold border border-indigo-200 px-2 py-1 rounded bg-indigo-50">Use</button>
                             </td>
                         </tr>
                     `;
+                    // Dropdown Option
+                    runSelect.add(new Option(p.title, p.protocol_id));
                 });
             }
         }
 
+        // --- Run Experiment Logic ---
+        function openRunProtocolModal(preselectId) {
+            if(preselectId) document.getElementById('runProtocolSelect').value = preselectId;
+            // Trigger render if value exists
+            const val = document.getElementById('runProtocolSelect').value;
+            if(val) renderProtocolFields(val);
+            openModal('runProtocolModal');
+        }
+
+        function renderProtocolFields(protocolId) {
+            const proto = availableProtocols.find(p => p.protocol_id === protocolId);
+            const container = document.getElementById('dynamicRunFields');
+            container.innerHTML = '';
+            
+            if(!proto || !proto.content_json) {
+                container.classList.add('hidden');
+                return;
+            }
+
+            container.classList.remove('hidden');
+            // Parse schema
+            let schema = [];
+            try {
+                schema = typeof proto.content_json === 'string' ? JSON.parse(proto.content_json) : proto.content_json;
+            } catch(e) { console.error("Bad JSON", e); return; }
+
+            schema.forEach(field => {
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = `<label class="block text-xs font-bold text-slate-500 mb-1">${field.label}</label>`;
+                
+                let input;
+                if(field.type === 'checkbox') {
+                    input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.className = "rounded text-indigo-600 focus:ring-indigo-500";
+                } else {
+                    input = document.createElement('input');
+                    input.type = field.type || 'text';
+                    input.className = "w-full p-2 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 outline-none";
+                }
+                // Store label as data attribute for easy extraction
+                input.dataset.label = field.label;
+                input.dataset.inputType = field.type;
+                input.name = "dynamic_field"; // Marker class
+
+                if(field.type === 'checkbox') {
+                    const flex = document.createElement('div');
+                    flex.className = "flex items-center gap-2";
+                    flex.appendChild(input);
+                    flex.appendChild(document.createTextNode(' Yes'));
+                    wrapper.appendChild(flex);
+                } else {
+                    wrapper.appendChild(input);
+                }
+                
+                container.appendChild(wrapper);
+            });
+        }
+
+        document.getElementById('runForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // 1. Gather Dynamic Data
+            const dynamicData = {};
+            const inputs = document.querySelectorAll('[name="dynamic_field"]');
+            inputs.forEach(inp => {
+                const key = inp.dataset.label;
+                const val = inp.dataset.inputType === 'checkbox' ? inp.checked : inp.value;
+                dynamicData[key] = val;
+            });
+
+            // 2. Prepare Payload
+            const payload = {
+                run_id: `RUN_${Date.now()}`,
+                protocol_id: document.getElementById('runProtocolSelect').value,
+                experiment_id: document.getElementById('runExperimentSelect').value || null,
+                notes: document.getElementById('runNotes').value,
+                person_id: JSON.parse(sessionStorage.getItem('user')).person_id,
+                data_json: JSON.stringify(dynamicData) // Store as JSON blob
+            };
+
+            const res = await apiFetch('table/eln/protocols_run', { method: 'POST', body: payload });
+            if(res) {
+                showToast("Experiment run saved!");
+                closeModal('runProtocolModal');
+                loadNotebook(); // Refresh feed
+            } else {
+                showToast("Failed to save run", "error");
+            }
+        });
+
         // --- SOPs ---
         async function loadSOPs() {
             const sops = await apiFetch('table/lims/sop');
+            sopData = sops || [];
+            renderSOPs(sopData);
+        }
+
+        function renderSOPs(list) {
             const grid = document.getElementById('sopGrid');
             grid.innerHTML = '';
-
-            if (sops) {
-                sops.forEach(sop => {
-                    grid.innerHTML += `
-                        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm text-center hover:shadow-md transition">
-                            <div class="mx-auto w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-3">
-                                <i data-lucide="file-text" class="w-6 h-6 text-red-500"></i>
-                            </div>
-                            <h4 class="font-bold text-slate-800 mb-1">${sop.title}</h4>
-                            <p class="text-xs text-slate-500 mb-4">${sop.sop_nr_lab} • v${sop.version}</p>
-                            ${sop.attachment_link ? `<a href="${sop.attachment_link}" target="_blank" class="text-xs bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded text-slate-700 font-medium">Download PDF</a>` : '<span class="text-xs text-slate-300">No File</span>'}
+            list.forEach(sop => {
+                grid.innerHTML += `
+                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm text-center hover:shadow-md transition">
+                        <div class="mx-auto w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-3">
+                            <i data-lucide="file-text" class="w-6 h-6 text-red-500"></i>
                         </div>
-                    `;
-                });
-                lucide.createIcons();
-            }
+                        <h4 class="font-bold text-slate-800 mb-1 truncate" title="${sop.title}">${sop.title}</h4>
+                        <p class="text-xs text-slate-500 mb-4">${sop.sop_nr_lab} • v${sop.version}</p>
+                        ${sop.attachment_link ? `<a href="${sop.attachment_link}" target="_blank" class="text-xs bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded text-slate-700 font-medium">Download</a>` : '<span class="text-xs text-slate-300">No File</span>'}
+                    </div>
+                `;
+            });
+            lucide.createIcons();
+        }
+
+        function filterSOPs() {
+            const term = document.getElementById('sopSearch').value.toLowerCase();
+            const filtered = sopData.filter(s => s.title.toLowerCase().includes(term) || s.sop_nr_lab.toLowerCase().includes(term));
+            renderSOPs(filtered);
         }
 
         // --- Utils ---
@@ -473,25 +750,38 @@
             if(prjs) prjs.forEach(p => sel.add(new Option(p.acronym, p.project_id)));
         }
 
-        // --- Forms ---
+        // --- Booking Form ---
+        function openBookingModal(startStr, endStr) {
+            document.getElementById('bookingForm').reset();
+            // Pre-fill dates if clicked from calendar
+            if (startStr) document.getElementById('bookingStart').value = startStr.slice(0, 16); // format for datetime-local
+            if (endStr) document.getElementById('bookingEnd').value = endStr.slice(0, 16);
+            openModal('bookingModal');
+        }
+
         document.getElementById('bookingForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            // Helper to format ID
+            const generateId = (prefix) => `${prefix}_${Date.now().toString(36).toUpperCase()}`;
+
             const data = {
+                booking_id: generateId('BK'), // Manual ID to be safe
                 resource_id: document.getElementById('bookingResource').value,
-                start_time: document.getElementById('bookingStart').value,
-                end_time: document.getElementById('bookingEnd').value,
+                start_time: new Date(document.getElementById('bookingStart').value).toISOString(),
+                end_time: new Date(document.getElementById('bookingEnd').value).toISOString(),
                 project_id: document.getElementById('bookingProject').value || null,
                 notes: document.getElementById('bookingNotes').value,
                 person_id: JSON.parse(sessionStorage.getItem('user')).person_id
             };
             
             const res = await apiFetch('table/eln/bookings', { method: 'POST', body: data });
-            if(res && !res.error) {
-                alert('Booking Confirmed!');
+            if(res) {
+                showToast("Booking Confirmed!");
                 closeModal('bookingModal');
-                initCalendar(); // Refresh
+                calendarInstance.refetchEvents();
             } else {
-                alert('Booking Failed: ' + (res?.error || 'Unknown'));
+                showToast("Booking Failed", "error");
             }
         });
 
@@ -527,6 +817,7 @@
             }
 
             const data = {
+                protocol_id: `PRT_${Date.now().toString(36).toUpperCase()}`,
                 title: document.getElementById('protoTitle').value,
                 version: document.getElementById('protoVersion').value,
                 content_json: JSON.stringify(fields), // Store schema as JSON
@@ -534,16 +825,16 @@
             };
 
             const res = await apiFetch('table/eln/protocols', { method: 'POST', body: data });
-            if(res && !res.error) {
-                alert('Protocol Saved!');
+            if(res) {
+                showToast("Protocol Saved!");
                 closeModal('designerModal');
                 loadProtocols();
             } else {
-                alert('Error: ' + (res?.error || 'Unknown'));
+                showToast("Error saving protocol", "error");
             }
         });
 
-        // --- Modals ---
+        // --- Modals & Toast ---
         window.openModal = (id) => {
             const el = document.getElementById(id);
             el.classList.remove('hidden');
@@ -554,6 +845,15 @@
             el.classList.remove('open');
             setTimeout(() => el.classList.add('hidden'), 200);
         };
+
+        function showToast(msg, type='success') {
+            const c = document.getElementById('toastContainer');
+            const d = document.createElement('div');
+            d.className = `px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium flex items-center gap-2 transform transition-all duration-300 translate-y-0 ${type==='error'?'bg-red-500':'bg-emerald-600'}`;
+            d.innerHTML = `<i data-lucide="${type==='error'?'alert-circle':'check-circle-2'}" class="w-4 h-4"></i> ${msg}`;
+            c.appendChild(d); lucide.createIcons();
+            setTimeout(() => { d.classList.add('opacity-0', 'translate-y-2'); setTimeout(() => d.remove(), 300); }, 3000);
+        }
     </script>
 </body>
 </html>

@@ -211,6 +211,30 @@
         const getApiBase = () => window.location.pathname.includes('/mylims') ? '/mylims/api' : '/api';
         const API = getApiBase();
 
+        // --- Custom Date Editor Component ---
+        class DateEditor {
+            init(params) {
+                this.eInput = document.createElement('input');
+                this.eInput.type = 'date';
+                this.eInput.className = 'ag-input-field-input ag-text-field-input';
+                this.eInput.style.width = '100%';
+                this.eInput.style.height = '100%';
+                // Set initial value if exists
+                if (params.value) {
+                    // Try to format to YYYY-MM-DD
+                    const d = new Date(params.value);
+                    if (!isNaN(d.getTime())) {
+                        this.eInput.value = d.toISOString().split('T')[0];
+                    } else {
+                        this.eInput.value = params.value; // Fallback
+                    }
+                }
+            }
+            getGui() { return this.eInput; }
+            afterGuiAttached() { this.eInput.focus(); }
+            getValue() { return this.eInput.value; } // Returns YYYY-MM-DD
+        }
+
         // --- State ---
         let gridApi = null;
         let availableTables = [];
@@ -369,7 +393,13 @@
             const def = {
                 field: field,
                 headerName: colMeta.column_name,
-                editable: !isPK, // PK is typically auto-generated or managed by backend triggers
+                
+                // FIXED: PKs are editable ONLY on new rows
+                editable: (params) => {
+                    if (isPK) return !!params.node.data._new; // Only editable if it's a new row
+                    return true;
+                },
+                
                 filter: 'agTextColumnFilter',
                 sortable: true,
                 resizable: true,
@@ -382,9 +412,13 @@
             };
 
             // Enhanced Data Types
+            // FIXED: Use custom DateEditor for reliable YYYY-MM-DD entry
             if (colMeta.data_type.includes('date') || colMeta.data_type.includes('time')) {
-                def.filter = 'agDateColumnFilter';
-                def.cellEditor = 'agDateCellEditor';
+                def.cellEditor = DateEditor;
+                def.valueFormatter = (params) => {
+                    if (params.value) return params.value.split('T')[0]; // Simple format for display
+                    return '';
+                };
             } else if (colMeta.data_type.includes('int') || colMeta.data_type.includes('numeric')) {
                 def.filter = 'agNumberColumnFilter';
                 def.type = 'numericColumn';
@@ -399,10 +433,10 @@
                 def.headerCheckboxSelection = true;
                 def.width = 150;
                 
-                // For new rows, show (Auto)
+                // For new rows, show prompt if empty
                 def.valueFormatter = params => {
                     if (params.data._new && (params.value === null || params.value === undefined)) {
-                        return '(Auto)';
+                        return '(Auto/Enter)';
                     }
                     return params.value;
                 };

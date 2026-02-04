@@ -112,24 +112,32 @@ def serialize_row(row):
 
 def parse_value_by_type(val, dtype):
     if val is None: return None
+    
+    # Handle list/dict types (basic JSON support)
+    if isinstance(val, (list, dict)):
+        return json.dumps(val)
+
     if isinstance(val, str):
         val = val.strip()
         if val == "": return None
-        if dtype == 'date':
+        
+        dtype = dtype.lower()
+        if 'date' in dtype and 'time' not in dtype:
             try: return date.fromisoformat(val)
             except: pass
-        elif 'timestamp' in dtype:
+        elif 'timestamp' in dtype or 'date' in dtype: # timestamp or datetime
             try: return datetime.fromisoformat(val.replace('Z', '+00:00'))
             except: pass
-        elif dtype in ('integer', 'smallint', 'bigint'):
+        elif dtype in ('integer', 'smallint', 'bigint', 'serial', 'bigserial'):
             try: return int(val)
             except: pass
-        elif dtype in ('numeric', 'real', 'double precision'):
+        elif dtype in ('numeric', 'real', 'double precision', 'float'):
             try: return float(val.replace(',', '.'))
             except: pass
         elif dtype == 'boolean':
             if val.lower() in ('true', '1', 't', 'yes'): return True
             if val.lower() in ('false', '0', 'f', 'no'): return False
+            
     return val
 
 def create_access_token(data: dict):
@@ -184,14 +192,13 @@ async def login(creds: LoginRequest, request: Request):
     token = create_access_token(data={"sub": creds.username, "role": "user"})
     return {"access_token": token, "token_type": "bearer", "user_info": {"person_id": creds.username}}
 
-# --- FILE UPLOAD (New Feature) ---
+# --- FILE UPLOAD ---
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
     """Uploads a file and returns the relative URL. Useful for attachments."""
     try:
         file_location = os.path.join(UPLOAD_DIR, file.filename)
-        # Avoid overwriting existing files by appending timestamp if needed (simple logic here)
         if os.path.exists(file_location):
             base, ext = os.path.splitext(file.filename)
             file_location = os.path.join(UPLOAD_DIR, f"{base}_{int(datetime.now().timestamp())}{ext}")
@@ -199,40 +206,84 @@ async def upload_file(file: UploadFile = File(...), user: dict = Depends(get_cur
         with open(file_location, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # Return URL relative to server root
         return {"filename": os.path.basename(file_location), "url": f"/upload/{os.path.basename(file_location)}"}
     except Exception as e:
         raise HTTPException(500, f"File Upload Failed: {e}")
 
-# --- DASHBOARD STATS (New Feature) ---
+# --- DASHBOARD STATS ---
 
 @app.get("/api/stats/count")
 async def get_table_count(schema: str, table: str, db_pool = Depends(get_db_pool)):
-    """Fast count of rows in a table."""
+    """Fast count of rows in a table. Returns 0 if table not found (prevents 500 error)."""
     if not schema.replace("_","").isalnum() or not table.replace("_","").isalnum():
         raise HTTPException(400, "Invalid name")
     
-    async with db_pool.acquire() as conn:
-        count = await conn.fetchval(f'SELECT COUNT(*) FROM "{schema}"."{table}"')
-    return {"schema": schema, "table": table, "count": count}
+    try:
+        async with db_pool.acquire() as conn:
+            count = await conn.fetchval(f'SELECT COUNT(*) FROM "{schema}"."{table}"')
+        return {"schema": schema, "table": table, "count": count}
+    except asyncpg.UndefinedTableError:
+        logger.warning(f"Table not found: {schema}.{table}")
+        return {"schema": schema, "table": table, "count": 0}
+    except Exception as e:
+        logger.error(f"Error counting {schema}.{table}: {e}")
+        return {"schema": schema, "table": table, "count": 0}
 
 @app.get("/api/stats/activity")
 async def get_recent_activity(limit: int = 10, db_pool = Depends(get_db_pool)):
     """Fetches recent audit logs."""
     try:
         async with db_pool.acquire() as conn:
-            # Assumes audit.audit_log structure from your SQL dump context
             rows = await conn.fetch(f"""
-                SELECT action_tstamp_tx, action, table_name, logged_in_person_id
+                SELECT action_timestamp, action, table_name, logged_in_person_id
                 FROM audit.audit_log
-                ORDER BY action_tstamp_tx DESC
+                ORDER BY action_timestamp DESC
                 LIMIT $1
             """, limit)
         return [serialize_row(row) for row in rows]
     except Exception as e:
-        # Graceful fallback if audit table doesn't exist yet
         logger.warning(f"Audit log fetch failed: {e}")
         return []
+
+@app.get("/api/dashboard/chart-data")
+async def get_dashboard_chart_data(db_pool = Depends(get_db_pool)):
+    """Aggregates data for dashboard charts."""
+    async with db_pool.acquire() as conn:
+        # 1. Samples Trend
+        samples_query = """
+            SELECT TO_CHAR(collection_date, 'YYYY-MM') as month, COUNT(*) as count 
+            FROM bio_assets.samples_root 
+            WHERE collection_date >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '11 months')
+            GROUP BY 1 
+            ORDER BY 1
+        """
+        try:
+            samples_rows = await conn.fetch(samples_query)
+            samples_data = [{"month": r["month"], "count": r["count"]} for r in samples_rows]
+        except Exception as e:
+            logger.error(f"Chart Data Error (Samples): {e}")
+            samples_data = []
+
+        # 2. Storage Capacity
+        try:
+            total_cap = await conn.fetchval('SELECT COALESCE(SUM(capacity_slots), 0) FROM lims.storage')
+            used_samples = await conn.fetchval('SELECT COUNT(*) FROM bio_assets.samples_root WHERE storage_id IS NOT NULL')
+            used_reagents = await conn.fetchval('SELECT COUNT(*) FROM lims.reagents WHERE storage_id IS NOT NULL')
+            
+            used_total = (used_samples or 0) + (used_reagents or 0)
+            free_total = max(0, (total_cap or 0) - used_total)
+        except Exception as e:
+             logger.error(f"Chart Data Error (Storage): {e}")
+             used_total = 0
+             free_total = 0
+
+    return {
+        "samples": samples_data,
+        "storage": {
+            "used": used_total,
+            "free": free_total
+        }
+    }
 
 # --- SCHEMA METADATA ---
 
@@ -242,7 +293,7 @@ async def list_all_tables(db_pool = Depends(get_db_pool)):
         rows = await conn.fetch("""
             SELECT table_schema || '.' || table_name as full_name
             FROM information_schema.tables 
-            WHERE table_schema IN ('core', 'lims', 'field', 'bio_assets', 'biologyfish', 'moleculargenetics', 'bioinformatics', 'eln')
+            WHERE table_schema IN ('core', 'lims', 'field', 'bio_assets', 'biologyfish', 'moleculargenetics', 'bioinformatics', 'eln', 'communications')
             AND table_type = 'BASE TABLE'
             ORDER BY table_schema, table_name
         """)
@@ -254,7 +305,6 @@ async def get_table_meta(schema: str, table: str, db_pool = Depends(get_db_pool)
         raise HTTPException(400, "Invalid name")
 
     async with db_pool.acquire() as conn:
-        # Basic Columns
         cols = await conn.fetch("""
             SELECT column_name, data_type, is_nullable
             FROM information_schema.columns 
@@ -262,17 +312,13 @@ async def get_table_meta(schema: str, table: str, db_pool = Depends(get_db_pool)
             ORDER BY ordinal_position
         """, schema, table)
         
-        # Primary Keys
         pk_rows = await conn.fetch("""
-            SELECT a.attname
-            FROM   pg_index i
-            JOIN   pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-            WHERE  i.indrelid = (quote_ident($1) || '.' || quote_ident($2))::regclass
-            AND    i.indisprimary;
+            SELECT a.attname FROM pg_index i
+            JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+            WHERE i.indrelid = (quote_ident($1) || '.' || quote_ident($2))::regclass AND i.indisprimary;
         """, schema, table)
         pk_cols = [r['attname'] for r in pk_rows]
 
-        # Foreign Keys
         fk_rows = await conn.fetch("""
             SELECT
                 kcu.column_name,
@@ -281,12 +327,9 @@ async def get_table_meta(schema: str, table: str, db_pool = Depends(get_db_pool)
                 ccu.column_name AS foreign_column_name
             FROM
                 information_schema.key_column_usage AS kcu
-                JOIN information_schema.referential_constraints AS rc
-                    ON kcu.constraint_name = rc.constraint_name
-                JOIN information_schema.constraint_column_usage AS ccu
-                    ON ccu.constraint_name = rc.constraint_name
-            WHERE
-                kcu.table_schema = $1 AND kcu.table_name = $2
+                JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name
+                JOIN information_schema.constraint_column_usage AS ccu ON ccu.constraint_name = rc.constraint_name
+            WHERE kcu.table_schema = $1 AND kcu.table_name = $2
         """, schema, table)
         
         fk_map = {r['column_name']: {'table': f"{r['foreign_table_schema']}.{r['foreign_table_name']}", 'col': r['foreign_column_name']} for r in fk_rows}
@@ -304,7 +347,6 @@ async def get_table_meta(schema: str, table: str, db_pool = Depends(get_db_pool)
 
 @app.get("/api/table/{schema}/{table}/distinct/{column}")
 async def get_distinct_values(schema: str, table: str, column: str, db_pool = Depends(get_db_pool)):
-    """Fetch unique values for a column. Useful for dropdowns."""
     if not schema.replace("_","").isalnum() or not table.replace("_","").isalnum() or not column.replace("_","").isalnum():
         raise HTTPException(400, "Invalid parameters")
         
@@ -323,13 +365,8 @@ async def get_distinct_values(schema: str, table: str, column: str, db_pool = De
 
 @app.get("/api/table/{schema}/{table}")
 async def get_table_data(
-    schema: str, 
-    table: str, 
-    request: Request,
-    limit: int = 1000, 
-    offset: int = 0,
-    sort_by: Optional[str] = None,
-    sort_order: str = "asc",
+    schema: str, table: str, request: Request,
+    limit: int = 1000, offset: int = 0, sort_by: Optional[str] = None, sort_order: str = "asc",
     db_pool = Depends(get_db_pool)
 ):
     if not schema.replace("_","").isalnum() or not table.replace("_","").isalnum():
@@ -370,46 +407,90 @@ async def get_table_data(
     
     return [serialize_row(row) for row in rows]
 
+# IMPROVED: Robust Create Record with Validation
+@app.post("/api/table/{schema}/{table}")
+async def create_record(schema: str, table: str, request: Request, user: dict = Depends(get_current_user), db_pool = Depends(get_db_pool)):
+    body = await request.json()
+    if not body: raise HTTPException(400, "Empty payload")
+
+    async with db_pool.acquire() as conn:
+        # 1. Fetch valid columns to prevent SQL injection or bad column errors
+        col_meta = await conn.fetch("""SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2""", schema, table)
+        type_map = {r['column_name']: r['data_type'] for r in col_meta}
+        
+        if not type_map: raise HTTPException(404, f"Table {schema}.{table} not found")
+
+        # 2. Filter body to only include valid columns
+        valid_data = {}
+        for k, v in body.items():
+            if k in type_map:
+                valid_data[k] = parse_value_by_type(v, type_map[k])
+        
+        if not valid_data:
+            raise HTTPException(400, "No valid columns in payload")
+
+        cols = list(valid_data.keys())
+        vals = list(valid_data.values())
+            
+        col_str = ", ".join([f'"{c}"' for c in cols])
+        placeholders = "(" + ", ".join([f"${i+1}" for i in range(len(cols))]) + ")"
+        query = f'INSERT INTO "{schema}"."{table}" ({col_str}) VALUES {placeholders} RETURNING *'
+        
+        await conn.execute(f"SELECT set_config('session.logged_in_person_id', '{user['user_id']}', false)")
+        try:
+            result = await conn.fetchrow(query, *vals)
+            return serialize_row(result)
+        except Exception as e:
+            logger.error(f"Insert Error ({schema}.{table}): {e}")
+            raise HTTPException(500, f"Database Error: {str(e)}")
+
+# IMPROVED: Robust Update Record
 @app.put("/api/table/{schema}/{table}")
 async def update_record(schema: str, table: str, request: Request, user: dict = Depends(get_current_user), db_pool = Depends(get_db_pool)):
     params = dict(request.query_params)
     body = await request.json()
-    
-    if not params:
-        raise HTTPException(400, "Primary Key required in URL parameters for update")
-
-    set_items = []
-    values = []
-    idx = 1
-    
-    for col, val in body.items():
-        if col == "attachment_link" and val == "": val = None
-        set_items.append(f'"{col}" = ${idx}')
-        values.append(val)
-        idx += 1
-        
-    where_items = []
-    for pk_col, pk_val in params.items():
-        where_items.append(f'"{pk_col}" = ${idx}')
-        values.append(pk_val)
-        idx += 1
-        
-    query = f'UPDATE "{schema}"."{table}" SET {", ".join(set_items)} WHERE {" AND ".join(where_items)}'
+    if not params: raise HTTPException(400, "Primary Key required")
 
     async with db_pool.acquire() as conn:
+        col_meta = await conn.fetch("""SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2""", schema, table)
+        type_map = {r['column_name']: r['data_type'] for r in col_meta}
+
+        set_items = []
+        values = []
+        idx = 1
+        
+        # Filter body for valid columns only
+        for col, val in body.items():
+            if col in type_map:
+                val_parsed = parse_value_by_type(val, type_map[col])
+                set_items.append(f'"{col}" = ${idx}')
+                values.append(val_parsed)
+                idx += 1
+        
+        if not set_items:
+            return {"status": "no_changes", "message": "No valid columns to update"}
+
+        where_items = []
+        for pk_col, pk_val in params.items():
+            # Basic sanitization for PK columns logic (assuming PKs are simple types usually)
+            where_items.append(f'"{pk_col}" = ${idx}')
+            values.append(pk_val)
+            idx += 1
+            
+        query = f'UPDATE "{schema}"."{table}" SET {", ".join(set_items)} WHERE {" AND ".join(where_items)}'
+
         await conn.execute(f"SELECT set_config('session.logged_in_person_id', '{user['user_id']}', false)")
         try:
             await conn.execute(query, *values)
         except Exception as e:
-            logger.error(f"Update Error: {e}")
-            raise HTTPException(500, str(e))
+            logger.error(f"Update Error ({schema}.{table}): {e}")
+            raise HTTPException(500, f"Database Error: {str(e)}")
     return {**body}
 
 @app.delete("/api/table/{schema}/{table}")
 async def delete_record(schema: str, table: str, request: Request, user: dict = Depends(get_current_user), db_pool = Depends(get_db_pool)):
     params = dict(request.query_params)
-    if not params:
-        raise HTTPException(400, "Primary Key required for deletion")
+    if not params: raise HTTPException(400, "Primary Key required")
         
     where_items = []
     values = []
@@ -425,8 +506,7 @@ async def delete_record(schema: str, table: str, request: Request, user: dict = 
         await conn.execute(f"SELECT set_config('session.logged_in_person_id', '{user['user_id']}', false)")
         try:
             result = await conn.execute(query, *values)
-            if result == "DELETE 0":
-                raise HTTPException(404, "Record not found or could not be deleted")
+            if result == "DELETE 0": raise HTTPException(404, "Record not found")
         except asyncpg.ForeignKeyViolationError:
             raise HTTPException(400, "Cannot delete: Record is referenced by other data")
         except Exception as e:
@@ -439,37 +519,40 @@ async def delete_record(schema: str, table: str, request: Request, user: dict = 
 @app.post("/api/table/{schema}/{table}/batch_upload")
 async def batch_upload(schema: str, table: str, payload: List[Dict[str, Any]], user: dict = Depends(get_current_user), db_pool = Depends(get_db_pool)):
     rows = payload
-    if not rows: return {"count": 0}
+    if not rows: return {"count": 0, "rows": []}
     
     async with db_pool.acquire() as conn:
-        col_meta = await conn.fetch("""
-            SELECT column_name, data_type 
-            FROM information_schema.columns 
-            WHERE table_schema = $1 AND table_name = $2
-        """, schema, table)
+        col_meta = await conn.fetch("""SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2""", schema, table)
         type_map = {r['column_name']: r['data_type'] for r in col_meta}
         
-        cols = list(rows[0].keys())
-        col_str = ", ".join([f'"{c}"' for c in cols])
-        
-        records = []
-        for r in rows:
-            row_vals = []
-            for c in cols:
-                val = r.get(c)
-                if val is not None and c in type_map:
-                    val = parse_value_by_type(val, type_map[c])
-                row_vals.append(val)
-            records.append(row_vals)
+        # Validate columns based on the first row (assuming uniform payload)
+        valid_cols = [k for k in rows[0].keys() if k in type_map]
+        if not valid_cols: raise HTTPException(400, "No valid columns in batch payload")
 
-        placeholders = "(" + ", ".join([f"${i+1}" for i in range(len(cols))]) + ")"
-        query = f'INSERT INTO "{schema}"."{table}" ({col_str}) VALUES {placeholders}'
+        col_str = ", ".join([f'"{c}"' for c in valid_cols])
+        placeholders = "(" + ", ".join([f"${i+1}" for i in range(len(valid_cols))]) + ")"
+        query = f'INSERT INTO "{schema}"."{table}" ({col_str}) VALUES {placeholders} RETURNING *'
         
         await conn.execute(f"SELECT set_config('session.logged_in_person_id', '{user['user_id']}', false)")
+        inserted_rows = []
+        
         async with conn.transaction():
-            await conn.executemany(query, records)
+            for r in rows:
+                row_vals = []
+                for c in valid_cols:
+                    val = r.get(c)
+                    if val is not None: val = parse_value_by_type(val, type_map[c])
+                    row_vals.append(val)
+                
+                try:
+                    result = await conn.fetchrow(query, *row_vals)
+                    inserted_rows.append(serialize_row(result))
+                except Exception as e:
+                    logger.error(f"Batch Upload Error ({schema}.{table}): {e}")
+                    # Continue or break? Usually strict fail is safer for data integrity
+                    raise HTTPException(500, f"Batch Error: {str(e)}")
             
-    return {"status": "success", "count": len(records)}
+    return {"status": "success", "count": len(inserted_rows), "rows": inserted_rows}
 
 @app.post("/api/table/{schema}/{table}/batch_update")
 async def batch_update(schema: str, table: str, payload: List[Dict[str, Any]], user: dict = Depends(get_current_user), db_pool = Depends(get_db_pool)):
@@ -477,44 +560,39 @@ async def batch_update(schema: str, table: str, payload: List[Dict[str, Any]], u
     async with db_pool.acquire() as conn:
         await conn.execute(f"SELECT set_config('session.logged_in_person_id', '{user['user_id']}', false)")
         pk_rows = await conn.fetch("""
-            SELECT a.attname
-            FROM   pg_index i
-            JOIN   pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-            WHERE  i.indrelid = (quote_ident($1) || '.' || quote_ident($2))::regclass
-            AND    i.indisprimary;
+            SELECT a.attname FROM pg_index i
+            JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+            WHERE i.indrelid = (quote_ident($1) || '.' || quote_ident($2))::regclass AND i.indisprimary;
         """, schema, table)
         pk_cols = [r['attname'] for r in pk_rows]
         
         if not pk_cols: raise HTTPException(400, f"Cannot update {table}: No PK found")
 
-        col_meta = await conn.fetch("""
-            SELECT column_name, data_type 
-            FROM information_schema.columns 
-            WHERE table_schema = $1 AND table_name = $2
-        """, schema, table)
+        col_meta = await conn.fetch("""SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2""", schema, table)
         type_map = {r['column_name']: r['data_type'] for r in col_meta}
 
         async with conn.transaction():
             for row in payload:
                 pks = {k: row[k] for k in pk_cols if k in row}
-                data = {k: row[k] for k in row if k not in pk_cols}
+                # Filter data to only valid columns minus PKs
+                data = {k: row[k] for k in row if k not in pk_cols and k in type_map}
+                
                 if not pks or not data: continue
                 
                 set_items = []
                 values = []
                 idx = 1
                 for k, v in data.items():
-                    if v == "": v = None
-                    if v is not None and k in type_map: v = parse_value_by_type(v, type_map[k])
+                    val = parse_value_by_type(v, type_map[k])
                     set_items.append(f'"{k}" = ${idx}')
-                    values.append(v)
+                    values.append(val)
                     idx += 1
                 
                 where_items = []
                 for k, v in pks.items():
-                    if v is not None and k in type_map: v = parse_value_by_type(v, type_map[k])
+                    val = parse_value_by_type(v, type_map[k])
                     where_items.append(f'"{k}" = ${idx}')
-                    values.append(v)
+                    values.append(val)
                     idx += 1
                 
                 query = f'UPDATE "{schema}"."{table}" SET {", ".join(set_items)} WHERE {" AND ".join(where_items)}'
