@@ -530,4 +530,4 @@ app.mount("/upload", StaticFiles(directory="upload"), name="upload")
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=5300, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=5600, reload=True)
