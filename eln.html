@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ELN & Booking - TIFI LIMS</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- FullCalendar -->
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js'></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        
+        /* Sidebar (Matched to Dashboard) */
+        .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.5rem; }
+        .sidebar-nav-container::-webkit-scrollbar { width: 6px; }
+        .sidebar-nav-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .sidebar-item { transition: all 0.2s ease; color: #475569; }
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+
+        /* Custom Tabs */
+        .tab-btn {
+            padding: 0.75rem 1.5rem;
+            color: #64748b;
+            border-bottom: 2px solid transparent;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover { color: #4f46e5; }
+        .tab-btn.active {
+            color: #4f46e5;
+            border-bottom-color: #4f46e5;
+        }
+
+        /* Calendar Overrides */
+        .fc .fc-toolbar-title { font-size: 1.25rem; font-weight: 600; color: #1e293b; }
+        .fc .fc-button-primary { background-color: #4f46e5; border-color: #4f46e5; }
+        .fc .fc-button-primary:hover { background-color: #4338ca; border-color: #4338ca; }
+        
+        /* Modal Transitions */
+        .modal { opacity: 0; visibility: hidden; transition: opacity 0.2s ease-in-out; }
+        .modal.open { opacity: 1; visibility: visible; }
+        .modal-content { transform: scale(0.95); transition: transform 0.2s ease-in-out; }
+        .modal.open .modal-content { transform: scale(1); }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+    <!-- Sidebar -->
+    <div class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-sm flex-shrink-0">
+        <div class="p-4 border-b border-slate-200 font-bold text-slate-800 flex items-center gap-2 shrink-0">
+            <i data-lucide="flask-conical" class="w-6 h-6 text-indigo-600"></i> 
+            <span class="text-xl">TIFI LIMS</span>
+        </div>
+        
+        <div class="sidebar-nav-container p-2 space-y-1">
+            <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+            <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+            <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+            <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (ELN)</span></a>
+            <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+            <a href="planned_samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Planned Samples</span></a>
+            <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+            <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+            <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+            <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+            <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+            <a href="booking.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Booking</span></a>
+            <a href="tables.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="table-2" class="w-5 h-5 mr-3"></i><span>Data Editor</span></a>
+        </div>
+
+        <div class="mt-auto shrink-0 p-4 border-t border-slate-200">
+             <div class="flex items-center mb-3">
+                <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs mr-3">U</div>
+                <div class="overflow-hidden">
+                    <p class="font-semibold text-xs text-gray-800 truncate" id="userNameDisplay">User</p>
+                    <p class="text-xs text-slate-500">Logged In</p>
+                </div>
+            </div>
+            <button id="logout-button" class="w-full flex items-center p-2 rounded-md text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
+                <i data-lucide="log-out" class="w-4 h-4 mr-2"></i><span>Logout</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col h-full bg-slate-50 overflow-hidden">
+        
+        <!-- Header -->
+        <header class="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center z-10 shrink-0">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-800">Lab Notebook & Booking</h1>
+                <p class="text-sm text-slate-500">Manage resources and experiments</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="openModal('bookingModal')" class="flex items-center px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium transition text-sm">
+                    <i data-lucide="calendar-plus" class="w-4 h-4 mr-2"></i> New Booking
+                </button>
+                <button onclick="openModal('runProtocolModal')" class="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm font-medium transition text-sm">
+                    <i data-lucide="flask-conical" class="w-4 h-4 mr-2"></i> Run Experiment
+                </button>
+            </div>
+        </header>
+
+        <!-- Tabs -->
+        <div class="bg-white border-b border-slate-200 px-8 flex gap-4 shrink-0">
+            <button onclick="switchTab('calendarView')" class="tab-btn active" id="tab-calendarView">Resource Calendar</button>
+            <button onclick="switchTab('notebookView')" class="tab-btn" id="tab-notebookView">Lab Notebook</button>
+            <button onclick="switchTab('protocolView')" class="tab-btn" id="tab-protocolView">Protocol Designer</button>
+            <button onclick="switchTab('sopView')" class="tab-btn" id="tab-sopView">SOP Library</button>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="flex-1 overflow-auto p-8 relative">
+            
+            <!-- CALENDAR VIEW -->
+            <div id="calendarView" class="tab-content h-full flex gap-6">
+                <!-- Resources List -->
+                <div class="w-1/4 space-y-4">
+                    <h3 class="font-bold text-slate-700 text-sm uppercase tracking-wide">Lab Instruments</h3>
+                    <div id="resourceList" class="space-y-3">
+                        <div class="animate-pulse bg-white h-16 rounded-lg"></div>
+                    </div>
+                </div>
+                <!-- Calendar -->
+                <div class="w-3/4 bg-white rounded-xl shadow-sm border border-slate-200 p-4 h-full">
+                    <div id="calendar" class="h-full"></div>
+                </div>
+            </div>
+
+            <!-- NOTEBOOK VIEW -->
+            <div id="notebookView" class="tab-content hidden max-w-5xl mx-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-lg font-bold text-slate-800">Experiment Log</h2>
+                    <div class="relative w-64">
+                        <input type="text" id="notebookSearch" placeholder="Search experiments..." class="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+                    </div>
+                </div>
+                <div id="notebookEntries" class="space-y-4">
+                    <!-- Entries injected via JS -->
+                </div>
+            </div>
+
+            <!-- PROTOCOL DESIGNER -->
+            <div id="protocolView" class="tab-content hidden max-w-6xl mx-auto">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                        <div>
+                            <h3 class="font-bold text-slate-700">Universal Protocol Library</h3>
+                            <p class="text-xs text-slate-500">Define custom templates for experiments</p>
+                        </div>
+                        <button onclick="openModal('designerModal')" class="flex items-center px-3 py-1.5 bg-indigo-600 text-white rounded text-xs font-bold hover:bg-indigo-700">
+                            <i data-lucide="plus" class="w-3 h-3 mr-1"></i> Design New
+                        </button>
+                    </div>
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+                            <tr>
+                                <th class="px-6 py-3">Protocol Title</th>
+                                <th class="px-6 py-3">ID</th>
+                                <th class="px-6 py-3">Created</th>
+                                <th class="px-6 py-3 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="protocolTableBody" class="divide-y divide-slate-100">
+                            <!-- Rows injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SOP VIEW -->
+            <div id="sopView" class="tab-content hidden">
+                <div id="sopGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <!-- SOP Cards -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- === MODALS === -->
+
+    <!-- Booking Modal -->
+    <div id="bookingModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 class="font-bold text-slate-800">Book Resource</h3>
+                <button onclick="closeModal('bookingModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="bookingForm" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">Resource</label>
+                    <select id="bookingResource" class="w-full p-2 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 outline-none"></select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Start</label>
+                        <input type="datetime-local" id="bookingStart" class="w-full p-2 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 outline-none" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">End</label>
+                        <input type="datetime-local" id="bookingEnd" class="w-full p-2 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 outline-none" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">Project</label>
+                    <select id="bookingProject" class="w-full p-2 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <option value="">-- None --</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">Notes</label>
+                    <textarea id="bookingNotes" class="w-full p-2 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 outline-none" rows="2"></textarea>
+                </div>
+                <button type="submit" class="w-full py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition">Confirm Booking</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Protocol Designer Modal -->
+    <div id="designerModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 class="font-bold text-slate-800">Design New Protocol</h3>
+                <button onclick="closeModal('designerModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="designerForm" class="flex-1 overflow-y-auto p-6 space-y-4">
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="col-span-2">
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Protocol Title</label>
+                        <input type="text" id="protoTitle" class="w-full p-2 border border-slate-300 rounded text-sm" placeholder="e.g. DNA Extraction v2" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Version</label>
+                        <input type="text" id="protoVersion" class="w-full p-2 border border-slate-300 rounded text-sm" value="1.0">
+                    </div>
+                </div>
+                
+                <div class="border-t border-slate-100 pt-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="block text-xs font-bold text-indigo-600 uppercase">Data Fields</label>
+                        <button type="button" onclick="addFieldRow()" class="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-100">+ Add Field</button>
+                    </div>
+                    <div id="builderFields" class="space-y-2">
+                        <!-- Dynamic fields go here -->
+                    </div>
+                </div>
+                <div class="pt-4">
+                    <button type="submit" class="w-full py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition">Save Template</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        const API_PREFIX = '/mylims/api';
+        let calendarInstance;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            const token = sessionStorage.getItem('token');
+            if (!token) window.location.href = 'login.html';
+
+            // 1. User Profile in Sidebar
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if(user) document.getElementById('userNameDisplay').innerText = user.person_id;
+
+            // 2. Logout Logic
+            document.getElementById('logout-button').addEventListener('click', () => {
+                sessionStorage.clear();
+                window.location.href = 'login.html';
+            });
+
+            // 3. Initialize Calendar
+            initCalendar();
+
+            // 4. Load Data
+            await Promise.all([
+                loadResources(),
+                loadProjects(),
+                loadNotebook(),
+                loadProtocols(),
+                loadSOPs()
+            ]);
+
+            // 5. Add initial field to designer
+            addFieldRow();
+        });
+
+        // --- Tabs ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(tabId).classList.remove('hidden');
+            
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+
+            if (tabId === 'calendarView' && calendarInstance) calendarInstance.render();
+        }
+
+        // --- API Helper ---
+        async function apiFetch(endpoint, options = {}) {
+            const token = sessionStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...options.headers };
+            if(options.body) options.body = JSON.stringify(options.body);
+            
+            try {
+                const res = await fetch(`${API_PREFIX}/${endpoint}`, { ...options, headers });
+                if(!res.ok) throw new Error("API Error");
+                return res.json();
+            } catch(e) {
+                console.error(e);
+                return null;
+            }
+        }
+
+        // --- Calendar & Resources ---
+        async function loadResources() {
+            const resources = await apiFetch('table/eln/bookable_resources');
+            const list = document.getElementById('resourceList');
+            const select = document.getElementById('bookingResource');
+            
+            list.innerHTML = ''; select.innerHTML = '';
+            
+            if(resources) {
+                resources.forEach(res => {
+                    // Populate Sidebar List
+                    const statusColor = res.is_active ? 'border-l-4 border-emerald-500' : 'border-l-4 border-red-500 opacity-60';
+                    const icon = res.name.includes('Seq') ? 'dna' : 'microscope';
+                    list.innerHTML += `
+                        <div class="bg-white p-3 rounded-md shadow-sm ${statusColor} cursor-pointer hover:translate-x-1 transition-transform">
+                            <div class="flex items-center">
+                                <i data-lucide="${icon}" class="w-5 h-5 text-slate-400 mr-3"></i>
+                                <div>
+                                    <div class="font-bold text-sm text-slate-700">${res.name}</div>
+                                    <div class="text-xs text-slate-500">${res.is_active ? 'Available' : 'Maintenance'}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    // Populate Select
+                    if(res.is_active) select.add(new Option(res.name, res.resource_id));
+                });
+                lucide.createIcons();
+            }
+        }
+
+        async function initCalendar() {
+            const calendarEl = document.getElementById('calendar');
+            calendarInstance = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'timeGridWeek',
+                headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
+                slotMinTime: '08:00:00', slotMaxTime: '20:00:00',
+                height: '100%',
+                events: async (info, successCallback, failureCallback) => {
+                    const bookings = await apiFetch('table/eln/bookings');
+                    if (bookings) {
+                        const events = bookings.map(b => ({
+                            title: b.project_id || 'Reserved',
+                            start: b.start_time,
+                            end: b.end_time,
+                            color: '#4f46e5',
+                            resourceId: b.resource_id
+                        }));
+                        successCallback(events);
+                    } else {
+                        failureCallback();
+                    }
+                }
+            });
+            calendarInstance.render();
+        }
+
+        // --- Notebook ---
+        async function loadNotebook() {
+            const runs = await apiFetch('table/eln/protocols_run');
+            const container = document.getElementById('notebookEntries');
+            container.innerHTML = '';
+
+            if (runs && runs.length > 0) {
+                runs.forEach(run => {
+                    container.innerHTML += `
+                        <div class="bg-white border border-slate-200 rounded-lg p-4 hover:border-indigo-300 transition shadow-sm">
+                            <div class="flex justify-between items-start mb-2">
+                                <div class="flex items-center">
+                                    <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 mr-3">
+                                        <i data-lucide="flask-conical" class="w-5 h-5"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-slate-800">${run.experiment_id || 'Untitled Experiment'}</h4>
+                                        <p class="text-xs text-slate-500">${new Date(run.run_date).toLocaleString()}</p>
+                                    </div>
+                                </div>
+                                <span class="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded-full font-medium">${run.person_id}</span>
+                            </div>
+                            <p class="text-sm text-slate-600 bg-slate-50 p-3 rounded mb-3 italic">
+                                ${run.notes || 'No notes provided.'}
+                            </p>
+                            <div class="flex gap-2">
+                                <span class="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded border border-emerald-100">Proto: ${run.protocol_id || 'N/A'}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                lucide.createIcons();
+            } else {
+                container.innerHTML = `<div class="text-center py-10 text-slate-400">No notebook entries found.</div>`;
+            }
+        }
+
+        // --- Protocols ---
+        async function loadProtocols() {
+            const protocols = await apiFetch('table/eln/protocols');
+            const tbody = document.getElementById('protocolTableBody');
+            tbody.innerHTML = '';
+
+            if (protocols) {
+                protocols.forEach(p => {
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-slate-50 transition border-b border-slate-100 last:border-0">
+                            <td class="px-6 py-3 font-medium text-slate-700">${p.title}</td>
+                            <td class="px-6 py-3 text-slate-500 font-mono text-xs">${p.protocol_id}</td>
+                            <td class="px-6 py-3 text-slate-500 text-xs">${p.created_at}</td>
+                            <td class="px-6 py-3 text-right">
+                                <button class="text-indigo-600 hover:text-indigo-800 text-xs font-bold border border-indigo-200 px-2 py-1 rounded bg-indigo-50">View</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+        }
+
+        // --- SOPs ---
+        async function loadSOPs() {
+            const sops = await apiFetch('table/lims/sop');
+            const grid = document.getElementById('sopGrid');
+            grid.innerHTML = '';
+
+            if (sops) {
+                sops.forEach(sop => {
+                    grid.innerHTML += `
+                        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm text-center hover:shadow-md transition">
+                            <div class="mx-auto w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-3">
+                                <i data-lucide="file-text" class="w-6 h-6 text-red-500"></i>
+                            </div>
+                            <h4 class="font-bold text-slate-800 mb-1">${sop.title}</h4>
+                            <p class="text-xs text-slate-500 mb-4">${sop.sop_nr_lab} • v${sop.version}</p>
+                            ${sop.attachment_link ? `<a href="${sop.attachment_link}" target="_blank" class="text-xs bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded text-slate-700 font-medium">Download PDF</a>` : '<span class="text-xs text-slate-300">No File</span>'}
+                        </div>
+                    `;
+                });
+                lucide.createIcons();
+            }
+        }
+
+        // --- Utils ---
+        async function loadProjects() {
+            const prjs = await apiFetch('table/lims/projects');
+            const sel = document.getElementById('bookingProject');
+            if(prjs) prjs.forEach(p => sel.add(new Option(p.acronym, p.project_id)));
+        }
+
+        // --- Forms ---
+        document.getElementById('bookingForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                resource_id: document.getElementById('bookingResource').value,
+                start_time: document.getElementById('bookingStart').value,
+                end_time: document.getElementById('bookingEnd').value,
+                project_id: document.getElementById('bookingProject').value || null,
+                notes: document.getElementById('bookingNotes').value,
+                person_id: JSON.parse(sessionStorage.getItem('user')).person_id
+            };
+            
+            const res = await apiFetch('table/eln/bookings', { method: 'POST', body: data });
+            if(res && !res.error) {
+                alert('Booking Confirmed!');
+                closeModal('bookingModal');
+                initCalendar(); // Refresh
+            } else {
+                alert('Booking Failed: ' + (res?.error || 'Unknown'));
+            }
+        });
+
+        // --- Dynamic Form Builder ---
+        function addFieldRow() {
+            const container = document.getElementById('builderFields');
+            const div = document.createElement('div');
+            div.className = "flex gap-2 items-center bg-slate-50 p-2 rounded border border-slate-200";
+            div.innerHTML = `
+                <i data-lucide="grip-vertical" class="w-4 h-4 text-slate-400 cursor-move"></i>
+                <input type="text" class="flex-1 p-1.5 border border-slate-300 rounded text-xs" name="field_label" placeholder="Field Label (e.g. Temperature)">
+                <select class="p-1.5 border border-slate-300 rounded text-xs bg-white" name="field_type">
+                    <option value="text">Text</option>
+                    <option value="number">Number</option>
+                    <option value="date">Date</option>
+                    <option value="checkbox">Check</option>
+                </select>
+                <button type="button" onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-600"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            `;
+            container.appendChild(div);
+            lucide.createIcons();
+        }
+
+        document.getElementById('designerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            // Build JSON schema from UI
+            const fields = [];
+            const rows = document.getElementById('builderFields').children;
+            for(let row of rows) {
+                const label = row.querySelector('[name="field_label"]').value;
+                const type = row.querySelector('[name="field_type"]').value;
+                if(label) fields.push({ label, type });
+            }
+
+            const data = {
+                title: document.getElementById('protoTitle').value,
+                version: document.getElementById('protoVersion').value,
+                content_json: JSON.stringify(fields), // Store schema as JSON
+                author_id: JSON.parse(sessionStorage.getItem('user')).person_id
+            };
+
+            const res = await apiFetch('table/eln/protocols', { method: 'POST', body: data });
+            if(res && !res.error) {
+                alert('Protocol Saved!');
+                closeModal('designerModal');
+                loadProtocols();
+            } else {
+                alert('Error: ' + (res?.error || 'Unknown'));
+            }
+        });
+
+        // --- Modals ---
+        window.openModal = (id) => {
+            const el = document.getElementById(id);
+            el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('open'), 10);
+        };
+        window.closeModal = (id) => {
+            const el = document.getElementById(id);
+            el.classList.remove('open');
+            setTimeout(() => el.classList.add('hidden'), 200);
+        };
+    </script>
+</body>
+</html>

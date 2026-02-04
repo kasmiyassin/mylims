@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Data Editor - TIFI LIMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-grid.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-theme-alpine.css" />
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .ag-theme-alpine {
+            --ag-header-background-color: #f8fafc;
+            --ag-header-foreground-color: #475569;
+            --ag-border-color: #e2e8f0;
+            --ag-row-hover-color: #f1f5f9;
+            --ag-selected-row-background-color: #e0e7ff;
+            --ag-font-family: 'Inter', sans-serif;
+            --ag-font-size: 13px;
+        }
+        .loading-overlay {
+            position: absolute; inset: 0; background: rgba(255,255,255,0.8);
+            backdrop-filter: blur(2px); display: flex; justify-content: center; align-items: center;
+            z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .loading-overlay.active { opacity: 1; pointer-events: all; }
+        .mandatory-cell { background-color: #fee2e2 !important; } /* Red background for empty mandatory */
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+    <!-- Loading & Toast -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="bg-white px-6 py-4 rounded-xl shadow-xl flex items-center gap-3 border border-slate-200">
+            <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
+            <p id="loadingText" class="text-slate-700 font-medium">Processing...</p>
+        </div>
+    </div>
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2"></div>
+
+    <!-- Sidebar -->
+    <div class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-sm">
+        <div class="p-4 border-b border-slate-200 font-bold text-slate-800 flex items-center gap-2">
+            <i data-lucide="flask-conical" class="w-5 h-5 text-indigo-600"></i> TIFI LIMS
+        </div>
+        <div class="flex-1 p-2 space-y-1 overflow-y-auto text-sm text-slate-600">
+            <a href="dashboard.html" class="flex items-center p-2 rounded hover:bg-slate-50"><i data-lucide="layout-dashboard" class="w-4 h-4 mr-3"></i> Dashboard</a>
+            <a href="tables.html" class="flex items-center p-2 rounded bg-indigo-50 text-indigo-700 font-medium"><i data-lucide="table-2" class="w-4 h-4 mr-3"></i> Data Editor</a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col h-full bg-slate-50 relative">
+        
+        <!-- Controls Header -->
+        <div class="bg-white border-b border-slate-200 px-4 py-3 flex flex-col gap-3 shadow-sm z-10">
+            
+            <!-- Table Selection Area -->
+            <div class="flex items-start gap-2 flex-wrap" id="tableSelectors">
+                <div class="flex flex-col gap-1 min-w-[200px]">
+                    <label class="text-xs font-bold text-indigo-600 uppercase">Primary Table</label>
+                    <select id="primaryTable" class="w-full p-2 border border-slate-300 rounded text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"></select>
+                </div>
+
+                <div class="pt-6 text-slate-300"><i data-lucide="arrow-right" class="w-5 h-5"></i></div>
+                <div id="secondaryTablesContainer" class="flex gap-2 flex-wrap"></div>
+
+                <button onclick="addJoinTable()" class="mt-6 p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded border border-slate-300 transition" title="Join another table">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Action Bar -->
+            <div class="flex justify-between items-center pt-2 border-t border-slate-100">
+                <div class="flex items-center gap-2">
+                    <label class="text-xs font-bold text-slate-500 uppercase">Join On:</label>
+                    <input type="text" id="commonColumn" value="sample_id" class="p-1.5 border border-slate-300 rounded text-sm w-28 focus:ring-indigo-500 outline-none" placeholder="col name">
+                    
+                    <button onclick="loadData()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm font-medium shadow-sm transition flex items-center gap-2">
+                        <i data-lucide="refresh-cw" class="w-3 h-3"></i> Load
+                    </button>
+                    
+                    <!-- Column Picker Trigger -->
+                    <button onclick="toggleColumnPicker()" class="ml-2 px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded text-sm font-medium flex gap-2 items-center">
+                        <i data-lucide="columns" class="w-3 h-3"></i> Columns
+                    </button>
+                </div>
+
+                <div class="flex gap-2">
+                    <button onclick="addNewRow()" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded text-sm font-medium flex gap-2 items-center">
+                        <i data-lucide="plus" class="w-3 h-3"></i> Add Row
+                    </button>
+                    
+                    <!-- Export Options -->
+                    <div class="relative group">
+                        <button class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded text-sm font-medium flex gap-2 items-center">
+                            <i data-lucide="download" class="w-3 h-3"></i> Export
+                        </button>
+                        <div class="absolute right-0 mt-1 w-32 bg-white border border-slate-200 rounded shadow-lg hidden group-hover:block z-50">
+                            <button onclick="exportData('xlsx')" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+                                <i data-lucide="file-spreadsheet" class="w-3 h-3 text-green-600"></i> Excel (.xlsx)
+                            </button>
+                            <button onclick="exportData('csv')" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+                                <i data-lucide="file-text" class="w-3 h-3 text-blue-600"></i> CSV (.csv)
+                            </button>
+                        </div>
+                    </div>
+
+                    <button onclick="saveData()" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-sm font-medium shadow-sm flex gap-2 items-center">
+                        <i data-lucide="save" class="w-3 h-3"></i> Save Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grid Area -->
+        <div class="flex-1 p-4 overflow-hidden relative">
+            <div id="myGrid" class="ag-theme-alpine h-full w-full rounded-lg shadow-sm border border-slate-200"></div>
+            
+            <!-- Column Picker Modal (Hidden by default) -->
+            <div id="columnPicker" class="absolute top-4 left-4 bg-white border border-slate-300 shadow-xl rounded-lg w-64 max-h-[80%] flex flex-col hidden z-40">
+                <div class="p-3 border-b border-slate-200 flex justify-between items-center bg-slate-50 rounded-t-lg">
+                    <span class="font-bold text-sm text-slate-700">Show Columns</span>
+                    <button onclick="toggleColumnPicker()" class="text-slate-400 hover:text-red-500"><i data-lucide="x" class="w-4 h-4"></i></button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-2" id="columnToggleList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const getApiBase = () => window.location.pathname.includes('/mylims') ? '/mylims/api' : '/api';
+        const API = getApiBase();
+
+        // --- State ---
+        let gridApi = null;
+        let availableTables = [];
+        let activeSchemas = {};
+        let secondaryTableCount = 0;
+
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            const token = sessionStorage.getItem('token');
+            if(!token) window.location.href = 'login.html';
+
+            try {
+                const res = await fetch(`${API}/table_names_for_forms`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) throw new Error("Connection failed");
+                availableTables = await res.json();
+                populateSelect('primaryTable');
+            } catch(e) {
+                showToast("Failed to connect to backend", "error");
+            }
+        });
+
+        function populateSelect(id) {
+            const sel = document.getElementById(id);
+            sel.innerHTML = '<option value="" disabled selected>Select Table...</option>';
+            availableTables.forEach(t => sel.add(new Option(t, t)));
+        }
+
+        function addJoinTable() {
+            secondaryTableCount++;
+            const id = `secTable_${secondaryTableCount}`;
+            const container = document.getElementById('secondaryTablesContainer');
+            const div = document.createElement('div');
+            div.className = "flex flex-col gap-1 min-w-[200px] relative group";
+            div.innerHTML = `
+                <div class="flex justify-between">
+                    <label class="text-xs font-bold text-slate-500 uppercase">Table ${secondaryTableCount + 1}</label>
+                    <button onclick="this.closest('.group').remove()" class="text-xs text-red-400 hover:text-red-600"><i data-lucide="x" class="w-3 h-3"></i></button>
+                </div>
+                <select id="${id}" class="sec-select w-full p-2 border border-slate-300 rounded text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"></select>
+            `;
+            container.appendChild(div);
+            populateSelect(id);
+            lucide.createIcons();
+        }
+
+        // --- Data Loading ---
+        async function loadData() {
+            const pTable = document.getElementById('primaryTable').value;
+            const joinCol = document.getElementById('commonColumn').value;
+            if(!pTable) return showToast("Select a primary table", "error");
+
+            const tables = [{ id: 'PRIMARY', name: pTable }];
+            document.querySelectorAll('.sec-select').forEach((sel, idx) => {
+                if(sel.value) tables.push({ id: `SEC${idx+1}`, name: sel.value });
+            });
+
+            showLoading(true);
+            activeSchemas = {};
+
+            try {
+                // Fetch Meta & Data Parallel
+                const promises = tables.map(async (t) => {
+                    const [sch, tbl] = t.name.split('.');
+                    const [meta, data] = await Promise.all([
+                        apiFetch(`/table/${sch}/${tbl}/schema`),
+                        apiFetch(`/table/${sch}/${tbl}?limit=1000`)
+                    ]);
+                    
+                    activeSchemas[t.id] = {
+                        name: t.name,
+                        pks: meta.filter(c => c.is_primary_key).map(c => c.column_name),
+                        cols: meta
+                    };
+                    return { id: t.id, data };
+                });
+
+                const results = await Promise.all(promises);
+                const primaryData = results[0].data;
+                const secResults = results.slice(1);
+
+                // Join Logic (Client Side)
+                const secMaps = {};
+                secResults.forEach(res => {
+                    const map = new Map();
+                    res.data.forEach(row => {
+                        const key = String(row[joinCol] || '');
+                        if(key) map.set(key, row);
+                    });
+                    secMaps[res.id] = map;
+                });
+
+                const gridRows = primaryData.map(row => {
+                    const joinVal = String(row[joinCol] || '');
+                    const merged = { ...row };
+                    
+                    // Tag Primary PKs
+                    activeSchemas['PRIMARY'].pks.forEach(pk => merged[`__PK_PRIMARY_${pk}`] = row[pk]);
+
+                    // Merge Secondary
+                    secResults.forEach(res => {
+                        const match = secMaps[res.id].get(joinVal);
+                        if(match) {
+                            Object.keys(match).forEach(col => {
+                                if(col !== joinCol) merged[`${res.id}::${col}`] = match[col];
+                            });
+                            activeSchemas[res.id].pks.forEach(pk => merged[`__PK_${res.id}_${pk}`] = match[pk]);
+                        }
+                    });
+                    return merged;
+                });
+
+                // Build Definitions
+                const colDefs = [];
+                const pSchema = activeSchemas['PRIMARY'];
+                colDefs.push({
+                    headerName: pSchema.name.toUpperCase(),
+                    headerClass: 'bg-indigo-50 text-indigo-700 font-bold',
+                    children: pSchema.cols.map(c => createColDef(c, 'PRIMARY', null))
+                });
+
+                secResults.forEach(res => {
+                    const sSchema = activeSchemas[res.id];
+                    colDefs.push({
+                        headerName: sSchema.name.toUpperCase(),
+                        headerClass: 'bg-emerald-50 text-emerald-700 font-bold',
+                        children: sSchema.cols
+                            .filter(c => c.column_name !== joinCol)
+                            .map(c => createColDef(c, res.id, joinCol))
+                    });
+                });
+
+                initGrid(colDefs, gridRows);
+                updateColumnPicker(colDefs);
+                showToast(`Loaded ${gridRows.length} rows`);
+
+            } catch(e) {
+                console.error(e);
+                showToast(e.message, "error");
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function createColDef(colMeta, tableId, joinCol) {
+            const field = tableId === 'PRIMARY' ? colMeta.column_name : `${tableId}::${colMeta.column_name}`;
+            const isMandatory = colMeta.is_nullable === 'NO';
+            const isPK = colMeta.is_primary_key;
+
+            return {
+                field: field,
+                headerName: colMeta.column_name,
+                editable: !isPK,
+                filter: true,
+                sortable: true,
+                cellStyle: params => {
+                    if (isMandatory && (params.value === null || params.value === undefined || params.value === '')) {
+                        return { backgroundColor: '#fee2e2' };
+                    }
+                    if (isPK) return { backgroundColor: '#f8fafc', color: '#94a3b8' };
+                    return null;
+                }
+            };
+        }
+
+        function initGrid(colDefs, rowData) {
+            const eGridDiv = document.querySelector('#myGrid');
+            eGridDiv.innerHTML = '';
+            
+            const gridOptions = {
+                columnDefs: colDefs,
+                rowData: rowData,
+                defaultColDef: { resizable: true, minWidth: 100, flex: 1 },
+                rowSelection: 'multiple',
+                // Enable text selection for copying out
+                enableCellTextSelection: true,
+                ensureDomOrder: true,
+                onGridReady: p => {
+                    gridApi = p.api;
+                    // Attach Paste Handler
+                    eGridDiv.removeEventListener('paste', handleGridPaste);
+                    eGridDiv.addEventListener('paste', handleGridPaste);
+                },
+                onCellValueChanged: p => p.node.data._modified = true,
+                rowBuffer: 20,
+                animateRows: false 
+            };
+            agGrid.createGrid(eGridDiv, gridOptions);
+        }
+
+        // --- Custom Paste Handler ---
+        async function handleGridPaste(e) {
+            if (!gridApi) return;
+            // Allow pasting into inputs if user is editing a cell
+            if (e.target.closest('.ag-input-field-input, .ag-text-field-input')) return;
+
+            e.preventDefault();
+            const clipText = (e.clipboardData || window.clipboardData).getData('text');
+            if (!clipText) return;
+
+            // Parse TSV (Excel format)
+            const rows = clipText.split(/\r\n|\n|\r/).map(row => row.split('\t'));
+            
+            // Remove empty trailing row from Excel copy
+            if (rows.length > 0 && rows[rows.length - 1].length === 1 && rows[rows.length - 1][0] === "") {
+                rows.pop();
+            }
+            if (rows.length === 0) return;
+
+            const focusedCell = gridApi.getFocusedCell();
+            if (!focusedCell) return showToast("Click a cell to paste starting from there", "info");
+
+            const { rowIndex, column } = focusedCell;
+            const displayedCols = gridApi.getAllDisplayedColumns();
+            const startColIdx = displayedCols.indexOf(column);
+            
+            const itemsToUpdate = [];
+            const itemsToAdd = [];
+
+            rows.forEach((rowValues, rIdx) => {
+                const currentRowIndex = rowIndex + rIdx;
+                const rowNode = gridApi.getDisplayedRowAtIndex(currentRowIndex);
+                
+                // Use existing row or create new structure
+                let rowData = rowNode ? rowNode.data : { _new: true };
+                let hasChange = false;
+
+                rowValues.forEach((val, cIdx) => {
+                    const col = displayedCols[startColIdx + cIdx];
+                    if (!col) return; // Ignore data beyond visible columns
+
+                    const colDef = col.getColDef();
+                    if (!colDef.editable) return; // Skip read-only/PKs
+
+                    const field = colDef.field;
+                    let newVal = val.trim();
+                    if (newVal === "") newVal = null;
+
+                    if (rowData[field] !== newVal) {
+                        rowData[field] = newVal;
+                        hasChange = true;
+                    }
+                });
+
+                if (hasChange) {
+                    if (rowNode) {
+                        rowData._modified = true;
+                        itemsToUpdate.push(rowData);
+                    } else {
+                        itemsToAdd.push(rowData);
+                    }
+                }
+            });
+
+            // Update existing rows
+            if (itemsToUpdate.length > 0) {
+                gridApi.applyTransaction({ update: itemsToUpdate });
+            }
+            
+            // Add new rows
+            if (itemsToAdd.length > 0) {
+                gridApi.applyTransaction({ add: itemsToAdd });
+            }
+
+            if (itemsToUpdate.length > 0 || itemsToAdd.length > 0) {
+                showToast(`Pasted: ${itemsToUpdate.length} updated, ${itemsToAdd.length} new rows`, "success");
+            }
+        }
+
+        // --- Save Logic ---
+        async function saveData() {
+            if(!gridApi) return;
+            gridApi.stopEditing();
+            showLoading(true);
+
+            const payloads = {};
+            Object.keys(activeSchemas).forEach(id => payloads[id] = { name: activeSchemas[id].name, updates: [], inserts: [] });
+            
+            const joinCol = document.getElementById('commonColumn').value;
+
+            gridApi.forEachNode(node => {
+                const row = node.data;
+                if(!row._modified && !row._new) return;
+
+                Object.keys(activeSchemas).forEach(tableId => {
+                    const schema = activeSchemas[tableId];
+                    const record = {};
+                    let hasData = false;
+
+                    schema.cols.forEach(c => {
+                        const field = tableId === 'PRIMARY' ? c.column_name : `${tableId}::${c.column_name}`;
+                        
+                        if(tableId !== 'PRIMARY' && c.column_name === joinCol) {
+                            if(row[joinCol]) { record[c.column_name] = row[joinCol]; hasData = true; }
+                        }
+                        else if(row.hasOwnProperty(field)) {
+                            record[c.column_name] = row[field];
+                            hasData = true;
+                        }
+                    });
+
+                    if(!hasData) return;
+
+                    if(row._new) {
+                        payloads[tableId].inserts.push(record);
+                    } else {
+                        const pkExists = schema.pks.every(pk => row[`__PK_${tableId}_${pk}`] != null);
+                        if(pkExists) payloads[tableId].updates.push(record);
+                        else payloads[tableId].inserts.push(record);
+                    }
+                });
+            });
+
+            try {
+                let updates = 0, inserts = 0;
+                for(const id in payloads) {
+                    const p = payloads[id];
+                    const [s, t] = p.name.split('.');
+                    if(p.inserts.length) {
+                        await apiFetch(`/table/${s}/${t}/batch_upload`, { method: 'POST', body: p.inserts });
+                        inserts += p.inserts.length;
+                    }
+                    if(p.updates.length) {
+                        await apiFetch(`/table/${s}/${t}/batch_update`, { method: 'POST', body: p.updates });
+                        updates += p.updates.length;
+                    }
+                }
+                showToast(`Saved: ${inserts} added, ${updates} updated`, "success");
+                loadData();
+            } catch(e) {
+                showToast(e.message, "error");
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // --- Export Logic ---
+        function exportData(format = 'xlsx') {
+            if (!gridApi) return showToast("No data to export", "info");
+            
+            // Get visible rows (after filtering/sorting)
+            const rowData = [];
+            const colDefs = gridApi.getColumnDefs();
+            const colsToExport = [];
+            
+            // Flatten column structure to get header names and keys
+            colDefs.forEach(group => {
+                if (group.children) {
+                    group.children.forEach(col => {
+                        // Check if column is visible via API
+                        const isVisible = gridApi.getColumn(col.field).isVisible();
+                        if (isVisible) {
+                            colsToExport.push({ field: col.field, header: col.headerName });
+                        }
+                    });
+                }
+            });
+
+            gridApi.forEachNodeAfterFilterAndSort(node => {
+                const row = {};
+                colsToExport.forEach(col => {
+                    row[col.header] = node.data[col.field];
+                });
+                rowData.push(row);
+            });
+
+            if (rowData.length === 0) return showToast("No rows to export", "info");
+
+            const ws = XLSX.utils.json_to_sheet(rowData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Data");
+
+            const fileName = `export_${new Date().toISOString().slice(0,10)}.${format}`;
+            
+            if (format === 'csv') {
+                XLSX.writeFile(wb, fileName, { bookType: 'csv' });
+            } else {
+                XLSX.writeFile(wb, fileName);
+            }
+            
+            showToast(`Exported ${rowData.length} rows to ${fileName}`, "success");
+        }
+
+        // --- Column Picker UI ---
+        function toggleColumnPicker() {
+            const el = document.getElementById('columnPicker');
+            el.classList.toggle('hidden');
+        }
+        
+        function updateColumnPicker(colDefs) {
+            const list = document.getElementById('columnToggleList');
+            list.innerHTML = '';
+            const allCols = [];
+            colDefs.forEach(group => {
+                if(group.children) group.children.forEach(c => allCols.push(c));
+                else allCols.push(group);
+            });
+
+            allCols.forEach(col => {
+                const div = document.createElement('div');
+                div.className = "flex items-center gap-2 p-1 hover:bg-slate-50";
+                div.innerHTML = `
+                    <input type="checkbox" checked class="rounded text-indigo-600 focus:ring-indigo-500" onchange="toggleCol('${col.field}', this.checked)">
+                    <span class="text-xs text-slate-600 truncate" title="${col.headerName}">${col.headerName}</span>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function toggleCol(field, visible) {
+            gridApi.setColumnVisible(field, visible);
+        }
+
+        // --- Helpers ---
+        function addNewRow() {
+            if(!gridApi) return;
+            gridApi.applyTransaction({ add: [{ _new: true }], addIndex: 0 });
+        }
+        
+        async function apiFetch(url, opts={}) {
+            const token = sessionStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers };
+            if(opts.body) opts.body = JSON.stringify(opts.body);
+            const res = await fetch(API + url, { ...opts, headers });
+            if(!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || "API Error");
+            }
+            return res.json();
+        }
+
+        function showLoading(show) { document.getElementById('loadingOverlay').classList.toggle('active', show); }
+        function showToast(msg, type='success') {
+            const c = document.getElementById('toastContainer');
+            const d = document.createElement('div');
+            d.className = `px-4 py-2 rounded shadow-lg text-white text-sm ${type==='error'?'bg-red-500':'bg-emerald-500'}`;
+            d.innerText = msg;
+            c.appendChild(d);
+            setTimeout(() => d.remove(), 3000);
+        }
+    </script>
+</body>
+</html>
