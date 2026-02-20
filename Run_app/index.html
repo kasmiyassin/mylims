@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyLIMS v5.1 | Genetic & Fish Biology Lab</title>
+    
+    <!-- CSS Dependencies -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- JS Dependencies -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/lib/lucide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .sidebar-item-active { background-color: #eff6ff; color: #1d4ed8; border-right: 4px solid #1d4ed8; }
+        .sidebar-item-inactive:hover { background-color: #f1f5f9; color: #334155; }
+        .shimmer { animation: shimmer 2s infinite linear; background: linear-gradient(to right, #f1f5f9 4%, #e2e8f0 25%, #f1f5f9 36%); background-size: 1000px 100%; }
+        @keyframes shimmer { 0% { background-position: -1000px 0; } 100% { background-position: 1000px 0; } }
+        [v-cloak] { display: none; }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="antialiased h-screen overflow-hidden flex flex-col">
+
+<div id="app" v-cloak class="h-full flex flex-col">
+    
+    <!-- ==================== TOASTS ==================== -->
+    <div class="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 pointer-events-none">
+        <transition-group name="list" tag="div" class="flex flex-col gap-2">
+            <div v-for="t in toasts" :key="t.id" 
+                 class="pointer-events-auto px-4 py-3 rounded-lg shadow-lg text-sm font-medium text-white flex items-center gap-3 transform transition-all duration-300 min-w-[300px]"
+                 :class="t.type === 'error' ? 'bg-red-500' : (t.type === 'warning' ? 'bg-amber-500' : 'bg-emerald-600')">
+                 <component :is="t.type === 'error' ? 'AlertCircle' : 'CheckCircle2'" class="w-5 h-5"></component>
+                 <span>{{ t.message }}</span>
+            </div>
+        </transition-group>
+    </div>
+
+    <!-- ==================== LOGIN SCREEN ==================== -->
+    <div v-if="!isAuthenticated" class="flex-1 flex items-center justify-center bg-slate-100 p-4">
+        <div class="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-600 text-white rounded-2xl mb-4 shadow-lg shadow-blue-200">
+                    <component is="FlaskConical" class="w-8 h-8"></component>
+                </div>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">MyLIMS v5.1</h1>
+                <p class="text-slate-500 text-sm">Genetic & Fish Biology Laboratory</p>
+            </div>
+            
+            <form @submit.prevent="handleLogin" class="space-y-5">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Username or Email</label>
+                    <input v-model="loginForm.username" type="text" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="Enter your ID..." required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+                    <input v-model="loginForm.password" type="password" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="••••••••" required>
+                </div>
+                <button :disabled="loading" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition shadow-md disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                    <component v-if="loading" is="Loader2" class="w-5 h-5 animate-spin"></component>
+                    {{ loading ? 'Authenticating...' : 'Sign In' }}
+                </button>
+            </form>
+            <div class="mt-6 text-center text-xs text-slate-400">
+                &copy; 2025 Laboratory Management System
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MAIN APP LAYOUT ==================== -->
+    <div v-else class="flex h-full bg-slate-50">
+        
+        <!-- SIDEBAR -->
+        <aside :class="['fixed md:static inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200 flex flex-col transition-transform duration-300 ease-in-out', mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0']">
+            <div class="h-16 flex items-center px-6 border-b border-slate-100 bg-white">
+                <div class="flex items-center gap-3 text-blue-700">
+                    <component is="FlaskConical" class="w-6 h-6 fill-current"></component>
+                    <span class="font-bold text-lg tracking-tight text-slate-900">MyLIMS</span>
+                </div>
+                <button @click="mobileMenuOpen = false" class="ml-auto md:hidden text-slate-400">
+                    <component is="X" class="w-6 h-6"></component>
+                </button>
+            </div>
+
+            <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+                <template v-for="group in menuGroups" :key="group.title">
+                    <div class="px-3 mt-6 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">{{ group.title }}</div>
+                    <button v-for="item in group.items" :key="item.id" 
+                        @click="navigate(item.id)"
+                        :class="['w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors', currentView === item.id ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900']">
+                        <component :is="item.icon" class="w-4 h-4"></component>
+                        {{ item.label }}
+                    </button>
+                </template>
+            </nav>
+
+            <div class="p-4 border-t border-slate-100 bg-slate-50/50">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
+                        {{ user.initials }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-semibold text-slate-900 truncate">{{ user.name }}</p>
+                        <p class="text-xs text-slate-500 truncate">{{ user.role }}</p>
+                    </div>
+                    <button @click="logout" class="text-slate-400 hover:text-red-500 transition" title="Sign Out">
+                        <component is="LogOut" class="w-5 h-5"></component>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+            
+            <!-- TOP BAR -->
+            <header class="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 md:px-8 sticky top-0 z-20">
+                <div class="flex items-center gap-4">
+                    <button @click="mobileMenuOpen = true" class="md:hidden text-slate-500 hover:bg-slate-100 p-2 rounded-lg">
+                        <component is="Menu" class="w-5 h-5"></component>
+                    </button>
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-800">{{ activePageTitle }}</h2>
+                        <div v-if="currentView !== 'dashboard' && activeTableConfig" class="text-[10px] text-slate-400 font-mono hidden md:block">
+                            {{ activeTableConfig.schema }}.{{ activeTableConfig.table }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 md:gap-6">
+                    <!-- Global Search -->
+                    <div class="relative hidden md:block group">
+                        <component is="Search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></component>
+                        <input v-model="searchQuery" @keyup.enter="performGlobalSearch" type="text" placeholder="Search ID, Project, Name..." 
+                            class="pl-10 pr-4 py-2 w-64 focus:w-80 bg-slate-100 border-none rounded-full text-sm focus:ring-2 focus:ring-blue-500 transition-all outline-none">
+                    </div>
+
+                    <!-- Quick Actions -->
+                    <div class="flex items-center gap-2">
+                        <button @click="openModal('import')" class="hidden md:flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition">
+                            <component is="UploadCloud" class="w-3.5 h-3.5"></component> Import
+                        </button>
+                        <button v-if="currentView !== 'dashboard'" @click="openModal('create')" class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition shadow-sm hover:shadow">
+                            <component is="Plus" class="w-3.5 h-3.5"></component> New <span class="hidden sm:inline">Record</span>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- SCROLLABLE CONTENT -->
+            <div class="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth" ref="mainScroll">
+                
+                <!-- 1. DASHBOARD VIEW -->
+                <div v-if="currentView === 'dashboard'" class="space-y-6 max-w-7xl mx-auto">
+                    <!-- Stats Grid -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                        <div v-for="(stat, key) in stats" :key="key" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                            <div class="flex justify-between items-start mb-2">
+                                <span class="text-slate-500 text-xs font-bold uppercase tracking-wider">{{ key }}</span>
+                                <component :is="stat.icon" class="w-5 h-5 text-blue-500 opacity-80"></component>
+                            </div>
+                            <div class="text-3xl font-bold text-slate-900">{{ stat.value }}</div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Row -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                            <h3 class="font-semibold text-slate-800 mb-4">Sample Status</h3>
+                            <div class="h-64 relative flex items-center justify-center">
+                                <canvas id="chartSamples"></canvas>
+                                <p v-if="stats.samples.value === 0" class="absolute text-slate-400 text-sm">No data available</p>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                            <h3 class="font-semibold text-slate-800 mb-4">Project Activity</h3>
+                            <div class="h-64 relative flex items-center justify-center">
+                                <canvas id="chartProjects"></canvas>
+                                <p v-if="stats.projects.value === 0" class="absolute text-slate-400 text-sm">No data available</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity Table -->
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                            <h3 class="font-semibold text-slate-800">Recent Samples</h3>
+                            <button @click="navigate('biology')" class="text-sm text-blue-600 font-medium hover:underline">View All</button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left">
+                                <thead class="bg-slate-50 text-slate-500 font-medium border-b border-slate-100">
+                                    <tr>
+                                        <th class="px-6 py-3">Sample ID</th>
+                                        <th class="px-6 py-3">Project</th>
+                                        <th class="px-6 py-3">Date</th>
+                                        <th class="px-6 py-3">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    <tr v-for="s in recentSamples" :key="s.sample_id" class="hover:bg-slate-50 transition">
+                                        <td class="px-6 py-3.5 font-medium text-blue-600">{{ s.sample_id }}</td>
+                                        <td class="px-6 py-3.5">{{ s.project_id }}</td>
+                                        <td class="px-6 py-3.5 text-slate-500">{{ s.collection_date }}</td>
+                                        <td class="px-6 py-3.5"><span class="px-2 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">{{ s.status_id }}</span></td>
+                                    </tr>
+                                    <tr v-if="recentSamples.length === 0">
+                                        <td colspan="4" class="py-8 text-center text-slate-400">No samples recorded yet</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. GENERIC DATA TABLE VIEW -->
+                <div v-else class="h-full flex flex-col bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <!-- Table Controls -->
+                    <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-4 justify-between items-center bg-white">
+                        <div class="flex items-center gap-2">
+                             <div class="relative">
+                                <component is="Search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></component>
+                                <input v-model="viewSearch" type="text" placeholder="Filter current view..." 
+                                    class="pl-9 pr-4 py-2 w-64 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-blue-500 outline-none">
+                             </div>
+                             <button class="p-2 text-slate-500 hover:text-blue-600 bg-slate-50 rounded-lg border border-slate-200" title="Refresh" @click="fetchData">
+                                 <component is="RefreshCw" class="w-4 h-4" :class="{'animate-spin': loading}"></component>
+                             </button>
+                        </div>
+                        <div class="text-xs text-slate-500">
+                            Showing {{ filteredTableData.length }} records
+                        </div>
+                    </div>
+
+                    <!-- Actual Table -->
+                    <div class="flex-1 overflow-auto relative">
+                        <div v-if="loading && tableData.length === 0" class="absolute inset-0 bg-white z-10 p-6 space-y-4">
+                            <div v-for="i in 10" :key="i" class="h-10 bg-slate-100 rounded shimmer"></div>
+                        </div>
+
+                        <!-- Error State -->
+                        <div v-if="viewError" class="absolute inset-0 bg-white z-10 flex flex-col items-center justify-center text-center p-8">
+                             <div class="bg-red-50 p-4 rounded-full mb-3"><component is="AlertCircle" class="w-8 h-8 text-red-500"></component></div>
+                             <h3 class="text-lg font-bold text-slate-900">Unable to load data</h3>
+                             <p class="text-slate-500 text-sm max-w-sm mt-1">{{ viewError }}</p>
+                             <p class="text-xs text-slate-400 mt-4 font-mono">Attempted: {{ activeTableConfig?.schema }}.{{ activeTableConfig?.table }}</p>
+                        </div>
+
+                        <table v-if="!viewError" class="w-full text-sm text-left">
+                            <thead class="bg-slate-50 text-slate-600 font-semibold sticky top-0 z-10 shadow-sm">
+                                <tr>
+                                    <th v-for="col in displayColumns" :key="col.key" class="px-6 py-3 whitespace-nowrap bg-slate-50">
+                                        {{ col.label }}
+                                    </th>
+                                    <th class="px-6 py-3 text-right bg-slate-50">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr v-for="row in filteredTableData" :key="getRowKey(row)" class="hover:bg-blue-50/50 transition group">
+                                    <td v-for="col in displayColumns" :key="col.key" class="px-6 py-3.5 whitespace-nowrap">
+                                        <span v-if="col.key.includes('status')" 
+                                              :class="['px-2 py-0.5 rounded-full text-xs font-semibold', getStatusClass(row[col.key])]">
+                                            {{ row[col.key] }}
+                                        </span>
+                                        <span v-else class="text-slate-700">{{ formatCell(row[col.key]) }}</span>
+                                    </td>
+                                    <td class="px-6 py-3.5 text-right opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button @click="editRecord(row)" class="text-slate-400 hover:text-blue-600 mr-3"><component is="Edit2" class="w-4 h-4"></component></button>
+                                    </td>
+                                </tr>
+                                <tr v-if="tableData.length === 0 && !loading">
+                                    <td :colspan="displayColumns.length + 1" class="py-12 text-center text-slate-500">
+                                        <div class="flex flex-col items-center gap-2">
+                                            <div class="bg-slate-100 p-3 rounded-full"><component is="Database" class="w-6 h-6 text-slate-400"></component></div>
+                                            <p>No records found in this table.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- ==================== GENERIC MODAL (CREATE/EDIT) ==================== -->
+    <div v-if="modal.isOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" @click.self="closeModal">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-lg text-slate-900">{{ modal.mode === 'create' ? 'Create New' : 'Edit' }} {{ activePageTitle.replace(/s$/, '') }}</h3>
+                <button @click="closeModal" class="text-slate-400 hover:text-red-500"><component is="X" class="w-5 h-5"></component></button>
+            </div>
+            
+            <div class="p-6 overflow-y-auto space-y-4">
+                <div v-if="modalLoading && modal.type !== 'import' && !formFields.length" class="space-y-4">
+                     <div v-for="i in 5" :key="i" class="h-10 bg-slate-100 rounded shimmer"></div>
+                </div>
+
+                <template v-if="modal.type === 'import'">
+                    <!-- Import Interface -->
+                    <div class="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:bg-slate-50 transition cursor-pointer" @click="$refs.fileInput.click()">
+                        <input type="file" ref="fileInput" class="hidden" accept=".csv" @change="handleFileSelect">
+                        <component is="UploadCloud" class="w-10 h-10 mx-auto text-slate-400 mb-2"></component>
+                        <p class="text-sm font-medium text-slate-700">Click to upload CSV</p>
+                        <p class="text-xs text-slate-400" v-if="importFile">{{ importFile.name }}</p>
+                    </div>
+                    <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                        <input type="checkbox" v-model="importUpdate" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                        Update existing records (Upsert)
+                    </label>
+                </template>
+
+                <template v-else>
+                    <!-- CRUD Form -->
+                    <div v-for="field in formFields" :key="field.key">
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                            {{ field.label }} 
+                            <span v-if="!field.nullable && modal.mode==='create'" class="text-red-500">*</span>
+                        </label>
+                        
+                        <!-- Select for Status -->
+                        <select v-if="field.key.includes('status')" v-model="formData[field.key]" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none bg-white text-sm">
+                            <option value="Active">Active</option>
+                            <option value="Planned">Planned</option>
+                            <option value="Completed">Completed</option>
+                            <option value="On Hold">On Hold</option>
+                        </select>
+                        
+                        <!-- Date Input -->
+                        <input v-else-if="field.type === 'date' || field.key.includes('date')" type="date" v-model="formData[field.key]" :disabled="field.readonly"
+                            class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm disabled:bg-slate-100">
+                        
+                        <!-- Standard Text Input -->
+                        <input v-else type="text" v-model="formData[field.key]" :disabled="field.readonly"
+                            class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm disabled:bg-slate-100">
+                    </div>
+                </template>
+            </div>
+
+            <div class="p-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl flex justify-end gap-3">
+                <button @click="closeModal" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition">Cancel</button>
+                <button @click="submitModal" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow transition flex items-center gap-2">
+                    <component v-if="modalLoading" is="Loader2" class="w-4 h-4 animate-spin"></component>
+                    {{ modal.type === 'import' ? 'Process Import' : 'Save Record' }}
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted, nextTick, reactive, watch } = Vue;
+    
+    // Icon components
+    const icons = {
+        LayoutDashboard: 'LayoutDashboard', FolderKanban: 'FolderKanban', MapPin: 'MapPin',
+        Fish: 'Fish', Dna: 'Dna', Binary: 'Binary', Database: 'Database', Box: 'Box',
+        Thermometer: 'Thermometer', AlertCircle: 'AlertCircle', CheckCircle2: 'CheckCircle2',
+        FlaskConical: 'FlaskConical', Loader2: 'Loader2', X: 'X', LogOut: 'LogOut',
+        Menu: 'Menu', Search: 'Search', UploadCloud: 'UploadCloud', Plus: 'Plus',
+        RefreshCw: 'RefreshCw', Edit2: 'Edit2'
+    };
+
+    const app = createApp({
+        setup() {
+            // --- State ---
+            const isAuthenticated = ref(localStorage.getItem('token') ? true : false);
+            const user = ref(JSON.parse(localStorage.getItem('user') || '{"name":"Guest","role":"Visitor"}'));
+            const loading = ref(false);
+            const mobileMenuOpen = ref(false);
+            const currentView = ref('dashboard');
+            const viewError = ref(null);
+            
+            // Data Holders
+            const tableData = ref([]);
+            const recentSamples = ref([]);
+            const stats = ref({ projects: 0, samples: 0, events: 0, equipment: 0 });
+            const metaColumns = ref([]);
+            
+            const loginForm = reactive({ username: '', password: '' });
+            const searchQuery = ref('');
+            const viewSearch = ref('');
+            
+            // Modal State
+            const modal = reactive({ isOpen: false, mode: 'create', type: 'generic' });
+            const modalLoading = ref(false);
+            const formData = ref({});
+            const importFile = ref(null);
+            const importUpdate = ref(false);
+
+            // Toast System
+            const toasts = ref([]);
+            const showToast = (msg, type = 'success') => {
+                const id = Date.now();
+                toasts.value.push({ id, message: msg, type });
+                setTimeout(() => toasts.value = toasts.value.filter(t => t.id !== id), 3000);
+            };
+
+            // --- Configuration ---
+            const menuGroups = [
+                { title: 'Overview', items: [{ id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' }] },
+                { title: 'Management', items: [
+                    { id: 'projects', label: 'Projects', icon: 'FolderKanban' },
+                    { id: 'sampling', label: 'Field Sampling', icon: 'MapPin' }
+                ]},
+                { title: 'Laboratory', items: [
+                    { id: 'biology', label: 'Fish Biology', icon: 'Fish' },
+                    { id: 'molecular', label: 'Molecular Lab', icon: 'Dna' },
+                    { id: 'bioinformatics', label: 'Bioinformatics', icon: 'Binary' },
+                    { id: 'sequencing', label: 'Sequencing', icon: 'Database' }
+                ]},
+                { title: 'Assets', items: [
+                    { id: 'storage', label: 'Storage', icon: 'Box' },
+                    { id: 'equipment', label: 'Equipment', icon: 'Thermometer' }
+                ]}
+            ];
+
+            // Corrected Database Mapping
+            const endpointMap = {
+                projects: { schema: 'lims', table: 'projects' },
+                sampling: { schema: 'field', table: 'sampling_event' },
+                biology: { schema: 'bio_assets', table: 'samples_root' },
+                molecular: { schema: 'moleculargenetics', table: 'library' },
+                bioinformatics: { schema: 'bioinformatics', table: 'assignments' },
+                sequencing: { schema: 'moleculargenetics', table: 'sequencing' },
+                storage: { schema: 'lims', table: 'storage_units' },
+                equipment: { schema: 'core', table: 'equipments' }
+            };
+
+            // Explicit column overrides (optional)
+            const columnOverrides = {
+                projects: [
+                    { key: 'project_id', label: 'ID' }, { key: 'title', label: 'Title' }, 
+                    { key: 'status_id', label: 'Status' }, { key: 'start_date', label: 'Start' }
+                ],
+                biology: [
+                    { key: 'sample_id', label: 'Sample ID' }, { key: 'collection_date', label: 'Date' },
+                    { key: 'project_id', label: 'Project' }, { key: 'status_id', label: 'Status' }
+                ]
+            };
+
+            // --- Computed ---
+            const activePageTitle = computed(() => {
+                const item = menuGroups.flatMap(g => g.items).find(i => i.id === currentView.value);
+                return item ? item.label : 'Dashboard';
+            });
+            
+            const activeTableConfig = computed(() => endpointMap[currentView.value]);
+
+            const displayColumns = computed(() => {
+                if(columnOverrides[currentView.value]) return columnOverrides[currentView.value];
+                
+                // Fallback to API metadata
+                if(metaColumns.value.length > 0) {
+                    return metaColumns.value
+                        .filter(c => !['created_at', 'updated_at', 'is_active', 'passwd'].includes(c.column_name))
+                        .slice(0, 6)
+                        .map(c => ({ key: c.column_name, label: formatLabel(c.column_name) }));
+                }
+                return [{ key: 'id', label: 'ID' }];
+            });
+
+            // Auto-detect PK from metadata (first column)
+            const activePk = computed(() => {
+                 if(metaColumns.value.length > 0) return metaColumns.value[0].column_name;
+                 return 'id';
+            });
+            
+            const filteredTableData = computed(() => {
+                if(!viewSearch.value) return tableData.value;
+                const lower = viewSearch.value.toLowerCase();
+                return tableData.value.filter(row => Object.values(row).some(v => String(v).toLowerCase().includes(lower)));
+            });
+
+            const formFields = computed(() => {
+                if(metaColumns.value.length === 0) return [];
+                return metaColumns.value.map(col => ({
+                    key: col.column_name,
+                    label: formatLabel(col.column_name),
+                    type: mapPostgresTypeToInput(col.data_type),
+                    nullable: col.is_nullable === 'YES',
+                    readonly: modal.mode === 'edit' && col.column_name === activePk.value
+                }));
+            });
+
+            // --- Helpers ---
+            const formatLabel = (str) => str.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            const mapPostgresTypeToInput = (pgType) => {
+                if(pgType.includes('date') || pgType.includes('timestamp')) return 'date';
+                if(pgType.includes('int') || pgType.includes('numeric')) return 'number';
+                return 'text';
+            };
+            const formatCell = (val) => {
+                if(val === null || val === undefined) return '--';
+                if(typeof val === 'object') return JSON.stringify(val);
+                return val;
+            };
+            const getRowKey = (row) => row[activePk.value] || JSON.stringify(row);
+
+            // --- API Calls ---
+            const apiCall = async (endpoint, method = 'GET', body = null) => {
+                try {
+                    const opts = { method, headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } };
+                    if(body) {
+                        opts.headers['Content-Type'] = 'application/json';
+                        opts.body = JSON.stringify(body);
+                    }
+                    const res = await fetch(endpoint, opts);
+                    if(res.status === 401) { logout(); return null; }
+                    if(!res.ok) {
+                        const errData = await res.json().catch(() => ({ detail: res.statusText }));
+                        throw new Error(errData.detail || `API Error: ${res.statusText}`);
+                    }
+                    return await res.json();
+                } catch(e) {
+                    throw e; // Propagate error for view handling
+                }
+            };
+
+            const initDashboard = async () => {
+                try {
+                    const statsData = await apiCall('/api/dashboard/stats');
+                    if(statsData) {
+                        stats.value = {
+                            projects: { value: statsData.projects, icon: 'FolderKanban' },
+                            samples: { value: statsData.samples, icon: 'Fish' },
+                            events: { value: statsData.events, icon: 'MapPin' },
+                            equipment: { value: statsData.equipment, icon: 'Thermometer' }
+                        };
+                    }
+                    const recents = await apiCall('/api/samples/recent');
+                    if(recents) recentSamples.value = recents;
+                    nextTick(renderCharts);
+                } catch(e) {
+                    showToast('Failed to load dashboard data', 'error');
+                }
+            };
+
+            const fetchData = async () => {
+                viewError.value = null;
+                if(currentView.value === 'dashboard') return initDashboard();
+                
+                const config = endpointMap[currentView.value];
+                if(!config) { tableData.value = []; return; }
+                
+                loading.value = true;
+                
+                try {
+                    // Parallel fetch: Metadata + Data
+                    const [meta, data] = await Promise.all([
+                        apiCall(`/api/meta/columns/${config.schema}/${config.table}`),
+                        apiCall(`/api/generic/${config.schema}/${config.table}`)
+                    ]);
+                    
+                    if(meta) metaColumns.value = meta;
+                    tableData.value = data || [];
+                } catch(e) {
+                    console.error(e);
+                    viewError.value = e.message.includes('relation') ? 'Table does not exist in database.' : e.message;
+                    tableData.value = [];
+                    metaColumns.value = [];
+                } finally {
+                    loading.value = false;
+                }
+            };
+
+            // --- Handlers ---
+            const handleLogin = async () => {
+                loading.value = true;
+                try {
+                    const res = await apiCall('/api/auth/login', 'POST', loginForm);
+                    if(res && res.access_token) {
+                        localStorage.setItem('token', res.access_token);
+                        localStorage.setItem('user', JSON.stringify(res.user));
+                        user.value = res.user;
+                        user.value.initials = res.user.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
+                        isAuthenticated.value = true;
+                        showToast('Welcome back!');
+                        initDashboard();
+                    }
+                } catch(e) {
+                    showToast(e.message, 'error');
+                } finally {
+                    loading.value = false;
+                }
+            };
+
+            const logout = () => {
+                localStorage.clear();
+                isAuthenticated.value = false;
+                loginForm.username = ''; loginForm.password = '';
+            };
+
+            const performGlobalSearch = async () => {
+                 showToast('Search feature coming soon', 'info');
+                 // Implement generic search here
+            };
+
+            const navigate = (viewId) => {
+                currentView.value = viewId;
+                mobileMenuOpen.value = false;
+                tableData.value = []; 
+                fetchData();
+            };
+
+            // Modal Logic
+            const openModal = async (type, record = null) => {
+                modal.isOpen = true;
+                modal.type = type === 'import' ? 'import' : 'generic';
+                modal.mode = record ? 'edit' : 'create';
+                formData.value = record ? { ...record } : {};
+                
+                // Ensure metadata loaded for creating new records
+                if(type === 'create' && metaColumns.value.length === 0) {
+                     const config = endpointMap[currentView.value];
+                     modalLoading.value = true;
+                     try {
+                         const meta = await apiCall(`/api/meta/columns/${config.schema}/${config.table}`);
+                         if(meta) metaColumns.value = meta;
+                     } catch(e) {
+                         showToast('Could not load form definition', 'error');
+                     } finally {
+                         modalLoading.value = false;
+                     }
+                }
+            };
+            
+            const closeModal = () => { modal.isOpen = false; importFile.value = null; };
+            
+            const submitModal = async () => {
+                modalLoading.value = true;
+                const config = endpointMap[currentView.value];
+
+                try {
+                    if(modal.type === 'import') {
+                        if(!importFile.value) throw new Error('Select a file');
+                        
+                        Papa.parse(importFile.value, {
+                            header: true,
+                            skipEmptyLines: true,
+                            complete: async (results) => {
+                                try {
+                                    const res = await apiCall('/api/batch/import', 'POST', {
+                                        schema_name: config.schema,
+                                        table_name: config.table,
+                                        records: results.data,
+                                        update_existing: importUpdate.value,
+                                        pk_field: activePk.value
+                                    });
+                                    if(res && res.success) {
+                                        showToast(`Imported ${res.imported} records`);
+                                        closeModal();
+                                        fetchData();
+                                    } else if (res && res.errors) {
+                                        showToast(`Import failed: ${res.errors[0]}`, 'error');
+                                    }
+                                } catch(e) { showToast(e.message, 'error'); }
+                                finally { modalLoading.value = false; }
+                            }
+                        });
+                    } else {
+                        const url = `/api/generic/${config.schema}/${config.table}` + (modal.mode === 'edit' ? `/${activePk.value}/${formData.value[activePk.value]}` : '');
+                        const method = modal.mode === 'edit' ? 'PUT' : 'POST';
+                        const payload = { data: formData.value }; 
+                        
+                        await apiCall(url, method, payload);
+                        showToast(modal.mode === 'edit' ? 'Updated successfully' : 'Created successfully');
+                        closeModal();
+                        fetchData();
+                        modalLoading.value = false;
+                    }
+                } catch(e) {
+                    showToast(e.message, 'error');
+                    modalLoading.value = false;
+                }
+            };
+            
+            const handleFileSelect = (e) => { importFile.value = e.target.files[0]; };
+            
+            const getStatusClass = (status) => {
+                const map = { 'Active': 'bg-emerald-100 text-emerald-700', 'Planned': 'bg-amber-100 text-amber-700', 'Completed': 'bg-blue-100 text-blue-700' };
+                return map[status] || 'bg-slate-100 text-slate-700';
+            };
+
+            const renderCharts = () => {
+                const ctx1 = document.getElementById('chartSamples');
+                if(ctx1) new Chart(ctx1, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Active', 'Stored', 'Processed'],
+                        datasets: [{ data: [stats.value.samples, 0, 0], backgroundColor: ['#3b82f6', '#10b981', '#f59e0b'] }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+
+                const ctx2 = document.getElementById('chartProjects');
+                if(ctx2) new Chart(ctx2, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Current'],
+                        datasets: [{ label: 'Projects', data: [stats.value.projects], backgroundColor: '#3b82f6' }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            };
+
+            onMounted(() => {
+                if(isAuthenticated.value) {
+                    if(user.value.name) user.value.initials = user.value.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
+                    initDashboard();
+                }
+            });
+
+            return {
+                isAuthenticated, user, loading, loginForm, handleLogin, logout,
+                menuGroups, currentView, activePageTitle, navigate, activeTableConfig,
+                stats, recentSamples, tableData, filteredTableData, displayColumns,
+                searchQuery, viewSearch, loading, viewError,
+                modal, openModal, closeModal, submitModal, modalLoading, formData, formFields,
+                importFile, importUpdate, handleFileSelect,
+                toasts, getStatusClass, formatCell, getRowKey,
+                mobileMenuOpen, performGlobalSearch,
+                editRecord: (row) => openModal('generic', row)
+            };
+        }
+    })
+    
+    // Register components dynamically
+    Object.keys(icons).forEach(key => {
+        app.component(key, {
+            template: `<i :data-lucide="key" class="lucide"></i>`,
+            props: ['class'],
+            mounted() { lucide.createIcons({ icons: { [key]: lucide.icons[key] }, name: key, attrs: { class: this.class } }); }
+        });
+    });
+
+    app.mount('#app');
+    window.addEventListener('load', () => lucide.createIcons());
+</script>
+</body>
+</html>

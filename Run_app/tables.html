@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Data Editor - TIFI LIMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-grid.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-theme-alpine.css" />
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        
+        /* AG Grid Customization */
+        .ag-theme-alpine {
+            --ag-header-background-color: #f8fafc;
+            --ag-header-foreground-color: #475569;
+            --ag-border-color: #e2e8f0;
+            --ag-row-hover-color: #f1f5f9;
+            --ag-selected-row-background-color: #e0e7ff;
+            --ag-font-family: 'Inter', sans-serif;
+            --ag-font-size: 13px;
+        }
+        
+        /* Pinned PK Column Styling */
+        .pk-cell {
+            background-color: #f1f5f9 !important; /* Slate-100 */
+            font-family: 'Monaco', 'Consolas', monospace;
+            color: #334155;
+            font-weight: 600;
+        }
+        
+        /* New Row Indicator */
+        .new-row-cell {
+            background-color: #ecfdf5 !important; /* Emerald-50 */
+        }
+
+        .loading-overlay {
+            position: absolute; inset: 0; background: rgba(255,255,255,0.8);
+            backdrop-filter: blur(2px); display: flex; justify-content: center; align-items: center;
+            z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .loading-overlay.active { opacity: 1; pointer-events: all; }
+        
+        /* Mandatory field warning */
+        .mandatory-cell-empty { background-color: #fee2e2 !important; border-bottom: 2px solid #ef4444 !important; }
+
+        /* Slide-over panel transition */
+        .slide-over { transition: transform 0.3s ease-in-out; }
+        .slide-over.closed { transform: translateX(100%); }
+        .slide-over.open { transform: translateX(0); }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-slate-800">
+
+    <!-- Loading & Toast -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="bg-white px-6 py-4 rounded-xl shadow-xl flex items-center gap-3 border border-slate-200">
+            <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
+            <p id="loadingText" class="text-slate-700 font-medium">Processing data...</p>
+        </div>
+    </div>
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2"></div>
+
+    <!-- Sidebar -->
+    <div class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-sm flex-shrink-0">
+        <div class="p-4 border-b border-slate-200 font-bold text-slate-800 flex items-center gap-2">
+            <i data-lucide="flask-conical" class="w-6 h-6 text-indigo-600"></i> 
+            <span class="text-lg tracking-tight">TIFI LIMS</span>
+        </div>
+        <div class="flex-1 p-3 space-y-1 overflow-y-auto text-sm font-medium text-slate-600">
+            <a href="dashboard.html" class="flex items-center p-2.5 rounded-lg hover:bg-slate-50 transition"><i data-lucide="layout-dashboard" class="w-4 h-4 mr-3"></i> Dashboard</a>
+            <a href="tables.html" class="flex items-center p-2.5 rounded-lg bg-indigo-50 text-indigo-700"><i data-lucide="table-2" class="w-4 h-4 mr-3"></i> Data Editor</a>
+        </div>
+        <div class="p-4 border-t border-slate-200">
+            <button onclick="window.location.href='login.html'" class="flex items-center text-sm text-red-500 hover:text-red-700 font-medium">
+                <i data-lucide="log-out" class="w-4 h-4 mr-2"></i> Sign Out
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col h-full bg-slate-50 relative overflow-hidden">
+        
+        <!-- Controls Header -->
+        <div class="bg-white border-b border-slate-200 px-6 py-4 flex flex-col gap-4 shadow-sm z-10 shrink-0">
+            
+            <!-- Top Row: Table Selection -->
+            <div class="flex items-start gap-4 flex-wrap" id="tableSelectors">
+                <div class="flex flex-col gap-1.5 w-64">
+                    <label class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Primary Table</label>
+                    <div class="relative">
+                        <select id="primaryTable" class="w-full p-2.5 pl-3 pr-10 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm appearance-none cursor-pointer hover:border-indigo-400 transition"></select>
+                        <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none"></i>
+                    </div>
+                </div>
+
+                <div class="pt-8 text-slate-300"><i data-lucide="arrow-right" class="w-5 h-5"></i></div>
+                <div id="secondaryTablesContainer" class="flex gap-4 flex-wrap"></div>
+
+                <div class="pt-6">
+                    <button onclick="addJoinTable()" class="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg border border-slate-300 transition shadow-sm" title="Join another table">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Action Bar -->
+            <div class="flex flex-col lg:flex-row justify-between items-center pt-3 border-t border-slate-100 gap-3">
+                
+                <!-- Left: Load & Filter -->
+                <div class="flex items-center gap-3 w-full lg:w-auto">
+                    <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg p-1">
+                        <label class="text-xs font-bold text-slate-500 uppercase px-2">Join On:</label>
+                        <input type="text" id="commonColumn" value="sample_id" class="p-1.5 border border-slate-300 rounded text-sm w-32 focus:ring-indigo-500 outline-none" placeholder="col name">
+                    </div>
+                    
+                    <button onclick="loadData()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold shadow-sm transition flex items-center gap-2">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Load Data
+                    </button>
+                    
+                    <div class="h-8 w-px bg-slate-200 mx-2 hidden lg:block"></div>
+
+                    <!-- Quick Filter -->
+                    <div class="relative group">
+                        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
+                        <input type="text" id="quickFilter" oninput="onQuickFilterChanged()" placeholder="Quick filter..." 
+                            class="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm w-48 focus:w-64 transition-all focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm">
+                    </div>
+                </div>
+
+                <!-- Right: Edits & Export -->
+                <div class="flex gap-2 w-full lg:w-auto justify-end items-center">
+                    <div class="flex bg-white border border-slate-300 rounded-lg p-1 shadow-sm">
+                        <button onclick="addNewRow()" class="px-3 py-1.5 hover:bg-slate-50 text-slate-700 rounded text-sm font-medium flex gap-2 items-center" title="Add Empty Row">
+                            <i data-lucide="plus" class="w-3.5 h-3.5 text-emerald-600"></i> New
+                        </button>
+                        <div class="w-px bg-slate-200 my-1"></div>
+                        <button onclick="duplicateRow()" class="px-3 py-1.5 hover:bg-slate-50 text-slate-700 rounded text-sm font-medium flex gap-2 items-center" title="Duplicate Selected Row">
+                            <i data-lucide="copy" class="w-3.5 h-3.5 text-blue-600"></i> Duplicate
+                        </button>
+                        <div class="w-px bg-slate-200 my-1"></div>
+                        <button onclick="deleteSelectedRows()" class="px-3 py-1.5 hover:bg-red-50 text-red-600 rounded text-sm font-medium flex gap-2 items-center" title="Delete Selected Rows">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Delete
+                        </button>
+                    </div>
+
+                    <button onclick="toggleColumnPicker()" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-medium shadow-sm flex gap-2 items-center">
+                        <i data-lucide="columns" class="w-4 h-4"></i> Columns
+                    </button>
+
+                    <div class="relative group z-30">
+                        <button class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-medium shadow-sm flex gap-2 items-center">
+                            <i data-lucide="download" class="w-4 h-4"></i> Export
+                        </button>
+                        <div class="absolute right-0 mt-2 w-40 bg-white border border-slate-200 rounded-xl shadow-xl hidden group-hover:block p-1">
+                            <button onclick="exportData('xlsx')" class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-indigo-50 rounded-lg flex items-center gap-2">
+                                <i data-lucide="file-spreadsheet" class="w-4 h-4 text-green-600"></i> Excel (.xlsx)
+                            </button>
+                            <button onclick="exportData('csv')" class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-indigo-50 rounded-lg flex items-center gap-2">
+                                <i data-lucide="file-text" class="w-4 h-4 text-blue-600"></i> CSV (.csv)
+                            </button>
+                        </div>
+                    </div>
+
+                    <button onclick="saveData()" class="ml-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold shadow-sm flex gap-2 items-center transition">
+                        <i data-lucide="save" class="w-4 h-4"></i> Save
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grid Area -->
+        <div class="flex-1 p-0 overflow-hidden relative">
+            <div id="myGrid" class="ag-theme-alpine h-full w-full border-none"></div>
+            
+            <!-- No Data Placeholder -->
+            <div id="noDataMessage" class="hidden absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-slate-50">
+                <i data-lucide="database" class="w-12 h-12 mb-3 text-slate-300"></i>
+                <p class="text-sm font-medium">Select a table and click Load to begin</p>
+            </div>
+        </div>
+
+        <!-- Column Picker Slide-over -->
+        <div id="columnSidebar" class="absolute top-0 right-0 h-full w-80 bg-white shadow-2xl border-l border-slate-200 z-40 transform translate-x-full slide-over flex flex-col">
+            <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                <span class="font-bold text-slate-800 flex items-center gap-2">
+                    <i data-lucide="layout" class="w-4 h-4 text-indigo-600"></i> Column Visibility
+                </span>
+                <button onclick="toggleColumnPicker()" class="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-200 rounded transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-4 space-y-6" id="columnToggleList">
+                <!-- Columns injected here -->
+            </div>
+            <!-- Bottom Action -->
+            <div class="p-4 border-t border-slate-200 bg-slate-50">
+                <button onclick="toggleColumnPicker()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium text-sm transition shadow-sm">
+                    Done
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const getApiBase = () => window.location.pathname.includes('/mylims') ? '/mylims/api' : '/api';
+        const API = getApiBase();
+
+        // --- Custom Date Editor Component ---
+        class DateEditor {
+            init(params) {
+                this.eInput = document.createElement('input');
+                this.eInput.type = 'date';
+                this.eInput.className = 'ag-input-field-input ag-text-field-input';
+                this.eInput.style.width = '100%';
+                this.eInput.style.height = '100%';
+                // Set initial value if exists
+                if (params.value) {
+                    // Try to format to YYYY-MM-DD
+                    const d = new Date(params.value);
+                    if (!isNaN(d.getTime())) {
+                        this.eInput.value = d.toISOString().split('T')[0];
+                    } else {
+                        this.eInput.value = params.value; // Fallback
+                    }
+                }
+            }
+            getGui() { return this.eInput; }
+            afterGuiAttached() { this.eInput.focus(); }
+            getValue() { return this.eInput.value; } // Returns YYYY-MM-DD
+        }
+
+        // --- State ---
+        let gridApi = null;
+        let availableTables = [];
+        let activeSchemas = {};
+        let secondaryTableCount = 0;
+
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            const token = sessionStorage.getItem('token');
+            if(!token) window.location.href = 'login.html';
+
+            // Show placeholder
+            document.getElementById('noDataMessage').classList.remove('hidden');
+
+            try {
+                const res = await fetch(`${API}/table_names_for_forms`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) throw new Error("Connection failed");
+                availableTables = await res.json();
+                populateSelect('primaryTable');
+            } catch(e) {
+                showToast("Failed to connect to backend", "error");
+            }
+        });
+
+        function populateSelect(id) {
+            const sel = document.getElementById(id);
+            sel.innerHTML = '<option value="" disabled selected>Select Table...</option>';
+            availableTables.forEach(t => sel.add(new Option(t, t)));
+        }
+
+        function addJoinTable() {
+            secondaryTableCount++;
+            const id = `secTable_${secondaryTableCount}`;
+            const container = document.getElementById('secondaryTablesContainer');
+            const div = document.createElement('div');
+            div.className = "flex flex-col gap-1.5 w-64 relative group";
+            div.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Join Table ${secondaryTableCount}</label>
+                    <button onclick="this.closest('.group').remove()" class="text-xs text-red-400 hover:text-red-600 flex items-center gap-1"><i data-lucide="x" class="w-3 h-3"></i> Remove</button>
+                </div>
+                <div class="relative">
+                    <select id="${id}" class="sec-select w-full p-2.5 pl-3 pr-10 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm appearance-none cursor-pointer"></select>
+                    <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none"></i>
+                </div>
+            `;
+            container.appendChild(div);
+            populateSelect(id);
+            lucide.createIcons();
+        }
+
+        // --- Data Loading ---
+        async function loadData() {
+            const pTable = document.getElementById('primaryTable').value;
+            const joinCol = document.getElementById('commonColumn').value;
+            if(!pTable) return showToast("Select a primary table", "error");
+
+            const tables = [{ id: 'PRIMARY', name: pTable }];
+            document.querySelectorAll('.sec-select').forEach((sel, idx) => {
+                if(sel.value) tables.push({ id: `SEC${idx+1}`, name: sel.value });
+            });
+
+            showLoading(true);
+            document.getElementById('noDataMessage').classList.add('hidden');
+            activeSchemas = {};
+
+            try {
+                const promises = tables.map(async (t) => {
+                    const [sch, tbl] = t.name.split('.');
+                    const [meta, data] = await Promise.all([
+                        apiFetch(`/table/${sch}/${tbl}/schema`),
+                        apiFetch(`/table/${sch}/${tbl}?limit=1000`)
+                    ]);
+                    
+                    activeSchemas[t.id] = {
+                        name: t.name,
+                        pks: meta.filter(c => c.is_primary_key).map(c => c.column_name),
+                        cols: meta
+                    };
+                    return { id: t.id, data };
+                });
+
+                const results = await Promise.all(promises);
+                const primaryData = results[0].data;
+                const secResults = results.slice(1);
+
+                // Join Logic
+                const secMaps = {};
+                secResults.forEach(res => {
+                    const map = new Map();
+                    res.data.forEach(row => {
+                        const key = String(row[joinCol] || '');
+                        if(key) map.set(key, row);
+                    });
+                    secMaps[res.id] = map;
+                });
+
+                const gridRows = primaryData.map(row => {
+                    const joinVal = String(row[joinCol] || '');
+                    const merged = { ...row };
+                    activeSchemas['PRIMARY'].pks.forEach(pk => merged[`__PK_PRIMARY_${pk}`] = row[pk]);
+
+                    secResults.forEach(res => {
+                        const match = secMaps[res.id].get(joinVal);
+                        if(match) {
+                            Object.keys(match).forEach(col => {
+                                if(col !== joinCol) merged[`${res.id}::${col}`] = match[col];
+                            });
+                            activeSchemas[res.id].pks.forEach(pk => merged[`__PK_${res.id}_${pk}`] = match[pk]);
+                        }
+                    });
+                    return merged;
+                });
+
+                // Build Definitions
+                const colDefs = [];
+                const pSchema = activeSchemas['PRIMARY'];
+                
+                // Primary Columns
+                colDefs.push({
+                    headerName: pSchema.name.toUpperCase(),
+                    headerClass: 'bg-indigo-50 text-indigo-700 font-bold border-r border-indigo-100',
+                    children: pSchema.cols.map(c => createColDef(c, 'PRIMARY', null))
+                });
+
+                // Joined Columns
+                secResults.forEach(res => {
+                    const sSchema = activeSchemas[res.id];
+                    colDefs.push({
+                        headerName: sSchema.name.toUpperCase(),
+                        headerClass: 'bg-emerald-50 text-emerald-700 font-bold border-r border-emerald-100',
+                        children: sSchema.cols
+                            .filter(c => c.column_name !== joinCol)
+                            .map(c => createColDef(c, res.id, joinCol))
+                    });
+                });
+
+                initGrid(colDefs, gridRows);
+                updateColumnPicker(colDefs);
+                showToast(`Loaded ${gridRows.length} rows`);
+
+            } catch(e) {
+                console.error(e);
+                showToast(e.message, "error");
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function createColDef(colMeta, tableId, joinCol) {
+            const field = tableId === 'PRIMARY' ? colMeta.column_name : `${tableId}::${colMeta.column_name}`;
+            const isMandatory = colMeta.is_nullable === 'NO';
+            const isPK = colMeta.is_primary_key;
+
+            const def = {
+                field: field,
+                headerName: colMeta.column_name,
+                
+                // FIXED: PKs are editable ONLY on new rows
+                editable: (params) => {
+                    if (isPK) return !!params.node.data._new; // Only editable if it's a new row
+                    return true;
+                },
+                
+                filter: 'agTextColumnFilter',
+                sortable: true,
+                resizable: true,
+                headerTooltip: `${colMeta.data_type} ${isMandatory ? '(Required)' : ''}`,
+                cellClassRules: {
+                    'mandatory-cell-empty': params => isMandatory && !isPK && (params.value === null || params.value === undefined || params.value === ''),
+                    'new-row-cell': params => params.data._new,
+                    'pk-cell': params => isPK
+                }
+            };
+
+            // Enhanced Data Types
+            if (colMeta.data_type.includes('date') || colMeta.data_type.includes('time')) {
+                def.cellEditor = DateEditor;
+                def.valueFormatter = (params) => {
+                    if (params.value) return params.value.split('T')[0]; // Simple format for display
+                    return '';
+                };
+            } else if (colMeta.data_type.includes('int') || colMeta.data_type.includes('numeric')) {
+                def.filter = 'agNumberColumnFilter';
+                def.type = 'numericColumn';
+            }
+
+            // PRIMARY KEY ENFORCEMENT
+            if (isPK) {
+                def.pinned = 'left';
+                def.lockPosition = true; // Cannot move PK column
+                def.lockVisible = true; // Cannot hide PK column
+                def.checkboxSelection = true; // Selection handle
+                def.headerCheckboxSelection = true;
+                def.width = 150;
+                
+                // For new rows, show prompt if empty
+                def.valueFormatter = params => {
+                    if (params.data._new && (params.value === null || params.value === undefined)) {
+                        return '(Auto/Enter)';
+                    }
+                    return params.value;
+                };
+            }
+
+            return def;
+        }
+
+        function initGrid(colDefs, rowData) {
+            const eGridDiv = document.querySelector('#myGrid');
+            eGridDiv.innerHTML = '';
+            
+            const gridOptions = {
+                columnDefs: colDefs,
+                rowData: rowData,
+                defaultColDef: { 
+                    resizable: true, 
+                    minWidth: 100, 
+                    flex: 1,
+                    menuTabs: ['filterMenuTab', 'generalMenuTab']
+                },
+                rowSelection: 'multiple',
+                enableCellTextSelection: true,
+                suppressDragLeaveHidesColumns: true, // Prevent accidental hiding
+                animateRows: true,
+                onGridReady: p => {
+                    gridApi = p.api;
+                    eGridDiv.addEventListener('paste', handleGridPaste);
+                },
+                onCellValueChanged: p => p.node.data._modified = true
+            };
+            agGrid.createGrid(eGridDiv, gridOptions);
+        }
+
+        // --- Features ---
+
+        function onQuickFilterChanged() {
+            if(!gridApi) return;
+            gridApi.setQuickFilter(document.getElementById('quickFilter').value);
+        }
+
+        // Smart Duplicate Row
+        function duplicateRow() {
+            if(!gridApi) return;
+            const selected = gridApi.getSelectedNodes();
+            if(selected.length === 0) return showToast("Select rows to duplicate", "info");
+
+            const newItems = selected.map(node => {
+                const newData = { ...node.data };
+                newData._new = true;
+                delete newData._modified;
+                
+                // Clear Primary Keys so DB generates new ones
+                activeSchemas['PRIMARY'].pks.forEach(pk => {
+                    newData[pk] = null;
+                    delete newData[`__PK_PRIMARY_${pk}`];
+                });
+                return newData;
+            });
+
+            gridApi.applyTransaction({ add: newItems });
+            showToast(`Duplicated ${newItems.length} rows. PKs cleared for auto-generation.`);
+        }
+
+        function addNewRow() {
+            if(!gridApi) return;
+            const newItem = { _new: true };
+            // Initialize PKs to null for visual clarity
+            activeSchemas['PRIMARY'].pks.forEach(pk => newItem[pk] = null);
+            gridApi.applyTransaction({ add: [newItem], addIndex: 0 });
+            // Scroll to top
+            gridApi.ensureIndexVisible(0);
+        }
+
+        async function deleteSelectedRows() {
+            if(!gridApi) return;
+            const selectedData = gridApi.getSelectedRows();
+            if(selectedData.length === 0) return showToast("No rows selected for deletion", "info");
+            
+            if(!confirm(`Are you sure you want to delete ${selectedData.length} records? This cannot be undone.`)) return;
+
+            showLoading(true);
+            let successCount = 0;
+            let failCount = 0;
+
+            const pSchema = activeSchemas['PRIMARY'];
+            const primaryName = pSchema.name; // "schema.table"
+            const [schema, table] = primaryName.split('.');
+
+            try {
+                for (const row of selectedData) {
+                    // New rows (not saved yet) can just be removed from grid
+                    if (row._new) {
+                        gridApi.applyTransaction({ remove: [row] });
+                        successCount++;
+                        continue;
+                    }
+
+                    // Construct Query Params for PKs
+                    const params = new URLSearchParams();
+                    let missingPk = false;
+                    
+                    pSchema.pks.forEach(pk => {
+                        const val = row[`__PK_PRIMARY_${pk}`];
+                        if (val === null || val === undefined) missingPk = true;
+                        params.append(pk, val);
+                    });
+
+                    if (missingPk) {
+                        console.warn("Skipping row with missing PKs", row);
+                        failCount++;
+                        continue;
+                    }
+
+                    try {
+                        await apiFetch(`/table/${schema}/${table}?${params.toString()}`, { method: 'DELETE' });
+                        gridApi.applyTransaction({ remove: [row] });
+                        successCount++;
+                    } catch (e) {
+                        console.error(e);
+                        failCount++;
+                    }
+                }
+                
+                if (successCount > 0) showToast(`Deleted ${successCount} records.`, "success");
+                if (failCount > 0) showToast(`Failed to delete ${failCount} records. Check console.`, "error");
+
+            } catch (e) {
+                showToast("Error during deletion process", "error");
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // --- Side Panel ---
+        function toggleColumnPicker() {
+            const el = document.getElementById('columnSidebar');
+            if (el.classList.contains('translate-x-full')) {
+                el.classList.remove('translate-x-full');
+            } else {
+                el.classList.add('translate-x-full');
+            }
+        }
+
+        function updateColumnPicker(colDefs) {
+            const list = document.getElementById('columnToggleList');
+            list.innerHTML = '';
+
+            colDefs.forEach(group => {
+                const groupDiv = document.createElement('div');
+                groupDiv.className = "mb-4";
+                
+                // Group Header with Controls
+                const headerRow = document.createElement('div');
+                headerRow.className = "flex justify-between items-center mb-2 border-b border-slate-100 pb-1";
+
+                const title = document.createElement('h4');
+                title.className = "text-xs font-bold text-slate-500 uppercase tracking-wider";
+                title.innerText = group.headerName;
+
+                // Controls Container
+                const controls = document.createElement('div');
+                controls.className = "flex gap-2";
+
+                // "All" Button
+                const btnAll = document.createElement('button');
+                btnAll.className = "text-[10px] font-semibold text-indigo-600 hover:bg-indigo-50 px-1.5 py-0.5 rounded transition";
+                btnAll.innerText = "All";
+                
+                // "None" Button
+                const btnNone = document.createElement('button');
+                btnNone.className = "text-[10px] font-semibold text-slate-400 hover:bg-slate-100 hover:text-slate-600 px-1.5 py-0.5 rounded transition";
+                btnNone.innerText = "None";
+
+                // Field Collection
+                const groupFields = group.children.map(c => c.field);
+
+                // Attach Handlers
+                btnAll.onclick = () => toggleGroupCols(groupFields, true);
+                btnNone.onclick = () => toggleGroupCols(groupFields, false);
+
+                controls.appendChild(btnAll);
+                controls.appendChild(btnNone);
+                
+                headerRow.appendChild(title);
+                headerRow.appendChild(controls);
+                groupDiv.appendChild(headerRow);
+
+                group.children.forEach(col => {
+                    const isLocked = col.lockVisible;
+                    
+                    const div = document.createElement('div');
+                    div.className = "flex items-center gap-3 p-1.5 hover:bg-slate-50 rounded transition";
+                    
+                    // Create Checkbox Programmatically
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    // Safe ID for syncing
+                    checkbox.id = `cb_col_${col.field.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                    checkbox.className = `rounded text-indigo-600 focus:ring-indigo-500 ${isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`;
+                    checkbox.checked = true; // Initially all columns are visible
+                    if (isLocked) checkbox.disabled = true;
+
+                    // Attach Event Listener
+                    checkbox.addEventListener('change', (e) => {
+                        toggleCol(col.field, e.target.checked);
+                    });
+
+                    // Create Label
+                    const label = document.createElement('span'); 
+                    label.className = "text-sm text-slate-700 truncate cursor-pointer select-none flex-1 flex items-center justify-between";
+                    label.innerText = col.headerName;
+
+                    if (!isLocked) {
+                        label.onclick = (e) => {
+                            checkbox.checked = !checkbox.checked;
+                            toggleCol(col.field, checkbox.checked);
+                        };
+                    }
+
+                    if (isLocked) {
+                        const icon = document.createElement('i');
+                        icon.setAttribute('data-lucide', 'lock');
+                        icon.className = "w-3 h-3 text-slate-400 ml-2";
+                        label.appendChild(icon);
+                    }
+
+                    div.appendChild(checkbox);
+                    div.appendChild(label);
+                    groupDiv.appendChild(div);
+                });
+                list.appendChild(groupDiv);
+            });
+            lucide.createIcons();
+        }
+
+        function toggleGroupCols(fields, visible) {
+            if(!gridApi) return;
+            
+            // Filter out locked columns (PKs)
+            const colsToToggle = fields.filter(f => {
+                const col = gridApi.getColumn(f);
+                return col && !col.getColDef().lockVisible;
+            });
+
+            // Batch update visibility for performance
+            gridApi.setColumnsVisible(colsToToggle, visible);
+
+            // Sync Checkboxes UI
+            colsToToggle.forEach(f => {
+                const safeId = `cb_col_${f.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                const cb = document.getElementById(safeId);
+                if(cb) cb.checked = visible;
+            });
+        }
+
+        // FIXED: AG Grid API expects an array for visibility toggles
+        function toggleCol(field, visible) {
+            if (gridApi) {
+                gridApi.setColumnsVisible([field], visible);
+            }
+        }
+
+        function setAllColumns(visible) {
+            const allCols = gridApi.getColumns();
+            // Don't hide locked columns (PKs)
+            const colsToChange = allCols.filter(c => !c.getColDef().lockVisible);
+            gridApi.setColumnsVisible(colsToChange, visible);
+            
+            // Sync all checkboxes
+            document.querySelectorAll('#columnToggleList input:not(:disabled)').forEach(cb => cb.checked = visible);
+        }
+
+        // --- Paste Handler ---
+        async function handleGridPaste(e) {
+            if (!gridApi) return;
+            if (e.target.closest('.ag-input-field-input, .ag-text-field-input')) return;
+
+            e.preventDefault();
+            const clipText = (e.clipboardData || window.clipboardData).getData('text');
+            if (!clipText) return;
+
+            const rows = clipText.split(/\r\n|\n|\r/).map(row => row.split('\t'));
+            if (rows.length > 0 && rows[rows.length - 1].length === 1 && rows[rows.length - 1][0] === "") rows.pop();
+            if (rows.length === 0) return;
+
+            const focusedCell = gridApi.getFocusedCell();
+            const startColIdx = focusedCell ? gridApi.getAllDisplayedColumns().indexOf(focusedCell.column) : 0;
+            const startRowIdx = focusedCell ? focusedCell.rowIndex : 0;
+            const displayedCols = gridApi.getAllDisplayedColumns();
+
+            const itemsToUpdate = [];
+            const itemsToAdd = [];
+
+            rows.forEach((rowValues, rIdx) => {
+                const currentRowIndex = startRowIdx + rIdx;
+                const rowNode = gridApi.getDisplayedRowAtIndex(currentRowIndex);
+                
+                let rowData = rowNode ? rowNode.data : { _new: true };
+                let hasChange = false;
+
+                rowValues.forEach((val, cIdx) => {
+                    const col = displayedCols[startColIdx + cIdx];
+                    if (!col) return;
+
+                    const colDef = col.getColDef();
+                    if (!colDef.editable) return; 
+
+                    const field = colDef.field;
+                    let newVal = val.trim();
+                    if (newVal === "") newVal = null;
+
+                    if (rowData[field] !== newVal) {
+                        rowData[field] = newVal;
+                        hasChange = true;
+                    }
+                });
+
+                if (hasChange) {
+                    if (rowNode) {
+                        rowData._modified = true;
+                        itemsToUpdate.push(rowData);
+                    } else {
+                        itemsToAdd.push(rowData);
+                    }
+                }
+            });
+
+            if (itemsToUpdate.length > 0) gridApi.applyTransaction({ update: itemsToUpdate });
+            if (itemsToAdd.length > 0) gridApi.applyTransaction({ add: itemsToAdd });
+            showToast(`Pasted: ${itemsToUpdate.length} updated, ${itemsToAdd.length} new rows`, "success");
+        }
+
+        // --- Save Logic ---
+        async function saveData() {
+            if(!gridApi) return;
+            gridApi.stopEditing();
+            showLoading(true);
+
+            const payloads = {};
+            Object.keys(activeSchemas).forEach(id => payloads[id] = { name: activeSchemas[id].name, updates: [], inserts: [] });
+            
+            const joinCol = document.getElementById('commonColumn').value;
+
+            gridApi.forEachNode(node => {
+                const row = node.data;
+                if(!row._modified && !row._new) return;
+
+                Object.keys(activeSchemas).forEach(tableId => {
+                    const schema = activeSchemas[tableId];
+                    const record = {};
+                    let hasData = false;
+
+                    schema.cols.forEach(c => {
+                        const field = tableId === 'PRIMARY' ? c.column_name : `${tableId}::${c.column_name}`;
+                        
+                        if(tableId !== 'PRIMARY' && c.column_name === joinCol) {
+                            if(row[joinCol]) { record[c.column_name] = row[joinCol]; hasData = true; }
+                        }
+                        else if(row.hasOwnProperty(field)) {
+                            record[c.column_name] = row[field];
+                            hasData = true;
+                        }
+                    });
+
+                    if(!hasData && !row._new) return;
+
+                    // If row is new, all active data belongs to inserts
+                    if(row._new) {
+                        // Filter out empty keys for insert, allowing DB defaults (sequences) to trigger
+                        const cleanRecord = {};
+                        Object.keys(record).forEach(k => {
+                            if (record[k] !== null && record[k] !== undefined && record[k] !== '') {
+                                cleanRecord[k] = record[k];
+                            }
+                        });
+                        // Only insert if we have actual data beyond just the join key
+                        if (Object.keys(cleanRecord).length > (tableId !== 'PRIMARY' ? 1 : 0)) {
+                            payloads[tableId].inserts.push(cleanRecord);
+                        }
+                    } else {
+                        const pkExists = schema.pks.every(pk => row[`__PK_${tableId}_${pk}`] != null);
+                        if(pkExists) payloads[tableId].updates.push(record);
+                        else payloads[tableId].inserts.push(record);
+                    }
+                });
+            });
+
+            try {
+                let updates = 0, inserts = 0;
+                for(const id in payloads) {
+                    const p = payloads[id];
+                    const [s, t] = p.name.split('.');
+                    if(p.inserts.length) {
+                        await apiFetch(`/table/${s}/${t}/batch_upload`, { method: 'POST', body: p.inserts });
+                        inserts += p.inserts.length;
+                    }
+                    if(p.updates.length) {
+                        await apiFetch(`/table/${s}/${t}/batch_update`, { method: 'POST', body: p.updates });
+                        updates += p.updates.length;
+                    }
+                }
+                showToast(`Saved: ${inserts} added, ${updates} updated`, "success");
+                loadData(); // Reload to get generated IDs
+            } catch(e) {
+                showToast(e.message, "error");
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // --- Export Logic ---
+        function exportData(format = 'xlsx') {
+            if (!gridApi) return showToast("No data to export", "info");
+            
+            const rowData = [];
+            const colDefs = gridApi.getColumnDefs();
+            const colsToExport = [];
+            
+            // Flatten column structure
+            colDefs.forEach(group => {
+                if (group.children) {
+                    group.children.forEach(col => {
+                        if (gridApi.getColumn(col.field).isVisible()) {
+                            colsToExport.push({ field: col.field, header: col.headerName });
+                        }
+                    });
+                }
+            });
+
+            gridApi.forEachNodeAfterFilterAndSort(node => {
+                const row = {};
+                colsToExport.forEach(col => {
+                    row[col.header] = node.data[col.field];
+                });
+                rowData.push(row);
+            });
+
+            if (rowData.length === 0) return showToast("No rows to export", "info");
+
+            const ws = XLSX.utils.json_to_sheet(rowData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Data");
+
+            const fileName = `lims_export_${new Date().toISOString().slice(0,10)}.${format}`;
+            
+            if (format === 'csv') XLSX.writeFile(wb, fileName, { bookType: 'csv' });
+            else XLSX.writeFile(wb, fileName);
+            
+            showToast(`Exported ${rowData.length} rows`, "success");
+        }
+
+        // --- Generic Helpers ---
+        async function apiFetch(url, opts={}) {
+            const token = sessionStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers };
+            if(opts.body) opts.body = JSON.stringify(opts.body);
+            const res = await fetch(API + url, { ...opts, headers });
+            if(!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || "API Error");
+            }
+            return res.json();
+        }
+
+        function showLoading(show) { document.getElementById('loadingOverlay').classList.toggle('active', show); }
+        function showToast(msg, type='success') {
+            const c = document.getElementById('toastContainer');
+            const d = document.createElement('div');
+            d.className = `px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium flex items-center gap-2 transform transition-all duration-300 translate-y-0 ${type==='error'?'bg-red-500':'bg-emerald-600'}`;
+            d.innerHTML = `<i data-lucide="${type==='error'?'alert-circle':'check-circle-2'}" class="w-4 h-4"></i> ${msg}`;
+            c.appendChild(d);
+            lucide.createIcons();
+            setTimeout(() => { d.classList.add('opacity-0', 'translate-y-2'); setTimeout(() => d.remove(), 300); }, 3000);
+        }
+    </script>
+</body>
+</html>
