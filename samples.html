@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Samples Registry - TIFI LIMS</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- AG Grid -->
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-grid.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-theme-alpine.css" />
+    <!-- Barcode Lib (JsBarcode) -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <!-- QR Code Lib -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        
+        /* Sidebar */
+        .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.5rem; }
+        .sidebar-nav-container::-webkit-scrollbar { width: 6px; }
+        .sidebar-nav-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .sidebar-item { transition: all 0.2s ease; color: #475569; }
+        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
+        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+
+        /* Grid */
+        .ag-theme-alpine {
+            --ag-header-background-color: #f8fafc;
+            --ag-header-foreground-color: #475569;
+            --ag-border-color: #e2e8f0;
+            --ag-row-hover-color: #f1f5f9;
+            --ag-selected-row-background-color: #e0e7ff;
+            --ag-font-family: 'Inter', sans-serif;
+            --ag-font-size: 13px;
+        }
+        .sample-root { border-left: 4px solid #4f46e5 !important; }
+        .sample-child { border-left: 4px solid #10b981 !important; }
+
+        /* Lineage Tree */
+        .lineage-node { position: relative; padding-left: 20px; border-left: 2px solid #e2e8f0; margin-left: 10px; }
+        .lineage-node::before { content: ''; position: absolute; top: 15px; left: 0; width: 15px; height: 2px; background: #e2e8f0; }
+        .node-card { display: inline-flex; align-items: center; padding: 8px 12px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .node-card:hover { border-color: #4f46e5; }
+
+        /* Loading & Modals */
+        .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.8); backdrop-filter: blur(2px); display: flex; justify-content: center; align-items: center; z-index: 50; }
+        .modal { opacity: 0; visibility: hidden; transition: all 0.2s ease-in-out; }
+        .modal.open { opacity: 1; visibility: visible; }
+        .modal-content { transform: scale(0.95); transition: transform 0.2s ease-in-out; }
+        .modal.open .modal-content { transform: scale(1); }
+        .hidden { display: none !important; }
+        
+        /* Slide Over */
+        .slide-over { transition: transform 0.3s ease-in-out; }
+        .slide-over.closed { transform: translateX(100%); }
+        .slide-over.open { transform: translateX(0); }
+
+        /* Print Styles for Labels */
+        @media print {
+            @page { size: A4; margin: 10mm; } /* Standard A4 Label Sheet margins */
+            
+            body * { visibility: hidden; }
+            #labelModal, #labelModal .modal-content, #labelPreviewContainer, #labelPreviewContainer * { visibility: visible; }
+            
+            /* Hide modal UI elements during print */
+            #labelModal { position: absolute; top: 0; left: 0; width: 100%; height: auto; background: white; z-index: 9999; }
+            .modal-content { box-shadow: none !important; padding: 0 !important; width: 100% !important; max-width: none !important; transform: none !important; }
+            .no-print { display: none !important; }
+
+            /* A4 Grid Layout for Labels */
+            #labelPreviewContainer.print-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(48mm, 1fr)); /* Fits ~4 cols on A4 width */
+                gap: 4mm;
+                width: 100%;
+                background: none;
+                border: none;
+            }
+            
+            #labelPreviewContainer.print-list {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .label-card {
+                break-inside: avoid;
+                page-break-inside: avoid;
+                border: 1px solid #ccc; /* Cutting guideline */
+                box-shadow: none;
+                padding: 2mm;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                background: white;
+                height: auto;
+                min-height: 25mm; /* Minimum height for sticker */
+            }
+            
+            /* Optimize QR/Barcodes for print */
+            .label-card svg, .label-card img { max-width: 100%; height: auto; }
+            .label-card p { margin: 1px 0; font-size: 8pt; }
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-slate-800">
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="flex flex-col items-center gap-3">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <p class="text-slate-600 font-medium text-sm">Loading Registry...</p>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2"></div>
+
+    <!-- Sidebar -->
+    <div class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-sm flex-shrink-0">
+        <div class="p-4 border-b border-slate-200 font-bold text-slate-800 flex items-center gap-2 shrink-0">
+            <i data-lucide="flask-conical" class="w-6 h-6 text-indigo-600"></i> 
+            <span class="text-xl">TIFI LIMS</span>
+        </div>
+        
+        <div class="sidebar-nav-container p-2 space-y-1">
+            <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
+            <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
+            <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
+            <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (ELN)</span></a>
+            <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
+            <a href="planned_samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Planned Samples</span></a>
+            <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md active bg-indigo-50 text-indigo-700"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
+            <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
+            <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
+            <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
+            <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
+            <a href="booking.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Booking</span></a>
+            <a href="tables.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="table-2" class="w-5 h-5 mr-3"></i><span>Data Editor</span></a>
+        </div>
+
+        <div class="mt-auto shrink-0 p-4 border-t border-slate-200">
+             <div class="flex items-center mb-3">
+                <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs mr-3">U</div>
+                <div class="overflow-hidden">
+                    <p class="font-semibold text-xs text-gray-800 truncate" id="userNameDisplay">User</p>
+                    <p class="text-xs text-slate-500">Logged In</p>
+                </div>
+            </div>
+            <button id="logout-button" class="w-full flex items-center p-2 rounded-md text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
+                <i data-lucide="log-out" class="w-4 h-4 mr-2"></i><span>Logout</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col h-full bg-slate-50 overflow-hidden">
+        
+        <!-- Header -->
+        <div class="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center z-10 shrink-0 shadow-sm">
+            <div>
+                <h1 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                    <i data-lucide="vial" class="w-6 h-6 text-indigo-600"></i> Bio Assets Registry
+                </h1>
+                <p class="text-xs text-slate-500 mt-1">Master registry for biological samples, tracking, and genealogy.</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="relative">
+                    <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
+                    <input type="text" id="quickFilter" oninput="gridApi.setQuickFilter(this.value)" placeholder="Search ID, Type, Project..." class="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm w-64 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition">
+                </div>
+                <button onclick="toggleFilterSidebar()" class="px-3 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 shadow-sm transition">
+                    <i data-lucide="filter" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="px-6 py-3 bg-white border-b border-slate-200 flex justify-between items-center">
+            <div class="flex gap-2">
+                <button onclick="openModal('newSampleModal')" class="flex items-center px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 shadow-sm transition">
+                    <i data-lucide="plus" class="w-4 h-4 mr-1.5"></i> Register Sample
+                </button>
+                <div class="h-8 w-px bg-slate-200 mx-2"></div>
+                <button onclick="showLineage()" class="flex items-center px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition">
+                    <i data-lucide="git-branch" class="w-4 h-4 mr-1.5 text-purple-600"></i> Lineage
+                </button>
+                <button onclick="printLabels()" class="flex items-center px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition">
+                    <i data-lucide="qr-code" class="w-4 h-4 mr-1.5 text-slate-600"></i> Print Labels
+                </button>
+            </div>
+            <div class="text-xs text-slate-500 font-medium">
+                <span id="rowCount">0</span> records found
+            </div>
+        </div>
+
+        <!-- Grid Area -->
+        <div class="flex-1 p-0 overflow-hidden relative">
+            <div id="myGrid" class="ag-theme-alpine h-full w-full border-none"></div>
+        </div>
+
+    </div>
+
+    <!-- Filter Sidebar -->
+    <div id="filterSidebar" class="absolute top-0 right-0 h-full w-80 bg-white shadow-2xl border-l border-slate-200 z-40 transform translate-x-full slide-over flex flex-col transition-transform duration-300">
+        <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+            <h3 class="font-bold text-slate-800 flex items-center gap-2"><i data-lucide="filter" class="w-4 h-4 text-indigo-600"></i> Filters</h3>
+            <button onclick="toggleFilterSidebar()" class="text-slate-400 hover:text-slate-600 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <div class="p-4 space-y-4 flex-1 overflow-y-auto">
+            <div>
+                <label class="block text-xs font-bold text-slate-500 mb-1 uppercase">Sample Type</label>
+                <select id="filterType" class="w-full p-2 border border-slate-300 rounded text-sm bg-white" onchange="applyFilters()"></select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-500 mb-1 uppercase">Project</label>
+                <select id="filterProject" class="w-full p-2 border border-slate-300 rounded text-sm bg-white" onchange="applyFilters()"></select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-500 mb-1 uppercase">Date Range</label>
+                <input type="date" id="filterDateStart" class="w-full p-2 border border-slate-300 rounded text-sm mb-2" onchange="applyFilters()">
+                <input type="date" id="filterDateEnd" class="w-full p-2 border border-slate-300 rounded text-sm" onchange="applyFilters()">
+            </div>
+        </div>
+        <div class="p-4 border-t border-slate-200 bg-slate-50">
+            <button onclick="resetFilters()" class="w-full py-2 bg-white border border-slate-300 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-50">Reset Filters</button>
+        </div>
+    </div>
+
+    <!-- === MODALS === -->
+
+    <!-- Lineage Modal -->
+    <div id="lineageModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-4xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 class="font-bold text-slate-800 flex items-center gap-2"><i data-lucide="git-branch" class="w-5 h-5 text-purple-600"></i> Sample Lineage</h3>
+                <button onclick="closeModal('lineageModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+                <div id="lineageTree" class="pl-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Multi-Label Print Modal -->
+    <div id="labelModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-5xl rounded-xl shadow-2xl p-6 flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center mb-4 border-b border-slate-100 pb-3 no-print">
+                <h3 class="font-bold text-lg text-slate-800">Print Labels</h3>
+                <button onclick="closeModal('labelModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            
+            <!-- Controls (No Print) -->
+            <div class="no-print space-y-4 mb-4">
+                <div class="flex flex-wrap gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200 text-sm">
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-600 text-xs uppercase">Content</label>
+                        <div class="flex gap-4">
+                            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="lblOptProject" checked class="rounded text-indigo-600" onchange="renderLabels()"> Project</label>
+                            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="lblOptType" checked class="rounded text-indigo-600" onchange="renderLabels()"> Type</label>
+                            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="lblOptDate" checked class="rounded text-indigo-600" onchange="renderLabels()"> Date</label>
+                            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="lblOptStorage" class="rounded text-indigo-600" onchange="renderLabels()"> Storage</label>
+                        </div>
+                    </div>
+                    <div class="w-px bg-slate-300 mx-2"></div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-600 text-xs uppercase">Format</label>
+                        <div class="flex gap-4">
+                            <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="lblCode" value="barcode" checked class="text-indigo-600" onchange="renderLabels()"> Barcode 128</label>
+                            <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="lblCode" value="qr" class="text-indigo-600" onchange="renderLabels()"> QR Code</label>
+                        </div>
+                    </div>
+                    <div class="w-px bg-slate-300 mx-2"></div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-bold text-slate-600 text-xs uppercase">Layout</label>
+                        <div class="flex gap-4">
+                            <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="lblLayout" value="list" checked class="text-indigo-600" onchange="renderLabels()"> Standard List</label>
+                            <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="lblLayout" value="grid" class="text-indigo-600" onchange="renderLabels()"> A4 Label Sheet (Grid)</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preview Area -->
+            <div id="labelPreviewContainer" class="flex-1 overflow-y-auto p-4 bg-slate-100 border border-slate-200 rounded-lg">
+                <!-- Labels injected here -->
+            </div>
+
+            <div class="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-100 no-print">
+                <button onclick="closeModal('labelModal')" class="px-4 py-2 text-slate-600 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
+                <button onclick="window.print()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 flex items-center gap-2">
+                    <i data-lucide="printer" class="w-4 h-4"></i> Print
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Sample Modal -->
+    <div id="newSampleModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-md rounded-xl shadow-2xl p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-lg text-slate-800">Register New Sample</h3>
+                <button onclick="closeModal('newSampleModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="newSampleForm" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">Project</label>
+                    <select name="project_id" id="newSampleProject" class="w-full p-2 border border-slate-300 rounded text-sm bg-white" required></select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">Sample Type</label>
+                    <select name="sample_type_id" id="newSampleType" class="w-full p-2 border border-slate-300 rounded text-sm bg-white" required></select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">Collection Date</label>
+                    <input type="date" name="collection_date" class="w-full p-2 border border-slate-300 rounded text-sm" required>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">External ID</label>
+                    <input type="text" name="external_id" class="w-full p-2 border border-slate-300 rounded text-sm" placeholder="Optional external ref">
+                </div>
+                <div class="pt-2 flex justify-end gap-2">
+                    <button type="button" onclick="closeModal('newSampleModal')" class="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-sm text-white bg-emerald-600 rounded-lg hover:bg-emerald-700">Register</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // --- Config ---
+        const getApiBase = () => window.location.pathname.includes('/mylims') ? '/mylims/api' : '/api';
+        const API = getApiBase();
+        
+        let gridApi;
+        let rowData = [];
+        let selectedForLabel = [];
+
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            const token = sessionStorage.getItem('token');
+            if (!token) window.location.href = 'login.html';
+
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if(user) document.getElementById('userNameDisplay').innerText = user.person_id;
+
+            document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href='login.html'; });
+
+            await initGrid();
+            loadFilters();
+            loadDropdowns();
+        });
+
+        // --- Grid ---
+        async function initGrid() {
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+            
+            try {
+                // Fetch Schema for Columns
+                const meta = await apiFetch('/table/bio_assets/samples_root/schema');
+                const data = await apiFetch('/table/bio_assets/samples_root?limit=2000');
+                rowData = data;
+
+                const colDefs = meta.map(col => {
+                    const isPK = col.is_primary_key;
+                    return {
+                        field: col.column_name,
+                        headerName: formatHeader(col.column_name),
+                        sortable: true,
+                        filter: true,
+                        resizable: true,
+                        pinned: isPK ? 'left' : null,
+                        lockPosition: isPK,
+                        cellClass: isPK ? 'font-mono font-bold bg-slate-50 text-indigo-700' : '',
+                        width: isPK ? 160 : 120,
+                        checkboxSelection: isPK,
+                        headerCheckboxSelection: isPK
+                    };
+                });
+
+                const gridOptions = {
+                    columnDefs: colDefs,
+                    rowData: data,
+                    defaultColDef: { resizable: true },
+                    rowSelection: 'multiple',
+                    pagination: true,
+                    paginationPageSize: 50,
+                    animateRows: true,
+                    onGridReady: p => {
+                        gridApi = p.api;
+                        gridApi.sizeColumnsToFit();
+                        document.getElementById('rowCount').innerText = data.length;
+                    }
+                };
+
+                const eGridDiv = document.querySelector('#myGrid');
+                eGridDiv.innerHTML = '';
+                agGrid.createGrid(eGridDiv, gridOptions);
+
+            } catch(e) {
+                console.error(e);
+                showToast("Failed to load samples", "error");
+            } finally {
+                document.getElementById('loadingOverlay').classList.add('hidden');
+            }
+        }
+
+        // --- Lineage Logic ---
+        async function showLineage() {
+            if(!gridApi) return;
+            const selected = gridApi.getSelectedRows();
+            if(selected.length !== 1) return showToast("Select exactly one sample to view lineage", "info");
+            
+            const sampleId = selected[0].sample_id;
+            openModal('lineageModal');
+            document.getElementById('lineageTree').innerHTML = '<div class="text-sm text-slate-400">Loading hierarchy...</div>';
+
+            try {
+                // Use the database view designed for downstream lineage
+                // The generic CRUD API can query views if they are readable
+                const lineage = await apiFetch(`/table/bio_assets/view_downstream_lineage?ancestor_sample_id=${sampleId}`);
+                
+                if(!lineage || lineage.length === 0) {
+                    document.getElementById('lineageTree').innerHTML = '<div class="text-sm text-slate-500">No downstream samples found (Is this a root?).</div>';
+                    return;
+                }
+
+                // Render Tree
+                // Sort by depth
+                lineage.sort((a,b) => a.depth - b.depth);
+                
+                let html = '';
+                lineage.forEach(node => {
+                    const indent = node.depth * 20;
+                    const typeColor = node.descendant_type === 'DNA' ? 'bg-purple-100 text-purple-700' : (node.descendant_type === 'TISSUE' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700');
+                    
+                    html += `
+                        <div class="lineage-node" style="margin-left: ${indent}px">
+                            <div class="node-card">
+                                <span class="font-mono font-bold text-sm text-slate-700 mr-2">${node.descendant_sample_id}</span>
+                                <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded ${typeColor}">${node.descendant_type || 'Unknown'}</span>
+                                ${node.is_dissected ? '<span class="ml-2 text-[10px] bg-yellow-100 text-yellow-700 px-1 rounded">Dissected</span>' : ''}
+                                ${node.extraction_method ? `<span class="ml-2 text-[10px] text-slate-400">(${node.extraction_method})</span>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+                document.getElementById('lineageTree').innerHTML = html;
+
+            } catch(e) {
+                document.getElementById('lineageTree').innerHTML = '<div class="text-sm text-red-500">Error loading lineage.</div>';
+            }
+        }
+
+        // --- Label Printing Logic ---
+        function printLabels() {
+            if(!gridApi) return;
+            selectedForLabel = gridApi.getSelectedRows();
+            
+            if(selectedForLabel.length === 0) return showToast("Select at least one sample to print", "info");
+            
+            openModal('labelModal');
+            renderLabels(); // Render based on current selection
+        }
+
+        function renderLabels() {
+            const container = document.getElementById('labelPreviewContainer');
+            container.innerHTML = '';
+            
+            // Get user options
+            const showProject = document.getElementById('lblOptProject').checked;
+            const showType = document.getElementById('lblOptType').checked;
+            const showDate = document.getElementById('lblOptDate').checked;
+            const showStorage = document.getElementById('lblOptStorage').checked;
+            
+            const layout = document.querySelector('input[name="lblLayout"]:checked').value;
+            const codeType = document.querySelector('input[name="lblCode"]:checked').value;
+
+            // Update container class for print styling
+            container.className = layout === 'grid' 
+                ? 'print-grid p-4 bg-slate-100 border border-slate-200 rounded-lg' 
+                : 'print-list p-4 bg-slate-100 border border-slate-200 rounded-lg grid grid-cols-2 md:grid-cols-3 gap-4';
+
+            selectedForLabel.forEach((sample, idx) => {
+                const div = document.createElement('div');
+                div.className = "label-card bg-white p-4 rounded shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center";
+                
+                let infoText = [];
+                if(showProject && sample.project_id) infoText.push(sample.project_id);
+                if(showType && sample.sample_type_id) infoText.push(sample.sample_type_id);
+                if(showDate && sample.collection_date) infoText.push(sample.collection_date);
+                
+                const qrId = `qrcode-${idx}`;
+                const barId = `barcode-${idx}`;
+
+                div.innerHTML = `
+                    <div id="${qrId}"></div>
+                    <svg id="${barId}"></svg>
+                    <p class="font-mono text-sm font-bold mt-1">${sample.sample_id}</p>
+                    ${infoText.length ? `<p class="text-xs text-slate-500 mt-1">${infoText.join(' | ')}</p>` : ''}
+                    ${showStorage && sample.storage_position ? `<p class="text-xs font-mono bg-slate-100 px-2 py-0.5 rounded mt-1">${sample.storage_position}</p>` : ''}
+                `;
+                
+                container.appendChild(div);
+                
+                if (codeType === 'qr') {
+                    document.getElementById(barId).style.display = 'none';
+                    new QRCode(document.getElementById(qrId), {
+                        text: sample.sample_id,
+                        width: 80,
+                        height: 80,
+                        colorDark : "#000000",
+                        colorLight : "#ffffff",
+                        correctLevel : QRCode.CorrectLevel.H
+                    });
+                } else {
+                    document.getElementById(qrId).style.display = 'none';
+                    JsBarcode(`#${barId}`, sample.sample_id, {
+                        format: "CODE128",
+                        lineColor: "#000",
+                        width: 2,
+                        height: 40,
+                        displayValue: false
+                    });
+                }
+            });
+        }
+
+        // --- Filters & Helpers ---
+        async function loadFilters() {
+            try {
+                // Distinct Projects
+                const prjs = await apiFetch('/table/lims/projects?limit=500');
+                const pSel = document.getElementById('filterProject');
+                pSel.innerHTML = '<option value="">All Projects</option>';
+                prjs.forEach(p => pSel.add(new Option(p.acronym, p.project_id)));
+
+                // Distinct Types
+                const types = await apiFetch('/table/reference/sample_type');
+                const tSel = document.getElementById('filterType');
+                tSel.innerHTML = '<option value="">All Types</option>';
+                types.forEach(t => tSel.add(new Option(t.sample_type_id, t.sample_type_id)));
+            } catch(e) {}
+        }
+
+        function applyFilters() {
+            if(!gridApi) return;
+            const proj = document.getElementById('filterProject').value;
+            const type = document.getElementById('filterType').value;
+            const start = document.getElementById('filterDateStart').value;
+            
+            const filterModel = {};
+            if(proj) filterModel.project_id = { type: 'equals', filter: proj };
+            if(type) filterModel.sample_type_id = { type: 'equals', filter: type };
+            // Simple date filter logic (exact match or handled by server ideally)
+            if(start) filterModel.collection_date = { type: 'greaterThan', dateFrom: start };
+
+            gridApi.setFilterModel(filterModel);
+        }
+
+        function resetFilters() {
+            document.getElementById('filterProject').value = "";
+            document.getElementById('filterType').value = "";
+            document.getElementById('filterDateStart').value = "";
+            gridApi.setFilterModel(null);
+        }
+
+        function toggleFilterSidebar() {
+            const el = document.getElementById('filterSidebar');
+            if(el.classList.contains('translate-x-full')) el.classList.remove('translate-x-full');
+            else el.classList.add('translate-x-full');
+        }
+
+        async function loadDropdowns() {
+            try {
+                // Load Projects
+                const prjs = await apiFetch('/table/lims/projects?limit=500');
+                const pSel = document.getElementById('newSampleProject');
+                pSel.innerHTML = '<option value="" disabled selected>Select Project...</option>';
+                prjs.forEach(p => pSel.add(new Option(p.acronym, p.project_id)));
+
+                // Load Sample Types
+                const types = await apiFetch('/table/reference/sample_type');
+                const tSel = document.getElementById('newSampleType');
+                tSel.innerHTML = '<option value="" disabled selected>Select Type...</option>';
+                types.forEach(t => tSel.add(new Option(t.sample_type_id, t.sample_type_id)));
+            } catch(e) {}
+        }
+
+        // --- New Sample Creation ---
+        document.getElementById('newSampleForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            
+            // Note: sample_id is generated by DB trigger (trg_hierarchical_sample_id)
+            // We just need to provide required fields
+            
+            try {
+                await apiFetch('/table/bio_assets/samples_root/batch_upload', {
+                    method: 'POST',
+                    body: [data]
+                });
+                showToast("Sample registered successfully");
+                closeModal('newSampleModal');
+                e.target.reset();
+                initGrid(); // Refresh grid
+            } catch(err) {
+                showToast("Error registering sample: " + err.message, "error");
+            }
+        });
+
+        // --- Generic Helpers ---
+        async function apiFetch(url, opts={}) {
+            const token = sessionStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers };
+            if(opts.body && typeof opts.body === 'object') {
+                headers['Content-Type'] = 'application/json';
+                opts.body = JSON.stringify(opts.body);
+            }
+            try {
+                const res = await fetch(API + url, { ...opts, headers });
+                if(!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || "API Error");
+                }
+                return res.json();
+            } catch(e) { throw e; }
+        }
+
+        function formatHeader(name) {
+            return name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        function openModal(id) { document.getElementById(id).classList.remove('hidden'); setTimeout(() => document.getElementById(id).classList.add('open'), 10); }
+        function closeModal(id) { document.getElementById(id).classList.remove('open'); setTimeout(() => document.getElementById(id).classList.add('hidden'), 200); }
+
+        function showToast(msg, type='success') {
+            const c = document.getElementById('toastContainer');
+            const d = document.createElement('div');
+            d.className = `px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium flex items-center gap-2 transform transition-all duration-300 translate-y-0 ${type==='error'?'bg-red-500':'bg-emerald-600'}`;
+            d.innerHTML = `<i data-lucide="${type==='error'?'alert-circle':'check-circle-2'}" class="w-4 h-4"></i> ${msg}`;
+            c.appendChild(d); lucide.createIcons();
+            setTimeout(() => { d.classList.add('opacity-0', 'translate-y-2'); setTimeout(() => d.remove(), 300); }, 3000);
+        }
+    </script>
+</body>
+</html>

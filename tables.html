@@ -412,7 +412,6 @@
             };
 
             // Enhanced Data Types
-            // FIXED: Use custom DateEditor for reliable YYYY-MM-DD entry
             if (colMeta.data_type.includes('date') || colMeta.data_type.includes('time')) {
                 def.cellEditor = DateEditor;
                 def.valueFormatter = (params) => {
@@ -651,7 +650,7 @@
                     label.innerText = col.headerName;
 
                     if (!isLocked) {
-                        label.onclick = () => {
+                        label.onclick = (e) => {
                             checkbox.checked = !checkbox.checked;
                             toggleCol(col.field, checkbox.checked);
                         };
@@ -693,9 +692,10 @@
             });
         }
 
+        // FIXED: AG Grid API expects an array for visibility toggles
         function toggleCol(field, visible) {
             if (gridApi) {
-                gridApi.setColumnVisible(field, visible);
+                gridApi.setColumnsVisible([field], visible);
             }
         }
 
