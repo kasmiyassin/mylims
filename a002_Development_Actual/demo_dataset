@@ -1,0 +1,363 @@
+-- -------------------------------------------------
+-- DEMO DATASET FOR MYLIMS V5.1
+-- Generated for PostgreSQL 17
+-- -------------------------------------------------
+
+BEGIN;
+
+-- ==========================================================
+-- 0. PREPARATION: DISABLE TRIGGERS
+-- We disable ID generation triggers temporarily to insert 
+-- specific hardcoded IDs for foreign key linking.
+-- ==========================================================
+-- FIX SCHEMA MISMATCH: catch_id was SERIAL (int) but triggers/data use TEXT
+ALTER TABLE "field"."catch" ALTER COLUMN "catch_id" TYPE text;
+ALTER TABLE "field"."catch" ALTER COLUMN "catch_id" DROP DEFAULT;
+
+-- FIX SCHEMA MISMATCH: assignment_id was BIGSERIAL (int) but trigger generates TEXT
+ALTER TABLE "bioinformatics"."assignments" ALTER COLUMN "assignment_id" TYPE text;
+ALTER TABLE "bioinformatics"."assignments" ALTER COLUMN "assignment_id" DROP DEFAULT;
+
+ALTER TABLE bio_assets.samples_root DISABLE TRIGGER trg_hierarchical_sample_id;
+ALTER TABLE field.sampling_event DISABLE TRIGGER trg_field_sampling_id;
+ALTER TABLE field.catch DISABLE TRIGGER trg_catch_id;
+-- FIX ERROR: Disable seq_dataset ID trigger as it incorrectly references project_id
+ALTER TABLE bioinformatics.seq_dataset DISABLE TRIGGER trg_gen_ds_id;
+
+-- ==========================================================
+-- 1. REFERENCE DATA
+-- ==========================================================
+DO $$ BEGIN RAISE NOTICE 'Inserting Reference Data...'; END $$;
+
+-- Status
+INSERT INTO "reference"."status" ("status_id", "notes") VALUES
+('Planned', 'Scheduled but not started'),
+('Active', 'Currently in progress'),
+('Completed', 'Finished successfully'),
+('Pending QC', 'Waiting for quality check'),
+('Archived', 'Stored long term'),
+('Discarded', 'Thrown away');
+
+-- Units
+INSERT INTO "reference"."units" ("unit_id", "unit_name", "unit_abbreviation", "unit_type") VALUES
+('u_mm', 'Millimeter', 'mm', 'Length'),
+('u_cm', 'Centimeter', 'cm', 'Length'),
+('u_m', 'Meter', 'm', 'Length'),
+('u_g', 'Gram', 'g', 'Weight'),
+('u_kg', 'Kilogram', 'kg', 'Weight'),
+('u_mg', 'Milligram', 'mg', 'Weight'),
+('u_ml', 'Milliliter', 'ml', 'Volume'),
+('u_ul', 'Microliter', 'ul', 'Volume'),
+('u_c', 'Celsius', 'C', 'Temperature'),
+('u_ng_ul', 'Nanogram per Microliter', 'ng/ul', 'Concentration'),
+('u_ppt', 'Parts per Thousand', 'ppt', 'Salinity'),
+('u_min', 'Minutes', 'min', 'Time');
+
+-- Categories
+INSERT INTO "reference"."category" ("category_id", "notes") VALUES
+('Research', 'Scientific research projects'),
+('Commercial', 'Commercial sampling'),
+('Education', 'Teaching and training');
+
+-- Sample Types
+INSERT INTO "reference"."sample_type" ("sample_type_id", "abbreviation", "rank", "sample_path", "notes") VALUES
+('Whole Organism', 'S', '1', 'Root', 'Entire specimen'),
+('Tissue', 't', '2', 'Root.Tissue', 'Muscle, fin clip, etc.'),
+('DNA', 'd', '3', 'Root.Tissue.DNA', 'Extracted DNA'),
+('RNA', 'r', '3', 'Root.Tissue.RNA', 'Extracted RNA'),
+('Water', 'W', '1', 'Root', 'Environmental water sample'),
+('Sediment', 'Sed', '1', 'Root', 'Benthic sample');
+
+-- Taxon (Hierarchical - Salmon)
+-- Path: Animalia.Chordata.Actinopterygii.Salmoniformes.Salmonidae.Salmo.salar
+INSERT INTO "reference"."taxon" ("taxon_id", "scientific_name", "common_name_en", "rank", "taxon_path", "organism_type") VALUES
+('Animalia', 'Animalia', 'Animals', 'Kingdom', 'Animalia', 'Animal'),
+('Chordata', 'Chordata', 'Chordates', 'Phylum', 'Animalia.Chordata', 'Animal'),
+('Actinopterygii', 'Actinopterygii', 'Ray-finned fishes', 'Class', 'Animalia.Chordata.Actinopterygii', 'Fish'),
+('Salmoniformes', 'Salmoniformes', 'Salmons', 'Order', 'Animalia.Chordata.Actinopterygii.Salmoniformes', 'Fish'),
+('Salmonidae', 'Salmonidae', 'Salmonids', 'Family', 'Animalia.Chordata.Actinopterygii.Salmoniformes.Salmonidae', 'Fish'),
+('Salmo', 'Salmo', 'Atlantic salmons', 'Genus', 'Animalia.Chordata.Actinopterygii.Salmoniformes.Salmonidae.Salmo', 'Fish'),
+('Salmo_salar', 'Salmo salar', 'Atlantic Salmon', 'Species', 'Animalia.Chordata.Actinopterygii.Salmoniformes.Salmonidae.Salmo.Salmo_salar', 'Fish');
+
+-- Ecosystems
+INSERT INTO "reference"."ecosystem" ("ecosystem_id", "ecosystem_abrv", "rank", "ecosystem_path") VALUES
+('Marine', 'Mar', '1', 'Marine'),
+('Estuary', 'Est', '2', 'Marine.Estuary'),
+('Freshwater', 'Riv', '1', 'Freshwater');
+
+-- Regions
+INSERT INTO "reference"."region" ("region_id", "region_abrv", "rank", "region_path") VALUES
+('North Sea', 'NS', '1', 'NS'),
+('Weser', 'Wes', '2', 'NS.Wes'),
+('Elbe', 'Elb', '2', 'NS.Elb');
+
+-- Genes
+INSERT INTO "reference"."genes" ("gene_id", "gene_name", "description") VALUES
+('16S', '16S rRNA', 'Mitochondrial 16S ribosomal RNA'),
+('COI', 'Cytochrome c oxidase I', 'Mitochondrial barcode gene'),
+('CytB', 'Cytochrome b', 'Mitochondrial gene');
+
+-- ==========================================================
+-- 2. CORE DATA (Organizations, People, Locations)
+-- ==========================================================
+DO $$ BEGIN RAISE NOTICE 'Inserting Core Data...'; END $$;
+
+-- Organizations
+INSERT INTO "core"."organizations" ("organization_id", "name", "type", "country") VALUES
+('AWI', 'Alfred Wegener Institute', 'Internal', 'Germany'),
+('TI', 'Thünen Institute', 'Partner', 'Germany'),
+('Illumina', 'Illumina Inc.', 'Supplier', 'USA'),
+('Thermo', 'Thermo Fisher Scientific', 'Supplier', 'USA');
+
+-- Persons (Including Yassine)
+INSERT INTO "core"."persons" ("person_id", "first_name", "last_name", "email", "organization_id", "role_in_org", "status_id") VALUES
+('Yassine', 'Yassine', 'Admin', 'yassine@lab.org', 'AWI', 'Lab Manager', 'Active'),
+('Alice', 'Alice', 'Researcher', 'alice@lab.org', 'AWI', 'PostDoc', 'Active'),
+('Bob', 'Bob', 'Technician', 'bob@lab.org', 'AWI', 'Technician', 'Active'),
+('Captain_Ahab', 'Ahab', 'Seaman', 'ahab@sea.com', 'TI', 'Captain', 'Active');
+
+-- Locations
+INSERT INTO "core"."locations" ("build_id", "name", "organization_id", "city", "rank", "location_path") VALUES
+('Bldg_A', 'Building A', 'AWI', 'Bremerhaven', 'Building', 'Bldg_A'),
+('Lab_101', 'Wet Lab 101', 'AWI', 'Bremerhaven', 'Room', 'Bldg_A.Lab_101'),
+('Lab_202', 'Genetics Lab', 'AWI', 'Bremerhaven', 'Room', 'Bldg_A.Lab_202');
+
+-- Vessels
+INSERT INTO "core"."vessel" ("vessel_id", "vessel_name", "captain", "belong_to") VALUES
+('V_Uthoern', 'Uthörn', 'Captain_Ahab', 'AWI');
+
+-- Equipments
+INSERT INTO "core"."equipments" ("equipment_id", "name", "model", "manufacturer_id", "room_id", "status_id") VALUES
+('PCR_01', 'Thermocycler X1', 'ProFlex', 'Thermo', 'Lab_202', 'Active'),
+('Seq_01', 'MiSeq', 'MiSeq System', 'Illumina', 'Lab_202', 'Active'),
+('Nano_01', 'NanoDrop 2000', 'ND-2000', 'Thermo', 'Lab_202', 'Active');
+
+-- ==========================================================
+-- 3. LIMS DATA (Projects, Storage, Reagents)
+-- ==========================================================
+DO $$ BEGIN RAISE NOTICE 'Inserting LIMS Data...'; END $$;
+
+-- Projects
+INSERT INTO "lims"."projects" ("project_id", "title", "acronym", "pi_person_id", "status_id", "start_date") VALUES
+('PRJ_001', 'Aquaculture Quality Project', 'AQP', 'Yassine', 'Active', '2025-01-01'),
+('PRJ_002', 'North Sea Biodiversity', 'DIV', 'Alice', 'Active', '2025-02-01');
+
+-- Project Personal
+INSERT INTO "lims"."project_personal" ("project_id", "person_id", "role", "start_date") VALUES
+('PRJ_001', 'Yassine', 'PI', '2025-01-01'),
+('PRJ_001', 'Bob', 'Technician', '2025-01-01');
+
+-- Storage
+INSERT INTO "lims"."storage" ("storage_id", "room_id", "type", "name", "temperature_c", "project_id", "status_id") VALUES
+('Freezer_01', 'Lab_202', 'Freezer', 'Main -80C', -80, 'PRJ_001', 'Active'),
+('Shelf_A', 'Lab_202', 'Shelf', 'DNA Shelf', 20, 'PRJ_001', 'Active');
+
+-- SOPs
+INSERT INTO "lims"."sop" ("sop_id", "title", "sop_nr_lab", "version", "author_id") VALUES
+('SOP_DNA_01', 'DNA Extraction Protocol', 'L-001', 'v1.0', 'Yassine');
+
+-- Experiments
+INSERT INTO "lims"."experiments" ("experiment_id", "title", "sop_id", "person_id", "status_id", "aim") VALUES
+('Exp_25_01', 'Spring 2025 Barcoding', 'SOP_DNA_01', 'Bob', 'Active', 'Barcode salmon samples');
+
+-- ==========================================================
+-- 4. FIELD DATA (Cruises, Sampling, Catch)
+-- ==========================================================
+DO $$ BEGIN RAISE NOTICE 'Inserting Field Data...'; END $$;
+
+-- Cruise
+INSERT INTO "field"."cruises" ("cruise_id", "name", "vessel_id", "start_date", "end_date", "chief_scientist_id", "project_id") VALUES
+('CR_2025_Spring', 'Weser Spring Survey', 'V_Uthoern', '2025-03-01', '2025-03-10', 'Yassine', 'PRJ_001');
+
+-- Sampling Event (Manual ID: 25EstWes_001)
+INSERT INTO "field"."sampling_event" (
+    "sampling_id", "sampling_date", "project_id", "cruise_id", "region_id", "ecosystem_id", 
+    "latitude", "longitude", "status_id"
+) VALUES (
+    '25EstWes_001', '2025-03-05', 'PRJ_001', 'CR_2025_Spring', 'Weser', 'Estuary',
+    53.5500, 8.5800, 'Completed'
+);
+-- Trigger trg_sync_geo_sampling will handle the 'geography' column automatically upon insert.
+
+-- Abiotic Data
+INSERT INTO "field"."sampling_abiotic" ("sampling_id", "temperature_sampling_depth_c", "salinity", "oxygen", "instrument_id") VALUES
+('25EstWes_001', 12.5, 18.5, 8.2, 'Nano_01');
+
+-- Fishing
+INSERT INTO "field"."fishing" ("sampling_id", "fishing_method", "gear_type", "soak_time", "total_catch_quantity_kg") VALUES
+('25EstWes_001', 'Trawl', 'Pelagic Trawl', 30, 45.5);
+
+-- Catch
+INSERT INTO "field"."catch" ("catch_id", "sampling_id", "taxon_id", "quantity_weight_kg", "quantity_count") VALUES
+('25EstWes_001_Sp0001', '25EstWes_001', 'Salmo_salar', 15.2, 5);
+
+-- ==========================================================
+-- 5. BIO ASSETS (Hierarchical Samples)
+-- ==========================================================
+DO $$ BEGIN RAISE NOTICE 'Inserting Samples...'; END $$;
+
+-- 1. ROOT SAMPLE (The Fish) - ID: S25AQP_001
+INSERT INTO "bio_assets"."samples_root" (
+    "sample_id", "sample_type_id", "sampling_id", "project_id", 
+    "collection_date", "storage_id", "sampler_person_id", "status_id"
+) VALUES (
+    'S25AQP_001', 'Whole Organism', '25EstWes_001', 'PRJ_001',
+    '2025-03-05', 'Freezer_01', 'Bob', 'Active'
+);
+
+-- 2. CHILD SAMPLE (Tissue) - ID: S25AQP_001.t1
+INSERT INTO "bio_assets"."samples_root" (
+    "sample_id", "parent_sample_id", "sample_type_id", "project_id", 
+    "storage_id", "status_id"
+) VALUES (
+    'S25AQP_001.t1', 'S25AQP_001', 'Tissue', 'PRJ_001',
+    'Freezer_01', 'Active'
+);
+
+-- 3. CHILD SAMPLE (DNA) - ID: S25AQP_001.d1
+INSERT INTO "bio_assets"."samples_root" (
+    "sample_id", "parent_sample_id", "sample_type_id", "project_id", 
+    "storage_id", "status_id"
+) VALUES (
+    'S25AQP_001.d1', 'S25AQP_001.t1', 'DNA', 'PRJ_001',
+    'Shelf_A', 'Active'
+);
+
+-- ==========================================================
+-- 6. BIOLOGY LAB (Dissection, Specimen)
+-- ==========================================================
+DO $$ BEGIN RAISE NOTICE 'Inserting Biology Data...'; END $$;
+
+-- Specimen Details (Linked to Root Sample)
+INSERT INTO "bio_assets"."specimen_organisms" (
+    "sample_id", "organism_type", "taxon_id", "weight_g", "total_length_mm", "sex", "processing_date"
+) VALUES (
+    'S25AQP_001', 'Fish', 'Salmo_salar', 3200.5, 650, 'M', '2025-03-06'
+);
+
+-- Dissection Data
+INSERT INTO "biologyfish"."dissection" (
+    "sample_id", "taxon_id", "liver_weight_g", "stomach_contents_text", "surgeon_ID", "person_id"
+) VALUES (
+    'S25AQP_001', 'Salmo_salar', 45.2, 'Small crustaceans', 'Yassine', 'Yassine'
+);
+-- Metadata Trigger will generate 'dissection_id' automatically.
+
+-- Otoliths
+INSERT INTO "biologyfish"."otoliths" (
+    "otolith_id", "sample_id", "age_read", "read_by_person_id", "confidence_level"
+) VALUES (
+    'Oto_S25AQP_001', 'S25AQP_001', 3, 'Alice', 'High'
+);
+
+-- Tissue Details
+INSERT INTO "bio_assets"."tissue" ("sample_id", "tissue_type", "preservation_medium") VALUES
+('S25AQP_001.t1', 'Fin Clip', 'Ethanol 96%');
+
+-- ==========================================================
+-- 7. MOLECULAR LAB (DNA, PCR, Sequencing)
+-- ==========================================================
+DO $$ BEGIN RAISE NOTICE 'Inserting Molecular Data...'; END $$;
+
+-- DNA Extraction
+INSERT INTO "moleculargenetics"."nucleic_acid" (
+    "sample_id", "experiment_id", "processing_date", "extraction_method", 
+    "kit", "volume_uL", "conc_qubit", "a260_280"
+) VALUES (
+    'S25AQP_001.d1', 'Exp_25_01', '2025-03-07', 'Spin Column', 
+    'Qiagen DNeasy', 50, 45.5, 1.85
+);
+
+-- PCR (Linked to DNA sample)
+INSERT INTO "moleculargenetics"."pcr" (
+    "pcr_id", "sample_id", "experiment_id", "polymerase_mastermix", "cycles"
+) VALUES (
+    'S25AQP_001.d1', 'S25AQP_001.d1', 'Exp_25_01', 'Taq Polymerase', 35
+);
+
+-- Library Prep (We treat the DNA sample as the source for the library ID)
+-- Creating a new library ID usually works best, but here we link to existing root or creating a new derived sample.
+-- For simplicity in this demo, we assume the Library IS the DNA sample processed.
+INSERT INTO "moleculargenetics"."library" (
+    "library_id", "prep_kit", "avg_fragment_size", "lib_barcode", "status_id"
+) VALUES (
+    'S25AQP_001.d1', 'Nextera XT', 450, 'GATACA', 'Completed'
+);
+
+INSERT INTO "moleculargenetics"."library_samples" ("library_id", "sample_id", "sample_barcode") VALUES
+('S25AQP_001.d1', 'S25AQP_001.d1', 'BC01');
+
+-- Sequencing Run
+INSERT INTO "moleculargenetics"."sequencing_flowcells" (
+    "flowcell_id", "type", "sequencer_id", "run_date", "status_id"
+) VALUES (
+    'FC_2025_001', 'MiSeq V3', 'Seq_01', '2025-03-08', 'Completed'
+);
+
+INSERT INTO "moleculargenetics"."sequencing" ("run_id", "flowcell_id", "status_id") VALUES
+('Run_25_001', 'FC_2025_001', 'Completed');
+
+INSERT INTO "moleculargenetics"."sequencing_libraries" ("run_id", "library_id", "lane_number") VALUES
+('Run_25_001', 'S25AQP_001.d1', 1);
+
+-- ==========================================================
+-- 8. BIOINFORMATICS
+-- ==========================================================
+DO $$ BEGIN RAISE NOTICE 'Inserting Bioinformatics Data...'; END $$;
+
+INSERT INTO "bioinformatics"."pipelines" ("pipeline_id", "name", "version") VALUES
+('Pip_Tax_01', 'Kraken2 Taxonomy', 'v2.1');
+
+INSERT INTO "bioinformatics"."seq_dataset" (
+    "dataset_id", "run_id", "read_count_filtered", "file_path"
+) VALUES (
+    'DS_25_001', 'Run_25_001', 150000, '/data/seq/2025/Run_25_001.fastq.gz'
+);
+
+INSERT INTO "bioinformatics"."assignments" (
+    "sample_id", "dataset_id", "pipeline_id", "taxon_id", "count", "confidence"
+) VALUES (
+    'S25AQP_001', 'DS_25_001', 'Pip_Tax_01', 'Salmo_salar', 14500, 99.9
+);
+
+-- ==========================================================
+-- 9. ELN & COMMUNICATIONS
+-- ==========================================================
+DO $$ BEGIN RAISE NOTICE 'Inserting ELN Data...'; END $$;
+
+-- Bookable Resource
+INSERT INTO "eln"."bookable_resources" ("resource_id", "equipment_id", "name", "calendar_color") VALUES
+('Res_PCR_01', 'PCR_01', 'PCR Machine Booking', '#FF0000');
+
+-- Booking by Yassine
+INSERT INTO "eln"."bookings" (
+    "resource_id", "person_id", "start_time", "end_time", "project_id", "notes"
+) VALUES (
+    'Res_PCR_01', 'Yassine', '2025-03-07 09:00:00+01', '2025-03-07 12:00:00+01', 'PRJ_001', 'Morning PCR Run'
+);
+
+-- Chat
+INSERT INTO "communications"."projects_chat" (
+    "project_id", "sender_id", "message_body"
+) VALUES (
+    'PRJ_001', 'Yassine', 'Samples from the Weser cruise are stored in Freezer_01. Please process the DNA extraction by Friday.'
+),
+(
+    'PRJ_001', 'Bob', 'Understood. I have started the extractions.'
+);
+
+
+-- ==========================================================
+-- 10. CLEANUP: RE-ENABLE TRIGGERS
+-- ==========================================================
+ALTER TABLE bio_assets.samples_root ENABLE TRIGGER trg_hierarchical_sample_id;
+ALTER TABLE field.sampling_event ENABLE TRIGGER trg_field_sampling_id;
+ALTER TABLE field.catch ENABLE TRIGGER trg_catch_id;
+-- Enable seq_dataset ID trigger back
+ALTER TABLE bioinformatics.seq_dataset ENABLE TRIGGER trg_gen_ds_id;
+
+-- Refresh Materialized Views (if any)
+REFRESH MATERIALIZED VIEW "dashboard"."monthly_lab_throughput_mv";
+
+DO $$ BEGIN RAISE NOTICE 'Demo Data Insertion Complete!'; END $$;
+COMMIT;
