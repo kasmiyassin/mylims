@@ -577,49 +577,64 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."specimen_organisms" (
     "processing_date" date
 );
 
-CREATE TABLE IF NOT EXISTS "biologyfish"."dissection" (
-    "dissection_id" text PRIMARY KEY , -- sampleid_dissection_01
-    "sample_id" text REFERENCES "bio_assets"."specimen_organisms"("sample_id"),
-    "external_id" text,
-    "taxon_id" text REFERENCES "reference"."taxon"("taxon_id"),
-    "experiment_id" text REFERENCES "lims"."experiments"("experiment_id"),
-    "processing_date" date,
-    "weight_g" numeric,
-    "standard_length_mm" numeric,
-    "fork_length_mm" numeric,
-    "total_length_mm" numeric,
-    "eye_diameter_mm" numeric,
-    "sex" text CHECK ("sex" IN ('M', 'F', 'U', NULL)), -- Male, Female, undetermined
-    "reproductive_state" numeric,
-    "liver_weight_g" numeric,
-    "stomach_weight_g" numeric,
-    "gonad_weight_g" numeric,
-    "ug_per_egg" numeric,
-    "transmitter_ID" text,
-    "PITTag" text,
-    "surgeon_ID" text,
-    "genetics_sample" text,
-    "Scale_Sample" text,
-    "Scale_Proc" text,
-    "Muscle_Sample" text,
-    "Muscle_Iso_Hom" text,
-    "Muscle_Iso_Wei" text,
-    "Blood_Sample" text,
-    "Eyelens_Sample" text,
-    "Otolith_Sample" text,
-    "Oto_Laser_Sample" text,
-  	"Oto_Iso_Sample" text,
-    "Stomach_Content" text,
-    "stomach_fullness_index" text,
-    "stomach_contents_text" text,
-    "parasite_observation" text,
-    "pathology_observation" text,
-    "stomach_contents_jsonb" jsonb,
-    "parasite_observation_jsonb" jsonb,
-    "pathology_observation_jsonb" jsonb,
-    "person_id" text REFERENCES "core"."persons"("person_id"),
-    "notes" text,
-    "attachment_link" text
+CREATE TABLE biologyfish.dissection (
+
+    -- Identity
+    dissection_id           text PRIMARY KEY, -- sampleid_dissection_01
+    sample_id               text REFERENCES bio_assets.samples_root(sample_id),
+    external_id             text,
+    taxon_id                text REFERENCES reference.taxon(taxon_id),
+    experiment_id           text REFERENCES lims.experiments(experiment_id),
+    project_id              text REFERENCES lims.projects(project_id),
+    person_id               text REFERENCES core.persons(person_id),
+
+    -- Metadata
+    processing_date         date,
+    surgeon_id              text,
+    photo_id                text,
+    attachment_link         text,
+    notes                   text,
+
+    -- Morphometrics
+    weight_g                numeric,
+    standard_length_mm      numeric,
+    fork_length_mm          numeric,
+    total_length_mm         numeric,
+    eye_diameter_mm         numeric,
+    sex                     text CHECK (sex IN ('M','F','U')),
+    reproductive_state      numeric,
+    ug_per_egg              numeric,
+
+    -- Organ Weights
+    liver_weight_g          numeric,
+    stomach_weight_g        numeric,
+    gonad_weight_g          numeric,
+
+    -- Tagging
+    transmitter_id          text,
+    pittag                  text,
+
+    -- Tissue Samples
+    genetics_sample         text,
+    scale_sample            text,
+    scale_proc              text,
+    muscle_sample           text,
+    muscle_iso_hom          text,
+    muscle_iso_wei          text,
+    blood_sample            text,
+    eyelens_sample          text,
+    otolith_sample          text,
+    oto_laser_sample        text,
+    oto_iso_sample          text,
+
+    -- Stomach / Pathology
+    stomach_fullness_index      text,
+    stomach_contents_text       text,
+    stomach_contents_jsonb      jsonb,
+    parasite_observation        text,
+    parasite_observation_jsonb  jsonb,
+    pathology_observation       text,
+    pathology_observation_jsonb jsonb
 );
 
 CREATE TABLE IF NOT EXISTS "bio_assets"."tissue" (
