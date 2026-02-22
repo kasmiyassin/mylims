@@ -923,6 +923,43 @@ CREATE TABLE IF NOT EXISTS "eln"."protocols_run" (
 -- =========================================
 -- 13. COMMUNICATIONS SCHEMA
 -- =========================================
+CREATE TABLE "reference"."comm_methods" (
+    "method_id" text PRIMARY KEY, -- 'email', 'chat', 'phone', 'video', 'in_person'
+    "description" text
+);
+
+
+CREATE TABLE IF NOT EXISTS "communications"."reports" (
+    "report_id" text PRIMARY KEY, -- 25rprt_000
+    "project_id" text REFERENCES "lims"."projects"("project_id"),
+    "title" text,
+    "generated_by" text REFERENCES "core"."persons"("person_id"),
+    "generation_date" date DEFAULT CURRENT_DATE,
+    "file_path" text,
+    "type" text
+);
+
+CREATE TABLE "communications"."interactions" (
+    "interaction_id" text PRIMARY KEY,
+    "project_id" text REFERENCES "lims"."projects"("project_id"),
+    "from" text,
+    "to" text,
+    "method_id" text REFERENCES "reference"."comm_methods"("method_id"),
+    "subject" text,
+    "body" text,
+    "external_reference" text, -- e.g., Email Message-ID or Zoom Meeting ID
+    "sent_at" timestamptz DEFAULT CURRENT_TIMESTAMP,
+    "metadata" jsonb -- Great for storing call duration, participants, or email headers
+);
+
+CREATE TABLE "communications"."attachments" (
+    "attachment_id" serial PRIMARY KEY,
+    "interaction_id" text REFERENCES "communications"."interactions"("interaction_id"),
+    "report_id" text REFERENCES "communications"."reports"("report_id"), -- Link to your existing reports
+    "file_path" text,
+    "file_type" text
+);
+
 CREATE TABLE IF NOT EXISTS "communications"."projects_chat" (
     "message_id" text PRIMARY KEY, -- PrjYYMMDD_00
     "project_id" text REFERENCES "lims"."projects"("project_id"),
@@ -936,19 +973,12 @@ CREATE TABLE IF NOT EXISTS "communications"."internal_plans" (
     "plan_id" text PRIMARY KEY, -- 25intpln_000
     "title" text,
     "created_by" text REFERENCES "core"."persons"("person_id"),
+    "project_id" text REFERENCES "lims"."projects"("project_id"),
+    "start" date,
     "deadline" date,
+    "importance" text,
     "content" text,
     "status_id" text REFERENCES "reference"."status"("status_id")
-);
-
-CREATE TABLE IF NOT EXISTS "communications"."reports" (
-    "report_id" text PRIMARY KEY, -- 25rprt_000
-    "project_id" text REFERENCES "lims"."projects"("project_id"),
-    "title" text,
-    "generated_by" text REFERENCES "core"."persons"("person_id"),
-    "generation_date" date DEFAULT CURRENT_DATE,
-    "file_path" text,
-    "type" text
 );
 
 
