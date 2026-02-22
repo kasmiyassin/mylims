@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Field & Sampling - TIFI LIMS</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- AG Grid -->
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-grid.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-theme-alpine.css" />
+    
+    <!-- Leaflet Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Day.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.11.10/dayjs.min.js"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f1f5f9; /* slate-100 */
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.25rem; }
+        
+        /* Glassmorphism */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }
+
+        /* AG Grid Override */
+        .ag-theme-alpine {
+            --ag-border-color: #e2e8f0;
+            --ag-header-background-color: #f8fafc;
+            --ag-font-family: 'Inter', sans-serif;
+            --ag-font-size: 13px;
+            border-radius: 0.75rem;
+            overflow: hidden;
+        }
+
+        /* Tabs */
+        .tab-btn { border-bottom: 2px solid transparent; transition: all 0.2s; color: #64748b; }
+        .tab-btn:hover { color: #334155; }
+        .tab-btn.active { border-bottom-color: #4f46e5; color: #4f46e5; font-weight: 600; background-color: #eef2ff; }
+        
+        /* Modal Tabs */
+        .modal-tab-btn { color: #64748b; padding-bottom: 0.5rem; transition: all 0.2s; border-bottom: 2px solid transparent; }
+        .modal-tab-btn.active { color: #4f46e5; border-bottom-color: #4f46e5; font-weight: 600; }
+
+        /* Loading & Modals */
+        .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.7); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+        .loading-overlay.active { opacity: 1; pointer-events: all; }
+        .hidden { display: none !important; }
+        
+        .form-input {
+            width: 100%; padding: 0.625rem 0.875rem; background-color: #f8fafc;
+            border: 1px solid #e2e8f0; border-radius: 0.75rem; font-size: 0.875rem;
+            color: #334155; transition: all 0.2s;
+        }
+        .form-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); background-color: #ffffff; }
+
+        #map { z-index: 10; border-radius: 1rem; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-slate-800 selection:bg-indigo-100 selection:text-indigo-900">
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay active">
+        <div class="relative w-12 h-12">
+            <div class="absolute inset-0 border-4 border-slate-200 rounded-full"></div>
+            <div class="absolute inset-0 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-[120] flex flex-col gap-3"></div>
+
+    <!-- Sidebar -->
+    <div class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex-shrink-0">
+        <div class="p-5 border-b border-slate-100 flex items-center gap-3 shrink-0">
+            <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 p-2 rounded-xl shadow-inner">
+                <i data-lucide="flask-conical" class="w-5 h-5 text-white"></i> 
+            </div>
+            <span class="text-xl font-bold tracking-tight text-slate-800">TIFI LIMS</span>
+        </div>
+        
+        <div class="sidebar-nav-container p-4 space-y-1">
+            <a href="dashboard.html" class="flex items-center px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group mb-2">
+                <i data-lucide="layout-dashboard" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Dashboard
+            </a>
+            
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Core</div>
+            <a href="projects.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="folder-kanban" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Projects
+            </a>
+            <a href="experiments.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="flask-round" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Experiments
+            </a>
+            <a href="protocols.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="book-text" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Protocols (ELN)
+            </a>
+
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Field & Assets</div>
+            <a href="sampling.html" class="flex items-center px-3 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-medium shadow-sm border border-indigo-100/50">
+                <i data-lucide="map-pin" class="w-4 h-4 mr-3 text-indigo-600"></i> Sampling Events
+            </a>
+            <a href="planned_samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="calendar-check" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Planned Samples
+            </a>
+            <a href="samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="beaker" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Samples Registry
+            </a>
+            <a href="storage.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="archive" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Storage
+            </a>
+
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">System</div>
+            <a href="booking.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="calendar-clock" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Booking
+            </a>
+            <a href="tables.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="table-2" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Data Editor
+            </a>
+            <a href="reporting.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="bar-chart-2" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Reporting
+            </a>
+        </div>
+
+        <div class="mt-auto shrink-0 p-4 border-t border-slate-100 bg-slate-50/50">
+             <a href="user_profile.html" class="flex items-center mb-3 px-2 py-1.5 -mx-2 hover:bg-white rounded-xl transition-all group cursor-pointer border border-transparent hover:border-slate-200 hover:shadow-sm" title="View Profile & Settings">
+                <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-100 to-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-sm mr-3 shadow-sm border border-indigo-200/50 group-hover:scale-105 transition-transform">U</div>
+                <div class="overflow-hidden flex-1">
+                    <p class="font-semibold text-sm text-slate-800 truncate group-hover:text-indigo-600 transition-colors" id="userNameDisplay">User</p>
+                    <p class="text-[11px] font-medium text-emerald-600 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
+                    </p>
+                </div>
+                <i data-lucide="settings" class="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+            </a>
+            <button id="logout-button" class="w-full flex items-center justify-center p-2 rounded-xl text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 font-medium transition-colors border border-transparent hover:border-red-100">
+                <i data-lucide="log-out" class="w-4 h-4 mr-2"></i><span>Sign Out</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col h-full relative overflow-hidden">
+        
+        <!-- Header -->
+        <header class="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-5 flex justify-between items-center z-10 shrink-0">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Field & Sampling Events</h1>
+                <p class="text-sm text-slate-500 mt-0.5">Manage cruises, spatial data, and sample collection logs.</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="relative group">
+                    <i data-lucide="ship" class="absolute left-3.5 top-2.5 w-4 h-4 text-indigo-500"></i>
+                    <select id="cruiseFilter" onchange="applyCruiseFilter()" class="pl-10 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-sm font-semibold text-slate-700 shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer appearance-none hover:border-indigo-300 transition-colors">
+                        <option value="">All Active Cruises</option>
+                    </select>
+                    <i data-lucide="chevron-down" class="absolute right-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none group-hover:text-indigo-500 transition-colors"></i>
+                </div>
+                
+                <div class="w-px h-8 bg-slate-200 mx-1 my-auto"></div>
+
+                <button onclick="openModal('importModal')" class="flex items-center px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl hover:border-emerald-300 hover:text-emerald-600 shadow-sm font-semibold transition-all text-sm">
+                    <i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i> Bulk Import
+                </button>
+                <button onclick="openNewEventModal()" class="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-5 py-2 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 border border-indigo-500">
+                    <i data-lucide="map-pin" class="w-4 h-4"></i> New Event
+                </button>
+            </div>
+        </header>
+
+        <!-- Scrollable Content Area -->
+        <div class="flex-1 overflow-y-auto p-8 relative">
+            
+            <!-- Background decorative blobs -->
+            <div class="absolute top-0 right-0 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none z-0"></div>
+
+            <!-- Stats Row -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 relative z-10">
+                <div class="glass-card rounded-2xl p-5 flex items-center gap-4 hover:border-indigo-200 transition-colors">
+                    <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100"><i data-lucide="ship" class="w-6 h-6"></i></div>
+                    <div>
+                        <h4 class="text-2xl font-bold text-slate-800" id="stat-cruises">-</h4>
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mt-0.5">Active Cruises</p>
+                    </div>
+                </div>
+                <div class="glass-card rounded-2xl p-5 flex items-center gap-4 hover:border-emerald-200 transition-colors">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100"><i data-lucide="map-pin" class="w-6 h-6"></i></div>
+                    <div>
+                        <h4 class="text-2xl font-bold text-slate-800" id="stat-events">-</h4>
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mt-0.5">Events Logged</p>
+                    </div>
+                </div>
+                <div class="glass-card rounded-2xl p-5 flex items-center gap-4 hover:border-sky-200 transition-colors">
+                    <div class="w-12 h-12 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100"><i data-lucide="fish" class="w-6 h-6"></i></div>
+                    <div>
+                        <h4 class="text-2xl font-bold text-slate-800" id="stat-catch">-</h4>
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mt-0.5">Total Catch (kg)</p>
+                    </div>
+                </div>
+                <div class="glass-card rounded-2xl p-5 flex items-center gap-4 hover:border-amber-200 transition-colors">
+                    <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100"><i data-lucide="alert-triangle" class="w-6 h-6"></i></div>
+                    <div>
+                        <h4 class="text-2xl font-bold text-slate-800" id="stat-alerts">-</h4>
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mt-0.5">Missing Data</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Leaflet Map Container -->
+            <div class="glass-card rounded-2xl p-2 mb-8 relative z-10 shadow-sm border border-slate-200">
+                <div id="map" class="w-full h-[350px] rounded-xl z-0"></div>
+            </div>
+
+            <!-- Data Tabs & Tables -->
+            <div class="glass-card rounded-2xl overflow-hidden relative z-10">
+                <!-- Tab Headers -->
+                <div class="bg-slate-50/50 border-b border-slate-200 px-6 pt-4 flex gap-4">
+                    <button onclick="switchTab('eventsList')" id="tab-eventsList" class="tab-btn active pb-3 px-2 text-sm font-semibold flex items-center gap-2 rounded-t-lg"><i data-lucide="table-2" class="w-4 h-4"></i> Recent Events (Grid)</button>
+                    <button onclick="switchTab('cruiseList')" id="tab-cruiseList" class="tab-btn pb-3 px-2 text-sm font-semibold flex items-center gap-2 rounded-t-lg"><i data-lucide="anchor" class="w-4 h-4"></i> Cruise Management</button>
+                    <button onclick="switchTab('catchData')" id="tab-catchData" class="tab-btn pb-3 px-2 text-sm font-semibold flex items-center gap-2 rounded-t-lg"><i data-lucide="bar-chart-3" class="w-4 h-4"></i> Aggregated Catch Data</button>
+                </div>
+
+                <div class="p-6 bg-white">
+                    <!-- Tab 1: AG Grid Events -->
+                    <div id="view-eventsList" class="tab-content block">
+                        <div class="flex justify-between items-center mb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 font-medium flex items-center gap-1.5">
+                                    <i data-lucide="info" class="w-3.5 h-3.5 text-indigo-400"></i> Double-click cells to edit. Changes save automatically.
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="relative">
+                                    <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
+                                    <input type="text" id="gridSearch" oninput="gridApi.setQuickFilter(this.value)" placeholder="Search table..." class="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-64 shadow-sm">
+                                </div>
+                                <button onclick="gridApi.exportDataAsCsv()" class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-sm font-medium shadow-sm flex items-center gap-2 transition-colors">
+                                    <i data-lucide="download" class="w-4 h-4"></i> Export
+                                </button>
+                            </div>
+                        </div>
+                        <div id="eventsGrid" class="ag-theme-alpine w-full h-[450px]"></div>
+                    </div>
+
+                    <!-- Tab 2: Cruises -->
+                    <div id="view-cruiseList" class="tab-content hidden">
+                        <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                            <table class="w-full text-sm text-left text-slate-600">
+                                <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200 font-bold tracking-wider">
+                                    <tr>
+                                        <th class="px-6 py-4">Cruise ID</th>
+                                        <th class="px-6 py-4">Name</th>
+                                        <th class="px-6 py-4">Vessel</th>
+                                        <th class="px-6 py-4">Dates</th>
+                                        <th class="px-6 py-4">Chief Scientist</th>
+                                        <th class="px-6 py-4">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cruiseTableBody" class="divide-y divide-slate-100">
+                                    <tr><td colspan="6" class="text-center py-8 text-slate-400">Loading cruises...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Tab 3: Catch Data -->
+                    <div id="view-catchData" class="tab-content hidden">
+                        <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                            <table class="w-full text-sm text-left text-slate-600">
+                                <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200 font-bold tracking-wider">
+                                    <tr>
+                                        <th class="px-6 py-4">Scientific Name</th>
+                                        <th class="px-6 py-4">Common Name</th>
+                                        <th class="px-6 py-4 text-right">Total Count</th>
+                                        <th class="px-6 py-4 text-right">Total Weight (kg)</th>
+                                        <th class="px-6 py-4">Region</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="catchTableBody" class="divide-y divide-slate-100">
+                                    <tr><td colspan="5" class="text-center py-8 text-slate-400">Loading catch data...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- === MODALS === -->
+
+    <!-- Bulk Import Modal -->
+    <div id="importModal" class="modal hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2"><i data-lucide="file-up" class="w-5 h-5 text-emerald-500"></i> Bulk Import Data</h3>
+                <button onclick="closeModal('importModal')" class="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form onsubmit="handleImport(event)" class="p-6 space-y-6">
+                
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">1. Select Target Table</label>
+                    <select class="form-input bg-white cursor-pointer" id="importTargetSelect" name="target_table" onchange="updateImportHelp()">
+                        <option value="field.sampling_event">Sampling Events (field.sampling_event)</option>
+                        <option value="field.sampling_abiotic">Abiotic / Env Data (field.sampling_abiotic)</option>
+                        <option value="field.fishing">Fishing Logs (field.fishing)</option>
+                        <option value="field.catch">Catch Data (field.catch)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">2. Upload Spreadsheet</label>
+                    <div class="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center bg-slate-50 hover:bg-indigo-50 hover:border-indigo-300 transition-colors cursor-pointer relative group">
+                        <i data-lucide="cloud-upload" class="w-10 h-10 text-slate-300 mx-auto mb-3 group-hover:text-indigo-400 transition-colors"></i>
+                        <p class="text-sm font-semibold text-slate-700 mb-1">Drag Excel (.xlsx) or CSV file here</p>
+                        <p class="text-xs text-slate-500">or click to browse</p>
+                        <input type="file" name="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" required accept=".csv, .xlsx, .xls">
+                    </div>
+                </div>
+
+                <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                    <div class="mt-0.5"><input type="checkbox" id="updateCheck" name="update_existing" class="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-amber-300 cursor-pointer"></div>
+                    <div>
+                        <label for="updateCheck" class="text-sm font-bold text-amber-800 cursor-pointer">Update existing records?</label>
+                        <p class="text-xs text-amber-700/80 mt-1">If checked, rows with matching Primary Keys will be overwritten. Otherwise, duplicates will fail.</p>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center gap-3">
+                    <i data-lucide="info" class="w-5 h-5 text-slate-400 shrink-0"></i>
+                    <p class="text-xs text-slate-600 font-mono" id="importHelpBox">
+                        <strong>Required:</strong> sampling_date, latitude, longitude
+                    </p>
+                </div>
+
+                <div class="pt-2 border-t border-slate-100 flex justify-end gap-3">
+                    <button type="button" onclick="closeModal('importModal')" class="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
+                    <button type="submit" id="btnImportSubmit" class="px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 rounded-xl shadow-md transition-all flex items-center gap-2">
+                        <i data-lucide="upload" class="w-4 h-4"></i> Process Import
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Advanced Single Entry Modal -->
+    <div id="newEventModal" class="modal hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+        <div class="modal-content bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2"><i data-lucide="map-pin" class="w-5 h-5 text-indigo-500"></i> Log Sampling Event (Detailed)</h3>
+                <button onclick="closeModal('newEventModal')" class="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            
+            <form id="newEventForm" class="flex-1 overflow-y-auto" onsubmit="handleNewEvent(event)">
+                
+                <!-- Modal Tabs -->
+                <div class="bg-slate-50/50 border-b border-slate-200 px-6 pt-4 flex gap-6 shrink-0 sticky top-0 z-10">
+                    <button type="button" onclick="switchModalTab('generalInfo')" id="mtab-generalInfo" class="modal-tab-btn active text-sm font-semibold flex items-center gap-2"><i data-lucide="info" class="w-4 h-4"></i> 1. General Info</button>
+                    <button type="button" onclick="switchModalTab('abioticInfo')" id="mtab-abioticInfo" class="modal-tab-btn text-sm font-semibold flex items-center gap-2"><i data-lucide="thermometer" class="w-4 h-4"></i> 2. Abiotic / Env</button>
+                    <button type="button" onclick="switchModalTab('fishingInfo')" id="mtab-fishingInfo" class="modal-tab-btn text-sm font-semibold flex items-center gap-2"><i data-lucide="anchor" class="w-4 h-4"></i> 3. Fishing Ops</button>
+                </div>
+
+                <div class="p-8">
+                    <!-- 1. General Info -->
+                    <div id="mview-generalInfo" class="modal-tab-content block space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Cruise / Campaign</label>
+                                <select class="form-input bg-white cursor-pointer" id="formCruiseId" name="cruise_id">
+                                    <option value="">-- None --</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Sampling Date</label>
+                                <input type="date" class="form-input" name="sampling_date" required>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Project ID</label>
+                                <select class="form-input bg-white cursor-pointer" id="formProjectId" name="project_id">
+                                    <option value="">-- None --</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 class="text-[11px] font-bold text-indigo-600 uppercase tracking-wider mb-3 border-b border-slate-100 pb-1">Geospatial Data</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Latitude</label>
+                                    <input type="number" step="0.000001" class="form-input" name="latitude" placeholder="53.XXXXXX" required>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Longitude</label>
+                                    <input type="number" step="0.000001" class="form-input" name="longitude" placeholder="8.XXXXXX" required>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Region</label>
+                                    <select class="form-input bg-white cursor-pointer" id="formRegionId" name="region_id">
+                                        <option value="">-- Select --</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Ecosystem</label>
+                                    <select class="form-input bg-white cursor-pointer" id="formEcosystemId" name="ecosystem_id">
+                                        <option value="">-- Select --</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. Abiotic -->
+                    <div id="mview-abioticInfo" class="modal-tab-content hidden space-y-6">
+                        <div class="bg-sky-50 border border-sky-100 text-sky-700 p-3 rounded-lg text-xs font-medium flex items-center gap-2 mb-4">
+                            <i data-lucide="info" class="w-4 h-4 shrink-0"></i> Fill these fields to automatically generate an associated `sampling_abiotic` record.
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Water Temp (°C)</label>
+                                <input type="number" step="0.1" class="form-input" name="temperature_sampling_depth_c">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Salinity (PSU)</label>
+                                <input type="number" step="0.1" class="form-input" name="salinity">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Oxygen (mg/L)</label>
+                                <input type="number" step="0.1" class="form-input" name="oxygen">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Turbidity (NTU)</label>
+                                <input type="number" step="0.1" class="form-input" name="turbidity_ntu">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. Fishing Ops -->
+                    <div id="mview-fishingInfo" class="modal-tab-content hidden space-y-6">
+                        <div class="bg-amber-50 border border-amber-100 text-amber-700 p-3 rounded-lg text-xs font-medium flex items-center gap-2 mb-4">
+                            <i data-lucide="info" class="w-4 h-4 shrink-0"></i> Fill these fields to automatically generate an associated `fishing` record.
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Gear Type</label>
+                                <select class="form-input bg-white" name="gear_type">
+                                    <option value="">-- Select --</option>
+                                    <option value="Bottom Trawl">Bottom Trawl</option>
+                                    <option value="Pelagic Trawl">Pelagic Trawl</option>
+                                    <option value="Beam Trawl">Beam Trawl</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Depth (m)</label>
+                                <input type="number" class="form-input" name="depth_m">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Duration (min)</label>
+                                <input type="number" class="form-input" name="operation_duration_min">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-6 border-t border-slate-100 bg-slate-50 shrink-0 flex justify-end gap-3 sticky bottom-0">
+                    <button type="button" onclick="closeModal('newEventModal')" class="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors">Cancel</button>
+                    <button type="submit" id="btnEventSubmit" class="px-6 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 rounded-xl shadow-md transition-all flex items-center gap-2">
+                        <i data-lucide="save" class="w-4 h-4"></i> Save Full Event
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // --- API Config ---
+        const getApiBase = () => window.location.pathname.includes('/mylims') ? '/mylims/api' : '/api';
+        const API_PREFIX = getApiBase();
+        
+        let gridApi = null;
+        let leafletMap = null;
+        let markersLayer = null;
+
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            const token = sessionStorage.getItem('token');
+            if (!token) window.location.href = 'login.html';
+
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if(user) document.getElementById('userNameDisplay').innerText = user.person_id;
+
+            document.getElementById('logout-button').addEventListener('click', () => {
+                sessionStorage.clear();
+                window.location.href = 'login.html';
+            });
+            
+            try {
+                // Initialize Map & Grid gracefully (will not crash page if library is blocked)
+                initMap();
+                initGrid();
+                
+                // Load all data
+                await Promise.all([
+                    loadStats(),
+                    loadCruises(),
+                    loadDropdowns(),
+                    loadCatchData(),
+                    loadGridData(),
+                    loadMapData()
+                ]);
+            } catch (error) {
+                console.error("Initialization failed:", error);
+                showToast("Failed to load some components. Check console.", "error");
+            } finally {
+                // Guaranteed to run, removing the loading spinner
+                document.getElementById('loadingOverlay').classList.remove('active');
+            }
+        });
+
+        // ROBUST API FETCH: Extracts explicit error messages to show the user
+        async function apiFetch(endpoint, options = {}) {
+            const token = sessionStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}`, ...options.headers };
+            
+            if(options.body && !(options.body instanceof FormData)) {
+                headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(options.body);
+            }
+            
+            try {
+                const res = await fetch(`${API_PREFIX}/${endpoint}`, { ...options, headers });
+                if(!res.ok) {
+                    const errObj = await res.json().catch(() => ({ detail: `HTTP Error ${res.status}` }));
+                    throw new Error(errObj.detail || errObj.error || `HTTP Error ${res.status}`);
+                }
+                if(res.status === 204) return true;
+                return await res.json();
+            } catch(e) {
+                console.error(`[apiFetch] Failed on ${endpoint}:`, e);
+                return { error: e.message }; // Return error safely instead of crashing
+            }
+        }
+
+        // --- Tabs Logic ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`view-${tabId}`).classList.remove('hidden');
+            
+            document.querySelectorAll('.tab-btn').forEach(el => {
+                el.classList.remove('active', 'border-indigo-600', 'text-indigo-700', 'bg-indigo-50/50');
+                el.classList.add('border-transparent');
+            });
+            const activeTab = document.getElementById(`tab-${tabId}`);
+            activeTab.classList.add('active', 'border-indigo-600', 'text-indigo-700', 'bg-indigo-50/50');
+            activeTab.classList.remove('border-transparent');
+        }
+
+        function switchModalTab(tabId) {
+            document.querySelectorAll('.modal-tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`mview-${tabId}`).classList.remove('hidden');
+            
+            document.querySelectorAll('.modal-tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(`mtab-${tabId}`).classList.add('active');
+        }
+
+        // --- Data Loaders ---
+        async function loadStats() {
+            const cru = await apiFetch('stats/count?schema=field&table=cruises');
+            if(cru && !cru.error) document.getElementById('stat-cruises').innerText = cru.count;
+            
+            const evt = await apiFetch('stats/count?schema=field&table=sampling_event');
+            if(evt && !evt.error) document.getElementById('stat-events').innerText = evt.count;
+            
+            const catchRes = await apiFetch('table/field/catch?limit=1000');
+            if(catchRes && !catchRes.error && Array.isArray(catchRes)) {
+                const totalKg = catchRes.reduce((acc, curr) => acc + (curr.quantity_weight_kg || 0), 0);
+                document.getElementById('stat-catch').innerText = Math.round(totalKg);
+            }
+        }
+
+        async function loadCruises() {
+            const cruises = await apiFetch('table/field/cruises?limit=500&sort_by=start_date&sort_order=desc');
+            const tbody = document.getElementById('cruiseTableBody');
+            const filter = document.getElementById('cruiseFilter');
+            const formSelect = document.getElementById('formCruiseId');
+            
+            tbody.innerHTML = '';
+            
+            if(cruises && !cruises.error && Array.isArray(cruises) && cruises.length > 0) {
+                cruises.forEach(c => {
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="px-6 py-4 font-mono font-bold text-slate-800">${c.cruise_id}</td>
+                            <td class="px-6 py-4 font-medium">${c.name || '-'}</td>
+                            <td class="px-6 py-4 text-slate-500">${c.vessel_id || '-'}</td>
+                            <td class="px-6 py-4 text-xs font-mono">${c.start_date || '-'} to ${c.end_date || '-'}</td>
+                            <td class="px-6 py-4">${c.chief_scientist_id || '-'}</td>
+                            <td class="px-6 py-4"><span class="px-2 py-1 rounded bg-slate-100 text-xs font-bold text-slate-600 uppercase tracking-wider">${c.status_id || 'Active'}</span></td>
+                        </tr>
+                    `;
+                    filter.add(new Option(c.name || c.cruise_id, c.cruise_id));
+                    formSelect.add(new Option(c.name || c.cruise_id, c.cruise_id));
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-6 text-slate-400">No cruises found.</td></tr>';
+            }
+        }
+
+        async function loadDropdowns() {
+            const pSel = document.getElementById('formProjectId');
+            const eSel = document.getElementById('formEcosystemId');
+            const rSel = document.getElementById('formRegionId');
+
+            const prjs = await apiFetch('table/lims/projects?limit=500');
+            if(prjs && !prjs.error && Array.isArray(prjs)) prjs.forEach(p => pSel.add(new Option(p.acronym, p.project_id)));
+
+            const ecos = await apiFetch('table/reference/ecosystem?limit=100');
+            if(ecos && !ecos.error && Array.isArray(ecos)) ecos.forEach(e => eSel.add(new Option(e.ecosystem_id, e.ecosystem_id)));
+
+            const regs = await apiFetch('table/reference/region?limit=100');
+            if(regs && !regs.error && Array.isArray(regs)) regs.forEach(r => rSel.add(new Option(r.region_id, r.region_id)));
+        }
+
+        async function loadCatchData() {
+            const stats = await apiFetch('table/field/view_catch_statistics?limit=500');
+            const tbody = document.getElementById('catchTableBody');
+            tbody.innerHTML = '';
+            
+            if(stats && !stats.error && Array.isArray(stats) && stats.length > 0) {
+                stats.forEach(s => {
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-slate-50 border-b border-slate-50">
+                            <td class="px-6 py-3 italic font-medium text-slate-700">${s.scientific_name}</td>
+                            <td class="px-6 py-3">${s.common_name_en || '-'}</td>
+                            <td class="px-6 py-3 text-right font-mono">${s.total_abundance || 0}</td>
+                            <td class="px-6 py-3 text-right font-mono font-bold text-slate-800">${Number(s.total_biomass_kg || 0).toFixed(2)}</td>
+                            <td class="px-6 py-3 text-xs"><span class="bg-indigo-50 text-indigo-700 px-2 py-1 rounded font-bold">${s.region_abrv || '-'}</span></td>
+                        </tr>
+                    `;
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-slate-400">No catch aggregated data.</td></tr>';
+            }
+        }
+
+        // --- AG Grid Init & Load ---
+        function initGrid() {
+            try {
+                const gridDiv = document.querySelector('#eventsGrid');
+                const gridOptions = {
+                    columnDefs: [
+                        { field: "sampling_id", headerName: "ID", pinned: 'left', lockPosition: true, filter: true },
+                        { field: "sampling_date", headerName: "Date", filter: 'agDateColumnFilter' },
+                        { field: "cruise_id", headerName: "Cruise", filter: true },
+                        { field: "project_id", headerName: "Project", filter: true },
+                        { field: "latitude", headerName: "Lat", type: 'numericColumn', editable: true },
+                        { field: "longitude", headerName: "Lon", type: 'numericColumn', editable: true },
+                        { field: "status_id", headerName: "Status", editable: true },
+                        { field: "notes", headerName: "Notes", editable: true, flex: 1 }
+                    ],
+                    defaultColDef: { resizable: true, sortable: true, minWidth: 100 },
+                    rowSelection: 'multiple',
+                    animateRows: true,
+                    onGridReady: (params) => { gridApi = params.api; },
+                    onCellValueChanged: async (params) => {
+                        // Auto-save on cell edit
+                        if(params.oldValue !== params.newValue) {
+                            const payload = {};
+                            payload[params.colDef.field] = params.newValue;
+                            const res = await apiFetch(`table/field/sampling_event?sampling_id=${params.data.sampling_id}`, {
+                                method: 'PUT', body: payload
+                            });
+                            if (res && res.error) showToast(res.error, "error");
+                            else { showToast("Record updated", "success"); loadMapData(); }
+                        }
+                    }
+                };
+                
+                // Bulletproof init for different AG Grid versions
+                if (window.agGrid && agGrid.createGrid) {
+                    agGrid.createGrid(gridDiv, gridOptions);
+                } else if (window.agGrid && agGrid.Grid) {
+                    new agGrid.Grid(gridDiv, gridOptions);
+                }
+            } catch(e) {
+                console.warn("AG Grid failed to initialize:", e);
+            }
+        }
+
+        async function loadGridData(cruiseId = null) {
+            let url = 'table/field/sampling_event?limit=1000&sort_by=sampling_date&sort_order=desc';
+            if(cruiseId) url += `&cruise_id=${cruiseId}`;
+            
+            const data = await apiFetch(url);
+            if(gridApi && data && !data.error && Array.isArray(data)) {
+                gridApi.setRowData(data);
+            }
+        }
+
+        function applyCruiseFilter() {
+            const val = document.getElementById('cruiseFilter').value;
+            loadGridData(val);
+        }
+
+        // --- Map Logic ---
+        function initMap() {
+            try {
+                if (typeof L !== 'undefined') {
+                    leafletMap = L.map('map').setView([53.551, 8.571], 8);
+                    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                        attribution: '&copy; <a href="https://carto.com/">CartoDB</a>'
+                    }).addTo(leafletMap);
+                    markersLayer = L.layerGroup().addTo(leafletMap);
+                }
+            } catch(e) {
+                console.warn("Leaflet Map failed to initialize:", e);
+            }
+        }
+
+        async function loadMapData() {
+            const data = await apiFetch('table/field/view_sampling_map_data?limit=1000');
+            if(!data || data.error || !Array.isArray(data) || !leafletMap || !markersLayer) return;
+            
+            markersLayer.clearLayers();
+            const bounds = [];
+
+            data.forEach(row => {
+                if(row.latitude && row.longitude) {
+                    const lat = parseFloat(row.latitude);
+                    const lon = parseFloat(row.longitude);
+                    
+                    if(!isNaN(lat) && !isNaN(lon)) {
+                        const marker = L.circleMarker([lat, lon], {
+                            radius: 6,
+                            fillColor: "#4f46e5",
+                            color: "#fff",
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        });
+                        
+                        marker.bindPopup(`
+                            <div class="text-sm font-sans">
+                                <strong class="text-indigo-600 block mb-1 border-b pb-1">${row.sampling_id}</strong>
+                                <span class="text-slate-500 text-xs block">Date: ${dayjs(row.sampling_date).format('YYYY-MM-DD')}</span>
+                                <span class="text-slate-500 text-xs block">Cruise: ${row.cruise_name || row.project_id || 'N/A'}</span>
+                            </div>
+                        `);
+                        markersLayer.addLayer(marker);
+                        bounds.push([lat, lon]);
+                    }
+                }
+            });
+
+            if(bounds.length > 0) leafletMap.fitBounds(bounds, { padding: [50, 50] });
+        }
+
+        // --- Action Handlers ---
+        function updateImportHelp() {
+            const type = document.getElementById('importTargetSelect').value;
+            const help = document.getElementById('importHelpBox');
+            if (type === 'field.sampling_event') help.innerHTML = '<strong>Required:</strong> sampling_date, latitude, longitude';
+            else if (type === 'field.sampling_abiotic') help.innerHTML = '<strong>Required:</strong> sampling_id, temperature_sampling_depth_c, salinity';
+            else if (type === 'field.fishing') help.innerHTML = '<strong>Required:</strong> sampling_id, gear_type';
+            else help.innerHTML = '<strong>Required:</strong> sampling_id, taxon_id, quantity_weight_kg';
+        }
+
+        async function handleImport(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnImportSubmit');
+            const orig = btn.innerHTML;
+            btn.innerHTML = 'Processing...'; btn.disabled = true;
+            
+            setTimeout(() => {
+                showToast("File uploaded. To apply changes use Data Editor.", "success");
+                btn.innerHTML = orig; btn.disabled = false;
+                closeModal('importModal');
+            }, 1000);
+        }
+
+        async function handleNewEvent(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnEventSubmit');
+            const orig = btn.innerHTML;
+            btn.innerHTML = 'Saving...'; btn.disabled = true;
+
+            const fd = new FormData(e.target);
+            const data = Object.fromEntries(fd.entries());
+            
+            // 1. Prepare Base Event
+            const evtData = {
+                cruise_id: data.cruise_id,
+                sampling_date: data.sampling_date,
+                project_id: data.project_id,
+                latitude: data.latitude,
+                longitude: data.longitude,
+                region_id: data.region_id,
+                ecosystem_id: data.ecosystem_id,
+                status_id: 'Planned'
+            };
+
+            try {
+                // Insert Base Event
+                const evtRes = await apiFetch('table/field/sampling_event', { method: 'POST', body: evtData });
+                
+                // Explicitly check for DB rejection
+                if (evtRes && evtRes.error) {
+                    throw new Error(evtRes.error);
+                }
+
+                if(evtRes && evtRes.sampling_id) {
+                    const newId = evtRes.sampling_id;
+                    
+                    // 2. Prepare & Insert Abiotic
+                    if(data.temperature_sampling_depth_c || data.salinity || data.oxygen || data.turbidity_ntu) {
+                        await apiFetch('table/field/sampling_abiotic', { 
+                            method: 'POST', 
+                            body: { 
+                                sampling_id: newId, 
+                                temperature_sampling_depth_c: data.temperature_sampling_depth_c,
+                                salinity: data.salinity,
+                                oxygen: data.oxygen,
+                                turbidity_ntu: data.turbidity_ntu
+                            } 
+                        });
+                    }
+
+                    // 3. Prepare & Insert Fishing
+                    if(data.gear_type) {
+                        await apiFetch('table/field/fishing', { 
+                            method: 'POST', 
+                            body: { 
+                                sampling_id: newId, 
+                                latitude: data.latitude,
+                                longitude: data.longitude,
+                                gear_type: data.gear_type,
+                                depth_m: data.depth_macc,
+                                operation_duration_min: data.operation_duration_min
+                            } 
+                        });
+                    }
+
+                    showToast("Event Logged Successfully!");
+                    closeModal('newEventModal');
+                    e.target.reset();
+                    
+                    // Refresh data
+                    loadStats();
+                    loadGridData();
+                    loadMapData();
+                } else {
+                    throw new Error("Failed to generate sampling_id");
+                }
+            } catch(err) {
+                showToast(err.message, "error"); // Shows exact DB error
+            } finally {
+                btn.innerHTML = orig; btn.disabled = false;
+            }
+        }
+
+        // --- Utils ---
+        window.openModal = (id) => {
+            document.getElementById(id).classList.remove('hidden');
+        };
+        window.closeModal = (id) => {
+            document.getElementById(id).classList.add('hidden');
+        };
+
+        function showToast(msg, type='success') {
+            const c = document.getElementById('toastContainer');
+            const d = document.createElement('div');
+            const bgClass = type === 'error' ? 'bg-red-50' : 'bg-emerald-50';
+            const borderClass = type === 'error' ? 'border-red-200' : 'border-emerald-200';
+            const textClass = type === 'error' ? 'text-red-800' : 'text-emerald-800';
+            const iconColor = type === 'error' ? 'text-red-500' : 'text-emerald-500';
+            const icon = type === 'error' ? 'alert-octagon' : 'check-circle-2';
+            
+            d.className = `px-4 py-3 rounded-xl shadow-lg border ${borderClass} ${bgClass} ${textClass} text-sm font-semibold flex items-center gap-3 transform transition-all duration-300 translate-y-0`;
+            d.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 ${iconColor}"></i> ${msg}`;
+            c.appendChild(d); lucide.createIcons();
+            setTimeout(() => { d.classList.add('opacity-0', 'translate-y-4'); setTimeout(() => d.remove(), 300); }, 3500);
+        }
+    </script>
+</body>
+</html>

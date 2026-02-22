@@ -153,17 +153,21 @@
                         <i data-lucide="columns" class="w-4 h-4"></i> Columns
                     </button>
 
-                    <div class="relative group z-30">
+                    <!-- Dropdown structure adjusted to fix gap-hiding issue -->
+                    <div class="relative group z-[60]">
                         <button class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-medium shadow-sm flex gap-2 items-center">
                             <i data-lucide="download" class="w-4 h-4"></i> Export
                         </button>
-                        <div class="absolute right-0 mt-2 w-40 bg-white border border-slate-200 rounded-xl shadow-xl hidden group-hover:block p-1">
-                            <button onclick="exportData('xlsx')" class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-indigo-50 rounded-lg flex items-center gap-2">
-                                <i data-lucide="file-spreadsheet" class="w-4 h-4 text-green-600"></i> Excel (.xlsx)
-                            </button>
-                            <button onclick="exportData('csv')" class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-indigo-50 rounded-lg flex items-center gap-2">
-                                <i data-lucide="file-text" class="w-4 h-4 text-blue-600"></i> CSV (.csv)
-                            </button>
+                        <!-- pt-2 acts as a transparent bridge so the mouse hover doesn't break -->
+                        <div class="absolute right-0 top-full pt-1.5 w-40 hidden group-hover:block transition-all">
+                            <div class="bg-white border border-slate-200 rounded-xl shadow-xl p-1">
+                                <button onclick="exportData('xlsx')" class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-indigo-50 rounded-lg flex items-center gap-2">
+                                    <i data-lucide="file-spreadsheet" class="w-4 h-4 text-green-600"></i> Excel (.xlsx)
+                                </button>
+                                <button onclick="exportData('csv')" class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-indigo-50 rounded-lg flex items-center gap-2">
+                                    <i data-lucide="file-text" class="w-4 h-4 text-blue-600"></i> CSV (.csv)
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -851,7 +855,6 @@
         function exportData(format = 'xlsx') {
             if (!gridApi) return showToast("No data to export", "info");
             
-            const rowData = [];
             const colDefs = gridApi.getColumnDefs();
             const colsToExport = [];
             
@@ -866,13 +869,28 @@
                 }
             });
 
-            gridApi.forEachNodeAfterFilterAndSort(node => {
-                const row = {};
-                colsToExport.forEach(col => {
-                    row[col.header] = node.data[col.field];
+            const rowData = [];
+            const selectedNodes = gridApi.getSelectedNodes();
+            
+            if (selectedNodes.length > 0) {
+                // User has selected rows, export only the selected ones
+                selectedNodes.forEach(node => {
+                    const row = {};
+                    colsToExport.forEach(col => {
+                        row[col.header] = node.data[col.field];
+                    });
+                    rowData.push(row);
                 });
-                rowData.push(row);
-            });
+            } else {
+                // No rows selected, export all currently visible (filtered/sorted) rows
+                gridApi.forEachNodeAfterFilterAndSort(node => {
+                    const row = {};
+                    colsToExport.forEach(col => {
+                        row[col.header] = node.data[col.field];
+                    });
+                    rowData.push(row);
+                });
+            }
 
             if (rowData.length === 0) return showToast("No rows to export", "info");
 
@@ -885,7 +903,8 @@
             if (format === 'csv') XLSX.writeFile(wb, fileName, { bookType: 'csv' });
             else XLSX.writeFile(wb, fileName);
             
-            showToast(`Exported ${rowData.length} rows`, "success");
+            const msg = selectedNodes.length > 0 ? `Exported ${rowData.length} selected rows` : `Exported ${rowData.length} rows`;
+            showToast(msg, "success");
         }
 
         // --- Generic Helpers ---

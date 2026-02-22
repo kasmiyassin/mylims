@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Data Editor - TIFI LIMS</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- AG Grid -->
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-grid.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-theme-alpine.css" />
+    <!-- SheetJS -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f1f5f9; /* slate-100 */
+        }
+        
+        /* Premium AG Grid Customization */
+        .ag-theme-alpine {
+            --ag-background-color: #ffffff;
+            --ag-header-background-color: #ffffff;
+            --ag-header-foreground-color: #64748b; /* slate-500 */
+            --ag-header-cell-hover-background-color: #f8fafc;
+            --ag-border-color: transparent;
+            --ag-row-border-color: #f1f5f9; /* slate-100 */
+            --ag-row-hover-color: #f8fafc; /* slate-50 */
+            --ag-selected-row-background-color: #eff6ff; /* blue-50 */
+            --ag-font-family: 'Inter', sans-serif;
+            --ag-font-size: 13px;
+            --ag-cell-horizontal-padding: 16px;
+            --ag-header-column-separator-display: block;
+            --ag-header-column-separator-color: #e2e8f0;
+            --ag-header-column-separator-height: 30%;
+            
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+            overflow: hidden;
+        }
+
+        .ag-theme-alpine .ag-header {
+            border-bottom: 1px solid #e2e8f0;
+            font-weight: 600;
+        }
+        
+        /* Pinned PK Column Styling */
+        .pk-cell {
+            background-color: #f8fafc !important; 
+            font-family: 'Monaco', 'Consolas', monospace;
+            color: #475569;
+            font-weight: 600;
+            border-right: 1px dashed #cbd5e1 !important;
+        }
+        
+        /* New Row Indicator */
+        .new-row-cell {
+            background-color: #ecfdf5 !important; /* Emerald-50 */
+            color: #065f46;
+            font-weight: 500;
+        }
+
+        .loading-overlay {
+            position: absolute; inset: 0; background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center;
+            z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        .loading-overlay.active { opacity: 1; pointer-events: all; }
+        
+        /* Mandatory field warning */
+        .mandatory-cell-empty { 
+            background-color: #fef2f2 !important; 
+            border: 1px solid #fca5a5 !important;
+        }
+
+        /* Slide-over panel transition */
+        .slide-over { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .slide-over.closed { transform: translateX(100%); }
+        .slide-over.open { transform: translateX(0); }
+        
+        /* Custom Scrollbar for sidebar/panels */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.25rem; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-slate-800 selection:bg-indigo-100 selection:text-indigo-900">
+
+    <!-- Global Loading & Toast -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="bg-white/90 px-6 py-5 rounded-2xl shadow-2xl flex items-center gap-4 border border-slate-200/50">
+            <div class="relative w-6 h-6">
+                <div class="absolute inset-0 border-2 border-slate-200 rounded-full"></div>
+                <div class="absolute inset-0 border-2 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
+            </div>
+            <p id="loadingText" class="text-slate-700 font-semibold tracking-wide">Processing data...</p>
+        </div>
+    </div>
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-[120] flex flex-col gap-3"></div>
+
+    <!-- Sidebar -->
+    <div class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex-shrink-0">
+        <div class="p-5 border-b border-slate-100 flex items-center gap-3 shrink-0">
+            <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 p-2 rounded-xl shadow-inner">
+                <i data-lucide="flask-conical" class="w-5 h-5 text-white"></i> 
+            </div>
+            <span class="text-xl font-bold tracking-tight text-slate-800">TIFI LIMS</span>
+        </div>
+        
+        <div class="sidebar-nav-container p-4 space-y-1">
+            <a href="dashboard.html" class="flex items-center px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group mb-2">
+                <i data-lucide="layout-dashboard" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Dashboard
+            </a>
+            
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Core</div>
+            <a href="projects.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="folder-kanban" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Projects
+            </a>
+            <a href="experiments.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="flask-round" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Experiments
+            </a>
+            <a href="protocols.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="book-text" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Protocols (ELN)
+            </a>
+
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Field & Assets</div>
+            <a href="sampling.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="map-pin" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Sampling Events
+            </a>
+            <a href="planned_samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="calendar-check" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Planned Samples
+            </a>
+            <a href="samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="beaker" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Samples Registry
+            </a>
+            <a href="storage.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="archive" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Storage
+            </a>
+
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">System</div>
+            <a href="booking.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="calendar-clock" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Booking
+            </a>
+            <a href="tables.html" class="flex items-center px-3 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-medium shadow-sm border border-indigo-100/50">
+                <i data-lucide="table-2" class="w-4 h-4 mr-3 text-indigo-600"></i> Data Editor
+            </a>
+            <a href="reporting.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="bar-chart-2" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Reporting
+            </a>
+        </div>
+
+        <div class="mt-auto shrink-0 p-4 border-t border-slate-100 bg-slate-50/50">
+             <a href="user_profile.html" class="flex items-center mb-3 px-2 py-1.5 -mx-2 hover:bg-white rounded-xl transition-all group cursor-pointer border border-transparent hover:border-slate-200 hover:shadow-sm" title="View Profile & Settings">
+                <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-100 to-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-sm mr-3 shadow-sm border border-indigo-200/50 group-hover:scale-105 transition-transform">U</div>
+                <div class="overflow-hidden flex-1">
+                    <p class="font-semibold text-sm text-slate-800 truncate group-hover:text-indigo-600 transition-colors" id="userNameDisplay">User</p>
+                    <p class="text-[11px] font-medium text-emerald-600 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
+                    </p>
+                </div>
+                <i data-lucide="settings" class="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+            </a>
+            <button id="logout-button" class="w-full flex items-center justify-center p-2 rounded-xl text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 font-medium transition-colors border border-transparent hover:border-red-100">
+                <i data-lucide="log-out" class="w-4 h-4 mr-2"></i><span>Sign Out</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="flex-1 flex flex-col h-full relative overflow-hidden">
+        
+        <!-- Header & Query Builder -->
+        <div class="bg-white px-8 py-6 z-10 shrink-0 border-b border-slate-200">
+            <div class="flex justify-between items-end mb-4">
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Data Editor</h1>
+                    <p class="text-sm text-slate-500 mt-1">Configure your data sources and join rules to begin editing.</p>
+                </div>
+            </div>
+
+            <!-- Query Builder Card -->
+            <div class="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+                <div class="flex items-start gap-4 flex-wrap" id="tableSelectors">
+                    
+                    <!-- Primary Table -->
+                    <div class="flex flex-col gap-2 w-64 shrink-0">
+                        <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="database" class="w-3.5 h-3.5 text-indigo-500"></i> Primary Table
+                        </label>
+                        <div class="relative group">
+                            <select id="primaryTable" class="w-full pl-3 pr-10 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none shadow-sm appearance-none cursor-pointer group-hover:border-indigo-300 transition-all"></select>
+                            <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none group-hover:text-indigo-500 transition-colors"></i>
+                        </div>
+                    </div>
+
+                    <!-- Join Condition -->
+                    <div class="flex flex-col gap-2 w-40 shrink-0">
+                        <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="link-2" class="w-3.5 h-3.5 text-emerald-500"></i> Join On Key
+                        </label>
+                        <input type="text" id="commonColumn" value="sample_id" class="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none shadow-sm" placeholder="e.g. sample_id">
+                    </div>
+
+                    <!-- Visual Connector -->
+                    <div class="pt-8 text-slate-300 hidden md:block">
+                        <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                    </div>
+
+                    <!-- Secondary Tables Wrapper -->
+                    <div id="secondaryTablesContainer" class="flex gap-4 flex-wrap"></div>
+
+                    <!-- Add Join Button -->
+                    <div class="pt-7 shrink-0">
+                        <button onclick="addJoinTable()" class="h-[42px] px-4 bg-white hover:bg-slate-50 text-slate-600 rounded-xl border border-slate-300 border-dashed hover:border-solid hover:border-indigo-300 hover:text-indigo-600 transition-all shadow-sm flex items-center gap-2 text-sm font-medium">
+                            <i data-lucide="plus" class="w-4 h-4"></i> Join Table
+                        </button>
+                    </div>
+
+                    <!-- Spacer -->
+                    <div class="flex-1 min-w-[20px]"></div>
+
+                    <!-- Action: Load Data -->
+                    <div class="pt-7 shrink-0">
+                        <button onclick="loadData()" class="h-[42px] px-6 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 border border-indigo-500">
+                            <i data-lucide="play" class="w-4 h-4 fill-current"></i> Run Query
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Table Toolbar -->
+        <div class="bg-white/60 backdrop-blur-md px-8 py-3 border-b border-slate-200 flex justify-between items-center z-10 shrink-0">
+            <!-- Left: Search -->
+            <div class="relative group w-72">
+                <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5"></i>
+                <input type="text" id="quickFilter" oninput="onQuickFilterChanged()" placeholder="Search in records..." 
+                    class="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 hover:border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none shadow-sm transition-all">
+            </div>
+
+            <!-- Right: Actions -->
+            <div class="flex items-center gap-3">
+                <!-- Segmented Control for Row Actions -->
+                <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/60 shadow-inner">
+                    <button onclick="addNewRow()" class="px-3.5 py-1.5 hover:bg-white text-slate-600 hover:text-emerald-600 rounded-lg text-sm font-medium flex gap-2 items-center transition-all hover:shadow-sm" title="Add Empty Row">
+                        <i data-lucide="plus-circle" class="w-4 h-4"></i> New
+                    </button>
+                    <div class="w-px h-4 bg-slate-200 mx-1"></div>
+                    <button onclick="duplicateRow()" class="px-3.5 py-1.5 hover:bg-white text-slate-600 hover:text-blue-600 rounded-lg text-sm font-medium flex gap-2 items-center transition-all hover:shadow-sm" title="Duplicate Selected Row">
+                        <i data-lucide="copy" class="w-4 h-4"></i> Duplicate
+                    </button>
+                    <div class="w-px h-4 bg-slate-200 mx-1"></div>
+                    <button onclick="deleteSelectedRows()" class="px-3.5 py-1.5 hover:bg-white text-slate-600 hover:text-red-600 rounded-lg text-sm font-medium flex gap-2 items-center transition-all hover:shadow-sm" title="Delete Selected Rows">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i> Delete
+                    </button>
+                </div>
+
+                <div class="w-px h-6 bg-slate-200 mx-1"></div>
+
+                <!-- View & Export -->
+                <button onclick="toggleColumnPicker()" class="px-4 py-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium shadow-sm flex gap-2 items-center transition-all">
+                    <i data-lucide="columns" class="w-4 h-4 text-slate-400"></i> Columns
+                </button>
+
+                <div class="relative group z-[60]">
+                    <button class="px-4 py-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium shadow-sm flex gap-2 items-center transition-all">
+                        <i data-lucide="download" class="w-4 h-4 text-slate-400"></i> Export
+                    </button>
+                    <div class="absolute right-0 top-full pt-1.5 w-44 hidden group-hover:block transition-all">
+                        <div class="bg-white border border-slate-200 rounded-xl shadow-xl p-1.5">
+                            <button onclick="exportData('xlsx')" class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 rounded-lg flex items-center gap-2.5 transition-colors">
+                                <i data-lucide="file-spreadsheet" class="w-4 h-4 text-emerald-500"></i> Excel (.xlsx)
+                            </button>
+                            <button onclick="exportData('csv')" class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 rounded-lg flex items-center gap-2.5 transition-colors mt-0.5">
+                                <i data-lucide="file-text" class="w-4 h-4 text-sky-500"></i> CSV (.csv)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Primary Action: Save -->
+                <button onclick="saveData()" class="ml-2 px-6 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 border border-emerald-500">
+                    <i data-lucide="save" class="w-4 h-4"></i> Commit Changes
+                </button>
+            </div>
+        </div>
+
+        <!-- Grid Area -->
+        <div class="flex-1 p-6 pt-4 overflow-hidden relative">
+            <div id="myGrid" class="ag-theme-alpine h-full w-full"></div>
+            
+            <!-- No Data Placeholder (Beautiful Empty State) -->
+            <div id="noDataMessage" class="hidden absolute inset-6 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center bg-white/50 backdrop-blur-sm z-0">
+                <div class="bg-indigo-50 p-4 rounded-full mb-4">
+                    <i data-lucide="database" class="w-10 h-10 text-indigo-400"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-800 mb-1">Ready to explore data</h3>
+                <p class="text-sm text-slate-500 text-center max-w-sm">Select a primary table from the configuration above, add joins if necessary, and click <span class="font-semibold text-indigo-600">Run Query</span> to populate the grid.</p>
+            </div>
+        </div>
+
+        <!-- Column Picker Slide-over -->
+        <div id="columnSidebar" class="absolute top-0 right-0 h-full w-80 bg-white/95 backdrop-blur-md shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border-l border-slate-200 z-50 transform translate-x-full slide-over flex flex-col">
+            <div class="p-5 border-b border-slate-200/60 flex justify-between items-center bg-white">
+                <span class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                    <i data-lucide="layout" class="w-5 h-5 text-indigo-500"></i> Show/Hide Columns
+                </span>
+                <button onclick="toggleColumnPicker()" class="text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-1.5 rounded-lg transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-5 space-y-6" id="columnToggleList">
+                <!-- Columns injected here -->
+            </div>
+            
+            <!-- Bottom Action -->
+            <div class="p-5 border-t border-slate-200/60 bg-slate-50/50">
+                <button onclick="toggleColumnPicker()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-medium text-sm transition-all shadow-md">
+                    Done
+                </button>
+            </div>
+        </div>
+        
+        <!-- Backdrop for Sidebar (Optional, but nice) -->
+        <div id="sidebarBackdrop" onclick="toggleColumnPicker()" class="absolute inset-0 bg-slate-900/10 backdrop-blur-sm z-40 hidden transition-opacity opacity-0"></div>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const getApiBase = () => window.location.pathname.includes('/mylims') ? '/mylims/api' : '/api';
+        const API = getApiBase();
+
+        // --- Custom Date Editor Component ---
+        class DateEditor {
+            init(params) {
+                this.eInput = document.createElement('input');
+                this.eInput.type = 'date';
+                this.eInput.className = 'ag-input-field-input ag-text-field-input !rounded-md !border-slate-300 focus:!ring-2 focus:!ring-indigo-500 outline-none px-2';
+                this.eInput.style.width = '100%';
+                this.eInput.style.height = '100%';
+                // Set initial value if exists
+                if (params.value) {
+                    const d = new Date(params.value);
+                    if (!isNaN(d.getTime())) {
+                        this.eInput.value = d.toISOString().split('T')[0];
+                    } else {
+                        this.eInput.value = params.value; 
+                    }
+                }
+            }
+            getGui() { return this.eInput; }
+            afterGuiAttached() { this.eInput.focus(); }
+            getValue() { return this.eInput.value; }
+        }
+
+        // --- State ---
+        let gridApi = null;
+        let availableTables = [];
+        let activeSchemas = {};
+        let secondaryTableCount = 0;
+
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            const token = sessionStorage.getItem('token');
+            if(!token) window.location.href = 'login.html';
+
+            const userStr = sessionStorage.getItem('user');
+            if(userStr) {
+                const user = JSON.parse(userStr);
+                if(user && user.person_id) document.getElementById('userNameDisplay').innerText = user.person_id;
+            }
+
+            document.getElementById('logout-button').addEventListener('click', () => {
+                sessionStorage.clear();
+                window.location.href = 'login.html';
+            });
+
+            // Show placeholder
+            document.getElementById('noDataMessage').classList.remove('hidden');
+
+            try {
+                const res = await fetch(`${API}/table_names_for_forms`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) throw new Error("Connection failed");
+                availableTables = await res.json();
+                populateSelect('primaryTable');
+            } catch(e) {
+                showToast("Failed to connect to backend", "error");
+            }
+        });
+
+        function populateSelect(id) {
+            const sel = document.getElementById(id);
+            sel.innerHTML = '<option value="" disabled selected>Select a table...</option>';
+            availableTables.forEach(t => sel.add(new Option(t, t)));
+        }
+
+        function addJoinTable() {
+            secondaryTableCount++;
+            const id = `secTable_${secondaryTableCount}`;
+            const container = document.getElementById('secondaryTablesContainer');
+            const div = document.createElement('div');
+            div.className = "flex flex-col gap-2 w-64 relative group shrink-0";
+            div.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <i data-lucide="table" class="w-3.5 h-3.5 text-sky-500"></i> Join Table ${secondaryTableCount}
+                    </label>
+                    <button onclick="this.closest('.group').remove()" class="text-xs text-slate-400 hover:text-red-500 flex items-center gap-1 transition-colors bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-200 hover:border-red-200">
+                        <i data-lucide="x" class="w-3 h-3"></i> Remove
+                    </button>
+                </div>
+                <div class="relative">
+                    <select id="${id}" class="sec-select w-full pl-3 pr-10 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none shadow-sm appearance-none cursor-pointer"></select>
+                    <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none"></i>
+                </div>
+            `;
+            container.appendChild(div);
+            populateSelect(id);
+            lucide.createIcons();
+        }
+
+        // --- Data Loading ---
+        async function loadData() {
+            const pTable = document.getElementById('primaryTable').value;
+            const joinCol = document.getElementById('commonColumn').value;
+            if(!pTable) return showToast("Select a primary table first", "error");
+
+            const tables = [{ id: 'PRIMARY', name: pTable }];
+            document.querySelectorAll('.sec-select').forEach((sel, idx) => {
+                if(sel.value) tables.push({ id: `SEC${idx+1}`, name: sel.value });
+            });
+
+            showLoading(true);
+            document.getElementById('noDataMessage').classList.add('hidden');
+            activeSchemas = {};
+
+            try {
+                const promises = tables.map(async (t) => {
+                    const [sch, tbl] = t.name.split('.');
+                    const [meta, data] = await Promise.all([
+                        apiFetch(`/table/${sch}/${tbl}/schema`),
+                        apiFetch(`/table/${sch}/${tbl}?limit=1000`)
+                    ]);
+                    
+                    activeSchemas[t.id] = {
+                        name: t.name,
+                        pks: meta.filter(c => c.is_primary_key).map(c => c.column_name),
+                        cols: meta
+                    };
+                    return { id: t.id, data };
+                });
+
+                const results = await Promise.all(promises);
+                const primaryData = results[0].data;
+                const secResults = results.slice(1);
+
+                // Join Logic
+                const secMaps = {};
+                secResults.forEach(res => {
+                    const map = new Map();
+                    res.data.forEach(row => {
+                        const key = String(row[joinCol] || '');
+                        if(key) map.set(key, row);
+                    });
+                    secMaps[res.id] = map;
+                });
+
+                const gridRows = primaryData.map(row => {
+                    const joinVal = String(row[joinCol] || '');
+                    const merged = { ...row };
+                    activeSchemas['PRIMARY'].pks.forEach(pk => merged[`__PK_PRIMARY_${pk}`] = row[pk]);
+
+                    secResults.forEach(res => {
+                        const match = secMaps[res.id].get(joinVal);
+                        if(match) {
+                            Object.keys(match).forEach(col => {
+                                if(col !== joinCol) merged[`${res.id}::${col}`] = match[col];
+                            });
+                            activeSchemas[res.id].pks.forEach(pk => merged[`__PK_${res.id}_${pk}`] = match[pk]);
+                        }
+                    });
+                    return merged;
+                });
+
+                // Build Definitions
+                const colDefs = [];
+                const pSchema = activeSchemas['PRIMARY'];
+                
+                // Primary Columns
+                colDefs.push({
+                    headerName: pSchema.name.toUpperCase(),
+                    headerClass: 'bg-indigo-50/50 text-indigo-800 font-bold tracking-wide border-r border-indigo-100',
+                    children: pSchema.cols.map(c => createColDef(c, 'PRIMARY', null))
+                });
+
+                // Joined Columns
+                secResults.forEach((res, index) => {
+                    const sSchema = activeSchemas[res.id];
+                    const colorClass = index % 2 === 0 ? 'bg-sky-50/50 text-sky-800 border-sky-100' : 'bg-emerald-50/50 text-emerald-800 border-emerald-100';
+                    colDefs.push({
+                        headerName: sSchema.name.toUpperCase(),
+                        headerClass: `${colorClass} font-bold tracking-wide border-r`,
+                        children: sSchema.cols
+                            .filter(c => c.column_name !== joinCol)
+                            .map(c => createColDef(c, res.id, joinCol))
+                    });
+                });
+
+                initGrid(colDefs, gridRows);
+                updateColumnPicker(colDefs);
+                showToast(`Loaded ${gridRows.length} rows successfully`, "success");
+
+            } catch(e) {
+                console.error(e);
+                showToast(e.message, "error");
+                document.getElementById('noDataMessage').classList.remove('hidden');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function createColDef(colMeta, tableId, joinCol) {
+            const field = tableId === 'PRIMARY' ? colMeta.column_name : `${tableId}::${colMeta.column_name}`;
+            const isMandatory = colMeta.is_nullable === 'NO';
+            const isPK = colMeta.is_primary_key;
+
+            const def = {
+                field: field,
+                headerName: colMeta.column_name,
+                
+                editable: (params) => {
+                    if (isPK) return !!params.node.data._new;
+                    return true;
+                },
+                
+                filter: 'agTextColumnFilter',
+                sortable: true,
+                resizable: true,
+                headerTooltip: `${colMeta.data_type} ${isMandatory ? '(Required)' : ''}`,
+                cellClassRules: {
+                    'mandatory-cell-empty': params => isMandatory && !isPK && (params.value === null || params.value === undefined || params.value === ''),
+                    'new-row-cell': params => params.data._new,
+                    'pk-cell': params => isPK
+                }
+            };
+
+            if (colMeta.data_type.includes('date') || colMeta.data_type.includes('time')) {
+                def.cellEditor = DateEditor;
+                def.valueFormatter = (params) => {
+                    if (params.value) return params.value.split('T')[0]; 
+                    return '';
+                };
+            } else if (colMeta.data_type.includes('int') || colMeta.data_type.includes('numeric')) {
+                def.filter = 'agNumberColumnFilter';
+                def.type = 'numericColumn';
+            }
+
+            if (isPK) {
+                def.pinned = 'left';
+                def.lockPosition = true; 
+                def.lockVisible = true; 
+                def.checkboxSelection = true; 
+                def.headerCheckboxSelection = true;
+                def.width = 160;
+                
+                def.valueFormatter = params => {
+                    if (params.data._new && (params.value === null || params.value === undefined)) {
+                        return '(Auto/Enter)';
+                    }
+                    return params.value;
+                };
+            }
+
+            return def;
+        }
+
+        function initGrid(colDefs, rowData) {
+            const eGridDiv = document.querySelector('#myGrid');
+            eGridDiv.innerHTML = '';
+            
+            const gridOptions = {
+                columnDefs: colDefs,
+                rowData: rowData,
+                defaultColDef: { 
+                    resizable: true, 
+                    minWidth: 120, 
+                    flex: 1,
+                    menuTabs: ['filterMenuTab', 'generalMenuTab'],
+                    cellStyle: { display: 'flex', alignItems: 'center' } // Vertical centering
+                },
+                rowSelection: 'multiple',
+                enableCellTextSelection: true,
+                suppressDragLeaveHidesColumns: true, 
+                animateRows: true,
+                rowHeight: 44, // Slightly taller rows for better readability
+                headerHeight: 48,
+                onGridReady: p => {
+                    gridApi = p.api;
+                    eGridDiv.addEventListener('paste', handleGridPaste);
+                },
+                onCellValueChanged: p => p.node.data._modified = true
+            };
+            if (window.agGrid && agGrid.createGrid) {
+                agGrid.createGrid(eGridDiv, gridOptions);
+            } else if (window.agGrid && agGrid.Grid) {
+                new agGrid.Grid(eGridDiv, gridOptions);
+            }
+        }
+
+        // --- Features ---
+
+        function onQuickFilterChanged() {
+            if(!gridApi) return;
+            gridApi.setQuickFilter(document.getElementById('quickFilter').value);
+        }
+
+        function duplicateRow() {
+            if(!gridApi) return;
+            const selected = gridApi.getSelectedNodes();
+            if(selected.length === 0) return showToast("Select rows to duplicate", "error");
+
+            const newItems = selected.map(node => {
+                const newData = { ...node.data };
+                newData._new = true;
+                delete newData._modified;
+                
+                activeSchemas['PRIMARY'].pks.forEach(pk => {
+                    newData[pk] = null;
+                    delete newData[`__PK_PRIMARY_${pk}`];
+                });
+                return newData;
+            });
+
+            gridApi.applyTransaction({ add: newItems });
+            showToast(`Duplicated ${newItems.length} rows. Primary keys cleared.`, "success");
+        }
+
+        function addNewRow() {
+            if(!gridApi) return;
+            const newItem = { _new: true };
+            activeSchemas['PRIMARY'].pks.forEach(pk => newItem[pk] = null);
+            gridApi.applyTransaction({ add: [newItem], addIndex: 0 });
+            gridApi.ensureIndexVisible(0);
+        }
+
+        async function deleteSelectedRows() {
+            if(!gridApi) return;
+            const selectedData = gridApi.getSelectedRows();
+            if(selectedData.length === 0) return showToast("No rows selected for deletion", "error");
+            
+            if(!confirm(`Delete ${selectedData.length} record(s)? This action cannot be undone.`)) return;
+
+            showLoading(true);
+            let successCount = 0;
+            let failCount = 0;
+
+            const pSchema = activeSchemas['PRIMARY'];
+            const primaryName = pSchema.name; 
+            const [schema, table] = primaryName.split('.');
+
+            try {
+                for (const row of selectedData) {
+                    if (row._new) {
+                        gridApi.applyTransaction({ remove: [row] });
+                        successCount++;
+                        continue;
+                    }
+
+                    const params = new URLSearchParams();
+                    let missingPk = false;
+                    
+                    pSchema.pks.forEach(pk => {
+                        const val = row[`__PK_PRIMARY_${pk}`];
+                        if (val === null || val === undefined) missingPk = true;
+                        params.append(pk, val);
+                    });
+
+                    if (missingPk) {
+                        failCount++;
+                        continue;
+                    }
+
+                    try {
+                        await apiFetch(`/table/${schema}/${table}?${params.toString()}`, { method: 'DELETE' });
+                        gridApi.applyTransaction({ remove: [row] });
+                        successCount++;
+                    } catch (e) {
+                        failCount++;
+                    }
+                }
+                
+                if (successCount > 0) showToast(`Deleted ${successCount} records.`, "success");
+                if (failCount > 0) showToast(`Failed to delete ${failCount} records.`, "error");
+
+            } catch (e) {
+                showToast("Error during deletion process", "error");
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // --- Side Panel ---
+        function toggleColumnPicker() {
+            const el = document.getElementById('columnSidebar');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            
+            if (el.classList.contains('translate-x-full')) {
+                el.classList.remove('translate-x-full');
+                backdrop.classList.remove('hidden');
+                setTimeout(() => backdrop.classList.remove('opacity-0'), 10);
+            } else {
+                el.classList.add('translate-x-full');
+                backdrop.classList.add('opacity-0');
+                setTimeout(() => backdrop.classList.add('hidden'), 300);
+            }
+        }
+
+        function updateColumnPicker(colDefs) {
+            const list = document.getElementById('columnToggleList');
+            list.innerHTML = '';
+
+            colDefs.forEach(group => {
+                const groupDiv = document.createElement('div');
+                groupDiv.className = "mb-6 bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden";
+                
+                const headerRow = document.createElement('div');
+                headerRow.className = "flex justify-between items-center px-4 py-2.5 bg-slate-50 border-b border-slate-100";
+
+                const title = document.createElement('h4');
+                title.className = "text-xs font-bold text-slate-600 uppercase tracking-wider";
+                title.innerText = group.headerName;
+
+                const controls = document.createElement('div');
+                controls.className = "flex gap-1";
+
+                const btnAll = document.createElement('button');
+                btnAll.className = "text-[10px] font-semibold text-indigo-600 hover:bg-indigo-100 px-2 py-1 rounded transition";
+                btnAll.innerText = "All";
+                
+                const btnNone = document.createElement('button');
+                btnNone.className = "text-[10px] font-semibold text-slate-500 hover:bg-slate-200 px-2 py-1 rounded transition";
+                btnNone.innerText = "None";
+
+                const groupFields = group.children.map(c => c.field);
+
+                btnAll.onclick = () => toggleGroupCols(groupFields, true);
+                btnNone.onclick = () => toggleGroupCols(groupFields, false);
+
+                controls.appendChild(btnAll);
+                controls.appendChild(btnNone);
+                
+                headerRow.appendChild(title);
+                headerRow.appendChild(controls);
+                groupDiv.appendChild(headerRow);
+
+                const itemsContainer = document.createElement('div');
+                itemsContainer.className = "p-2 flex flex-col gap-0.5";
+
+                group.children.forEach(col => {
+                    const isLocked = col.lockVisible;
+                    
+                    const div = document.createElement('label');
+                    div.className = "flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg transition cursor-pointer select-none group";
+                    
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.id = `cb_col_${col.field.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                    checkbox.className = `w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 ${isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`;
+                    checkbox.checked = true; 
+                    if (isLocked) checkbox.disabled = true;
+
+                    checkbox.addEventListener('change', (e) => {
+                        toggleCol(col.field, e.target.checked);
+                    });
+
+                    const labelText = document.createElement('span'); 
+                    labelText.className = "text-sm text-slate-700 truncate flex-1 group-hover:text-slate-900";
+                    labelText.innerText = col.headerName;
+
+                    div.appendChild(checkbox);
+                    div.appendChild(labelText);
+
+                    if (isLocked) {
+                        const icon = document.createElement('i');
+                        icon.setAttribute('data-lucide', 'lock');
+                        icon.className = "w-3.5 h-3.5 text-slate-400";
+                        div.appendChild(icon);
+                    }
+
+                    itemsContainer.appendChild(div);
+                });
+                
+                groupDiv.appendChild(itemsContainer);
+                list.appendChild(groupDiv);
+            });
+            lucide.createIcons();
+        }
+
+        function toggleGroupCols(fields, visible) {
+            if(!gridApi) return;
+            const colsToToggle = fields.filter(f => {
+                const col = gridApi.getColumn(f);
+                return col && !col.getColDef().lockVisible;
+            });
+            gridApi.setColumnsVisible(colsToToggle, visible);
+            colsToToggle.forEach(f => {
+                const safeId = `cb_col_${f.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                const cb = document.getElementById(safeId);
+                if(cb) cb.checked = visible;
+            });
+        }
+
+        function toggleCol(field, visible) {
+            if (gridApi) gridApi.setColumnsVisible([field], visible);
+        }
+
+        // --- Paste Handler ---
+        async function handleGridPaste(e) {
+            if (!gridApi) return;
+            if (e.target.closest('.ag-input-field-input, .ag-text-field-input')) return;
+
+            e.preventDefault();
+            const clipText = (e.clipboardData || window.clipboardData).getData('text');
+            if (!clipText) return;
+
+            const rows = clipText.split(/\r\n|\n|\r/).map(row => row.split('\t'));
+            if (rows.length > 0 && rows[rows.length - 1].length === 1 && rows[rows.length - 1][0] === "") rows.pop();
+            if (rows.length === 0) return;
+
+            const focusedCell = gridApi.getFocusedCell();
+            const startColIdx = focusedCell ? gridApi.getAllDisplayedColumns().indexOf(focusedCell.column) : 0;
+            const startRowIdx = focusedCell ? focusedCell.rowIndex : 0;
+            const displayedCols = gridApi.getAllDisplayedColumns();
+
+            const itemsToUpdate = [];
+            const itemsToAdd = [];
+
+            rows.forEach((rowValues, rIdx) => {
+                const currentRowIndex = startRowIdx + rIdx;
+                const rowNode = gridApi.getDisplayedRowAtIndex(currentRowIndex);
+                
+                let rowData = rowNode ? rowNode.data : { _new: true };
+                let hasChange = false;
+
+                rowValues.forEach((val, cIdx) => {
+                    const col = displayedCols[startColIdx + cIdx];
+                    if (!col) return;
+
+                    const colDef = col.getColDef();
+                    if (!colDef.editable) return; 
+
+                    const field = colDef.field;
+                    let newVal = val.trim();
+                    if (newVal === "") newVal = null;
+
+                    if (rowData[field] !== newVal) {
+                        rowData[field] = newVal;
+                        hasChange = true;
+                    }
+                });
+
+                if (hasChange) {
+                    if (rowNode) {
+                        rowData._modified = true;
+                        itemsToUpdate.push(rowData);
+                    } else {
+                        itemsToAdd.push(rowData);
+                    }
+                }
+            });
+
+            if (itemsToUpdate.length > 0) gridApi.applyTransaction({ update: itemsToUpdate });
+            if (itemsToAdd.length > 0) gridApi.applyTransaction({ add: itemsToAdd });
+            showToast(`Pasted: ${itemsToUpdate.length} updated, ${itemsToAdd.length} new`, "success");
+        }
+
+        // --- Save Logic ---
+        async function saveData() {
+            if(!gridApi) return;
+            gridApi.stopEditing();
+            showLoading(true);
+
+            const payloads = {};
+            Object.keys(activeSchemas).forEach(id => payloads[id] = { name: activeSchemas[id].name, updates: [], inserts: [] });
+            
+            const joinCol = document.getElementById('commonColumn').value;
+
+            gridApi.forEachNode(node => {
+                const row = node.data;
+                if(!row._modified && !row._new) return;
+
+                Object.keys(activeSchemas).forEach(tableId => {
+                    const schema = activeSchemas[tableId];
+                    const record = {};
+                    let hasData = false;
+
+                    schema.cols.forEach(c => {
+                        const field = tableId === 'PRIMARY' ? c.column_name : `${tableId}::${c.column_name}`;
+                        
+                        if(tableId !== 'PRIMARY' && c.column_name === joinCol) {
+                            if(row[joinCol]) { record[c.column_name] = row[joinCol]; hasData = true; }
+                        }
+                        else if(row.hasOwnProperty(field)) {
+                            record[c.column_name] = row[field];
+                            hasData = true;
+                        }
+                    });
+
+                    if(!hasData && !row._new) return;
+
+                    if(row._new) {
+                        const cleanRecord = {};
+                        Object.keys(record).forEach(k => {
+                            if (record[k] !== null && record[k] !== undefined && record[k] !== '') {
+                                cleanRecord[k] = record[k];
+                            }
+                        });
+                        if (Object.keys(cleanRecord).length > (tableId !== 'PRIMARY' ? 1 : 0)) {
+                            payloads[tableId].inserts.push(cleanRecord);
+                        }
+                    } else {
+                        const pkExists = schema.pks.every(pk => row[`__PK_${tableId}_${pk}`] != null);
+                        if(pkExists) payloads[tableId].updates.push(record);
+                        else payloads[tableId].inserts.push(record);
+                    }
+                });
+            });
+
+            try {
+                let updates = 0, inserts = 0;
+                for(const id in payloads) {
+                    const p = payloads[id];
+                    const [s, t] = p.name.split('.');
+                    if(p.inserts.length) {
+                        await apiFetch(`/table/${s}/${t}/batch_upload`, { method: 'POST', body: p.inserts });
+                        inserts += p.inserts.length;
+                    }
+                    if(p.updates.length) {
+                        await apiFetch(`/table/${s}/${t}/batch_update`, { method: 'POST', body: p.updates });
+                        updates += p.updates.length;
+                    }
+                }
+                showToast(`Saved successfully: ${inserts} added, ${updates} updated`, "success");
+                loadData(); 
+            } catch(e) {
+                showToast(e.message, "error");
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // --- Export Logic ---
+        function exportData(format = 'xlsx') {
+            if (!gridApi) return showToast("No data to export", "error");
+            
+            const colDefs = gridApi.getColumnDefs();
+            const colsToExport = [];
+            
+            colDefs.forEach(group => {
+                if (group.children) {
+                    group.children.forEach(col => {
+                        if (gridApi.getColumn(col.field).isVisible()) {
+                            colsToExport.push({ field: col.field, header: col.headerName });
+                        }
+                    });
+                }
+            });
+
+            const rowData = [];
+            const selectedNodes = gridApi.getSelectedNodes();
+            
+            if (selectedNodes.length > 0) {
+                selectedNodes.forEach(node => {
+                    const row = {};
+                    colsToExport.forEach(col => { row[col.header] = node.data[col.field]; });
+                    rowData.push(row);
+                });
+            } else {
+                gridApi.forEachNodeAfterFilterAndSort(node => {
+                    const row = {};
+                    colsToExport.forEach(col => { row[col.header] = node.data[col.field]; });
+                    rowData.push(row);
+                });
+            }
+
+            if (rowData.length === 0) return showToast("No rows to export", "error");
+
+            const ws = XLSX.utils.json_to_sheet(rowData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Data");
+
+            const fileName = `lims_export_${new Date().toISOString().slice(0,10)}.${format}`;
+            
+            if (format === 'csv') XLSX.writeFile(wb, fileName, { bookType: 'csv' });
+            else XLSX.writeFile(wb, fileName);
+            
+            const msg = selectedNodes.length > 0 ? `Exported ${rowData.length} selected rows` : `Exported ${rowData.length} rows`;
+            showToast(msg, "success");
+        }
+
+        // --- Generic Helpers ---
+        async function apiFetch(url, opts={}) {
+            const token = sessionStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers };
+            if(opts.body) opts.body = JSON.stringify(opts.body);
+            const res = await fetch(API + url, { ...opts, headers });
+            if(!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || "API Error");
+            }
+            return res.json();
+        }
+
+        function showLoading(show) { document.getElementById('loadingOverlay').classList.toggle('active', show); }
+        function showToast(msg, type='success') {
+            const c = document.getElementById('toastContainer');
+            const d = document.createElement('div');
+            
+            const bgClass = type === 'error' ? 'bg-red-50' : 'bg-emerald-50';
+            const borderClass = type === 'error' ? 'border-red-200' : 'border-emerald-200';
+            const textClass = type === 'error' ? 'text-red-800' : 'text-emerald-800';
+            const iconColor = type === 'error' ? 'text-red-500' : 'text-emerald-500';
+            
+            d.className = `px-4 py-3 rounded-xl shadow-lg border ${borderClass} ${bgClass} ${textClass} text-sm font-semibold flex items-center gap-3 transform transition-all duration-300 translate-y-0`;
+            d.innerHTML = `<i data-lucide="${type==='error'?'alert-octagon':'check-circle-2'}" class="w-5 h-5 ${iconColor}"></i> ${msg}`;
+            c.appendChild(d);
+            lucide.createIcons();
+            setTimeout(() => { 
+                d.classList.add('opacity-0', 'translate-y-4'); 
+                setTimeout(() => d.remove(), 300); 
+            }, 3500);
+        }
+    </script>
+</body>
+</html>

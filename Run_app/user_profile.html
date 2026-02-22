@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Profile - TIFI LIMS</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f1f5f9; /* slate-100 */
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.25rem; }
+        
+        /* Glassmorphism for modern cards */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }
+        
+        /* Form Inputs */
+        .form-input {
+            width: 100%;
+            padding: 0.625rem 0.875rem;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            font-size: 0.875rem;
+            color: #334155;
+            transition: all 0.2s;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+            background-color: #ffffff;
+        }
+        .form-input:read-only {
+            background-color: #f1f5f9;
+            color: #64748b;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-slate-800 selection:bg-indigo-100 selection:text-indigo-900">
+
+    <!-- Sidebar (Matches Dashboard exactly) -->
+    <div class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex-shrink-0">
+        <div class="p-5 border-b border-slate-100 flex items-center gap-3 shrink-0">
+            <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 p-2 rounded-xl shadow-inner">
+                <i data-lucide="flask-conical" class="w-5 h-5 text-white"></i> 
+            </div>
+            <span class="text-xl font-bold tracking-tight text-slate-800">TIFI LIMS</span>
+        </div>
+        
+        <div class="sidebar-nav-container p-4 space-y-1">
+            <a href="dashboard.html" class="flex items-center px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group mb-2">
+                <i data-lucide="layout-dashboard" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Dashboard
+            </a>
+            
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Core</div>
+            <a href="projects.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="folder-kanban" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Projects
+            </a>
+            <a href="experiments.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="flask-round" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Experiments
+            </a>
+            <a href="protocols.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="book-text" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Protocols (ELN)
+            </a>
+
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Field & Assets</div>
+            <a href="sampling.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="map-pin" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Sampling Events
+            </a>
+            <a href="planned_samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="calendar-check" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Planned Samples
+            </a>
+            <a href="samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="beaker" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Samples Registry
+            </a>
+            <a href="storage.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="archive" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Storage
+            </a>
+
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">System</div>
+            <a href="booking.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="calendar-clock" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Booking
+            </a>
+            <a href="tables.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="table-2" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Data Editor
+            </a>
+            <a href="reporting.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="bar-chart-2" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Reporting
+            </a>
+        </div>
+
+        <div class="mt-auto shrink-0 p-4 border-t border-slate-100 bg-slate-50/50">
+             <a href="user_profile.html" class="flex items-center mb-3 px-2 py-1.5 -mx-2 bg-white rounded-xl transition-all group cursor-pointer border border-indigo-200 shadow-sm ring-2 ring-indigo-50" title="View Profile & Settings">
+                <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm mr-3 shadow-sm group-hover:scale-105 transition-transform">U</div>
+                <div class="overflow-hidden flex-1">
+                    <p class="font-semibold text-sm text-indigo-700 truncate" id="userNameDisplay">User</p>
+                    <p class="text-[11px] font-medium text-emerald-600 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
+                    </p>
+                </div>
+                <i data-lucide="settings" class="w-4 h-4 text-indigo-600 mr-1 animate-spin-slow"></i>
+            </a>
+            <button id="logout-button" class="w-full flex items-center justify-center p-2 rounded-xl text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 font-medium transition-colors border border-transparent hover:border-red-100">
+                <i data-lucide="log-out" class="w-4 h-4 mr-2"></i><span>Sign Out</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1 overflow-auto p-8 relative">
+        
+        <!-- Background decorative blobs -->
+        <div class="absolute top-0 right-0 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none z-0"></div>
+        <div class="absolute bottom-0 left-40 w-72 h-72 bg-emerald-200/20 rounded-full blur-3xl translate-y-1/2 pointer-events-none z-0"></div>
+
+        <header class="flex justify-between items-end mb-8 relative z-10">
+            <div>
+                <p class="text-sm font-semibold text-indigo-600 mb-1 tracking-wide">Account Settings</p>
+                <h1 class="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
+                    My Profile
+                </h1>
+            </div>
+        </header>
+
+        <div id="loading-area" class="flex flex-col items-center justify-center py-20 relative z-10">
+            <div class="relative w-10 h-10 mb-4">
+                <div class="absolute inset-0 border-4 border-slate-200 rounded-full"></div>
+                <div class="absolute inset-0 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
+            </div>
+            <p class="text-slate-500 font-medium">Fetching profile details...</p>
+        </div>
+
+        <div id="profile-container" class="hidden grid grid-cols-1 xl:grid-cols-3 gap-8 relative z-10">
+            
+            <!-- LEFT COLUMN: Editing Forms -->
+            <div class="xl:col-span-2 space-y-8">
+                
+                <!-- Account Info -->
+                <div class="glass-card rounded-2xl p-7">
+                    <h2 class="text-lg font-bold text-slate-800 mb-5 flex items-center gap-2">
+                        <i data-lucide="user-circle" class="w-5 h-5 text-indigo-500"></i> Personal Information
+                    </h2>
+                    
+                    <form id="profile-form" class="space-y-5">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">User ID</label>
+                                <input type="text" id="person_id" name="person_id" readonly class="form-input font-mono text-xs text-slate-500">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Status</label>
+                                <input type="text" id="status_id" name="status_id" readonly class="form-input">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">First Name</label>
+                                <input type="text" id="first_name" name="first_name" class="form-input">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Last Name</label>
+                                <input type="text" id="last_name" name="last_name" class="form-input">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Email Address</label>
+                                <div class="relative">
+                                    <i data-lucide="mail" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+                                    <input type="email" id="email" name="email" class="form-input pl-9">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Phone Number</label>
+                                <div class="relative">
+                                    <i data-lucide="phone" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+                                    <input type="tel" id="phone" name="phone" class="form-input pl-9">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Organization ID</label>
+                                <div class="relative">
+                                    <i data-lucide="building" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+                                    <input type="text" id="organization_id" name="organization_id" class="form-input pl-9">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Role in Org</label>
+                                <input type="text" id="role_in_org" name="role_in_org" class="form-input">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Notes</label>
+                            <textarea id="notes" name="notes" rows="3" class="form-input resize-none"></textarea>
+                        </div>
+                        
+                        <div class="flex justify-end pt-2">
+                            <button type="submit" id="save-profile-btn" class="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-semibold py-2.5 px-6 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 border border-indigo-500">
+                                <i data-lucide="save" class="w-4 h-4"></i> Save Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Security / Password -->
+                <div class="glass-card rounded-2xl p-7 border-t-4 border-t-red-500">
+                    <h2 class="text-lg font-bold text-slate-800 mb-5 flex items-center gap-2">
+                        <i data-lucide="shield-check" class="w-5 h-5 text-red-500"></i> Security Settings
+                    </h2>
+                    <form id="password-form" class="space-y-5">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">New Password</label>
+                                <div class="relative">
+                                    <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+                                    <input type="password" id="new_password" required minlength="8" class="form-input pl-9 focus:border-red-500 focus:ring-red-500" placeholder="Min. 8 characters">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Confirm Password</label>
+                                <div class="relative">
+                                    <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+                                    <input type="password" id="confirm_password" required minlength="8" class="form-input pl-9 focus:border-red-500 focus:ring-red-500" placeholder="Repeat password">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex justify-end">
+                            <button type="submit" id="change-password-btn" class="bg-white hover:bg-red-50 text-red-600 border border-red-200 font-semibold py-2.5 px-6 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2">
+                                <i data-lucide="key" class="w-4 h-4"></i> Update Password
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: User Activity Summary -->
+            <div class="space-y-6">
+                
+                <!-- My Projects -->
+                <div class="glass-card rounded-2xl p-6">
+                    <h2 class="text-[13px] font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
+                        <i data-lucide="folder-kanban" class="w-4 h-4 text-indigo-500"></i> Active Projects
+                    </h2>
+                    <div id="my-projects-list" class="space-y-3">
+                        <div class="animate-pulse flex space-x-4">
+                            <div class="flex-1 space-y-2 py-1"><div class="h-2 bg-slate-200 rounded"></div><div class="h-2 bg-slate-200 rounded w-5/6"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- My Experiments -->
+                <div class="glass-card rounded-2xl p-6">
+                    <h2 class="text-[13px] font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
+                        <i data-lucide="flask-round" class="w-4 h-4 text-emerald-500"></i> Recent Experiments
+                    </h2>
+                    <div id="my-experiments-list" class="space-y-3">
+                        <div class="animate-pulse flex space-x-4">
+                            <div class="flex-1 space-y-2 py-1"><div class="h-2 bg-slate-200 rounded"></div><div class="h-2 bg-slate-200 rounded w-5/6"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- My Samples -->
+                <div class="glass-card rounded-2xl p-6">
+                    <h2 class="text-[13px] font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
+                        <i data-lucide="beaker" class="w-4 h-4 text-purple-500"></i> Received Samples
+                    </h2>
+                    <div id="my-samples-list" class="space-y-3">
+                        <div class="animate-pulse flex space-x-4">
+                            <div class="flex-1 space-y-2 py-1"><div class="h-2 bg-slate-200 rounded"></div><div class="h-2 bg-slate-200 rounded w-5/6"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div id="toastContainer" class="fixed bottom-6 right-6 z-[120] flex flex-col gap-3"></div>
+    </div>
+
+    <script>
+        // --- Configuration & Session Check ---
+        const getApiBase = () => window.location.pathname.includes('/mylims') ? '/mylims/api' : '/api';
+        const API_PREFIX = getApiBase();
+
+        // 1. Auth Check
+        const token = sessionStorage.getItem('token');
+        if (!token) window.location.href = 'login.html';
+
+        const USER_SESSION_DATA = JSON.parse(sessionStorage.getItem('user'));
+        const USER_ID = USER_SESSION_DATA?.person_id;
+        
+        // V5.1 DB References
+        const TARGET_SCHEMA = 'core';
+        const TARGET_TABLE = 'persons';
+        const USER_PK_KEY = 'person_id';
+
+        // --- Core Utilities ---
+        function showToast(msg, type='success') {
+            const c = document.getElementById('toastContainer');
+            const d = document.createElement('div');
+            
+            const bgClass = type === 'error' ? 'bg-red-50' : 'bg-emerald-50';
+            const borderClass = type === 'error' ? 'border-red-200' : 'border-emerald-200';
+            const textClass = type === 'error' ? 'text-red-800' : 'text-emerald-800';
+            const iconColor = type === 'error' ? 'text-red-500' : 'text-emerald-500';
+            const icon = type === 'error' ? 'alert-octagon' : 'check-circle-2';
+            
+            d.className = `px-4 py-3 rounded-xl shadow-lg border ${borderClass} ${bgClass} ${textClass} text-sm font-semibold flex items-center gap-3 transform transition-all duration-300 translate-y-0`;
+            d.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 ${iconColor}"></i> ${msg}`;
+            c.appendChild(d);
+            lucide.createIcons();
+            
+            setTimeout(() => { 
+                d.classList.add('opacity-0', 'translate-y-4'); 
+                setTimeout(() => d.remove(), 300); 
+            }, 3500);
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            try {
+                return new Date(dateString).toLocaleDateString([], {year: 'numeric', month: 'short', day: 'numeric'});
+            } catch (e) { return 'N/A'; }
+        }
+        
+        async function apiFetch(endpoint, options = {}) {
+            try {
+                const isPasswordChange = endpoint.includes('/user/change-password');
+                const isJson = isPasswordChange || !(options.body instanceof FormData);
+
+                const response = await fetch(`${API_PREFIX}/${endpoint}`, {
+                    ...options,
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        ...(isJson ? {'Content-Type': 'application/json'} : {}), 
+                        ...(options.headers || {}) 
+                    },
+                    body: isJson && options.body && typeof options.body !== 'string' ? JSON.stringify(options.body) : options.body
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+                    throw new Error(errorData.detail || errorData.error || `HTTP error! Status: ${response.status}`);
+                }
+                
+                if (response.status === 204) return { success: true };
+                return await response.json();
+            } catch (error) {
+                console.error(`API Error on ${endpoint}:`, error);
+                return { error: error.message };
+            }
+        }
+        
+        // --- Profile Management ---
+
+        async function fetchProfileData() {
+            if (!USER_ID) {
+                document.getElementById('loading-area').innerHTML = `<p class="text-red-600 font-bold bg-red-50 p-4 rounded-xl border border-red-200">Error: User session data is incomplete.</p>`;
+                return;
+            }
+
+            // In V5.1, exact column matches are passed as standard query parameters in the API
+            const result = await apiFetch(`table/${TARGET_SCHEMA}/${TARGET_TABLE}?${USER_PK_KEY}=${USER_ID}`);
+
+            if (result && !result.error && result.length > 0) {
+                const profile = result[0];
+                renderProfileForm(profile);
+                
+                // Fetch context data
+                fetchMyProjects();
+                fetchMyRecentExperiments();
+                fetchMyRecentSamples();
+            } else {
+                document.getElementById('loading-area').innerHTML = `<p class="text-red-600 font-bold bg-red-50 p-4 rounded-xl border border-red-200">Error loading profile: ${result?.error || 'Record not found.'}</p>`;
+            }
+        }
+
+        function renderProfileForm(profile) {
+            document.getElementById('loading-area').classList.add('hidden');
+            document.getElementById('profile-container').classList.remove('hidden');
+
+            const form = document.getElementById('profile-form');
+
+            // Populate Read-Only
+            document.getElementById('person_id').value = profile[USER_PK_KEY] || USER_ID;
+            document.getElementById('status_id').value = profile.status_id || 'Active';
+            
+            // Populate Editable
+            const fields = ['first_name', 'last_name', 'email', 'phone', 'organization_id', 'role_in_org', 'notes'];
+            fields.forEach(field => {
+                const input = document.getElementById(field);
+                if (input && profile[field] !== undefined && profile[field] !== null) {
+                    input.value = profile[field];
+                }
+            });
+
+            form.onsubmit = handleProfileSubmit;
+            document.getElementById('password-form').onsubmit = handlePasswordSubmit;
+            lucide.createIcons();
+        }
+
+        async function handleProfileSubmit(e) {
+            e.preventDefault();
+            const form = e.target;
+            const btn = document.getElementById('save-profile-btn');
+            
+            btn.innerHTML = `<div class="w-4 h-4 border-2 border-white rounded-full border-t-transparent animate-spin"></div> Saving...`;
+            btn.disabled = true;
+            
+            const payload = {};
+            const formData = new FormData(form);
+            
+            for (let [key, value] of formData.entries()) {
+                 const element = form.elements[key];
+                 if (!element.readOnly && element.type !== 'submit') {
+                    payload[key] = value.trim() === '' ? null : value.trim();
+                 }
+            }
+            
+            // V5.1 update endpoint logic via app.py
+            const queryString = `${USER_PK_KEY}=${USER_ID}`;
+            const endpoint = `table/${TARGET_SCHEMA}/${TARGET_TABLE}?${queryString}`;
+
+            const result = await apiFetch(endpoint, { method: 'PUT', body: payload });
+
+            if (result && !result.error && result.status !== 'error') {
+                showToast("Profile details updated successfully!", "success");
+            } else {
+                showToast(result?.error || 'Failed to update profile.', "error");
+            }
+            
+            btn.innerHTML = `<i data-lucide="save" class="w-4 h-4"></i> Save Changes`;
+            btn.disabled = false;
+            lucide.createIcons();
+        }
+
+        async function handlePasswordSubmit(e) {
+            e.preventDefault();
+            const form = e.target;
+            const newPassword = form.elements['new_password'].value;
+            const confirmPassword = form.elements['confirm_password'].value;
+            const btn = document.getElementById('change-password-btn');
+            
+            if (newPassword !== confirmPassword) {
+                return showToast("Passwords do not match.", "error");
+            }
+            
+            btn.innerHTML = `<div class="w-4 h-4 border-2 border-red-600 rounded-full border-t-transparent animate-spin"></div> Updating...`;
+            btn.disabled = true;
+            
+            // Note: Update to match your actual authentication API endpoints
+            const endpoint = 'auth/change-password'; // Adjust if your route is different
+            const payload = { new_password: newPassword }; 
+
+            try {
+                const result = await apiFetch(endpoint, { method: 'POST', body: payload });
+
+                if (result && !result.error) {
+                    showToast("Password updated. Redirecting to login...", "success");
+                    form.reset(); 
+                    
+                    setTimeout(() => {
+                        sessionStorage.clear();
+                        window.location.href = './login.html';
+                    }, 2000); 
+                } else {
+                    showToast(result?.error || 'Password update failed.', "error");
+                }
+            } catch (error) {
+                showToast("Network failure during password change.", "error");
+            }
+            
+            btn.innerHTML = `<i data-lucide="key" class="w-4 h-4"></i> Update Password`;
+            btn.disabled = false;
+            lucide.createIcons();
+        }
+        
+        // --- Contextual Data Fetches ---
+        
+        async function fetchMyProjects() {
+            const container = document.getElementById('my-projects-list');
+            try {
+                // Find projects where user is PI
+                const piProjects = await apiFetch(`table/lims/projects?pi_person_id=${USER_ID}`);
+                
+                // Find projects where user is standard personnel
+                const memberProjects = await apiFetch(`table/lims/project_personal?person_id=${USER_ID}`);
+                
+                let allProjects = {};
+
+                if (piProjects && !piProjects.error) {
+                    piProjects.forEach(p => { allProjects[p.project_id] = { ...p, role: 'PI' }; });
+                }
+                
+                if (memberProjects && !memberProjects.error) {
+                    for (const mp of memberProjects) {
+                        if (!allProjects[mp.project_id]) {
+                            const details = await apiFetch(`table/lims/projects?project_id=${mp.project_id}`);
+                            if (details && details.length > 0) {
+                                allProjects[mp.project_id] = { ...details[0], role: mp.role || 'Member' };
+                            }
+                        } else {
+                            allProjects[mp.project_id].role += `, ${mp.role}`;
+                        }
+                     }
+                }
+                
+                const finalProjects = Object.values(allProjects).filter(p => p.status_id !== 'Closed');
+
+                if (finalProjects.length === 0) {
+                    container.innerHTML = `<div class="p-3 text-center bg-slate-50 rounded-xl border border-slate-100 text-slate-400 text-sm">No active projects found.</div>`;
+                    return;
+                }
+
+                container.innerHTML = finalProjects.map(p => `
+                    <div class="p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl hover:bg-indigo-50 transition-colors">
+                        <p class="font-bold text-slate-800 text-sm">${p.acronym || p.project_id}: <span class="font-medium">${p.title}</span></p>
+                        <div class="flex justify-between items-center mt-1">
+                            <p class="text-xs text-slate-500">Role: <span class="font-semibold text-indigo-700">${p.role}</span></p>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${p.status_id === 'Planned' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'}">${p.status_id}</span>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                container.innerHTML = `<p class="text-red-500 text-xs">Failed to load projects.</p>`;
+            }
+        }
+
+        async function fetchMyRecentExperiments() {
+            const container = document.getElementById('my-experiments-list');
+            try {
+                // Using standard query params for app.py
+                const experiments = await apiFetch(`table/lims/experiments?person_id=${USER_ID}&limit=5&sort_by=processing_date&sort_order=desc`);
+
+                if (experiments && !experiments.error) {
+                    if (experiments.length === 0) {
+                        container.innerHTML = `<div class="p-3 text-center bg-slate-50 rounded-xl border border-slate-100 text-slate-400 text-sm">No recent experiments.</div>`;
+                        return;
+                    }
+
+                    container.innerHTML = experiments.map(e => `
+                        <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-emerald-300 transition-colors">
+                            <p class="font-bold text-slate-800 text-sm truncate">${e.experiment_id}</p>
+                            <p class="text-xs text-slate-600 truncate mt-0.5">${e.title || e.aim || 'No description'}</p>
+                            <div class="flex justify-between mt-1.5">
+                                <span class="text-[10px] text-slate-400 font-medium"><i data-lucide="calendar" class="w-3 h-3 inline mr-1 -mt-0.5"></i>${formatDate(e.processing_date)}</span>
+                                <span class="text-[10px] font-bold text-emerald-600">${e.status_id || 'Active'}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                    lucide.createIcons();
+                }
+            } catch (error) {
+                container.innerHTML = `<p class="text-red-500 text-xs">Failed to load experiments.</p>`;
+            }
+        }
+
+        async function fetchMyRecentSamples() {
+            const container = document.getElementById('my-samples-list');
+            try {
+                // Fetch where the user is marked as the receiver
+                const samples = await apiFetch(`table/bio_assets/samples_root?receiver_person_id=${USER_ID}&limit=5&sort_by=collection_date&sort_order=desc`);
+                
+                if (samples && !samples.error) {
+                    if (samples.length === 0) {
+                        container.innerHTML = `<div class="p-3 text-center bg-slate-50 rounded-xl border border-slate-100 text-slate-400 text-sm">No recent samples received.</div>`;
+                        return;
+                    }
+
+                    container.innerHTML = samples.map(s => `
+                        <div class="p-3 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-purple-300 transition-colors flex items-center justify-between">
+                            <div class="min-w-0 flex-1">
+                                <p class="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                                    ${s.sample_id}
+                                    <span class="bg-slate-100 text-slate-500 text-[9px] px-1.5 py-0.5 rounded font-mono uppercase">${s.sample_type_id}</span>
+                                </p>
+                                <p class="text-[11px] text-slate-500 truncate mt-0.5">Ext ID: ${s.external_id || 'None'}</p>
+                            </div>
+                            <div class="text-right shrink-0">
+                                <span class="block text-[10px] font-bold text-purple-600">${s.status_id || 'Stored'}</span>
+                                <span class="block text-[10px] text-slate-400">${formatDate(s.collection_date)}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                container.innerHTML = `<p class="text-red-500 text-xs">Failed to load samples.</p>`;
+            }
+        }
+        
+        // --- Initialize ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            
+            if(USER_SESSION_DATA && USER_SESSION_DATA.person_id) {
+                document.getElementById('userNameDisplay').innerText = USER_SESSION_DATA.person_id;
+            }
+
+            document.getElementById('logout-button').addEventListener('click', () => {
+                sessionStorage.clear();
+                window.location.href = './login.html';
+            });
+            
+            fetchProfileData();
+        });
+    </script>
+</body>
+</html>

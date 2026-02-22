@@ -23,13 +23,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("uvicorn.error")
 
 DB_CONFIG = {
-    "dsn": "postgresql://kasmi:password@127.0.0.1/migfish_demo",
+    "dsn": "postgresql://web_admin:password@0.0.0.0/migfish_db",
     "min_size": 1,
     "max_size": 20
 }
 
 AUTH_DB_CONFIG = {
-    "dsn": "postgresql://auth_user:auth_password@127.0.0.1/musr",
+    "dsn": "postgresql://auth_user:auth_password@0.0.0.0/musr",
     "min_size": 1,
     "max_size": 5
 }
@@ -83,10 +83,15 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
+class ChangePasswordRequest(BaseModel):
+    new_password: str
+
 class Token(BaseModel):
     access_token: str
     token_type: str
     user_info: dict
+
+
 
 async def get_db_pool(request: Request):
     if not hasattr(request.app.state, 'db_pool') or not request.app.state.db_pool:
@@ -287,13 +292,25 @@ async def get_dashboard_chart_data(db_pool = Depends(get_db_pool)):
 
 # --- SCHEMA METADATA ---
 
+# @app.get("/api/table_names_for_forms")
+# async def list_all_tables(db_pool = Depends(get_db_pool)):
+#    async with db_pool.acquire() as conn:
+#        rows = await conn.fetch("""
+#            SELECT table_schema || '.' || table_name as full_name
+#            FROM information_schema.tables 
+#            WHERE table_schema IN ('core', 'lims', 'field', 'bio_assets', 'biologyfish', 'moleculargenetics', 'bioinformatics', 'eln', 'communications')
+#            AND table_type = 'BASE TABLE'
+#            ORDER BY table_schema, table_name
+#        """)
+#    return [r['full_name'] for r in rows]
+
 @app.get("/api/table_names_for_forms")
 async def list_all_tables(db_pool = Depends(get_db_pool)):
     async with db_pool.acquire() as conn:
         rows = await conn.fetch("""
             SELECT table_schema || '.' || table_name as full_name
             FROM information_schema.tables 
-            WHERE table_schema IN ('core', 'lims', 'field', 'bio_assets', 'biologyfish', 'moleculargenetics', 'bioinformatics', 'eln', 'communications')
+            WHERE table_schema NOT IN ('information_schema', 'pg_catalog')
             AND table_type = 'BASE TABLE'
             ORDER BY table_schema, table_name
         """)
@@ -600,6 +617,49 @@ async def batch_update(schema: str, table: str, payload: List[Dict[str, Any]], u
                 updated += 1
     return {"status": "success", "count": updated}
 
+@app.post("/api/auth/change-password")
+async def change_password(payload: ChangePasswordRequest, request: Request, user: dict = Depends(get_current_user)):
+    username = user['user_id']
+    
+    # Optional: Prevent changing the hardcoded bypass account
+    if username == 'kasmi':
+        raise HTTPException(400, "Cannot change password for hardcoded admin account.")
+
+    # Hash the new password using bcrypt
+    new_password_bytes = payload.new_password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed_password = bcrypt.hashpw(new_password_bytes, salt).decode('utf-8')
+
+    try:
+        auth_pool = await get_auth_pool(request)
+        async with auth_pool.acquire() as conn:
+            # Update the user's password in the aaa.lg_fi table inside the musr DB
+            result = await conn.execute(
+                "UPDATE aaa.lg_fi SET pswd_hash = $1 WHERE login = $2",
+                hashed_password, username
+            )
+            
+            if result == "UPDATE 0":
+                raise HTTPException(404, "User not found in authentication database")
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating password for {username}: {e}")
+        raise HTTPException(500, "Failed to update password due to database error")
+        
+    return {"success": True, "message": "Password updated successfully"}
+
+
+
+@app.middleware("http")
+async def disable_caching_middleware(request: Request, call_next):
+    response = await call_next(request)
+    # Tells the browser to NEVER cache during development
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 # ==============================================================================
 # 7. STATIC FILES & RUN
 # ==============================================================================

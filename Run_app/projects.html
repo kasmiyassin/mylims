@@ -8,159 +8,243 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.11.10/dayjs.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f1f5f9; /* slate-100 */
+        }
         
-        /* Sidebar Styling */
-        .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.5rem; }
-        .sidebar-nav-container::-webkit-scrollbar { width: 6px; }
-        .sidebar-nav-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        .sidebar-item { transition: all 0.2s ease; color: #475569; }
-        .sidebar-item.active, .sidebar-item.active i { background-color: #eef2ff; color: #4f46e5; font-weight: 600; }
-        .sidebar-item:hover { background-color: #f1f5f9; color: #1e293b; }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.25rem; }
+        
+        /* Glassmorphism for modern cards */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }
 
         /* Kanban Board */
-        .kanban-col { min-width: 280px; transition: background-color 0.2s; }
-        .kanban-col.drag-over { background-color: #e0e7ff; }
-        .kanban-card { transition: transform 0.1s, box-shadow 0.1s; border-left: 4px solid transparent; cursor: grab; }
+        .kanban-col { 
+            min-width: 300px; 
+            transition: all 0.2s ease;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+        }
+        .kanban-col.drag-over { 
+            background-color: #e0e7ff; 
+            border-color: #818cf8;
+            border-style: dashed;
+        }
+        .kanban-card { 
+            transition: transform 0.15s, box-shadow 0.15s; 
+            border-left: 4px solid #6366f1; 
+            cursor: grab; 
+        }
         .kanban-card:active { cursor: grabbing; }
-        .kanban-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+        .kanban-card:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); 
+        }
         
         /* Chat */
-        .chat-bubble { max-width: 75%; position: relative; }
-        .chat-bubble::after { content: ''; position: absolute; bottom: 0; width: 0; height: 0; border: 6px solid transparent; }
-        .chat-in .chat-bubble { background-color: #f1f5f9; border-bottom-left-radius: 2px; color: #1e293b; }
+        .chat-bubble { max-width: 80%; position: relative; }
+        .chat-in .chat-bubble { background-color: #ffffff; border: 1px solid #e2e8f0; border-bottom-left-radius: 4px; color: #334155; }
         .chat-out { flex-direction: row-reverse; }
-        .chat-out .chat-bubble { background-color: #4f46e5; border-bottom-right-radius: 2px; color: white; }
+        .chat-out .chat-bubble { background-color: #4f46e5; border-bottom-right-radius: 4px; color: white; box-shadow: 0 2px 4px rgba(79,70,229,0.2); }
 
         /* Tabs */
-        .tab-btn { border-bottom: 2px solid transparent; transition: all 0.2s; }
+        .tab-btn { border-bottom: 2px solid transparent; transition: all 0.2s; color: #64748b; }
+        .tab-btn:hover { color: #334155; }
         .tab-btn.active { border-bottom-color: #4f46e5; color: #4f46e5; font-weight: 600; }
 
         /* Loading */
-        .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.7); backdrop-filter: blur(2px); display: flex; justify-content: center; align-items: center; z-index: 50; }
+        .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.7); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+        .loading-overlay.active { opacity: 1; pointer-events: all; }
         .hidden { display: none !important; }
         
-        /* Transitions */
-        .fade-in { animation: fadeIn 0.2s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        /* Form Inputs */
+        .form-input {
+            width: 100%;
+            padding: 0.625rem 0.875rem;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            font-size: 0.875rem;
+            color: #334155;
+            transition: all 0.2s;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+            background-color: #ffffff;
+        }
     </style>
 </head>
-<body class="flex h-screen overflow-hidden text-slate-800">
+<body class="flex h-screen overflow-hidden text-slate-800 selection:bg-indigo-100 selection:text-indigo-900">
 
     <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="loading-overlay hidden">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="relative w-12 h-12">
+            <div class="absolute inset-0 border-4 border-slate-200 rounded-full"></div>
+            <div class="absolute inset-0 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
+        </div>
     </div>
 
     <!-- Toast Container -->
-    <div id="toastContainer" class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2"></div>
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-[120] flex flex-col gap-3"></div>
 
     <!-- Sidebar -->
-    <div class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-sm flex-shrink-0">
-        <div class="p-4 border-b border-slate-200 font-bold text-slate-800 flex items-center gap-2 shrink-0">
-            <i data-lucide="flask-conical" class="w-6 h-6 text-indigo-600"></i> 
-            <span class="text-xl">TIFI LIMS</span>
+    <div class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex-shrink-0">
+        <div class="p-5 border-b border-slate-100 flex items-center gap-3 shrink-0">
+            <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 p-2 rounded-xl shadow-inner">
+                <i data-lucide="flask-conical" class="w-5 h-5 text-white"></i> 
+            </div>
+            <span class="text-xl font-bold tracking-tight text-slate-800">TIFI LIMS</span>
         </div>
         
-        <div class="sidebar-nav-container p-2 space-y-1">
-            <a href="dashboard.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i><span>Dashboard</span></a>
-            <a href="projects.html" class="sidebar-item flex items-center p-2 rounded-md active"><i data-lucide="folder-kanban" class="w-5 h-5 mr-3"></i><span>Projects</span></a>
-            <a href="experiments.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="flask-round" class="w-5 h-5 mr-3"></i><span>Experiments</span></a>
-            <a href="protocols.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="book-text" class="w-5 h-5 mr-3"></i><span>Protocols (ELN)</span></a>
-            <a href="sampling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="map-pin" class="w-5 h-5 mr-3"></i><span>Sampling</span></a>
-            <a href="planned_samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Planned Samples</span></a>
-            <a href="samples.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="beaker" class="w-5 h-5 mr-3"></i><span>Samples</span></a>
-            <a href="storage.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="archive" class="w-5 h-5 mr-3"></i><span>Storage</span></a>
-            <a href="labeling.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="printer" class="w-5 h-5 mr-3"></i><span>Labeling</span></a>
-            <a href="workflow.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="workflow" class="w-5 h-5 mr-3"></i><span>Workflow</span></a>
-            <a href="reporting.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="bar-chart-2" class="w-5 h-5 mr-3"></i><span>Reporting</span></a>
-            <a href="booking.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="calendar-check" class="w-5 h-5 mr-3"></i><span>Booking</span></a>
-            <a href="tables.html" class="sidebar-item flex items-center p-2 rounded-md"><i data-lucide="table-2" class="w-5 h-5 mr-3"></i><span>Data Editor</span></a>
+        <div class="sidebar-nav-container p-4 space-y-1">
+            <a href="dashboard.html" class="flex items-center px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group mb-2">
+                <i data-lucide="layout-dashboard" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Dashboard
+            </a>
+            
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Core</div>
+            <a href="projects.html" class="flex items-center px-3 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-medium shadow-sm border border-indigo-100/50">
+                <i data-lucide="folder-kanban" class="w-4 h-4 mr-3 text-indigo-600"></i> Projects
+            </a>
+            <a href="experiments.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="flask-round" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Experiments
+            </a>
+            <a href="protocols.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="book-text" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Protocols (ELN)
+            </a>
+
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Field & Assets</div>
+            <a href="sampling.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="map-pin" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Sampling Events
+            </a>
+            <a href="planned_samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="calendar-check" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Planned Samples
+            </a>
+            <a href="samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="beaker" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Samples Registry
+            </a>
+            <a href="storage.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="archive" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Storage
+            </a>
+
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">System</div>
+            <a href="booking.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="calendar-clock" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Booking
+            </a>
+            <a href="tables.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="table-2" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Data Editor
+            </a>
+            <a href="reporting.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="bar-chart-2" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Reporting
+            </a>
         </div>
 
-        <div class="mt-auto shrink-0 p-4 border-t border-slate-200">
-             <div class="flex items-center mb-3">
-                <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs mr-3">U</div>
-                <div class="overflow-hidden">
-                    <p class="font-semibold text-xs text-gray-800 truncate" id="userNameDisplay">User</p>
-                    <p class="text-xs text-slate-500">Logged In</p>
+        <div class="mt-auto shrink-0 p-4 border-t border-slate-100 bg-slate-50/50">
+             <a href="user_profile.html" class="flex items-center mb-3 px-2 py-1.5 -mx-2 hover:bg-white rounded-xl transition-all group cursor-pointer border border-transparent hover:border-slate-200 hover:shadow-sm" title="View Profile & Settings">
+                <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-100 to-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-sm mr-3 shadow-sm border border-indigo-200/50 group-hover:scale-105 transition-transform">U</div>
+                <div class="overflow-hidden flex-1">
+                    <p class="font-semibold text-sm text-slate-800 truncate group-hover:text-indigo-600 transition-colors" id="userNameDisplay">User</p>
+                    <p class="text-[11px] font-medium text-emerald-600 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
+                    </p>
                 </div>
-            </div>
-            <button id="logout-button" class="w-full flex items-center p-2 rounded-md text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
-                <i data-lucide="log-out" class="w-4 h-4 mr-2"></i><span>Logout</span>
+                <i data-lucide="settings" class="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+            </a>
+            <button id="logout-button" class="w-full flex items-center justify-center p-2 rounded-xl text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 font-medium transition-colors border border-transparent hover:border-red-100">
+                <i data-lucide="log-out" class="w-4 h-4 mr-2"></i><span>Sign Out</span>
             </button>
         </div>
     </div>
 
     <!-- Main Content -->
-    <div class="flex-1 flex flex-col h-full bg-slate-50 relative overflow-hidden">
+    <div class="flex-1 flex flex-col h-full relative overflow-hidden">
         
         <!-- Top Navigation Bar -->
-        <div class="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center shadow-sm shrink-0">
+        <div class="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-4 flex justify-between items-center shadow-sm z-10 shrink-0">
             <div>
-                <h2 class="text-xl font-bold text-slate-800">Project Collaboration</h2>
-                <p class="text-slate-500 text-xs mt-0.5">Manage tasks, communication, and permits</p>
+                <h2 class="text-2xl font-bold text-slate-900 tracking-tight">Project Hub</h2>
+                <p class="text-slate-500 text-sm mt-0.5">Manage workflows, communications, and documentation.</p>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-4">
                 <!-- Project Selector -->
-                <div class="relative">
-                    <i data-lucide="folder" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
-                    <select id="projectSelect" onchange="loadProjectDetails(this.value)" class="pl-9 pr-8 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 bg-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm cursor-pointer min-w-[250px]">
-                        <option value="" disabled selected>Select Project...</option>
+                <div class="relative group">
+                    <i data-lucide="folder" class="w-4 h-4 text-indigo-500 absolute left-3.5 top-2.5"></i>
+                    <select id="projectSelect" onchange="loadProjectDetails(this.value)" class="pl-10 pr-8 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-slate-700 bg-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm cursor-pointer min-w-[280px] appearance-none hover:border-indigo-300 transition-all">
+                        <option value="" disabled selected>Select an active project...</option>
                     </select>
+                    <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 absolute right-3 top-2.5 pointer-events-none group-hover:text-indigo-500 transition-colors"></i>
                 </div>
                 
-                <button onclick="openModal('newProjectModal')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm transition">
+                <div class="w-px h-8 bg-slate-200"></div>
+
+                <button onclick="openModal('newProjectModal')" class="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-5 py-2 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 border border-indigo-500">
                     <i data-lucide="plus" class="w-4 h-4"></i> New Project
                 </button>
             </div>
         </div>
 
         <!-- Scrollable Content -->
-        <div class="flex-1 overflow-y-auto p-8" id="mainScroll">
+        <div class="flex-1 overflow-y-auto p-8 relative" id="mainScroll">
             
+            <!-- Background decorative blobs -->
+            <div class="absolute top-0 right-0 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none z-0"></div>
+
             <!-- Project Banner -->
-            <div id="projectBanner" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6 relative overflow-hidden hidden">
-                <div class="absolute top-0 left-0 w-full h-1 bg-indigo-500"></div>
-                <div class="flex flex-col md:flex-row justify-between gap-6">
+            <div id="projectBanner" class="glass-card rounded-2xl p-7 mb-8 relative overflow-hidden hidden z-10">
+                <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500"></div>
+                <div class="flex flex-col md:flex-row justify-between gap-8">
                     <div class="flex-1">
-                        <h1 class="text-2xl font-bold text-slate-800 mb-2" id="bannerTitle">Project Title</h1>
-                        <div class="flex flex-wrap gap-4 text-sm text-slate-600 mb-4">
-                            <div class="flex items-center gap-1.5 bg-slate-100 px-2 py-1 rounded">
-                                <i data-lucide="hash" class="w-3.5 h-3.5 text-slate-400"></i> <span id="bannerId" class="font-mono font-medium">ID</span>
+                        <h1 class="text-3xl font-extrabold text-slate-900 mb-3 tracking-tight" id="bannerTitle">Project Title</h1>
+                        <div class="flex flex-wrap gap-3 text-sm text-slate-600 mb-5">
+                            <div class="flex items-center gap-1.5 bg-white border border-slate-200 shadow-sm px-2.5 py-1 rounded-lg">
+                                <i data-lucide="hash" class="w-3.5 h-3.5 text-indigo-500"></i> <span id="bannerId" class="font-mono font-bold text-slate-700">ID</span>
                             </div>
-                            <div class="flex items-center gap-1.5 bg-slate-100 px-2 py-1 rounded">
-                                <i data-lucide="user" class="w-3.5 h-3.5 text-slate-400"></i> <span id="bannerPI">PI Name</span>
+                            <div class="flex items-center gap-1.5 bg-white border border-slate-200 shadow-sm px-2.5 py-1 rounded-lg">
+                                <i data-lucide="user" class="w-3.5 h-3.5 text-emerald-500"></i> <span id="bannerPI" class="font-medium text-slate-700">PI Name</span>
                             </div>
-                            <div class="flex items-center gap-1.5 bg-slate-100 px-2 py-1 rounded">
-                                <i data-lucide="credit-card" class="w-3.5 h-3.5 text-slate-400"></i> <span id="bannerGrant">Grant</span>
+                            <div class="flex items-center gap-1.5 bg-white border border-slate-200 shadow-sm px-2.5 py-1 rounded-lg">
+                                <i data-lucide="credit-card" class="w-3.5 h-3.5 text-amber-500"></i> <span id="bannerGrant" class="font-medium text-slate-700">Grant</span>
                             </div>
                         </div>
 
                         <!-- Timeline -->
-                        <div class="relative pt-4">
-                            <div class="flex justify-between text-xs text-slate-500 mb-1 font-medium">
+                        <div class="relative pt-4 max-w-2xl">
+                            <div class="flex justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
                                 <span id="startDate">Start</span>
-                                <span class="text-indigo-600 font-bold">Today</span>
+                                <span class="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">Timeline</span>
                                 <span id="endDate">End</span>
                             </div>
-                            <div class="h-2 bg-slate-100 rounded-full overflow-hidden relative">
-                                <div id="progressBar" class="h-full bg-indigo-500 rounded-full" style="width: 0%"></div>
+                            <div class="h-2.5 bg-slate-100 border border-slate-200 rounded-full overflow-hidden relative shadow-inner">
+                                <div id="progressBar" class="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 rounded-full" style="width: 0%"></div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Team Section -->
-                    <div class="md:border-l border-slate-100 md:pl-6 flex flex-col justify-center min-w-[200px]">
-                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Project Team</h3>
-                        <div class="flex items-center justify-between">
-                            <div class="flex -space-x-2" id="teamAvatars">
+                    <div class="md:border-l border-slate-200 md:pl-8 flex flex-col justify-center min-w-[220px]">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                            <i data-lucide="users" class="w-4 h-4"></i> Project Team
+                        </h3>
+                        <div class="flex items-center justify-between bg-slate-50/50 p-2 rounded-xl border border-slate-100">
+                            <div class="flex -space-x-2.5" id="teamAvatars">
                                 <!-- Injected via JS -->
                             </div>
-                            <button onclick="openTeamModal()" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium border border-indigo-200 hover:bg-indigo-50 px-3 py-1.5 rounded-md transition">
+                            <button onclick="openTeamModal()" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-white border border-indigo-100 shadow-sm hover:border-indigo-300 hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-all">
                                 Manage
                             </button>
                         </div>
@@ -169,66 +253,78 @@
             </div>
 
             <!-- Empty State -->
-            <div id="emptyState" class="flex flex-col items-center justify-center h-64 text-slate-400 bg-white rounded-xl border border-dashed border-slate-300">
-                <i data-lucide="folder-search" class="w-12 h-12 mb-3 text-slate-300"></i>
-                <p class="font-medium">Select a project to view details</p>
+            <div id="emptyState" class="flex flex-col items-center justify-center h-80 text-slate-400 bg-white/50 backdrop-blur-sm rounded-3xl border-2 border-dashed border-slate-200 z-10 relative">
+                <div class="bg-indigo-50 p-4 rounded-full mb-4">
+                    <i data-lucide="folder-search" class="w-10 h-10 text-indigo-400"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-700 mb-1">No Project Selected</h3>
+                <p class="font-medium text-sm text-slate-500 text-center max-w-sm">Choose a project from the dropdown above to view tasks, team chats, and documents.</p>
             </div>
 
             <!-- Content Tabs (Hidden until project selected) -->
-            <div id="projectContent" class="hidden">
+            <div id="projectContent" class="hidden relative z-10">
                 <!-- Tab Headers -->
-                <div class="border-b border-slate-200 mb-6">
-                    <div class="flex gap-6">
-                        <button onclick="switchTab('tasks')" id="tab-tasks" class="tab-btn active pb-3 px-1 text-sm flex items-center gap-2"><i data-lucide="kanban" class="w-4 h-4"></i> Task Board</button>
-                        <button onclick="switchTab('chat')" id="tab-chat" class="tab-btn pb-3 px-1 text-sm flex items-center gap-2"><i data-lucide="message-square" class="w-4 h-4"></i> Team Chat</button>
-                        <button onclick="switchTab('permits')" id="tab-permits" class="tab-btn pb-3 px-1 text-sm flex items-center gap-2"><i data-lucide="file-check" class="w-4 h-4"></i> Permits</button>
-                        <button onclick="switchTab('docs')" id="tab-docs" class="tab-btn pb-3 px-1 text-sm flex items-center gap-2"><i data-lucide="files" class="w-4 h-4"></i> Documents</button>
-                    </div>
+                <div class="border-b border-slate-200 mb-6 flex">
+                    <button onclick="switchTab('tasks')" id="tab-tasks" class="tab-btn active pb-3 px-4 text-sm font-medium flex items-center gap-2 border-b-2 border-indigo-600 text-indigo-700 bg-indigo-50/50 rounded-t-lg"><i data-lucide="kanban" class="w-4 h-4"></i> Task Board</button>
+                    <button onclick="switchTab('chat')" id="tab-chat" class="tab-btn pb-3 px-4 text-sm font-medium flex items-center gap-2 border-b-2 border-transparent hover:bg-slate-50 rounded-t-lg"><i data-lucide="message-square" class="w-4 h-4"></i> Team Chat</button>
+                    <button onclick="switchTab('permits')" id="tab-permits" class="tab-btn pb-3 px-1 text-sm flex items-center gap-2"><i data-lucide="file-check" class="w-4 h-4"></i> Permits</button>
+                    <button onclick="switchTab('docs')" id="tab-docs" class="tab-btn pb-3 px-4 text-sm font-medium flex items-center gap-2 border-b-2 border-transparent hover:bg-slate-50 rounded-t-lg"><i data-lucide="files" class="w-4 h-4"></i> Documents</button>
                 </div>
 
                 <!-- Tab: Tasks (Kanban) -->
                 <div id="view-tasks" class="tab-pane block">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-bold text-slate-800">Internal Plans & Tasks</h3>
-                        <button onclick="openNewTaskModal()" class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-1.5 rounded-lg text-sm font-medium shadow-sm flex items-center gap-2">
-                            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Task
+                    <div class="flex justify-between items-center mb-5">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-800">Internal Plans & Tasks</h3>
+                            <p class="text-xs text-slate-500 mt-0.5">Drag and drop to update task status.</p>
+                        </div>
+                        <button onclick="openNewTaskModal()" class="bg-white border border-slate-200 text-slate-700 hover:border-indigo-300 hover:text-indigo-600 px-4 py-2 rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-all">
+                            <i data-lucide="plus-circle" class="w-4 h-4"></i> Add Task
                         </button>
                     </div>
-                    <div class="flex gap-4 overflow-x-auto pb-4" id="kanbanBoard">
+                    <div class="flex gap-5 overflow-x-auto pb-6 pt-2 px-1" id="kanbanBoard">
                         <!-- Kanban Cols Injected -->
                     </div>
                 </div>
 
                 <!-- Tab: Chat -->
                 <div id="view-chat" class="tab-pane hidden">
-                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm flex h-[600px] overflow-hidden">
+                    <div class="glass-card rounded-2xl flex h-[600px] overflow-hidden">
                         <!-- Channels -->
-                        <div class="w-64 bg-slate-50 border-r border-slate-200 p-4 flex flex-col">
+                        <div class="w-64 bg-slate-50/80 border-r border-slate-200 p-5 flex flex-col">
                             <div class="mb-4">
-                                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Channels</h4>
-                                <div class="space-y-1">
-                                    <div class="bg-white text-indigo-700 font-semibold px-3 py-2 rounded-md shadow-sm border border-slate-200 cursor-pointer text-sm"># general</div>
-                                    <div class="text-slate-600 hover:bg-slate-100 px-3 py-2 rounded-md cursor-pointer text-sm transition"># sampling</div>
-                                    <div class="text-slate-600 hover:bg-slate-100 px-3 py-2 rounded-md cursor-pointer text-sm transition"># lab-results</div>
+                                <h4 class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">Channels</h4>
+                                <div class="space-y-1.5">
+                                    <div class="bg-white text-indigo-700 font-semibold px-4 py-2.5 rounded-xl shadow-sm border border-slate-200 cursor-pointer text-sm flex items-center gap-2">
+                                        <i data-lucide="hash" class="w-4 h-4 opacity-50"></i> general
+                                    </div>
+                                    <div class="text-slate-600 hover:bg-slate-200/50 px-4 py-2.5 rounded-xl cursor-pointer text-sm transition flex items-center gap-2 font-medium">
+                                        <i data-lucide="hash" class="w-4 h-4 opacity-50"></i> sampling
+                                    </div>
+                                    <div class="text-slate-600 hover:bg-slate-200/50 px-4 py-2.5 rounded-xl cursor-pointer text-sm transition flex items-center gap-2 font-medium">
+                                        <i data-lucide="hash" class="w-4 h-4 opacity-50"></i> lab-results
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         
                         <!-- Chat Area -->
                         <div class="flex-1 flex flex-col bg-white">
-                            <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-white">
-                                <h3 class="font-bold text-slate-800 flex items-center gap-2"><span class="text-slate-400">#</span> general</h3>
-                                <span class="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full font-medium">Online</span>
+                            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
+                                <h3 class="font-bold text-slate-800 flex items-center gap-2 text-lg"><span class="text-slate-300">#</span> general</h3>
+                                <span class="text-xs text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Active
+                                </span>
                             </div>
                             
-                            <div class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50" id="chatFeed">
+                            <div class="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/30" id="chatFeed">
                                 <!-- Messages Injected -->
                             </div>
 
-                            <div class="p-4 bg-white border-t border-slate-200">
-                                <form onsubmit="sendMessage(event)" class="flex gap-2">
-                                    <input type="text" id="chatInput" class="flex-1 border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Type a message...">
-                                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white p-2.5 rounded-lg transition shadow-sm">
+                            <div class="p-5 bg-white border-t border-slate-100 shrink-0">
+                                <form onsubmit="sendMessage(event)" class="flex gap-3">
+                                    <input type="text" id="chatInput" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-5 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all shadow-inner" placeholder="Type your message here...">
+                                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 rounded-xl transition shadow-md flex items-center justify-center">
                                         <i data-lucide="send" class="w-5 h-5"></i>
                                     </button>
                                 </form>
@@ -252,24 +348,27 @@
 
                 <!-- Tab: Docs -->
                 <div id="view-docs" class="tab-pane hidden">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-bold text-slate-800">Project Documents</h3>
-                        <button onclick="openModal('newDocModal')" class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-1.5 rounded-lg text-sm font-medium shadow-sm flex items-center gap-2">
-                            <i data-lucide="upload" class="w-3.5 h-3.5"></i> Upload Document
+                    <div class="flex justify-between items-center mb-5">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-800">Project Documents</h3>
+                            <p class="text-xs text-slate-500 mt-0.5">Reports, plans, and external files.</p>
+                        </div>
+                        <button onclick="openModal('newDocModal')" class="bg-white border border-slate-200 text-slate-700 hover:border-indigo-300 hover:text-indigo-600 px-4 py-2 rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-all">
+                            <i data-lucide="upload-cloud" class="w-4 h-4"></i> Upload Document
                         </button>
                     </div>
-                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
                         <table class="w-full text-sm text-left text-slate-600">
-                            <thead class="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-200">
+                            <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200 font-bold tracking-wider">
                                 <tr>
-                                    <th class="px-6 py-3">File Name</th>
-                                    <th class="px-6 py-3">Type</th>
-                                    <th class="px-6 py-3">Generated By</th>
-                                    <th class="px-6 py-3">Date</th>
-                                    <th class="px-6 py-3 text-right">Action</th>
+                                    <th class="px-6 py-4">File Name</th>
+                                    <th class="px-6 py-4">Type</th>
+                                    <th class="px-6 py-4">Uploaded By</th>
+                                    <th class="px-6 py-4">Date</th>
+                                    <th class="px-6 py-4 text-right">Action</th>
                                 </tr>
                             </thead>
-                            <tbody id="docsTableBody">
+                            <tbody id="docsTableBody" class="divide-y divide-slate-100">
                                 <!-- Docs Injected -->
                             </tbody>
                         </table>
@@ -284,50 +383,50 @@
 
     <!-- Modal: New Project -->
     <div id="newProjectModal" class="fixed inset-0 z-[60] hidden">
-        <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="closeModal('newProjectModal')"></div>
-        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 animate-in fade-in zoom-in duration-200">
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onclick="closeModal('newProjectModal')"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl shadow-2xl w-full max-w-lg p-7 animate-in fade-in zoom-in duration-200">
             <div class="flex justify-between items-center mb-6">
-                <h3 class="text-lg font-bold text-slate-800">Initialize New Project</h3>
-                <button onclick="closeModal('newProjectModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+                <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2"><i data-lucide="folder-plus" class="text-indigo-500 w-6 h-6"></i> Initialize Project</h3>
+                <button onclick="closeModal('newProjectModal')" class="text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
             
-            <form onsubmit="handleNewProject(event)" class="space-y-4">
-                <div class="grid grid-cols-3 gap-4">
+            <form onsubmit="handleNewProject(event)" class="space-y-5">
+                <div class="grid grid-cols-3 gap-5">
                     <div class="col-span-1">
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">ID (Acronym)</label>
-                        <input type="text" name="project_id" required class="w-full p-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="e.g. AQP25">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">ID (Acronym)</label>
+                        <input type="text" name="project_id" required class="form-input font-mono" placeholder="e.g. AQP25">
                     </div>
                     <div class="col-span-2">
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Project Title</label>
-                        <input type="text" name="title" required class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Full research title">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Project Title</label>
+                        <input type="text" name="title" required class="form-input" placeholder="Full research title">
                     </div>
                 </div>
                 
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-2 gap-5">
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">PI (Person ID)</label>
-                        <select name="pi_person_id" id="piSelect" class="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none"></select>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">PI (Person ID)</label>
+                        <select name="pi_person_id" id="piSelect" class="form-input bg-white cursor-pointer"></select>
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Grant Nr</label>
-                        <input type="text" name="grant_nr" class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Start Date</label>
-                        <input type="date" name="start_date" required class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">End Date</label>
-                        <input type="date" name="end_date" required class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Grant Nr</label>
+                        <input type="text" name="grant_nr" class="form-input" placeholder="Optional">
                     </div>
                 </div>
 
-                <div class="pt-4 border-t border-slate-100 flex justify-end gap-2">
-                    <button type="button" onclick="closeModal('newProjectModal')" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
-                    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm">Create Project</button>
+                <div class="grid grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Start Date</label>
+                        <input type="date" name="start_date" required class="form-input">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">End Date</label>
+                        <input type="date" name="end_date" required class="form-input">
+                    </div>
+                </div>
+
+                <div class="pt-5 border-t border-slate-100 flex justify-end gap-3 mt-2">
+                    <button type="button" onclick="closeModal('newProjectModal')" class="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
+                    <button type="submit" class="px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 rounded-xl shadow-md transition-all">Create Project</button>
                 </div>
             </form>
         </div>
@@ -335,34 +434,36 @@
 
     <!-- Modal: Task (Create/Edit) -->
     <div id="newTaskModal" class="fixed inset-0 z-[60] hidden">
-        <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="closeModal('newTaskModal')"></div>
-        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold text-slate-800" id="taskModalTitle">Add Task</h3>
-                <button onclick="closeModal('newTaskModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onclick="closeModal('newTaskModal')"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl shadow-2xl w-full max-w-md p-7">
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2"><i data-lucide="check-square" class="text-emerald-500 w-6 h-6"></i> <span id="taskModalTitle">Add Task</span></h3>
+                <button onclick="closeModal('newTaskModal')" class="text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
-            <form onsubmit="handleTaskSubmit(event)" id="taskForm" class="space-y-4">
+            <form onsubmit="handleTaskSubmit(event)" id="taskForm" class="space-y-5">
                 <input type="hidden" name="plan_id" id="taskPlanId">
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Title</label>
-                    <input type="text" name="title" id="taskTitle" required class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Task Title</label>
+                    <input type="text" name="title" id="taskTitle" required class="form-input" placeholder="What needs to be done?">
                 </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Due Date</label>
-                    <input type="date" name="deadline" id="taskDeadline" class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                <div class="grid grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Due Date</label>
+                        <input type="date" name="deadline" id="taskDeadline" class="form-input">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Status</label>
+                        <select name="status_id" id="taskStatus" class="form-input bg-white cursor-pointer">
+                            <option value="Planned">Planned</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Review">Review</option>
+                            <option value="Done">Done</option>
+                        </select>
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Status</label>
-                    <select name="status_id" id="taskStatus" class="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white outline-none">
-                        <option value="Planned">Planned</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Review">Review</option>
-                        <option value="Done">Done</option>
-                    </select>
-                </div>
-                <div class="flex justify-end gap-2 pt-2">
-                    <button type="button" onclick="closeModal('newTaskModal')" class="px-4 py-2 text-sm font-medium text-slate-600">Cancel</button>
-                    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg" id="taskSubmitBtn">Save Task</button>
+                <div class="flex justify-end gap-3 pt-5 border-t border-slate-100 mt-2">
+                    <button type="button" onclick="closeModal('newTaskModal')" class="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
+                    <button type="submit" class="px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 rounded-xl shadow-md transition-all" id="taskSubmitBtn">Save Task</button>
                 </div>
             </form>
         </div>
@@ -370,28 +471,28 @@
 
     <!-- Modal: New Permit -->
     <div id="newPermitModal" class="fixed inset-0 z-[60] hidden">
-        <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="closeModal('newPermitModal')"></div>
-        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold text-slate-800">Add Permit</h3>
-                <button onclick="closeModal('newPermitModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onclick="closeModal('newPermitModal')"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl shadow-2xl w-full max-w-md p-7">
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2"><i data-lucide="file-badge" class="text-amber-500 w-6 h-6"></i> Add Permit</h3>
+                <button onclick="closeModal('newPermitModal')" class="text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
-            <form onsubmit="handleNewPermit(event)" class="space-y-4">
+            <form onsubmit="handleNewPermit(event)" class="space-y-5">
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Permit Number</label>
-                    <input type="text" name="permit_number" required class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Permit Number</label>
+                    <input type="text" name="permit_number" required class="form-input">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Issuing Authority</label>
-                    <input type="text" name="issuing_authority" class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Issuing Authority</label>
+                    <input type="text" name="issuing_authority" class="form-input">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Valid To</label>
-                    <input type="date" name="valid_to" required class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Valid To</label>
+                    <input type="date" name="valid_to" required class="form-input">
                 </div>
-                <div class="flex justify-end gap-2 pt-2">
-                    <button type="button" onclick="closeModal('newPermitModal')" class="px-4 py-2 text-sm font-medium text-slate-600">Cancel</button>
-                    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Save Permit</button>
+                <div class="flex justify-end gap-3 pt-5 border-t border-slate-100 mt-2">
+                    <button type="button" onclick="closeModal('newPermitModal')" class="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
+                    <button type="submit" class="px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 rounded-xl shadow-md transition-all">Save Permit</button>
                 </div>
             </form>
         </div>
@@ -399,24 +500,24 @@
 
     <!-- Modal: Upload Doc -->
     <div id="newDocModal" class="fixed inset-0 z-[60] hidden">
-        <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="closeModal('newDocModal')"></div>
-        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold text-slate-800">Upload Document</h3>
-                <button onclick="closeModal('newDocModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onclick="closeModal('newDocModal')"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl shadow-2xl w-full max-w-md p-7">
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2"><i data-lucide="cloud-upload" class="text-sky-500 w-6 h-6"></i> Upload Document</h3>
+                <button onclick="closeModal('newDocModal')" class="text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
-            <form onsubmit="handleUploadDoc(event)" class="space-y-4">
+            <form onsubmit="handleUploadDoc(event)" class="space-y-5">
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Document Title</label>
-                    <input type="text" name="title" required class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Document Title</label>
+                    <input type="text" name="title" required class="form-input">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">File</label>
-                    <input type="file" name="file" required class="w-full p-2 border border-slate-300 rounded-lg text-sm bg-slate-50">
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Select File</label>
+                    <input type="file" name="file" required class="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 cursor-pointer">
                 </div>
-                <div class="flex justify-end gap-2 pt-2">
-                    <button type="button" onclick="closeModal('newDocModal')" class="px-4 py-2 text-sm font-medium text-slate-600">Cancel</button>
-                    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Upload</button>
+                <div class="flex justify-end gap-3 pt-5 border-t border-slate-100 mt-2">
+                    <button type="button" onclick="closeModal('newDocModal')" class="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
+                    <button type="submit" class="px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 rounded-xl shadow-md transition-all">Upload File</button>
                 </div>
             </form>
         </div>
@@ -424,35 +525,35 @@
 
     <!-- Modal: Team Management -->
     <div id="teamModal" class="fixed inset-0 z-[60] hidden">
-        <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="closeModal('teamModal')"></div>
-        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold text-slate-800">Manage Team</h3>
-                <button onclick="closeModal('teamModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onclick="closeModal('teamModal')"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl shadow-2xl w-full max-w-md p-7">
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2"><i data-lucide="users" class="text-indigo-500 w-6 h-6"></i> Manage Team</h3>
+                <button onclick="closeModal('teamModal')" class="text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
             
             <div class="mb-6">
-                <h4 class="text-xs font-bold text-slate-500 uppercase mb-2">Current Members</h4>
-                <div id="teamList" class="space-y-2 max-h-40 overflow-y-auto">
+                <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Current Members</h4>
+                <div id="teamList" class="space-y-2 max-h-48 overflow-y-auto pr-2">
                     <!-- List injected here -->
                 </div>
             </div>
             
-            <hr class="border-slate-100 my-4">
-            <h4 class="text-xs font-bold text-slate-500 uppercase mb-2">Add New Member</h4>
+            <hr class="border-slate-100 my-5">
+            <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">Add New Member</h4>
             
             <form onsubmit="handleAddToTeam(event)" class="space-y-4">
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Select Person</label>
-                    <select name="person_id" id="teamMemberSelect" class="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none"></select>
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Select Person</label>
+                    <select name="person_id" id="teamMemberSelect" class="form-input bg-white cursor-pointer"></select>
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Role</label>
-                    <input type="text" name="role" placeholder="e.g. Researcher" class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Role</label>
+                    <input type="text" name="role" placeholder="e.g. Lead Researcher" class="form-input">
                 </div>
-                <div class="flex justify-end gap-2 pt-2">
-                    <button type="button" onclick="closeModal('teamModal')" class="px-4 py-2 text-sm font-medium text-slate-600">Close</button>
-                    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Add Member</button>
+                <div class="flex justify-end gap-3 pt-5 border-t border-slate-100 mt-2">
+                    <button type="button" onclick="closeModal('teamModal')" class="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Close</button>
+                    <button type="submit" class="px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 rounded-xl shadow-md transition-all">Add Member</button>
                 </div>
             </form>
         </div>
@@ -471,7 +572,10 @@
         document.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
             const token = sessionStorage.getItem('token');
-            if(!token) window.location.href = 'login.html';
+            if(!token) {
+                window.location.href = 'login.html';
+                return;
+            }
             
             const userStr = sessionStorage.getItem('user');
             if(userStr) {
@@ -482,8 +586,11 @@
             document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href='login.html'; });
 
             await loadProjectsDropdown();
-            await loadPersonsDropdown(); // For new project modal
-            await loadTeamDropdown(); // For team modal
+            await loadPersonsDropdown(); 
+            await loadTeamDropdown();
+            
+            // Turn off global loading overlay
+            document.getElementById('loadingOverlay').classList.remove('active');
         });
 
         async function apiFetch(url, opts={}) {
@@ -495,7 +602,7 @@
                 opts.body = JSON.stringify(opts.body);
             }
             const res = await fetch(API + url, { ...opts, headers });
-            if(!res.ok) { const err = await res.json(); throw new Error(err.detail || "API Error"); }
+            if(!res.ok) { const err = await res.json(); throw new Error(err.detail || err.error || "API Error"); }
             return res.json();
         }
 
@@ -503,7 +610,7 @@
             try {
                 const data = await apiFetch(`/table/lims/projects?limit=500&sort_by=start_date&sort_order=desc`);
                 const sel = document.getElementById('projectSelect');
-                sel.innerHTML = '<option value="" disabled selected>Select Project...</option>';
+                sel.innerHTML = '<option value="" disabled selected>Select an active project...</option>';
                 data.forEach(p => {
                     const opt = document.createElement('option');
                     opt.value = p.project_id;
@@ -521,7 +628,7 @@
                 data.forEach(p => {
                     const opt = document.createElement('option');
                     opt.value = p.person_id;
-                    opt.innerText = `${p.first_name} ${p.last_name}`;
+                    opt.innerText = `${p.first_name} ${p.last_name} (${p.person_id})`;
                     sel.appendChild(opt);
                 });
              } catch(e) {}
@@ -535,7 +642,7 @@
                 data.forEach(p => {
                     const opt = document.createElement('option');
                     opt.value = p.person_id;
-                    opt.innerText = `${p.first_name} ${p.last_name}`;
+                    opt.innerText = `${p.first_name} ${p.last_name} (${p.person_id})`;
                     sel.appendChild(opt);
                 });
              } catch(e) {}
@@ -544,7 +651,7 @@
         // --- Main Logic ---
 
         async function loadProjectDetails(projectId) {
-            document.getElementById('loadingOverlay').classList.remove('hidden');
+            document.getElementById('loadingOverlay').classList.add('active');
             try {
                 const projects = await apiFetch(`/table/lims/projects?project_id=${projectId}`);
                 if(!projects.length) throw new Error("Project not found");
@@ -562,11 +669,14 @@
                 loadPermits(projectId);
                 loadDocs(projectId);
 
+                // Initial tab setup
+                switchTab('tasks');
+
             } catch(e) {
                 console.error(e);
                 showToast(e.message, "error");
             } finally {
-                document.getElementById('loadingOverlay').classList.add('hidden');
+                document.getElementById('loadingOverlay').classList.remove('active');
             }
         }
 
@@ -596,7 +706,7 @@
             // Render PI
             if(p.pi_person_id) {
                  const piDiv = document.createElement('div');
-                 piDiv.className = "w-8 h-8 rounded-full border-2 border-white bg-indigo-600 flex items-center justify-center text-xs text-white font-bold cursor-help";
+                 piDiv.className = "w-9 h-9 rounded-full border-2 border-white bg-indigo-600 flex items-center justify-center text-xs text-white font-bold cursor-help shadow-sm z-10 hover:scale-110 transition-transform";
                  piDiv.innerText = p.pi_person_id.substring(0,2).toUpperCase();
                  piDiv.title = `PI: ${p.pi_person_id}`;
                  container.appendChild(piDiv);
@@ -605,36 +715,32 @@
             // Fetch and Render Team Members
             try {
                 const team = await apiFetch(`/table/lims/project_personal?project_id=${p.project_id}`);
-                team.forEach(member => {
+                team.forEach((member, i) => {
                     const div = document.createElement('div');
-                    div.className = "w-8 h-8 rounded-full border-2 border-white bg-slate-500 flex items-center justify-center text-xs text-white font-bold cursor-help";
+                    div.className = `w-9 h-9 rounded-full border-2 border-white bg-slate-500 flex items-center justify-center text-xs text-white font-bold cursor-help shadow-sm hover:scale-110 transition-transform hover:z-20`;
+                    div.style.zIndex = 9 - i;
                     const initials = member.person_id ? member.person_id.substring(0,2).toUpperCase() : '??';
                     div.innerText = initials;
                     div.title = `${member.person_id} (${member.role || 'Member'})`;
                     container.appendChild(div);
                 });
             } catch(e) { console.error("Error loading team", e); }
-
-            const extra = document.createElement('div');
-            extra.className = "w-8 h-8 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-xs text-slate-500 font-bold";
-            extra.innerText = "+";
-            container.appendChild(extra);
         }
 
         // --- Tabs Data Loaders ---
 
         async function loadTasks(projectId) {
             try {
-                // Fetch tasks (internal_plans)
-                const data = await apiFetch(`/table/communications/internal_plans?limit=100`);
-                currentTasks = data; // Store locally for editing
+                // Fetch tasks filtered by project_id
+                const data = await apiFetch(`/table/communications/internal_plans?project_id=${projectId}&limit=100`);
+                currentTasks = data; 
                 
                 const cols = { 'Planned': [], 'In Progress': [], 'Review': [], 'Done': [] };
                 
                 data.forEach(task => {
                     const status = task.status_id || 'Planned';
                     if(cols[status]) cols[status].push(task);
-                    else if(cols['Planned']) cols['Planned'].push(task); // Fallback
+                    else if(cols['Planned']) cols['Planned'].push(task);
                 });
 
                 const board = document.getElementById('kanbanBoard');
@@ -643,7 +749,7 @@
                 Object.keys(cols).forEach(status => {
                     const items = cols[status];
                     const colDiv = document.createElement('div');
-                    colDiv.className = "kanban-col bg-slate-100 rounded-lg p-3 flex flex-col gap-3 min-h-[200px]";
+                    colDiv.className = "kanban-col rounded-2xl p-4 flex flex-col gap-3 min-h-[250px] shadow-inner";
                     
                     // Drag & Drop Attributes for Column
                     colDiv.setAttribute('data-status', status);
@@ -651,15 +757,15 @@
                     colDiv.setAttribute('ondrop', 'drop(event)');
 
                     colDiv.innerHTML = `
-                        <div class="flex justify-between items-center text-xs font-bold text-slate-500 uppercase px-1 pointer-events-none">
+                        <div class="flex justify-between items-center text-[11px] font-bold text-slate-500 uppercase px-1 pointer-events-none mb-1">
                             <span>${status}</span>
-                            <span class="bg-slate-200 text-slate-600 px-2 rounded-full">${items.length}</span>
+                            <span class="bg-white border border-slate-200 text-slate-700 px-2 py-0.5 rounded-full shadow-sm">${items.length}</span>
                         </div>
                     `;
                     
                     items.forEach(t => {
                         const card = document.createElement('div');
-                        card.className = "kanban-card bg-white p-3 rounded shadow-sm cursor-pointer border-l-4 border-indigo-500 hover:ring-2 hover:ring-indigo-100";
+                        card.className = "kanban-card bg-white p-4 rounded-xl shadow-sm hover:shadow-md cursor-pointer border border-slate-200";
                         
                         // Drag Attributes for Card
                         card.draggable = true;
@@ -667,10 +773,14 @@
                         card.setAttribute('onclick', `openEditTaskModal('${t.plan_id}')`);
 
                         card.innerHTML = `
-                            <div class="font-semibold text-sm text-slate-800 mb-1 pointer-events-none">${t.title}</div>
-                            <div class="flex justify-between items-center text-xs text-slate-500 mt-2 pointer-events-none">
-                                <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3 h-3"></i> ${t.deadline || 'No date'}</span>
-                                <div class="w-6 h-6 bg-slate-200 rounded-full flex items-center justify-center text-[10px] font-bold">${t.created_by ? t.created_by.substring(0,2) : 'Un'}</div>
+                            <div class="font-bold text-sm text-slate-800 mb-2 pointer-events-none leading-tight">${t.title}</div>
+                            <div class="flex justify-between items-end mt-3 pointer-events-none">
+                                <span class="flex items-center gap-1.5 text-xs font-medium text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                                    <i data-lucide="calendar" class="w-3.5 h-3.5 text-indigo-400"></i> ${t.deadline ? dayjs(t.deadline).format('MMM D') : 'No date'}
+                                </span>
+                                <div class="w-7 h-7 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm" title="Assigned to ${t.created_by}">
+                                    ${t.created_by ? t.created_by.substring(0,2).toUpperCase() : 'Un'}
+                                </div>
                             </div>
                         `;
                         colDiv.appendChild(card);
@@ -702,12 +812,10 @@
             if(!planId || !newStatus) return;
 
             try {
-                // Update via API
                 await apiFetch(`/table/communications/internal_plans?plan_id=${planId}`, {
                     method: 'PUT',
                     body: { status_id: newStatus }
                 });
-                // Reload board to reflect change
                 await loadTasks(currentProject.project_id);
                 showToast(`Task moved to ${newStatus}`);
             } catch(e) {
@@ -721,7 +829,7 @@
             document.getElementById('taskModalTitle').innerText = 'Add Task';
             document.getElementById('taskForm').reset();
             document.getElementById('taskPlanId').value = '';
-            document.getElementById('taskSubmitBtn').innerText = 'Add Task';
+            document.getElementById('taskSubmitBtn').innerText = 'Save Task';
             openModal('newTaskModal');
         }
 
@@ -747,17 +855,17 @@
             const data = Object.fromEntries(formData.entries());
             const planId = data.plan_id;
 
+            // FIX: Ensure Project ID is attached
+            data.project_id = currentProject.project_id;
+
             try {
                 if(planId) {
-                    // Update
                     delete data.plan_id; 
                     await apiFetch(`/table/communications/internal_plans?plan_id=${planId}`, { method: 'PUT', body: data });
                     showToast("Task updated");
                 } else {
-                    // Create
                     delete data.plan_id; 
-                    data.plan_id = generateId('TSK'); // FORCE UNIQUE ID
-                    data.created_by = currentUser.person_id;
+                    data.created_by = currentUser ? currentUser.person_id : 'System';
                     await apiFetch(`/table/communications/internal_plans`, { method: 'POST', body: data });
                     showToast("Task added");
                 }
@@ -767,168 +875,32 @@
             } catch(err) { showToast("Error: " + err.message, "error"); }
         }
 
+        // --- Chat ---
         async function loadChat(projectId) {
             try {
                 const msgs = await apiFetch(`/table/communications/projects_chat?project_id=${projectId}&sort_by=sent_at&sort_order=asc`);
                 const feed = document.getElementById('chatFeed');
                 feed.innerHTML = '';
                 
+                if(msgs.length === 0) {
+                    feed.innerHTML = `<div class="text-center text-slate-400 py-10 text-sm font-medium">No messages yet. Say hi! 👋</div>`;
+                }
+
                 msgs.forEach(m => {
                     const isMe = currentUser && m.sender_id === currentUser.person_id;
                     const div = document.createElement('div');
                     div.className = `flex w-full ${isMe ? 'chat-out' : 'chat-in'}`;
                     div.innerHTML = `
-                         <div class="chat-bubble p-3 shadow-sm text-sm">
-                            ${!isMe ? `<div class="text-[10px] font-bold opacity-75 mb-1">${m.sender_id}</div>` : ''}
-                            ${m.message_body}
-                            <div class="text-[10px] opacity-60 text-right mt-1">${dayjs(m.sent_at).format('HH:mm')}</div>
+                         <div class="chat-bubble p-3.5 shadow-sm text-sm">
+                            ${!isMe ? `<div class="text-[11px] font-bold opacity-80 mb-1 tracking-wide">${m.sender_id}</div>` : ''}
+                            <div class="leading-relaxed">${m.message_body}</div>
+                            <div class="text-[10px] opacity-70 text-right mt-1.5 font-medium">${dayjs(m.sent_at).format('MMM D, HH:mm')}</div>
                         </div>
                     `;
                     feed.appendChild(div);
                 });
                 feed.scrollTop = feed.scrollHeight;
             } catch(e) { console.error("Chat load error", e); }
-        }
-
-        async function loadPermits(projectId) {
-            try {
-                const data = await apiFetch(`/table/lims/permits?project_id=${projectId}`);
-                const container = document.getElementById('permitsGrid');
-                container.innerHTML = '';
-
-                if(data.length === 0) {
-                    container.innerHTML = `<div class="col-span-3 text-center text-slate-400 py-10">No permits found</div>`;
-                    return;
-                }
-
-                data.forEach(p => {
-                    const validUntil = dayjs(p.valid_to);
-                    const isExpired = validUntil.isBefore(dayjs());
-                    const statusClass = isExpired ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200';
-                    
-                    const card = document.createElement('div');
-                    card.className = "bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition relative overflow-hidden";
-                    card.innerHTML = `
-                        <div class="absolute top-0 right-0 px-3 py-1 text-[10px] font-bold uppercase rounded-bl-lg border-b border-l ${statusClass}">
-                            ${isExpired ? 'Expired' : 'Valid'}
-                        </div>
-                        <div class="flex items-start gap-4 mb-3">
-                            <div class="p-3 bg-slate-50 rounded-lg text-slate-500 border border-slate-100"><i data-lucide="file-check" class="w-6 h-6"></i></div>
-                            <div>
-                                <h4 class="font-bold text-slate-800 text-sm">${p.permit_number || 'No Number'}</h4>
-                                <p class="text-xs text-slate-500">${p.issuing_authority || 'Unknown Authority'}</p>
-                            </div>
-                        </div>
-                        <div class="flex justify-between text-xs text-slate-500 border-t border-slate-100 pt-3">
-                            <span>Expires: <span class="font-mono">${p.valid_to || 'N/A'}</span></span>
-                            <button class="text-indigo-600 hover:text-indigo-800 font-medium">View</button>
-                        </div>
-                    `;
-                    container.appendChild(card);
-                });
-                lucide.createIcons();
-            } catch(e) { console.error(e); }
-        }
-
-        async function loadDocs(projectId) {
-            try {
-                const data = await apiFetch(`/table/communications/reports?project_id=${projectId}`);
-                const tbody = document.getElementById('docsTableBody');
-                tbody.innerHTML = '';
-                
-                if(data.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-400 text-sm">No documents found</td></tr>`;
-                    return;
-                }
-
-                data.forEach(d => {
-                    const tr = document.createElement('tr');
-                    tr.className = "border-b border-slate-100 hover:bg-slate-50";
-                    tr.innerHTML = `
-                        <td class="px-6 py-4 font-medium text-slate-800">${d.title || d.report_id}</td>
-                        <td class="px-6 py-4 text-xs"><span class="bg-slate-100 px-2 py-1 rounded text-slate-600">${d.type || 'File'}</span></td>
-                        <td class="px-6 py-4 text-slate-500">${d.generated_by || '-'}</td>
-                        <td class="px-6 py-4 text-slate-500 font-mono text-xs">${d.generation_date}</td>
-                        <td class="px-6 py-4 text-right">
-                            <button class="text-slate-400 hover:text-indigo-600 transition"><i data-lucide="download" class="w-4 h-4"></i></button>
-                        </td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-                lucide.createIcons();
-            } catch(e) {}
-        }
-
-        // --- Actions (POST) ---
-
-        async function handleNewProject(e) {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData.entries());
-            
-            // Fix for SQL NotNullViolationError: Ensure acronym exists
-            if (!data.acronym) {
-                data.acronym = data.project_id; // Default acronym to ID
-            }
-            data.status_id = 'Active'; 
-            
-            try {
-                await apiFetch(`/table/lims/projects/batch_upload`, { method: 'POST', body: [data] });
-                showToast("Project created successfully");
-                closeModal('newProjectModal');
-                e.target.reset();
-                await loadProjectsDropdown();
-            } catch(err) { showToast("Error: " + err.message, "error"); }
-        }
-
-        // handleNewTask replaced by handleTaskSubmit
-
-        async function handleNewPermit(e) {
-            e.preventDefault();
-            if(!currentProject) return;
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData.entries());
-            data.project_id = currentProject.project_id;
-            data.permit_id = generateId('PERM');
-            
-            try {
-                await apiFetch(`/table/lims/permits`, { method: 'POST', body: data });
-                showToast("Permit logged");
-                closeModal('newPermitModal');
-                e.target.reset();
-                loadPermits(currentProject.project_id);
-            } catch(err) { showToast("Error: " + err.message, "error"); }
-        }
-
-        async function handleUploadDoc(e) {
-            e.preventDefault();
-            if(!currentProject) return;
-            const formData = new FormData(e.target);
-            const file = formData.get('file');
-            
-            try {
-                // 1. Upload File
-                const uploadForm = new FormData();
-                uploadForm.append('file', file);
-                const uploadRes = await apiFetch('/upload', { method: 'POST', body: uploadForm });
-                
-                // 2. Create Record
-                const record = {
-                    report_id: generateId('DOC'),
-                    project_id: currentProject.project_id,
-                    title: formData.get('title'),
-                    file_path: uploadRes.url,
-                    type: file.name.split('.').pop(),
-                    generated_by: currentUser.person_id
-                };
-                
-                await apiFetch(`/table/communications/reports`, { method: 'POST', body: record });
-                
-                showToast("Document uploaded");
-                closeModal('newDocModal');
-                e.target.reset();
-                loadDocs(currentProject.project_id);
-            } catch(err) { showToast("Upload failed: " + err.message, "error"); }
         }
 
         async function sendMessage(e) {
@@ -953,28 +925,152 @@
             } catch(err) { showToast("Failed to send", "error"); }
         }
 
+        // --- Permits ---
+        async function loadPermits(projectId) {
+            try {
+                const data = await apiFetch(`/table/lims/permits?project_id=${projectId}`);
+                const container = document.getElementById('permitsGrid');
+                container.innerHTML = '';
+
+                if(data.length === 0) {
+                    container.innerHTML = `<div class="col-span-1 md:col-span-2 lg:col-span-3 text-center text-slate-400 py-12 bg-white rounded-2xl border border-dashed border-slate-200">No active permits found for this project.</div>`;
+                    return;
+                }
+
+                data.forEach(p => {
+                    const validUntil = dayjs(p.valid_to);
+                    const isExpired = validUntil.isBefore(dayjs());
+                    const statusClass = isExpired ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                    
+                    const card = document.createElement('div');
+                    card.className = "bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition relative overflow-hidden group";
+                    card.innerHTML = `
+                        <div class="absolute top-0 right-0 px-3 py-1 text-[10px] font-bold uppercase rounded-bl-xl border-b border-l ${statusClass}">
+                            ${isExpired ? 'Expired' : 'Valid'}
+                        </div>
+                        <div class="flex items-start gap-4 mb-4 mt-2">
+                            <div class="p-3 bg-slate-50 rounded-xl text-slate-500 border border-slate-100 group-hover:scale-110 transition-transform"><i data-lucide="file-check" class="w-6 h-6"></i></div>
+                            <div>
+                                <h4 class="font-bold text-slate-800 text-sm mb-0.5">${p.permit_number || 'No Number'}</h4>
+                                <p class="text-xs text-slate-500 font-medium">${p.issuing_authority || 'Unknown Authority'}</p>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center text-xs text-slate-500 border-t border-slate-100 pt-3">
+                            <span class="flex items-center gap-1.5"><i data-lucide="clock" class="w-3.5 h-3.5 text-slate-400"></i> <span class="font-medium">${p.valid_to ? dayjs(p.valid_to).format('MMM D, YYYY') : 'N/A'}</span></span>
+                            <button class="text-indigo-600 hover:text-indigo-800 font-bold bg-indigo-50 px-2 py-1 rounded">View</button>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+                lucide.createIcons();
+            } catch(e) { console.error(e); }
+        }
+
+        async function handleNewPermit(e) {
+            e.preventDefault();
+            if(!currentProject) return;
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            data.project_id = currentProject.project_id;
+            
+            try {
+                await apiFetch(`/table/lims/permits`, { method: 'POST', body: data });
+                showToast("Permit logged successfully");
+                closeModal('newPermitModal');
+                e.target.reset();
+                loadPermits(currentProject.project_id);
+            } catch(err) { showToast("Error: " + err.message, "error"); }
+        }
+
+        // --- Docs ---
+        async function loadDocs(projectId) {
+            try {
+                const data = await apiFetch(`/table/communications/reports?project_id=${projectId}`);
+                const tbody = document.getElementById('docsTableBody');
+                tbody.innerHTML = '';
+                
+                if(data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-slate-400 text-sm">No documents uploaded yet.</td></tr>`;
+                    return;
+                }
+
+                data.forEach(d => {
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-slate-50 transition-colors";
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 font-bold text-slate-800 flex items-center gap-3">
+                            <i data-lucide="file-text" class="w-4 h-4 text-slate-400"></i> ${d.title || d.report_id}
+                        </td>
+                        <td class="px-6 py-4 text-xs"><span class="bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-md text-slate-600 font-medium uppercase tracking-wider">${d.type || 'FILE'}</span></td>
+                        <td class="px-6 py-4 text-slate-600 font-medium">${d.generated_by || '-'}</td>
+                        <td class="px-6 py-4 text-slate-500 font-mono text-xs">${d.generation_date ? dayjs(d.generation_date).format('YYYY-MM-DD') : '-'}</td>
+                        <td class="px-6 py-4 text-right">
+                            <a href="${d.file_path || '#'}" target="_blank" class="text-slate-400 hover:text-indigo-600 bg-white border border-slate-200 hover:border-indigo-200 p-2 rounded-lg inline-flex transition-all shadow-sm">
+                                <i data-lucide="download" class="w-4 h-4"></i>
+                            </a>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                lucide.createIcons();
+            } catch(e) {}
+        }
+
+        async function handleUploadDoc(e) {
+            e.preventDefault();
+            if(!currentProject) return;
+            const formData = new FormData(e.target);
+            const file = formData.get('file');
+            
+            try {
+                // 1. Upload File
+                const uploadForm = new FormData();
+                uploadForm.append('file', file);
+                const uploadRes = await apiFetch('/upload', { method: 'POST', body: uploadForm });
+                
+                // 2. Create Record
+                const record = {
+                    project_id: currentProject.project_id,
+                    title: formData.get('title'),
+                    file_path: uploadRes.url,
+                    type: file.name.split('.').pop().toUpperCase(),
+                    generated_by: currentUser ? currentUser.person_id : 'System'
+                };
+                
+                await apiFetch(`/table/communications/reports`, { method: 'POST', body: record });
+                
+                showToast("Document uploaded successfully");
+                closeModal('newDocModal');
+                e.target.reset();
+                loadDocs(currentProject.project_id);
+            } catch(err) { showToast("Upload failed: " + err.message, "error"); }
+        }
+
+        // --- Team Management ---
         async function openTeamModal() {
             if(!currentProject) return;
             
-            // Load members
             const list = document.getElementById('teamList');
-            list.innerHTML = '<div class="text-center text-gray-400 text-xs">Loading...</div>';
+            list.innerHTML = '<div class="text-center text-slate-400 text-sm py-4"><div class="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>Loading...</div>';
             openModal('teamModal');
 
             try {
                 const team = await apiFetch(`/table/lims/project_personal?project_id=${currentProject.project_id}`);
                 list.innerHTML = '';
-                if(team.length === 0) list.innerHTML = '<div class="text-gray-400 text-xs italic">No additional members.</div>';
+                if(team.length === 0) list.innerHTML = '<div class="text-slate-400 text-xs italic py-2">No additional members currently assigned.</div>';
                 
                 team.forEach(m => {
                     const row = document.createElement('div');
-                    row.className = "flex justify-between items-center p-2 bg-slate-50 rounded text-sm";
+                    row.className = "flex justify-between items-center p-3 bg-slate-50 border border-slate-100 rounded-xl text-sm group hover:border-slate-200 transition-colors";
                     row.innerHTML = `
-                        <span>
-                            <span class="font-semibold text-slate-700">${m.person_id}</span>
-                            <span class="text-slate-500 text-xs ml-2">${m.role || ''}</span>
+                        <span class="flex items-center gap-3">
+                            <div class="w-7 h-7 bg-indigo-100 text-indigo-700 font-bold rounded-full flex items-center justify-center text-[10px]">${m.person_id.substring(0,2).toUpperCase()}</div>
+                            <div>
+                                <div class="font-bold text-slate-700 leading-tight">${m.person_id}</div>
+                                <div class="text-slate-500 text-[10px] uppercase tracking-wider font-semibold mt-0.5">${m.role || 'Member'}</div>
+                            </div>
                         </span>
-                        <button onclick="removeTeamMember('${m.person_id}')" class="text-red-400 hover:text-red-600">
+                        <button onclick="removeTeamMember('${m.person_id}')" class="text-red-400 hover:text-red-600 bg-white border border-red-100 hover:bg-red-50 p-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100">
                             <i data-lucide="trash-2" class="w-4 h-4"></i>
                         </button>
                     `;
@@ -982,18 +1078,17 @@
                 });
                 lucide.createIcons();
             } catch(e) {
-                list.innerHTML = '<div class="text-red-400 text-xs">Failed to load team.</div>';
+                list.innerHTML = '<div class="text-red-500 text-xs py-2 font-medium">Failed to load team data.</div>';
             }
         }
 
         async function removeTeamMember(personId) {
-            if(!confirm('Remove this member?')) return;
+            if(!confirm(`Are you sure you want to remove ${personId} from the project?`)) return;
             try {
-                // Assuming composite PK or allow delete by project_id + person_id
                 await apiFetch(`/table/lims/project_personal?project_id=${currentProject.project_id}&person_id=${personId}`, { method: 'DELETE' });
-                showToast("Member removed");
-                openTeamModal(); // Refresh list
-                renderBanner(currentProject); // Refresh avatar
+                showToast("Member removed successfully");
+                openTeamModal(); 
+                renderBanner(currentProject); 
             } catch(e) { showToast("Error removing member", "error"); }
         }
 
@@ -1006,40 +1101,75 @@
             data.project_id = currentProject.project_id;
             data.start_date = new Date().toISOString().split('T')[0];
             
-            // REMOVED manual ID generation to prevent Primary Key constraint errors.
-            // Database likely uses composite key (project_id, person_id) or auto-increments.
-            
             try {
                 await apiFetch(`/table/lims/project_personal`, { method: 'POST', body: data });
-                showToast("Member added to team");
-                openTeamModal(); // Refresh list immediately
+                showToast("Member added to project team");
+                openTeamModal(); 
                 e.target.reset();
-                renderBanner(currentProject); // Refresh team view
+                renderBanner(currentProject); 
             } catch(err) { showToast("Error: " + err.message, "error"); }
+        }
+
+        // --- Project Creation ---
+        async function handleNewProject(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            
+            if (!data.acronym) data.acronym = data.project_id; 
+            data.status_id = 'In Progress'; // Updated logic based on typical LIMS status
+            
+            try {
+                // Use the standard single record post instead of batch if possible, or batch if required by your backend mapping
+                await apiFetch(`/table/lims/projects`, { method: 'POST', body: data });
+                showToast("Project created successfully");
+                closeModal('newProjectModal');
+                e.target.reset();
+                await loadProjectsDropdown();
+                // Optionally auto-select the new project
+                document.getElementById('projectSelect').value = data.project_id;
+                loadProjectDetails(data.project_id);
+            } catch(err) { showToast("Failed to create: " + err.message, "error"); }
         }
 
         // --- Utils ---
         function switchTab(tabId) {
+            // Update Pane Visibility
             document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
             document.getElementById(`view-${tabId}`).classList.remove('hidden');
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-            document.getElementById(`tab-${tabId}`).classList.add('active');
+            
+            // Update Tab Styling
+            document.querySelectorAll('.tab-btn').forEach(el => {
+                el.classList.remove('active', 'border-indigo-600', 'text-indigo-700', 'bg-indigo-50/50');
+                el.classList.add('border-transparent');
+            });
+            
+            const activeTab = document.getElementById(`tab-${tabId}`);
+            activeTab.classList.add('active', 'border-indigo-600', 'text-indigo-700', 'bg-indigo-50/50');
+            activeTab.classList.remove('border-transparent');
         }
 
         function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
         function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
-
-        function generateId(prefix) {
-            return `${prefix}_${Date.now().toString(36) + Math.random().toString(36).substr(2, 5)}`.toUpperCase();
-        }
-
         function showToast(msg, type='success') {
             const c = document.getElementById('toastContainer');
             const d = document.createElement('div');
-            d.className = `px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium flex items-center gap-2 transform transition-all duration-300 translate-y-0 ${type==='error'?'bg-red-500':'bg-emerald-600'}`;
-            d.innerHTML = `<i data-lucide="${type==='error'?'alert-circle':'check-circle-2'}" class="w-4 h-4"></i> ${msg}`;
-            c.appendChild(d); lucide.createIcons();
-            setTimeout(() => { d.classList.add('opacity-0', 'translate-y-2'); setTimeout(() => d.remove(), 300); }, 3000);
+            
+            const bgClass = type === 'error' ? 'bg-red-50' : 'bg-emerald-50';
+            const borderClass = type === 'error' ? 'border-red-200' : 'border-emerald-200';
+            const textClass = type === 'error' ? 'text-red-800' : 'text-emerald-800';
+            const iconColor = type === 'error' ? 'text-red-500' : 'text-emerald-500';
+            const icon = type === 'error' ? 'alert-octagon' : 'check-circle-2';
+            
+            d.className = `px-4 py-3 rounded-xl shadow-lg border ${borderClass} ${bgClass} ${textClass} text-sm font-semibold flex items-center gap-3 transform transition-all duration-300 translate-y-0`;
+            d.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 ${iconColor}"></i> ${msg}`;
+            c.appendChild(d);
+            lucide.createIcons();
+            
+            setTimeout(() => { 
+                d.classList.add('opacity-0', 'translate-y-4'); 
+                setTimeout(() => d.remove(), 300); 
+            }, 3500);
         }
     </script>
 </body>

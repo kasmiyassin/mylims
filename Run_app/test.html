@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Samples Registry - TIFI LIMS</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- AG Grid -->
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-grid.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-theme-alpine.css" />
+    <!-- Barcode Lib (JsBarcode) -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <!-- QR Code Lib -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <!-- Day.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.11.10/dayjs.min.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f1f5f9; /* slate-100 */
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.25rem; }
+        
+        /* Glassmorphism */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }
+
+        /* AG Grid Override */
+        .ag-theme-alpine {
+            --ag-header-background-color: #f8fafc;
+            --ag-header-foreground-color: #475569;
+            --ag-border-color: #e2e8f0;
+            --ag-row-hover-color: #f1f5f9;
+            --ag-selected-row-background-color: #e0e7ff;
+            --ag-font-family: 'Inter', sans-serif;
+            --ag-font-size: 13px;
+            border-radius: 0.75rem;
+            overflow: hidden;
+        }
+
+        .sample-root { border-left: 4px solid #4f46e5 !important; }
+        .sample-child { border-left: 4px solid #10b981 !important; }
+
+        /* Lineage Tree */
+        .lineage-node { position: relative; padding-left: 20px; border-left: 2px solid #e2e8f0; margin-left: 10px; }
+        .lineage-node::before { content: ''; position: absolute; top: 18px; left: 0; width: 15px; height: 2px; background: #e2e8f0; }
+        .node-card { display: inline-flex; align-items: center; padding: 10px 14px; background: white; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s; }
+        .node-card:hover { border-color: #818cf8; transform: translateX(2px); box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+
+        /* Loading & Modals */
+        .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.7); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+        .loading-overlay.active { opacity: 1; pointer-events: all; }
+        
+        .modal { opacity: 0; visibility: hidden; transition: all 0.2s ease-in-out; }
+        .modal.open { opacity: 1; visibility: visible; }
+        .modal-content { transform: scale(0.95); transition: transform 0.2s ease-in-out; }
+        .modal.open .modal-content { transform: scale(1); }
+        .hidden { display: none !important; }
+        
+        /* Slide Over */
+        .slide-over { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .slide-over.closed { transform: translateX(100%); }
+        .slide-over.open { transform: translateX(0); }
+
+        /* Form Inputs */
+        .form-input {
+            width: 100%; padding: 0.625rem 0.875rem; background-color: #f8fafc;
+            border: 1px solid #e2e8f0; border-radius: 0.75rem; font-size: 0.875rem;
+            color: #334155; transition: all 0.2s;
+        }
+        .form-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); background-color: #ffffff; }
+
+        /* Print Styles for Labels */
+        @media print {
+            @page { size: A4; margin: 10mm; } 
+            body * { visibility: hidden; }
+            #labelModal, #labelModal .modal-content, #labelPreviewContainer, #labelPreviewContainer * { visibility: visible; }
+            
+            #labelModal { position: absolute; top: 0; left: 0; width: 100%; height: auto; background: white; z-index: 9999; }
+            .modal-content { box-shadow: none !important; padding: 0 !important; width: 100% !important; max-width: none !important; transform: none !important; border: none !important; }
+            .no-print { display: none !important; }
+
+            #labelPreviewContainer.print-grid {
+                display: grid; grid-template-columns: repeat(auto-fill, minmax(48mm, 1fr)); gap: 4mm;
+                width: 100%; background: none; border: none; padding: 0;
+            }
+            #labelPreviewContainer.print-list { display: flex; flex-direction: column; gap: 10px; padding: 0; background: none; border: none; }
+
+            .label-card {
+                break-inside: avoid; page-break-inside: avoid; border: 1px dashed #ccc; box-shadow: none;
+                padding: 2mm; display: flex; flex-direction: column; align-items: center; justify-content: center;
+                background: white; height: auto; min-height: 25mm;
+            }
+            .label-card svg, .label-card img { max-width: 100%; height: auto; }
+            .label-card p { margin: 1px 0; font-size: 8pt; color: black; }
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-slate-800 selection:bg-indigo-100 selection:text-indigo-900">
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay active">
+        <div class="bg-white/90 px-6 py-5 rounded-2xl shadow-2xl flex items-center gap-4 border border-slate-200/50">
+            <div class="relative w-6 h-6">
+                <div class="absolute inset-0 border-2 border-slate-200 rounded-full"></div>
+                <div class="absolute inset-0 border-2 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
+            </div>
+            <p id="loadingText" class="text-slate-700 font-semibold tracking-wide">Syncing registry...</p>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-[120] flex flex-col gap-3"></div>
+
+    <!-- Sidebar -->
+    <div class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex-shrink-0">
+        <div class="p-5 border-b border-slate-100 flex items-center gap-3 shrink-0">
+            <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 p-2 rounded-xl shadow-inner">
+                <i data-lucide="flask-conical" class="w-5 h-5 text-white"></i> 
+            </div>
+            <span class="text-xl font-bold tracking-tight text-slate-800">TIFI LIMS</span>
+        </div>
+        
+        <div class="sidebar-nav-container p-4 space-y-1">
+            <a href="dashboard.html" class="flex items-center px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group mb-2">
+                <i data-lucide="layout-dashboard" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Dashboard
+            </a>
+            
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Core</div>
+            <a href="projects.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="folder-kanban" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Projects
+            </a>
+            <a href="experiments.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="flask-round" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Experiments
+            </a>
+            <a href="protocols.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="book-text" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Protocols (ELN)
+            </a>
+
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Field & Assets</div>
+            <a href="sampling.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="map-pin" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Sampling Events
+            </a>
+            <a href="planned_samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="calendar-check" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Planned Samples
+            </a>
+            <a href="samples.html" class="flex items-center px-3 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-medium shadow-sm border border-indigo-100/50">
+                <i data-lucide="beaker" class="w-4 h-4 mr-3 text-indigo-600"></i> Samples Registry
+            </a>
+            <a href="storage.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="archive" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Storage
+            </a>
+
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">System</div>
+            <a href="booking.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="calendar-clock" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Booking
+            </a>
+            <a href="tables.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="table-2" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Data Editor
+            </a>
+            <a href="reporting.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="bar-chart-2" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Reporting
+            </a>
+        </div>
+
+        <div class="mt-auto shrink-0 p-4 border-t border-slate-100 bg-slate-50/50">
+             <a href="user_profile.html" class="flex items-center mb-3 px-2 py-1.5 -mx-2 hover:bg-white rounded-xl transition-all group cursor-pointer border border-transparent hover:border-slate-200 hover:shadow-sm" title="View Profile & Settings">
+                <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-100 to-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-sm mr-3 shadow-sm border border-indigo-200/50 group-hover:scale-105 transition-transform">U</div>
+                <div class="overflow-hidden flex-1">
+                    <p class="font-semibold text-sm text-slate-800 truncate group-hover:text-indigo-600 transition-colors" id="userNameDisplay">User</p>
+                    <p class="text-[11px] font-medium text-emerald-600 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
+                    </p>
+                </div>
+                <i data-lucide="settings" class="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+            </a>
+            <button id="logout-button" class="w-full flex items-center justify-center p-2 rounded-xl text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 font-medium transition-colors border border-transparent hover:border-red-100">
+                <i data-lucide="log-out" class="w-4 h-4 mr-2"></i><span>Sign Out</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col h-full bg-slate-50 relative overflow-hidden">
+        
+        <!-- Header -->
+        <div class="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-5 flex justify-between items-center z-10 shrink-0 shadow-sm">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
+                    Bio Assets Registry
+                </h1>
+                <p class="text-sm text-slate-500 mt-0.5">Master registry for biological samples, tracking, and genealogy.</p>
+            </div>
+            <div class="flex gap-3 items-center">
+                <div class="relative group">
+                    <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5"></i>
+                    <input type="text" id="quickFilter" oninput="gridApi.setQuickFilter(this.value)" placeholder="Search ID, Type, Project..." class="pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-xl text-sm w-72 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-all hover:border-indigo-300">
+                </div>
+                <button onclick="toggleFilterSidebar()" class="px-3 py-2 bg-white border border-slate-300 text-slate-700 rounded-xl hover:border-indigo-300 hover:text-indigo-600 shadow-sm transition-colors" title="Advanced Filters">
+                    <i data-lucide="filter" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="px-8 py-3 bg-white/60 backdrop-blur-md border-b border-slate-200 flex justify-between items-center z-10 shrink-0">
+            <div class="flex items-center gap-3">
+                <button onclick="openModal('newSampleModal')" class="flex items-center px-4 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-sm font-semibold shadow-md transition-all border border-emerald-500">
+                    <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Register Sample
+                </button>
+                <div class="h-6 w-px bg-slate-300 mx-1"></div>
+                <button onclick="showLineage()" class="flex items-center px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:border-purple-300 hover:text-purple-600 hover:bg-purple-50 shadow-sm transition-all">
+                    <i data-lucide="git-branch" class="w-4 h-4 mr-2 text-purple-500"></i> View Lineage
+                </button>
+                <button onclick="printLabels()" class="flex items-center px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:border-sky-300 hover:text-sky-600 hover:bg-sky-50 shadow-sm transition-all">
+                    <i data-lucide="qr-code" class="w-4 h-4 mr-2 text-sky-500"></i> Print Labels
+                </button>
+            </div>
+            <div class="text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                <span id="rowCount" class="text-indigo-600 text-sm">0</span> records
+            </div>
+        </div>
+
+        <!-- Grid Area -->
+        <div class="flex-1 p-6 overflow-hidden relative">
+            <!-- Background decorative blobs -->
+            <div class="absolute top-0 right-0 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none z-0"></div>
+            
+            <div class="glass-card rounded-2xl h-full overflow-hidden relative z-10 border border-slate-200">
+                <div id="myGrid" class="ag-theme-alpine h-full w-full border-none"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Filter Sidebar -->
+    <div id="filterSidebar" class="absolute top-0 right-0 h-full w-80 bg-white/95 backdrop-blur-md shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border-l border-slate-200 z-40 transform translate-x-full slide-over flex flex-col transition-transform duration-300">
+        <div class="p-5 border-b border-slate-200/60 flex justify-between items-center bg-white">
+            <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2"><i data-lucide="filter" class="w-5 h-5 text-indigo-500"></i> Advanced Filters</h3>
+            <button onclick="toggleFilterSidebar()" class="text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <div class="p-6 space-y-6 flex-1 overflow-y-auto">
+            <div>
+                <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Sample Type</label>
+                <select id="filterType" class="form-input bg-white cursor-pointer" onchange="applyFilters()"></select>
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Project</label>
+                <select id="filterProject" class="form-input bg-white cursor-pointer" onchange="applyFilters()"></select>
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Date Range (Collection)</label>
+                <div class="space-y-3">
+                    <input type="date" id="filterDateStart" class="form-input" onchange="applyFilters()">
+                    <div class="text-center text-xs font-bold text-slate-300 uppercase">to</div>
+                    <input type="date" id="filterDateEnd" class="form-input" onchange="applyFilters()">
+                </div>
+            </div>
+        </div>
+        <div class="p-5 border-t border-slate-200/60 bg-slate-50/50">
+            <button onclick="resetFilters()" class="w-full py-2.5 bg-white border border-slate-300 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-100 shadow-sm transition-all">Clear Filters</button>
+        </div>
+    </div>
+
+    <!-- === MODALS === -->
+
+    <!-- New Sample Modal -->
+    <div id="newSampleModal" class="modal hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
+                <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2"><i data-lucide="plus-circle" class="w-5 h-5 text-emerald-500"></i> Register Sample</h3>
+                <button onclick="closeModal('newSampleModal')" class="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="newSampleForm" onsubmit="handleNewSample(event)" class="flex-1 overflow-y-auto p-6 space-y-5">
+                
+                <div class="bg-indigo-50 border border-indigo-100 p-3 rounded-lg mb-2">
+                    <p class="text-xs text-indigo-700 font-medium"><i data-lucide="info" class="w-3 h-3 inline mr-1 -mt-0.5"></i> Sample IDs are generated automatically by the database upon saving.</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Sample Type *</label>
+                        <select id="formSampleType" name="sample_type_id" class="form-input bg-white cursor-pointer" required></select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Project *</label>
+                        <select id="formProject" name="project_id" class="form-input bg-white cursor-pointer" required></select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Parent Sample ID</label>
+                    <input type="text" name="parent_sample_id" placeholder="Leave blank if root sample (e.g. Fish)" class="form-input">
+                    <p class="text-[10px] text-slate-400 mt-1">If this sample derives from another (e.g., DNA from Tissue), provide the parent ID.</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">External ID</label>
+                        <input type="text" name="external_id" class="form-input" placeholder="e.g. Tag Number">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Collection Date</label>
+                        <input type="date" name="collection_date" class="form-input">
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Storage Location</label>
+                        <select id="formStorage" name="storage_id" class="form-input bg-white cursor-pointer"></select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Status</label>
+                        <select name="status_id" class="form-input bg-white cursor-pointer">
+                            <option value="Stored">Stored</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Depleted">Depleted</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Notes</label>
+                    <textarea name="notes" rows="2" class="form-input resize-none"></textarea>
+                </div>
+
+                <div class="pt-4 border-t border-slate-100 flex justify-end gap-3">
+                    <button type="button" onclick="closeModal('newSampleModal')" class="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
+                    <button type="submit" id="btnSaveSample" class="px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 rounded-xl shadow-md transition-all">Save Sample</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Lineage Modal -->
+    <div id="lineageModal" class="modal hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
+                <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2"><i data-lucide="git-branch" class="w-5 h-5 text-purple-500"></i> Sample Genealogy</h3>
+                <button onclick="closeModal('lineageModal')" class="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-8 bg-slate-50/50">
+                <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm min-h-[200px]">
+                    <div id="lineageTree" class="pl-2">
+                        <!-- Tree Injected via JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Multi-Label Print Modal -->
+    <div id="labelModal" class="modal hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0 no-print">
+                <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2"><i data-lucide="qr-code" class="w-5 h-5 text-sky-500"></i> Print Labels</h3>
+                <button onclick="closeModal('labelModal')" class="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            
+            <div class="p-4 bg-slate-100 border-b border-slate-200 flex items-center justify-between no-print shrink-0">
+                <div class="flex gap-4">
+                    <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                        <input type="radio" name="labelFormat" value="grid" checked class="text-indigo-600 focus:ring-indigo-500" onchange="updateLabelPreview()"> Grid (Small Labels)
+                    </label>
+                    <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                        <input type="radio" name="labelFormat" value="list" class="text-indigo-600 focus:ring-indigo-500" onchange="updateLabelPreview()"> List (Large Labels)
+                    </label>
+                </div>
+                <button onclick="window.print()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-sm transition-colors flex items-center gap-2">
+                    <i data-lucide="printer" class="w-4 h-4"></i> Print Now
+                </button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-6 bg-slate-50/50 flex justify-center">
+                <!-- Preview Container for Print -->
+                <div id="labelPreviewContainer" class="print-grid bg-white border border-slate-200 rounded-xl p-6 shadow-sm min-h-[500px] w-full max-w-3xl">
+                    <!-- Labels Injected Here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        const getApiBase = () => window.location.pathname.includes('/mylims') ? '/mylims/api' : '/api';
+        const API_PREFIX = getApiBase();
+        
+        let gridApi = null;
+        let allSamplesData = [];
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            const token = sessionStorage.getItem('token');
+            if (!token) window.location.href = 'login.html';
+
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if(user) document.getElementById('userNameDisplay').innerText = user.person_id;
+
+            initGrid();
+            await loadDropdowns();
+            await loadGridData();
+            
+            document.getElementById('loadingOverlay').classList.remove('active');
+        });
+
+        // Robust API Fetch wrapper
+        async function apiFetch(endpoint, options = {}) {
+            const token = sessionStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}`, ...options.headers };
+            
+            if(options.body && !(options.body instanceof FormData)) {
+                headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(options.body);
+            }
+            
+            try {
+                const res = await fetch(`${API_PREFIX}/${endpoint}`, { ...options, headers });
+                if(!res.ok) {
+                    const errObj = await res.json().catch(() => ({ detail: `HTTP Error ${res.status}` }));
+                    throw new Error(errObj.detail || errObj.error || `HTTP Error ${res.status}`);
+                }
+                if(res.status === 204) return true;
+                return await res.json();
+            } catch(e) {
+                console.error(`[apiFetch] Failed on ${endpoint}:`, e);
+                return { error: e.message }; 
+            }
+        }
+
+        // --- Data Loading ---
+        async function loadDropdowns() {
+            // Sample Types
+            const types = await apiFetch('table/reference/sample_type?limit=100');
+            const fType = document.getElementById('filterType');
+            const mType = document.getElementById('formSampleType');
+            fType.innerHTML = '<option value="">All Types</option>';
+            mType.innerHTML = '<option value="" disabled selected>-- Select Type --</option>';
+            if(types && Array.isArray(types)) {
+                types.forEach(t => {
+                    fType.add(new Option(t.sample_type_id, t.sample_type_id));
+                    mType.add(new Option(t.sample_type_id, t.sample_type_id));
+                });
+            }
+
+            // Projects
+            const prjs = await apiFetch('table/lims/projects?limit=500');
+            const fPrj = document.getElementById('filterProject');
+            const mPrj = document.getElementById('formProject');
+            fPrj.innerHTML = '<option value="">All Projects</option>';
+            mPrj.innerHTML = '<option value="" disabled selected>-- Select Project --</option>';
+            if(prjs && Array.isArray(prjs)) {
+                prjs.forEach(p => {
+                    fPrj.add(new Option(p.acronym, p.project_id));
+                    mPrj.add(new Option(p.acronym, p.project_id));
+                });
+            }
+
+            // Storage
+            const storage = await apiFetch('table/lims/storage?limit=500');
+            const mStor = document.getElementById('formStorage');
+            mStor.innerHTML = '<option value="">-- None / Unassigned --</option>';
+            if(storage && Array.isArray(storage)) {
+                storage.forEach(s => {
+                    mStor.add(new Option(s.name || s.storage_id, s.storage_id));
+                });
+            }
+        }
+
+        async function loadGridData() {
+            // Using the view to get the 'generation_level' easily
+            const data = await apiFetch('table/bio_assets/view_samples_with_root?limit=2000');
+            if(data && !data.error && Array.isArray(data)) {
+                allSamplesData = data;
+                if(gridApi) gridApi.setRowData(allSamplesData);
+                document.getElementById('rowCount').innerText = allSamplesData.length;
+            }
+        }
+
+        // --- Grid Logic ---
+        function initGrid() {
+            const gridDiv = document.querySelector('#myGrid');
+            const gridOptions = {
+                columnDefs: [
+                    { field: "sample_id", headerName: "Sample ID", pinned: 'left', lockPosition: true, checkboxSelection: true, headerCheckboxSelection: true, width: 180 },
+                    { field: "sample_type_id", headerName: "Type", width: 120 },
+                    { field: "generation_level", headerName: "Hierarchy", width: 100, 
+                      cellRenderer: params => {
+                          const isRoot = params.value === 'Root';
+                          const color = isRoot ? 'text-indigo-600 bg-indigo-50 border-indigo-200' : 'text-emerald-600 bg-emerald-50 border-emerald-200';
+                          return `<span class="px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${color}">${params.value}</span>`;
+                      }
+                    },
+                    { field: "project_id", headerName: "Project", width: 130 },
+                    { field: "parent_sample_id", headerName: "Parent ID", width: 160 },
+                    { field: "collection_date", headerName: "Collected", filter: 'agDateColumnFilter', width: 130 },
+                    { field: "external_id", headerName: "Ext ID", editable: true, width: 130 }
+                ],
+                defaultColDef: { resizable: true, sortable: true, filter: true },
+                rowSelection: 'multiple',
+                animateRows: true,
+                getRowClass: params => params.data.generation_level === 'Root' ? 'sample-root' : 'sample-child',
+                onGridReady: (params) => { gridApi = params.api; },
+                onFilterChanged: () => {
+                    document.getElementById('rowCount').innerText = gridApi.getDisplayedRowCount();
+                }
+            };
+            
+            if (window.agGrid && agGrid.createGrid) {
+                agGrid.createGrid(gridDiv, gridOptions);
+            } else if (window.agGrid && agGrid.Grid) {
+                new agGrid.Grid(gridDiv, gridOptions);
+            }
+        }
+
+        function toggleFilterSidebar() {
+            const el = document.getElementById('filterSidebar');
+            el.classList.toggle('translate-x-full');
+        }
+
+        function applyFilters() {
+            const type = document.getElementById('filterType').value;
+            const prj = document.getElementById('filterProject').value;
+            const dStart = document.getElementById('filterDateStart').value;
+            const dEnd = document.getElementById('filterDateEnd').value;
+            
+            let filtered = allSamplesData;
+            
+            if (type) filtered = filtered.filter(s => s.sample_type_id === type);
+            if (prj) filtered = filtered.filter(s => s.project_id === prj);
+            if (dStart) filtered = filtered.filter(s => s.collection_date && s.collection_date >= dStart);
+            if (dEnd) filtered = filtered.filter(s => s.collection_date && s.collection_date <= dEnd);
+            
+            if(gridApi) gridApi.setRowData(filtered);
+            document.getElementById('rowCount').innerText = filtered.length;
+        }
+
+        function resetFilters() {
+            document.getElementById('filterType').value = '';
+            document.getElementById('filterProject').value = '';
+            document.getElementById('filterDateStart').value = '';
+            document.getElementById('filterDateEnd').value = '';
+            if(gridApi) gridApi.setRowData(allSamplesData);
+            document.getElementById('rowCount').innerText = allSamplesData.length;
+            toggleFilterSidebar();
+        }
+
+        // --- New Sample Actions ---
+        async function handleNewSample(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnSaveSample');
+            const orig = btn.innerHTML;
+            btn.innerHTML = 'Saving...'; btn.disabled = true;
+
+            const fd = new FormData(e.target);
+            const data = Object.fromEntries(fd.entries());
+            
+            // Clean empty strings to null for DB foreign keys
+            Object.keys(data).forEach(k => { if(data[k] === '') data[k] = null; });
+
+            try {
+                // sample_id is deliberately omitted so Postgres trigger fn_generate_hierarchical_sample_id handles it
+                const res = await apiFetch('table/bio_assets/samples_root', { method: 'POST', body: data });
+                
+                if (res && res.error) throw new Error(res.error);
+                
+                showToast(`Sample Registered: ${res.sample_id}`, "success");
+                closeModal('newSampleModal');
+                e.target.reset();
+                loadGridData();
+            } catch(err) {
+                showToast(err.message, "error");
+            } finally {
+                btn.innerHTML = orig; btn.disabled = false;
+            }
+        }
+
+        // --- Lineage Logic ---
+        async function showLineage() {
+            if(!gridApi) return;
+            const selected = gridApi.getSelectedRows();
+            if(selected.length !== 1) {
+                showToast("Please select exactly ONE sample to view lineage.", "error");
+                return;
+            }
+
+            const targetId = selected[0].sample_id;
+            const treeContainer = document.getElementById('lineageTree');
+            treeContainer.innerHTML = '<div class="text-slate-400 text-sm animate-pulse">Tracing genealogy...</div>';
+            openModal('lineageModal');
+
+            try {
+                // Fetch lineage data
+                const lineage = await apiFetch(`table/bio_assets/view_downstream_lineage?ancestor_sample_id=${targetId}`);
+                
+                if(!lineage || lineage.error || lineage.length === 0) {
+                    treeContainer.innerHTML = '<p class="text-slate-500">No downstream derivatives found for this sample.</p>';
+                    return;
+                }
+
+                // Simple render: indent by depth
+                let html = '';
+                lineage.sort((a, b) => a.depth - b.depth).forEach(node => {
+                    const margin = node.depth * 20;
+                    const icon = node.depth === 0 ? 'box' : 'corner-down-right';
+                    const color = node.depth === 0 ? 'text-indigo-600' : 'text-emerald-500';
+                    const border = node.depth === 0 ? 'border-indigo-200 bg-indigo-50/30' : 'border-e2e8f0';
+                    
+                    html += `
+                        <div style="margin-left: ${margin}px" class="relative ${node.depth > 0 ? 'lineage-node' : ''}">
+                            <div class="node-card ${border}">
+                                <i data-lucide="${icon}" class="w-4 h-4 mr-2 ${color}"></i>
+                                <div>
+                                    <div class="font-mono font-bold text-sm text-slate-800">${node.descendant_sample_id}</div>
+                                    <div class="text-[10px] uppercase font-bold text-slate-400 mt-0.5">${node.descendant_type}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                treeContainer.innerHTML = html;
+                lucide.createIcons();
+
+            } catch (err) {
+                treeContainer.innerHTML = `<p class="text-red-500 text-sm">Failed to load lineage: ${err.message}</p>`;
+            }
+        }
+
+        // --- Label Printing Logic ---
+        function printLabels() {
+            if(!gridApi) return;
+            const selected = gridApi.getSelectedRows();
+            if(selected.length === 0) {
+                showToast("Select at least one sample to print labels.", "error");
+                return;
+            }
+
+            openModal('labelModal');
+            generateLabelPreviews(selected);
+        }
+
+        function updateLabelPreview() {
+            if(!gridApi) return;
+            const selected = gridApi.getSelectedRows();
+            const isGrid = document.querySelector('input[name="labelFormat"]:checked').value === 'grid';
+            
+            const container = document.getElementById('labelPreviewContainer');
+            container.className = isGrid ? 'print-grid bg-white border border-slate-200 rounded-xl p-6 shadow-sm min-h-[500px] w-full max-w-3xl' : 'print-list bg-white border border-slate-200 rounded-xl p-6 shadow-sm min-h-[500px] w-full max-w-md';
+            
+            generateLabelPreviews(selected, isGrid);
+        }
+
+        function generateLabelPreviews(samples, isGrid = true) {
+            const container = document.getElementById('labelPreviewContainer');
+            container.innerHTML = '';
+
+            samples.forEach((sample, index) => {
+                const card = document.createElement('div');
+                card.className = "label-card";
+                
+                const title = document.createElement('p');
+                title.style.fontWeight = 'bold';
+                title.style.marginBottom = '2px';
+                title.innerText = sample.sample_id;
+                
+                const meta = document.createElement('p');
+                meta.innerText = `${sample.sample_type_id} | ${sample.project_id || ''}`;
+                meta.style.fontSize = '6pt';
+                meta.style.marginBottom = '2px';
+
+                // QR Code Container
+                const qrContainer = document.createElement('div');
+                qrContainer.id = `qr-${index}`;
+                qrContainer.style.margin = '2px 0';
+                
+                // Barcode Container
+                const barcodeImg = document.createElement('svg');
+                barcodeImg.id = `bc-${index}`;
+
+                card.appendChild(title);
+                card.appendChild(meta);
+                card.appendChild(qrContainer);
+                card.appendChild(barcodeImg);
+                container.appendChild(card);
+
+                // Generate QR
+                new QRCode(qrContainer, {
+                    text: sample.sample_id,
+                    width: isGrid ? 40 : 60,
+                    height: isGrid ? 40 : 60,
+                    colorDark : "#000000",
+                    colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.L
+                });
+
+                // Generate Barcode
+                JsBarcode(`#bc-${index}`, sample.sample_id, {
+                    format: "CODE128",
+                    width: isGrid ? 1 : 1.5,
+                    height: isGrid ? 20 : 30,
+                    displayValue: false,
+                    margin: 0
+                });
+            });
+        }
+
+        // --- Modals & Toast Utils ---
+        window.openModal = (id) => {
+            const el = document.getElementById(id);
+            el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('open'), 10);
+        };
+        window.closeModal = (id) => {
+            const el = document.getElementById(id);
+            el.classList.remove('open');
+            setTimeout(() => el.classList.add('hidden'), 200);
+        };
+
+        function showToast(msg, type='success') {
+            const c = document.getElementById('toastContainer');
+            const d = document.createElement('div');
+            const bgClass = type === 'error' ? 'bg-red-50' : 'bg-emerald-50';
+            const borderClass = type === 'error' ? 'border-red-200' : 'border-emerald-200';
+            const textClass = type === 'error' ? 'text-red-800' : 'text-emerald-800';
+            const iconColor = type === 'error' ? 'text-red-500' : 'text-emerald-500';
+            const icon = type === 'error' ? 'alert-octagon' : 'check-circle-2';
+            
+            d.className = `px-4 py-3 rounded-xl shadow-lg border ${borderClass} ${bgClass} ${textClass} text-sm font-semibold flex items-center gap-3 transform transition-all duration-300 translate-y-0`;
+            d.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 ${iconColor}"></i> ${msg}`;
+            c.appendChild(d); lucide.createIcons();
+            setTimeout(() => { d.classList.add('opacity-0', 'translate-y-4'); setTimeout(() => d.remove(), 300); }, 3500);
+        }
+    </script>
+</body>
+</html>
