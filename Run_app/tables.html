@@ -4,81 +4,177 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Data Editor - TIFI LIMS</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- AG Grid -->
     <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-grid.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-theme-alpine.css" />
+    <!-- SheetJS -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f1f5f9; /* slate-100 */
+        }
         
-        /* AG Grid Customization */
+        /* Premium AG Grid Customization */
         .ag-theme-alpine {
-            --ag-header-background-color: #f8fafc;
-            --ag-header-foreground-color: #475569;
-            --ag-border-color: #e2e8f0;
-            --ag-row-hover-color: #f1f5f9;
-            --ag-selected-row-background-color: #e0e7ff;
+            --ag-background-color: #ffffff;
+            --ag-header-background-color: #ffffff;
+            --ag-header-foreground-color: #64748b; /* slate-500 */
+            --ag-header-cell-hover-background-color: #f8fafc;
+            --ag-border-color: transparent;
+            --ag-row-border-color: #f1f5f9; /* slate-100 */
+            --ag-row-hover-color: #f8fafc; /* slate-50 */
+            --ag-selected-row-background-color: #eff6ff; /* blue-50 */
             --ag-font-family: 'Inter', sans-serif;
             --ag-font-size: 13px;
+            --ag-cell-horizontal-padding: 16px;
+            --ag-header-column-separator-display: block;
+            --ag-header-column-separator-color: #e2e8f0;
+            --ag-header-column-separator-height: 30%;
+            
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+            overflow: hidden;
+        }
+
+        .ag-theme-alpine .ag-header {
+            border-bottom: 1px solid #e2e8f0;
+            font-weight: 600;
         }
         
         /* Pinned PK Column Styling */
         .pk-cell {
-            background-color: #f1f5f9 !important; /* Slate-100 */
+            background-color: #f8fafc !important; 
             font-family: 'Monaco', 'Consolas', monospace;
-            color: #334155;
+            color: #475569;
             font-weight: 600;
+            border-right: 1px dashed #cbd5e1 !important;
         }
         
         /* New Row Indicator */
         .new-row-cell {
             background-color: #ecfdf5 !important; /* Emerald-50 */
+            color: #065f46;
+            font-weight: 500;
         }
 
         .loading-overlay {
-            position: absolute; inset: 0; background: rgba(255,255,255,0.8);
-            backdrop-filter: blur(2px); display: flex; justify-content: center; align-items: center;
-            z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+            position: absolute; inset: 0; background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center;
+            z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
         }
         .loading-overlay.active { opacity: 1; pointer-events: all; }
         
         /* Mandatory field warning */
-        .mandatory-cell-empty { background-color: #fee2e2 !important; border-bottom: 2px solid #ef4444 !important; }
+        .mandatory-cell-empty { 
+            background-color: #fef2f2 !important; 
+            border: 1px solid #fca5a5 !important;
+        }
 
         /* Slide-over panel transition */
-        .slide-over { transition: transform 0.3s ease-in-out; }
+        .slide-over { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .slide-over.closed { transform: translateX(100%); }
         .slide-over.open { transform: translateX(0); }
+        
+        /* Custom Scrollbar for sidebar/panels */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.25rem; }
     </style>
 </head>
-<body class="flex h-screen overflow-hidden text-slate-800">
+<body class="flex h-screen overflow-hidden text-slate-800 selection:bg-indigo-100 selection:text-indigo-900">
 
-    <!-- Loading & Toast -->
+    <!-- Global Loading & Toast -->
     <div id="loadingOverlay" class="loading-overlay">
-        <div class="bg-white px-6 py-4 rounded-xl shadow-xl flex items-center gap-3 border border-slate-200">
-            <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
-            <p id="loadingText" class="text-slate-700 font-medium">Processing data...</p>
+        <div class="bg-white/90 px-6 py-5 rounded-2xl shadow-2xl flex items-center gap-4 border border-slate-200/50">
+            <div class="relative w-6 h-6">
+                <div class="absolute inset-0 border-2 border-slate-200 rounded-full"></div>
+                <div class="absolute inset-0 border-2 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
+            </div>
+            <p id="loadingText" class="text-slate-700 font-semibold tracking-wide">Processing data...</p>
         </div>
     </div>
-    <div id="toastContainer" class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2"></div>
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-[120] flex flex-col gap-3"></div>
 
     <!-- Sidebar -->
-    <div class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-sm flex-shrink-0">
-        <div class="p-4 border-b border-slate-200 font-bold text-slate-800 flex items-center gap-2">
-            <i data-lucide="flask-conical" class="w-6 h-6 text-indigo-600"></i> 
-            <span class="text-lg tracking-tight">TIFI LIMS</span>
+    <div class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex-shrink-0">
+        <div class="p-5 border-b border-slate-100 flex items-center gap-3 shrink-0">
+            <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 p-2 rounded-xl shadow-inner">
+                <i data-lucide="flask-conical" class="w-5 h-5 text-white"></i> 
+            </div>
+            <span class="text-xl font-bold tracking-tight text-slate-800">TIFI LIMS</span>
         </div>
-        <div class="flex-1 p-3 space-y-1 overflow-y-auto text-sm font-medium text-slate-600">
-            <a href="dashboard.html" class="flex items-center p-2.5 rounded-lg hover:bg-slate-50 transition"><i data-lucide="layout-dashboard" class="w-4 h-4 mr-3"></i> Dashboard</a>
-            <a href="tables.html" class="flex items-center p-2.5 rounded-lg bg-indigo-50 text-indigo-700"><i data-lucide="table-2" class="w-4 h-4 mr-3"></i> Data Editor</a>
+        
+        <div class="sidebar-nav-container p-4 space-y-1">
+            <a href="dashboard.html" class="flex items-center px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group mb-2">
+                <i data-lucide="layout-dashboard" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Dashboard
+            </a>
+            
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Core</div>
+            <a href="projects.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="folder-kanban" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Projects
+            </a>
+            <a href="experiments.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="flask-round" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Experiments
+            </a>
+            <a href="protocols.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="book-text" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Protocols (ELN)
+            </a>
+
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Field & Assets</div>
+            <a href="sampling.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="map-pin" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Sampling Events
+            </a>
+            <a href="planned_samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="calendar-check" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Planned Samples
+            </a>
+            <a href="samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="beaker" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Samples Registry
+            </a>
+            <a href="storage.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="archive" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Storage
+            </a>
+
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">System</div>
+            <a href="booking.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="calendar-clock" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Booking
+            </a>
+            <a href="tables.html" class="flex items-center px-3 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-medium shadow-sm border border-indigo-100/50">
+                <i data-lucide="table" class="w-4 h-4 mr-3 text-indigo-600"></i> Data Editor
+            </a>
+            <a href="tables_sub.html" class="flex items-center px-3 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-medium shadow-sm border border-indigo-100/50">
+                <i data-lucide="table-2" class="w-4 h-4 mr-3 text-indigo-600"></i> Tables_2
+            </a>
+            <a href="reporting.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="bar-chart-2" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Reporting
+            </a>
         </div>
-        <div class="p-4 border-t border-slate-200">
-            <button onclick="window.location.href='login.html'" class="flex items-center text-sm text-red-500 hover:text-red-700 font-medium">
-                <i data-lucide="log-out" class="w-4 h-4 mr-2"></i> Sign Out
+
+        <div class="mt-auto shrink-0 p-4 border-t border-slate-100 bg-slate-50/50">
+             <a href="user_profile.html" class="flex items-center mb-3 px-2 py-1.5 -mx-2 hover:bg-white rounded-xl transition-all group cursor-pointer border border-transparent hover:border-slate-200 hover:shadow-sm" title="View Profile & Settings">
+                <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-100 to-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-sm mr-3 shadow-sm border border-indigo-200/50 group-hover:scale-105 transition-transform">U</div>
+                <div class="overflow-hidden flex-1">
+                    <p class="font-semibold text-sm text-slate-800 truncate group-hover:text-indigo-600 transition-colors" id="userNameDisplay">User</p>
+                    <p class="text-[11px] font-medium text-emerald-600 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
+                    </p>
+                </div>
+                <i data-lucide="settings" class="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+            </a>
+            <button id="logout-button" class="w-full flex items-center justify-center p-2 rounded-xl text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 font-medium transition-colors border border-transparent hover:border-red-100">
+                <i data-lucide="log-out" class="w-4 h-4 mr-2"></i><span>Sign Out</span>
             </button>
         </div>
     </div>

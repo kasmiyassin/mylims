@@ -3,24 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Samples Registry - TIFI LIMS</title>
-    
+    <title>Sample Reservations - TIFI LIMS</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Icons -->
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- AG Grid -->
     <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-grid.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-theme-alpine.css" />
-    <!-- Barcode Lib (JsBarcode) -->
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-    <!-- QR Code Lib -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    
     <!-- Day.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.11.10/dayjs.min.js"></script>
-    
+    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <style>
@@ -51,81 +45,47 @@
             --ag-header-foreground-color: #475569;
             --ag-border-color: #e2e8f0;
             --ag-row-hover-color: #f1f5f9;
-            --ag-selected-row-background-color: #e0e7ff;
+            --ag-selected-row-background-color: #eef2ff;
             --ag-font-family: 'Inter', sans-serif;
             --ag-font-size: 13px;
-            border-radius: 0.75rem;
+            border-radius: 1rem;
             overflow: hidden;
         }
 
-        .sample-root { border-left: 4px solid #4f46e5 !important; }
-        .sample-child { border-left: 4px solid #10b981 !important; }
+        /* Reservation Basket Item */
+        .basket-item {
+            transition: all 0.2s ease;
+            border-left: 4px solid #f97316; /* orange-500 */
+        }
+        .basket-item:hover {
+            transform: translateX(4px);
+            background-color: #fff7ed;
+        }
 
-        /* Lineage Tree */
-        .lineage-node { position: relative; padding-left: 20px; border-left: 2px solid #e2e8f0; margin-left: 10px; }
-        .lineage-node::before { content: ''; position: absolute; top: 18px; left: 0; width: 15px; height: 2px; background: #e2e8f0; }
-        .node-card { display: inline-flex; align-items: center; padding: 10px 14px; background: white; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s; }
-        .node-card:hover { border-color: #818cf8; transform: translateX(2px); box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-
-        /* Loading & Modals */
+        /* Loading Overlay */
         .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.7); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
         .loading-overlay.active { opacity: 1; pointer-events: all; }
         
-        .modal { opacity: 0; visibility: hidden; transition: all 0.2s ease-in-out; }
-        .modal.open { opacity: 1; visibility: visible; }
-        .modal-content { transform: scale(0.95); transition: transform 0.2s ease-in-out; }
-        .modal.open .modal-content { transform: scale(1); }
-        .hidden { display: none !important; }
-        
-        /* Slide Over */
-        .slide-over { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .slide-over.closed { transform: translateX(100%); }
-        .slide-over.open { transform: translateX(0); }
-
-        /* Form Inputs */
         .form-input {
             width: 100%; padding: 0.625rem 0.875rem; background-color: #f8fafc;
             border: 1px solid #e2e8f0; border-radius: 0.75rem; font-size: 0.875rem;
             color: #334155; transition: all 0.2s;
         }
-        .form-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); background-color: #ffffff; }
+        .form-input:focus { outline: none; border-color: #f97316; box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1); background-color: #ffffff; }
 
-        /* Print Styles for Labels */
-        @media print {
-            @page { size: A4; margin: 10mm; } 
-            body * { visibility: hidden; }
-            #labelModal, #labelModal .modal-content, #labelPreviewContainer, #labelPreviewContainer * { visibility: visible; }
-            
-            #labelModal { position: absolute; top: 0; left: 0; width: 100%; height: auto; background: white; z-index: 9999; }
-            .modal-content { box-shadow: none !important; padding: 0 !important; width: 100% !important; max-width: none !important; transform: none !important; border: none !important; }
-            .no-print { display: none !important; }
-
-            #labelPreviewContainer.print-grid {
-                display: grid; grid-template-columns: repeat(auto-fill, minmax(48mm, 1fr)); gap: 4mm;
-                width: 100%; background: none; border: none; padding: 0;
-            }
-            #labelPreviewContainer.print-list { display: flex; flex-direction: column; gap: 10px; padding: 0; background: none; border: none; }
-
-            .label-card {
-                break-inside: avoid; page-break-inside: avoid; border: 1px dashed #ccc; box-shadow: none;
-                padding: 2mm; display: flex; flex-direction: column; align-items: center; justify-content: center;
-                background: white; height: auto; min-height: 25mm;
-            }
-            .label-card svg, .label-card img { max-width: 100%; height: auto; }
-            .label-card p { margin: 1px 0; font-size: 8pt; color: black; }
-        }
+        .hidden { display: none !important; }
     </style>
 </head>
-<body class="flex h-screen overflow-hidden text-slate-800 selection:bg-indigo-100 selection:text-indigo-900">
+<body class="flex h-screen overflow-hidden text-slate-800 selection:bg-orange-100 selection:text-orange-900">
 
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay active">
         <div class="bg-white/90 px-6 py-5 rounded-2xl shadow-2xl flex items-center gap-4 border border-slate-200/50">
             <div class="relative w-6 h-6">
                 <div class="absolute inset-0 border-2 border-slate-200 rounded-full"></div>
-                <div class="absolute inset-0 border-2 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
+                <div class="absolute inset-0 border-2 border-orange-500 rounded-full border-t-transparent animate-spin"></div>
             </div>
-            <p id="loadingText" class="text-slate-700 font-semibold tracking-wide">Syncing registry...</p>
+            <p id="loadingText" class="text-slate-700 font-semibold tracking-wide">Syncing reservations...</p>
         </div>
     </div>
 
@@ -161,11 +121,11 @@
             <a href="sampling.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
                 <i data-lucide="map-pin" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Sampling Events
             </a>
-            <a href="planned_samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
-                <i data-lucide="calendar-check" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Planned Samples
+            <a href="planned_samples.html" class="flex items-center px-3 py-2.5 rounded-xl bg-orange-50 text-orange-700 font-medium shadow-sm border border-orange-100/50">
+                <i data-lucide="calendar-check" class="w-4 h-4 mr-3 text-orange-600"></i> Planned Samples
             </a>
-            <a href="samples.html" class="flex items-center px-3 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-medium shadow-sm border border-indigo-100/50">
-                <i data-lucide="beaker" class="w-4 h-4 mr-3 text-indigo-600"></i> Samples Registry
+            <a href="samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="beaker" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Samples Registry
             </a>
             <a href="storage.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
                 <i data-lucide="archive" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Storage
@@ -201,201 +161,144 @@
     </div>
 
     <!-- Main Content -->
-    <div class="flex-1 flex flex-col h-full bg-slate-50 relative overflow-hidden">
+    <div class="flex-1 flex flex-col h-full relative overflow-hidden">
         
         <!-- Header -->
-        <div class="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-5 flex justify-between items-center z-10 shrink-0 shadow-sm">
+        <header class="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-5 flex justify-between items-center z-10 shrink-0 shadow-sm">
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
-                    Bio Assets Registry
+                    Sample Reservations
                 </h1>
-                <p class="text-sm text-slate-500 mt-0.5">Master registry for biological samples, tracking, and genealogy.</p>
+                <p class="text-sm text-slate-500 mt-0.5">Plan future collection campaigns or book from existing inventory.</p>
             </div>
             <div class="flex gap-3 items-center">
-                <div class="relative group">
-                    <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5"></i>
-                    <input type="text" id="quickFilter" oninput="gridApi.setQuickFilter(this.value)" placeholder="Search ID, Type, Project..." class="pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-xl text-sm w-72 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-all hover:border-indigo-300">
-                </div>
-                <button onclick="toggleFilterSidebar()" class="px-3 py-2 bg-white border border-slate-300 text-slate-700 rounded-xl hover:border-indigo-300 hover:text-indigo-600 shadow-sm transition-colors" title="Advanced Filters">
-                    <i data-lucide="filter" class="w-4 h-4"></i>
+                <button onclick="openModal('importModal')" class="flex items-center px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl hover:border-orange-300 hover:text-orange-600 shadow-sm font-semibold transition-all text-sm">
+                    <i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i> Bulk Import
                 </button>
             </div>
-        </div>
+        </header>
 
-        <!-- Toolbar -->
-        <div class="px-8 py-3 bg-white/60 backdrop-blur-md border-b border-slate-200 flex justify-between items-center z-10 shrink-0">
-            <div class="flex items-center gap-3">
-                <button onclick="openModal('newSampleModal')" class="flex items-center px-4 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-sm font-semibold shadow-md transition-all border border-emerald-500">
-                    <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Register Sample
-                </button>
-                <div class="h-6 w-px bg-slate-300 mx-1"></div>
-                <button onclick="showLineage()" class="flex items-center px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:border-purple-300 hover:text-purple-600 hover:bg-purple-50 shadow-sm transition-all">
-                    <i data-lucide="git-branch" class="w-4 h-4 mr-2 text-purple-500"></i> View Lineage
-                </button>
-                <button onclick="printLabels()" class="flex items-center px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:border-sky-300 hover:text-sky-600 hover:bg-sky-50 shadow-sm transition-all">
-                    <i data-lucide="qr-code" class="w-4 h-4 mr-2 text-sky-500"></i> Print Labels
-                </button>
-            </div>
-            <div class="text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-                <span id="rowCount" class="text-indigo-600 text-sm">0</span> records
-            </div>
-        </div>
+        <div class="flex-1 overflow-hidden flex relative">
+            <!-- Left Side: Tools & Active List -->
+            <div class="flex-1 overflow-y-auto p-8 space-y-8 relative">
+                <!-- Background decorative blobs -->
+                <div class="absolute top-0 right-0 w-96 h-96 bg-orange-100/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none z-0"></div>
 
-        <!-- Grid Area -->
-        <div class="flex-1 p-6 overflow-hidden relative">
-            <!-- Background decorative blobs -->
-            <div class="absolute top-0 right-0 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none z-0"></div>
-            
-            <div class="glass-card rounded-2xl h-full overflow-hidden relative z-10 border border-slate-200">
-                <div id="myGrid" class="ag-theme-alpine h-full w-full border-none"></div>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Filter Sidebar -->
-    <div id="filterSidebar" class="absolute top-0 right-0 h-full w-80 bg-white/95 backdrop-blur-md shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border-l border-slate-200 z-40 transform translate-x-full slide-over flex flex-col transition-transform duration-300">
-        <div class="p-5 border-b border-slate-200/60 flex justify-between items-center bg-white">
-            <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2"><i data-lucide="filter" class="w-5 h-5 text-indigo-500"></i> Advanced Filters</h3>
-            <button onclick="toggleFilterSidebar()" class="text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
-        </div>
-        <div class="p-6 space-y-6 flex-1 overflow-y-auto">
-            <div>
-                <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Sample Type</label>
-                <select id="filterType" class="form-input bg-white cursor-pointer" onchange="applyFilters()"></select>
-            </div>
-            <div>
-                <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Project</label>
-                <select id="filterProject" class="form-input bg-white cursor-pointer" onchange="applyFilters()"></select>
-            </div>
-            <div>
-                <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Date Range (Collection)</label>
-                <div class="space-y-3">
-                    <input type="date" id="filterDateStart" class="form-input" onchange="applyFilters()">
-                    <div class="text-center text-xs font-bold text-slate-300 uppercase">to</div>
-                    <input type="date" id="filterDateEnd" class="form-input" onchange="applyFilters()">
-                </div>
-            </div>
-        </div>
-        <div class="p-5 border-t border-slate-200/60 bg-slate-50/50">
-            <button onclick="resetFilters()" class="w-full py-2.5 bg-white border border-slate-300 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-100 shadow-sm transition-all">Clear Filters</button>
-        </div>
-    </div>
-
-    <!-- === MODALS === -->
-
-    <!-- New Sample Modal -->
-    <div id="newSampleModal" class="modal hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-        <div class="modal-content bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
-                <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2"><i data-lucide="plus-circle" class="w-5 h-5 text-emerald-500"></i> Register Sample</h3>
-                <button onclick="closeModal('newSampleModal')" class="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
-            <form id="newSampleForm" onsubmit="handleNewSample(event)" class="flex-1 overflow-y-auto p-6 space-y-5">
-                
-                <div class="bg-indigo-50 border border-indigo-100 p-3 rounded-lg mb-2">
-                    <p class="text-xs text-indigo-700 font-medium"><i data-lucide="info" class="w-3 h-3 inline mr-1 -mt-0.5"></i> Sample IDs are generated automatically by the database upon saving.</p>
-                </div>
-
-                <div class="grid grid-cols-2 gap-5">
-                    <div>
-                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Sample Type *</label>
-                        <select id="formSampleType" name="sample_type_id" class="form-input bg-white cursor-pointer" required></select>
+                <!-- Planning Tools -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                    <!-- Tool 1: Plan New -->
+                    <div class="glass-card rounded-2xl p-6 border-t-4 border-t-indigo-500">
+                        <div class="flex justify-between items-center mb-5">
+                            <h3 class="font-bold text-slate-800 flex items-center gap-2"><i data-lucide="plus-circle" class="w-5 h-5 text-indigo-500"></i> Plan New Collection</h3>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded">Pre-allocation</span>
+                        </div>
+                        <form id="planForm" class="space-y-4" onsubmit="addPlanToBasket(event)">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Project</label>
+                                    <select id="planProject" class="form-input bg-white cursor-pointer" required></select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Sample Type</label>
+                                    <select id="planType" class="form-input bg-white cursor-pointer" required></select>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Quantity</label>
+                                    <input type="number" id="planQty" class="form-input" value="10" min="1" required>
+                                </div>
+                                <div class="flex items-end">
+                                    <button type="submit" class="w-full py-2.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-xl font-bold text-sm transition-all border border-indigo-200">Add to Basket</button>
+                                </div>
+                            </div>
+                        </form>
                     </div>
-                    <div>
-                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Project *</label>
-                        <select id="formProject" name="project_id" class="form-input bg-white cursor-pointer" required></select>
+
+                    <!-- Tool 2: Book Existing -->
+                    <div class="glass-card rounded-2xl p-6 border-t-4 border-t-emerald-500">
+                        <div class="flex justify-between items-center mb-5">
+                            <h3 class="font-bold text-slate-800 flex items-center gap-2"><i data-lucide="search" class="w-5 h-5 text-emerald-500"></i> Book Existing Inventory</h3>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded">Direct Link</span>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Scan / Enter Sample ID</label>
+                                <div class="flex gap-2">
+                                    <input type="text" id="searchExisting" class="form-input" placeholder="e.g. F25MG_001">
+                                    <button onclick="addExistingToBasket()" class="px-5 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-xl font-bold text-sm transition-all border border-emerald-200 shrink-0">Book</button>
+                                </div>
+                            </div>
+                            <p class="text-[10px] text-slate-400 italic">This links an existing sample in `bio_assets.samples_root` to this reservation batch.</p>
+                        </div>
                     </div>
                 </div>
 
-                <div>
-                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Parent Sample ID</label>
-                    <input type="text" name="parent_sample_id" placeholder="Leave blank if root sample (e.g. Fish)" class="form-input">
-                    <p class="text-[10px] text-slate-400 mt-1">If this sample derives from another (e.g., DNA from Tissue), provide the parent ID.</p>
+                <!-- Active Log Grid -->
+                <div class="glass-card rounded-2xl overflow-hidden relative z-10 border border-slate-200">
+                    <div class="p-5 border-b border-slate-200 bg-white flex justify-between items-center">
+                        <h3 class="font-bold text-slate-800 flex items-center gap-2 text-lg">
+                            <i data-lucide="list-checks" class="w-5 h-5 text-indigo-500"></i> Active Reservation Log
+                        </h3>
+                        <div class="relative w-64">
+                            <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+                            <input type="text" id="gridSearch" oninput="gridApi.setQuickFilter(this.value)" placeholder="Search log..." class="pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm w-full focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                        </div>
+                    </div>
+                    <div id="reservationGrid" class="ag-theme-alpine w-full h-[500px]"></div>
                 </div>
+            </div>
 
-                <div class="grid grid-cols-2 gap-5">
-                    <div>
-                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">External ID</label>
-                        <input type="text" name="external_id" class="form-input" placeholder="e.g. Tag Number">
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Collection Date</label>
-                        <input type="date" name="collection_date" class="form-input">
-                    </div>
+            <!-- Right Side: Basket (Floating Panel style) -->
+            <div class="w-96 bg-white border-l border-slate-200 flex flex-col shrink-0 z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.02)]">
+                <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <h3 class="font-bold text-slate-800 flex items-center gap-2"><i data-lucide="shopping-basket" class="w-5 h-5 text-orange-500"></i> Reservation Basket</h3>
+                    <span id="basketCount" class="bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">0</span>
                 </div>
                 
-                <div class="grid grid-cols-2 gap-5">
+                <div class="flex-1 overflow-y-auto p-4 space-y-3" id="basketContainer">
+                    <div id="basketEmptyState" class="flex flex-col items-center justify-center h-40 text-slate-400 text-center px-6">
+                        <i data-lucide="arrow-left-circle" class="w-10 h-10 mb-2 opacity-20"></i>
+                        <p class="text-xs font-medium">Your basket is empty. Add items from the tools on the left.</p>
+                    </div>
+                </div>
+
+                <div class="p-6 border-t border-slate-100 space-y-4 bg-white">
                     <div>
-                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Storage Location</label>
-                        <select id="formStorage" name="storage_id" class="form-input bg-white cursor-pointer"></select>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Planned Date *</label>
+                        <input type="date" id="finalDate" class="form-input" required>
                     </div>
                     <div>
-                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Status</label>
-                        <select name="status_id" class="form-input bg-white cursor-pointer">
-                            <option value="Stored">Stored</option>
-                            <option value="In Progress">In Progress</option>
-                            <option value="Depleted">Depleted</option>
-                        </select>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Batch Notes / Purpose</label>
+                        <textarea id="finalNotes" class="form-input resize-none" rows="2" placeholder="e.g. Weser Campaign Jan 2026"></textarea>
                     </div>
-                </div>
-
-                <div>
-                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Notes</label>
-                    <textarea name="notes" rows="2" class="form-input resize-none"></textarea>
-                </div>
-
-                <div class="pt-4 border-t border-slate-100 flex justify-end gap-3">
-                    <button type="button" onclick="closeModal('newSampleModal')" class="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
-                    <button type="submit" id="btnSaveSample" class="px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 rounded-xl shadow-md transition-all">Save Sample</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Lineage Modal -->
-    <div id="lineageModal" class="modal hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-        <div class="modal-content bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
-                <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2"><i data-lucide="git-branch" class="w-5 h-5 text-purple-500"></i> Sample Genealogy</h3>
-                <button onclick="closeModal('lineageModal')" class="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
-            <div class="flex-1 overflow-y-auto p-8 bg-slate-50/50">
-                <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm min-h-[200px]">
-                    <div id="lineageTree" class="pl-2">
-                        <!-- Tree Injected via JS -->
-                    </div>
+                    <button onclick="commitReservationBatch()" id="btnCommit" class="w-full py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-2xl font-bold shadow-lg shadow-orange-500/20 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:grayscale">
+                        <i data-lucide="check-circle" class="w-5 h-5"></i> Generate & Reserve
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Multi-Label Print Modal -->
-    <div id="labelModal" class="modal hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-        <div class="modal-content bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0 no-print">
-                <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2"><i data-lucide="qr-code" class="w-5 h-5 text-sky-500"></i> Print Labels</h3>
-                <button onclick="closeModal('labelModal')" class="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+    <!-- Import Modal -->
+    <div id="importModal" class="modal hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-md rounded-3xl shadow-2xl overflow-hidden p-7 animate-in fade-in zoom-in duration-200">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2"><i data-lucide="file-up" class="text-emerald-500 w-6 h-6"></i> Bulk Import Reservations</h3>
+                <button onclick="closeModal('importModal')" class="text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
-            
-            <div class="p-4 bg-slate-100 border-b border-slate-200 flex items-center justify-between no-print shrink-0">
-                <div class="flex gap-4">
-                    <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
-                        <input type="radio" name="labelFormat" value="grid" checked class="text-indigo-600 focus:ring-indigo-500" onchange="updateLabelPreview()"> Grid (Small Labels)
-                    </label>
-                    <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
-                        <input type="radio" name="labelFormat" value="list" class="text-indigo-600 focus:ring-indigo-500" onchange="updateLabelPreview()"> List (Large Labels)
-                    </label>
+            <div class="space-y-5">
+                <div class="bg-indigo-50 p-4 rounded-2xl text-xs text-indigo-700 border border-indigo-100 leading-relaxed">
+                    <strong>Format:</strong> Excel (.xlsx) or CSV. Required columns: <code>sample_type_id</code>, <code>project_id</code>, <code>planned_date</code>.
                 </div>
-                <button onclick="window.print()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-sm transition-colors flex items-center gap-2">
-                    <i data-lucide="printer" class="w-4 h-4"></i> Print Now
-                </button>
-            </div>
-            
-            <div class="flex-1 overflow-y-auto p-6 bg-slate-50/50 flex justify-center">
-                <!-- Preview Container for Print -->
-                <div id="labelPreviewContainer" class="print-grid bg-white border border-slate-200 rounded-xl p-6 shadow-sm min-h-[500px] w-full max-w-3xl">
-                    <!-- Labels Injected Here -->
+                <div class="border-2 border-dashed border-slate-200 rounded-2xl p-8 text-center bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 transition-all cursor-pointer relative group">
+                    <i data-lucide="upload-cloud" class="w-10 h-10 text-slate-300 mx-auto mb-2 group-hover:text-emerald-500 transition-colors"></i>
+                    <p class="text-sm font-semibold text-slate-700">Choose File</p>
+                    <input type="file" class="absolute inset-0 opacity-0 cursor-pointer">
+                </div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button onclick="closeModal('importModal')" class="px-5 py-2.5 text-sm font-semibold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
+                    <button class="px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-sm shadow-md hover:bg-emerald-700 transition-all">Upload</button>
                 </div>
             </div>
         </div>
@@ -404,10 +307,10 @@
     <!-- Scripts -->
     <script>
         const getApiBase = () => window.location.pathname.includes('/mylims') ? '/mylims/api' : '/api';
-        const API_PREFIX = getApiBase();
+        const API = getApiBase();
         
         let gridApi = null;
-        let allSamplesData = [];
+        let basketItems = [];
 
         document.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
@@ -417,115 +320,91 @@
             const user = JSON.parse(sessionStorage.getItem('user'));
             if(user) document.getElementById('userNameDisplay').innerText = user.person_id;
 
-            initGrid();
-            await loadDropdowns();
-            await loadGridData();
-            
-            document.getElementById('loadingOverlay').classList.remove('active');
+            try {
+                // Initialize Grid First
+                initGrid();
+                
+                // Then Load Data
+                await Promise.all([
+                    loadDropdowns(),
+                    loadGridData()
+                ]);
+            } catch (err) {
+                console.error("Init Error:", err);
+            } finally {
+                // Hide global loading spinner
+                document.getElementById('loadingOverlay').classList.remove('active');
+            }
         });
 
-        // Robust API Fetch wrapper
         async function apiFetch(endpoint, options = {}) {
             const token = sessionStorage.getItem('token');
             const headers = { 'Authorization': `Bearer ${token}`, ...options.headers };
-            
             if(options.body && !(options.body instanceof FormData)) {
                 headers['Content-Type'] = 'application/json';
                 options.body = JSON.stringify(options.body);
             }
-            
             try {
-                const res = await fetch(`${API_PREFIX}/${endpoint}`, { ...options, headers });
+                const res = await fetch(`${API}/${endpoint}`, { ...options, headers });
                 if(!res.ok) {
                     const errObj = await res.json().catch(() => ({ detail: `HTTP Error ${res.status}` }));
                     throw new Error(errObj.detail || errObj.error || `HTTP Error ${res.status}`);
                 }
-                if(res.status === 204) return true;
                 return await res.json();
             } catch(e) {
-                console.error(`[apiFetch] Failed on ${endpoint}:`, e);
-                return { error: e.message }; 
+                console.error(e);
+                return { error: e.message };
             }
         }
 
-        // --- Data Loading ---
         async function loadDropdowns() {
-            // Sample Types
-            const types = await apiFetch('table/reference/sample_type?limit=100');
-            const fType = document.getElementById('filterType');
-            const mType = document.getElementById('formSampleType');
-            fType.innerHTML = '<option value="">All Types</option>';
-            mType.innerHTML = '<option value="" disabled selected>-- Select Type --</option>';
-            if(types && Array.isArray(types)) {
-                types.forEach(t => {
-                    fType.add(new Option(t.sample_type_id, t.sample_type_id));
-                    mType.add(new Option(t.sample_type_id, t.sample_type_id));
-                });
-            }
-
-            // Projects
             const prjs = await apiFetch('table/lims/projects?limit=500');
-            const fPrj = document.getElementById('filterProject');
-            const mPrj = document.getElementById('formProject');
-            fPrj.innerHTML = '<option value="">All Projects</option>';
-            mPrj.innerHTML = '<option value="" disabled selected>-- Select Project --</option>';
-            if(prjs && Array.isArray(prjs)) {
-                prjs.forEach(p => {
-                    fPrj.add(new Option(p.acronym, p.project_id));
-                    mPrj.add(new Option(p.acronym, p.project_id));
-                });
-            }
+            const pSel = document.getElementById('planProject');
+            if(prjs && !prjs.error && Array.isArray(prjs)) prjs.forEach(p => pSel.add(new Option(p.acronym, p.project_id)));
 
-            // Storage
-            const storage = await apiFetch('table/lims/storage?limit=500');
-            const mStor = document.getElementById('formStorage');
-            mStor.innerHTML = '<option value="">-- None / Unassigned --</option>';
-            if(storage && Array.isArray(storage)) {
-                storage.forEach(s => {
-                    mStor.add(new Option(s.name || s.storage_id, s.storage_id));
-                });
-            }
+            const types = await apiFetch('table/reference/sample_type?limit=100');
+            const tSel = document.getElementById('planType');
+            if(types && !types.error && Array.isArray(types)) types.forEach(t => tSel.add(new Option(t.sample_type_id, t.sample_type_id)));
         }
 
         async function loadGridData() {
-            // Using the view to get the 'generation_level' easily
-            const data = await apiFetch('table/bio_assets/view_samples_with_root?limit=2000');
-            if(data && !data.error && Array.isArray(data)) {
-                allSamplesData = data;
-                if(gridApi) gridApi.setRowData(allSamplesData);
-                document.getElementById('rowCount').innerText = allSamplesData.length;
+            const data = await apiFetch('table/bio_assets/samples_reservation?limit=1000&sort_by=planned_date&sort_order=desc');
+            // If data is valid and grid is ready, set row data
+            if(gridApi) {
+                gridApi.setRowData(Array.isArray(data) ? data : []);
             }
         }
 
-        // --- Grid Logic ---
         function initGrid() {
-            const gridDiv = document.querySelector('#myGrid');
+            const gridDiv = document.querySelector('#reservationGrid');
             const gridOptions = {
                 columnDefs: [
-                    { field: "sample_id", headerName: "Sample ID", pinned: 'left', lockPosition: true, checkboxSelection: true, headerCheckboxSelection: true, width: 180 },
+                    { field: "reservation_sample_id", headerName: "Reservation ID", pinned: 'left', width: 180 },
                     { field: "sample_type_id", headerName: "Type", width: 120 },
-                    { field: "generation_level", headerName: "Hierarchy", width: 100, 
+                    { field: "project_id", headerName: "Project", width: 130 },
+                    { field: "planned_date", headerName: "Date", filter: 'agDateColumnFilter', width: 130 },
+                    { field: "status_id", headerName: "Status", width: 120, 
                       cellRenderer: params => {
-                          const isRoot = params.value === 'Root';
-                          const color = isRoot ? 'text-indigo-600 bg-indigo-50 border-indigo-200' : 'text-emerald-600 bg-emerald-50 border-emerald-200';
-                          return `<span class="px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${color}">${params.value}</span>`;
+                          const val = params.value || 'Planned';
+                          let colorClass = 'text-indigo-600 bg-indigo-50 border-indigo-200';
+                          if (val === 'Active') colorClass = 'text-emerald-600 bg-emerald-50 border-emerald-200';
+                          if (val === 'Overdue') colorClass = 'text-red-600 bg-red-50 border-red-200';
+                          return `<span class="px-2.5 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider ${colorClass}">${val}</span>`;
                       }
                     },
-                    { field: "project_id", headerName: "Project", width: 130 },
-                    { field: "parent_sample_id", headerName: "Parent ID", width: 160 },
-                    { field: "collection_date", headerName: "Collected", filter: 'agDateColumnFilter', width: 130 },
-                    { field: "external_id", headerName: "Ext ID", editable: true, width: 130 }
+                    { field: "actual_sample_id", headerName: "Sample Link", width: 160 },
+                    { field: "notes", headerName: "Notes", flex: 1, editable: true }
                 ],
                 defaultColDef: { resizable: true, sortable: true, filter: true },
-                rowSelection: 'multiple',
                 animateRows: true,
-                getRowClass: params => params.data.generation_level === 'Root' ? 'sample-root' : 'sample-child',
-                onGridReady: (params) => { gridApi = params.api; },
-                onFilterChanged: () => {
-                    document.getElementById('rowCount').innerText = gridApi.getDisplayedRowCount();
+                onGridReady: (params) => { 
+                    gridApi = params.api; 
+                    // If grid initializes after data is fetched, this will catch up
+                    loadGridData(); 
                 }
             };
             
+            // Check for modern agGrid initialization
             if (window.agGrid && agGrid.createGrid) {
                 agGrid.createGrid(gridDiv, gridOptions);
             } else if (window.agGrid && agGrid.Grid) {
@@ -533,220 +412,126 @@
             }
         }
 
-        function toggleFilterSidebar() {
-            const el = document.getElementById('filterSidebar');
-            el.classList.toggle('translate-x-full');
-        }
+        // --- Basket Logic ---
 
-        function applyFilters() {
-            const type = document.getElementById('filterType').value;
-            const prj = document.getElementById('filterProject').value;
-            const dStart = document.getElementById('filterDateStart').value;
-            const dEnd = document.getElementById('filterDateEnd').value;
-            
-            let filtered = allSamplesData;
-            
-            if (type) filtered = filtered.filter(s => s.sample_type_id === type);
-            if (prj) filtered = filtered.filter(s => s.project_id === prj);
-            if (dStart) filtered = filtered.filter(s => s.collection_date && s.collection_date >= dStart);
-            if (dEnd) filtered = filtered.filter(s => s.collection_date && s.collection_date <= dEnd);
-            
-            if(gridApi) gridApi.setRowData(filtered);
-            document.getElementById('rowCount').innerText = filtered.length;
-        }
-
-        function resetFilters() {
-            document.getElementById('filterType').value = '';
-            document.getElementById('filterProject').value = '';
-            document.getElementById('filterDateStart').value = '';
-            document.getElementById('filterDateEnd').value = '';
-            if(gridApi) gridApi.setRowData(allSamplesData);
-            document.getElementById('rowCount').innerText = allSamplesData.length;
-            toggleFilterSidebar();
-        }
-
-        // --- New Sample Actions ---
-        async function handleNewSample(e) {
+        function addPlanToBasket(e) {
             e.preventDefault();
-            const btn = document.getElementById('btnSaveSample');
-            const orig = btn.innerHTML;
-            btn.innerHTML = 'Saving...'; btn.disabled = true;
+            const proj = document.getElementById('planProject').value;
+            const type = document.getElementById('planType').value;
+            const qty = parseInt(document.getElementById('planQty').value);
 
-            const fd = new FormData(e.target);
-            const data = Object.fromEntries(fd.entries());
+            for(let i=0; i<qty; i++) {
+                basketItems.push({
+                    mode: 'new',
+                    project_id: proj,
+                    sample_type_id: type,
+                    display: `New: ${type} (${proj})`
+                });
+            }
+            renderBasket();
+            showToast(`Added ${qty} items to basket`);
+        }
+
+        function addExistingToBasket() {
+            const id = document.getElementById('searchExisting').value.trim();
+            if(!id) return;
             
-            // Clean empty strings to null for DB foreign keys
-            Object.keys(data).forEach(k => { if(data[k] === '') data[k] = null; });
+            basketItems.push({
+                mode: 'book',
+                actual_sample_id: id,
+                display: `Link: ${id}`
+            });
+            document.getElementById('searchExisting').value = '';
+            renderBasket();
+            showToast(`Linked ${id} to batch`);
+        }
+
+        function renderBasket() {
+            const container = document.getElementById('basketContainer');
+            const emptyState = document.getElementById('basketEmptyState');
+            const countLabel = document.getElementById('basketCount');
+            const btn = document.getElementById('btnCommit');
+
+            container.innerHTML = '';
+            countLabel.innerText = basketItems.length;
+            btn.disabled = basketItems.length === 0;
+
+            if(basketItems.length === 0) {
+                container.appendChild(emptyState);
+                return;
+            }
+
+            basketItems.forEach((item, idx) => {
+                const div = document.createElement('div');
+                div.className = "basket-item bg-white border border-slate-200 rounded-xl p-3 flex justify-between items-center shadow-sm";
+                div.innerHTML = `
+                    <div>
+                        <div class="text-xs font-bold text-slate-800">${item.display}</div>
+                        <div class="text-[10px] text-slate-400 font-medium uppercase tracking-tighter">${item.mode === 'new' ? 'Generator Active' : 'Registry Link'}</div>
+                    </div>
+                    <button onclick="removeFromBasket(${idx})" class="text-slate-300 hover:text-red-500 transition-colors"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
+                `;
+                container.appendChild(div);
+            });
+            lucide.createIcons();
+        }
+
+        function removeFromBasket(index) {
+            basketItems.splice(index, 1);
+            renderBasket();
+        }
+
+        async function commitReservationBatch() {
+            const date = document.getElementById('finalDate').value;
+            if(!date) return showToast("Please select a planned date", "error");
+
+            const btn = document.getElementById('btnCommit');
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Saving...';
+            btn.disabled = true;
+
+            const payload = basketItems.map(item => ({
+                project_id: item.project_id || null,
+                sample_type_id: item.sample_type_id || null,
+                actual_sample_id: item.actual_sample_id || null,
+                planned_date: date,
+                notes: document.getElementById('finalNotes').value,
+                status_id: 'Planned'
+            }));
 
             try {
-                // sample_id is deliberately omitted so Postgres trigger fn_generate_hierarchical_sample_id handles it
-                const res = await apiFetch('table/bio_assets/samples_root', { method: 'POST', body: data });
-                
-                if (res && res.error) throw new Error(res.error);
-                
-                showToast(`Sample Registered: ${res.sample_id}`, "success");
-                closeModal('newSampleModal');
-                e.target.reset();
-                loadGridData();
-            } catch(err) {
+                // Batch Upload to bio_assets.samples_reservation
+                const res = await apiFetch('table/bio_assets/samples_reservation/batch_upload', {
+                    method: 'POST', body: payload
+                });
+
+                if(res && !res.error) {
+                    showToast(`Batch Generated: ${res.count} items reserved.`, "success");
+                    basketItems = [];
+                    document.getElementById('finalNotes').value = '';
+                    renderBasket();
+                    loadGridData();
+                } else {
+                    throw new Error(res.error || "Batch processing failed");
+                }
+            } catch (err) {
                 showToast(err.message, "error");
             } finally {
-                btn.innerHTML = orig; btn.disabled = false;
+                btn.innerHTML = orig;
+                btn.disabled = false;
             }
         }
 
-        // --- Lineage Logic ---
-        async function showLineage() {
-            if(!gridApi) return;
-            const selected = gridApi.getSelectedRows();
-            if(selected.length !== 1) {
-                showToast("Please select exactly ONE sample to view lineage.", "error");
-                return;
-            }
-
-            const targetId = selected[0].sample_id;
-            const treeContainer = document.getElementById('lineageTree');
-            treeContainer.innerHTML = '<div class="text-slate-400 text-sm animate-pulse">Tracing genealogy...</div>';
-            openModal('lineageModal');
-
-            try {
-                // Fetch lineage data
-                const lineage = await apiFetch(`table/bio_assets/view_downstream_lineage?ancestor_sample_id=${targetId}`);
-                
-                if(!lineage || lineage.error || lineage.length === 0) {
-                    treeContainer.innerHTML = '<p class="text-slate-500">No downstream derivatives found for this sample.</p>';
-                    return;
-                }
-
-                // Simple render: indent by depth
-                let html = '';
-                lineage.sort((a, b) => a.depth - b.depth).forEach(node => {
-                    const margin = node.depth * 20;
-                    const icon = node.depth === 0 ? 'box' : 'corner-down-right';
-                    const color = node.depth === 0 ? 'text-indigo-600' : 'text-emerald-500';
-                    const border = node.depth === 0 ? 'border-indigo-200 bg-indigo-50/30' : 'border-e2e8f0';
-                    
-                    html += `
-                        <div style="margin-left: ${margin}px" class="relative ${node.depth > 0 ? 'lineage-node' : ''}">
-                            <div class="node-card ${border}">
-                                <i data-lucide="${icon}" class="w-4 h-4 mr-2 ${color}"></i>
-                                <div>
-                                    <div class="font-mono font-bold text-sm text-slate-800">${node.descendant_sample_id}</div>
-                                    <div class="text-[10px] uppercase font-bold text-slate-400 mt-0.5">${node.descendant_type}</div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
-                treeContainer.innerHTML = html;
-                lucide.createIcons();
-
-            } catch (err) {
-                treeContainer.innerHTML = `<p class="text-red-500 text-sm">Failed to load lineage: ${err.message}</p>`;
-            }
-        }
-
-        // --- Label Printing Logic ---
-        function printLabels() {
-            if(!gridApi) return;
-            const selected = gridApi.getSelectedRows();
-            if(selected.length === 0) {
-                showToast("Select at least one sample to print labels.", "error");
-                return;
-            }
-
-            openModal('labelModal');
-            generateLabelPreviews(selected);
-        }
-
-        function updateLabelPreview() {
-            if(!gridApi) return;
-            const selected = gridApi.getSelectedRows();
-            const isGrid = document.querySelector('input[name="labelFormat"]:checked').value === 'grid';
-            
-            const container = document.getElementById('labelPreviewContainer');
-            container.className = isGrid ? 'print-grid bg-white border border-slate-200 rounded-xl p-6 shadow-sm min-h-[500px] w-full max-w-3xl' : 'print-list bg-white border border-slate-200 rounded-xl p-6 shadow-sm min-h-[500px] w-full max-w-md';
-            
-            generateLabelPreviews(selected, isGrid);
-        }
-
-        function generateLabelPreviews(samples, isGrid = true) {
-            const container = document.getElementById('labelPreviewContainer');
-            container.innerHTML = '';
-
-            samples.forEach((sample, index) => {
-                const card = document.createElement('div');
-                card.className = "label-card";
-                
-                const title = document.createElement('p');
-                title.style.fontWeight = 'bold';
-                title.style.marginBottom = '2px';
-                title.innerText = sample.sample_id;
-                
-                const meta = document.createElement('p');
-                meta.innerText = `${sample.sample_type_id} | ${sample.project_id || ''}`;
-                meta.style.fontSize = '6pt';
-                meta.style.marginBottom = '2px';
-
-                // QR Code Container
-                const qrContainer = document.createElement('div');
-                qrContainer.id = `qr-${index}`;
-                qrContainer.style.margin = '2px 0';
-                
-                // Barcode Container
-                const barcodeImg = document.createElement('svg');
-                barcodeImg.id = `bc-${index}`;
-
-                card.appendChild(title);
-                card.appendChild(meta);
-                card.appendChild(qrContainer);
-                card.appendChild(barcodeImg);
-                container.appendChild(card);
-
-                // Generate QR
-                new QRCode(qrContainer, {
-                    text: sample.sample_id,
-                    width: isGrid ? 40 : 60,
-                    height: isGrid ? 40 : 60,
-                    colorDark : "#000000",
-                    colorLight : "#ffffff",
-                    correctLevel : QRCode.CorrectLevel.L
-                });
-
-                // Generate Barcode
-                JsBarcode(`#bc-${index}`, sample.sample_id, {
-                    format: "CODE128",
-                    width: isGrid ? 1 : 1.5,
-                    height: isGrid ? 20 : 30,
-                    displayValue: false,
-                    margin: 0
-                });
-            });
-        }
-
-        // --- Modals & Toast Utils ---
-        window.openModal = (id) => {
-            const el = document.getElementById(id);
-            el.classList.remove('hidden');
-            setTimeout(() => el.classList.add('open'), 10);
-        };
-        window.closeModal = (id) => {
-            const el = document.getElementById(id);
-            el.classList.remove('open');
-            setTimeout(() => el.classList.add('hidden'), 200);
-        };
+        // --- UI Utils ---
+        window.openModal = (id) => document.getElementById(id).classList.remove('hidden');
+        window.closeModal = (id) => document.getElementById(id).classList.add('hidden');
 
         function showToast(msg, type='success') {
             const c = document.getElementById('toastContainer');
             const d = document.createElement('div');
-            const bgClass = type === 'error' ? 'bg-red-50' : 'bg-emerald-50';
-            const borderClass = type === 'error' ? 'border-red-200' : 'border-emerald-200';
-            const textClass = type === 'error' ? 'text-red-800' : 'text-emerald-800';
-            const iconColor = type === 'error' ? 'text-red-500' : 'text-emerald-500';
-            const icon = type === 'error' ? 'alert-octagon' : 'check-circle-2';
-            
-            d.className = `px-4 py-3 rounded-xl shadow-lg border ${borderClass} ${bgClass} ${textClass} text-sm font-semibold flex items-center gap-3 transform transition-all duration-300 translate-y-0`;
-            d.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 ${iconColor}"></i> ${msg}`;
+            const isErr = type === 'error';
+            d.className = `px-4 py-3 rounded-2xl shadow-xl border flex items-center gap-3 transform transition-all duration-300 translate-y-0 ${isErr ? 'bg-red-50 border-red-200 text-red-800' : 'bg-white border-slate-200 text-slate-800'}`;
+            d.innerHTML = `<i data-lucide="${isErr ? 'alert-octagon' : 'check-circle'}" class="w-5 h-5 ${isErr ? 'text-red-500' : 'text-emerald-500'}"></i> <span class="text-sm font-semibold">${msg}</span>`;
             c.appendChild(d); lucide.createIcons();
             setTimeout(() => { d.classList.add('opacity-0', 'translate-y-4'); setTimeout(() => d.remove(), 300); }, 3500);
         }
