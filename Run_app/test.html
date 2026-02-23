@@ -3,18 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inventory & Reagents - TIFI LIMS</title>
+    <title>Experiments - TIFI LIMS</title>
+    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- AG Grid -->
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-grid.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-theme-alpine.css" />
+    
+    <!-- Day.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.11.10/dayjs.min.js"></script>
+    
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <style>
         body { 
             font-family: 'Inter', sans-serif; 
-            background-color: #f1f5f9; 
+            background-color: #f1f5f9; /* slate-100 */
         }
         
         /* Custom Scrollbar */
@@ -25,7 +35,7 @@
         
         .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.25rem; }
         
-        /* Premium Card / Modal Styles */
+        /* Glassmorphism */
         .glass-card {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
@@ -33,58 +43,40 @@
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
         }
 
-        .modal-overlay { 
-            background-color: rgba(15, 23, 42, 0.4); 
-            backdrop-filter: blur(4px); 
-            z-index: 100; 
+        /* AG Grid Override */
+        .ag-theme-alpine {
+            --ag-border-color: #e2e8f0;
+            --ag-header-background-color: #f8fafc;
+            --ag-font-family: 'Inter', sans-serif;
+            --ag-font-size: 13px;
+            border-radius: 0.75rem;
+            overflow: hidden;
         }
 
-        /* Table specific styles */
-        .table-row-selected { 
-            background-color: #fdf4ff !important; /* fuchsia-50 */
-            border-left: 3px solid #d946ef; /* fuchsia-500 */
-        }
-        .dynamic-table-row { border-left: 3px solid transparent; transition: all 0.15s ease; }
-        .dynamic-table-row:hover { background-color: #f8fafc; }
-        
-        .sortable-header { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; }
-        .sortable-header:hover { color: #1e293b; }
-
-        /* Accordion transition */
-        .accordion-content { 
-            max-height: 0; 
-            overflow: hidden; 
-            transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease; 
-        }
-        .accordion-content.open { 
-            max-height: 800px; 
-            padding-top: 0.5rem;
-            padding-bottom: 1rem;
-        }
-
-        /* Loading Spinner Overlay */
-        .loading-overlay {
-            position: absolute; inset: 0; background: rgba(255,255,255,0.7);
-            backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center;
-            z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
-        }
+        /* Loading & Modals */
+        .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.7); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
         .loading-overlay.active { opacity: 1; pointer-events: all; }
-
-        /* Tabs */
-        .nav-tab {
-            transition: all 0.2s ease;
+        .hidden { display: none !important; }
+        
+        .form-input {
+            width: 100%; padding: 0.625rem 0.875rem; background-color: #f8fafc;
+            border: 1px solid #e2e8f0; border-radius: 0.75rem; font-size: 0.875rem;
+            color: #334155; transition: all 0.2s;
         }
-        .nav-tab.active {
-            background-color: #d946ef; /* fuchsia-500 */
-            color: white;
-            border-color: #c026d3; /* fuchsia-600 */
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
+        .form-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); background-color: #ffffff; }
     </style>
 </head>
-<body class="flex h-screen overflow-hidden text-slate-800 selection:bg-fuchsia-100 selection:text-fuchsia-900">
+<body class="flex h-screen overflow-hidden text-slate-800 selection:bg-indigo-100 selection:text-indigo-900">
 
-    <!-- Global Toast Container -->
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay active">
+        <div class="relative w-12 h-12">
+            <div class="absolute inset-0 border-4 border-slate-200 rounded-full"></div>
+            <div class="absolute inset-0 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
     <div id="toastContainer" class="fixed bottom-6 right-6 z-[120] flex flex-col gap-3"></div>
 
     <!-- Sidebar -->
@@ -105,8 +97,9 @@
             <a href="projects.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
                 <i data-lucide="folder-kanban" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Projects
             </a>
-            <a href="experiments.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
-                <i data-lucide="flask-round" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Experiments
+            <!-- Active State on Experiments -->
+            <a href="experiments.html" class="flex items-center px-3 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-medium shadow-sm border border-indigo-100/50">
+                <i data-lucide="flask-round" class="w-4 h-4 mr-3 text-indigo-600"></i> Experiments
             </a>
             <a href="protocols.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
                 <i data-lucide="book-text" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Protocols (ELN)
@@ -123,12 +116,7 @@
                 <i data-lucide="beaker" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Samples Registry
             </a>
             <a href="storage.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
-                <i data-lucide="archive" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-sky-500 transition-colors"></i> Storage Explorer
-            </a>
-
-            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Inventory</div>
-            <a href="storage_reagents.html" class="flex items-center px-3 py-2.5 rounded-xl bg-fuchsia-50 text-fuchsia-700 font-medium shadow-sm border border-fuchsia-100/50">
-                <i data-lucide="test-tubes" class="w-4 h-4 mr-3 text-fuchsia-600"></i> Reagents & Stock
+                <i data-lucide="archive" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Storage
             </a>
 
             <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">System</div>
@@ -152,6 +140,7 @@
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
                     </p>
                 </div>
+                <i data-lucide="settings" class="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"></i>
             </a>
             <button id="logout-button" class="w-full flex items-center justify-center p-2 rounded-xl text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 font-medium transition-colors border border-transparent hover:border-red-100">
                 <i data-lucide="log-out" class="w-4 h-4 mr-2"></i><span>Sign Out</span>
@@ -159,893 +148,463 @@
         </div>
     </div>
 
-    <!-- Main Content Area -->
-    <div class="flex-1 flex flex-col h-full relative overflow-hidden bg-slate-50/50">
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col h-full relative overflow-hidden">
         
         <!-- Header -->
-        <div class="bg-white px-8 py-6 z-10 shrink-0 border-b border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+        <header class="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-5 flex justify-between items-center z-10 shrink-0">
             <div>
-                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Inventory & Reagents</h1>
-                <p class="text-sm text-slate-500 mt-1">Manage lab reagents, chemicals, and inventory.</p>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Experiments</h1>
+                <p class="text-sm text-slate-500 mt-0.5">Manage laboratory workflows, assays, and project experiments.</p>
             </div>
+            <div class="flex gap-3">
+                <button onclick="openModal('newExperimentModal')" class="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-5 py-2 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 border border-indigo-500">
+                    <i data-lucide="plus" class="w-4 h-4"></i> New Experiment
+                </button>
+            </div>
+        </header>
+
+        <!-- Scrollable Content Area -->
+        <div class="flex-1 overflow-y-auto p-8 relative">
             
-            <div class="flex gap-2 flex-wrap">
-                <button id="download-template-general-btn" class="px-4 py-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium shadow-sm flex gap-2 items-center transition-all">
-                    <i data-lucide="download" class="w-4 h-4 text-slate-400"></i> Template
-                </button>
-                <button id="bulk-csv-upload-btn" class="px-4 py-2 bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200 hover:bg-fuchsia-100 rounded-xl text-sm font-medium shadow-sm flex gap-2 items-center transition-all">
-                    <i data-lucide="upload" class="w-4 h-4"></i> Bulk Upload
-                </button>
-                <button id="add-single-entry-btn" class="px-5 py-2 bg-gradient-to-r from-fuchsia-600 to-fuchsia-700 hover:from-fuchsia-700 hover:to-fuchsia-800 text-white rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 border border-fuchsia-500">
-                    <i data-lucide="plus" class="w-4 h-4"></i> <span id="add-btn-text">New Item</span>
-                </button>
-            </div>
-        </div>
+            <!-- Background decorative blobs -->
+            <div class="absolute top-0 right-0 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none z-0"></div>
 
-        <div class="flex-1 overflow-auto p-6 relative flex flex-col">
-            
-            <!-- Dynamic Category Tabs -->
-            <div class="flex gap-2 mb-6 overflow-x-auto pb-1 shrink-0 hide-scrollbar" id="table-tabs-container">
-                <!-- Tabs injected via JS -->
-            </div>
-
-            <!-- Filters Card -->
-            <div class="glass-card rounded-2xl p-4 mb-6 shrink-0 flex flex-wrap gap-4 items-end">
-                <div class="flex-1 min-w-[150px]">
-                    <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5 ml-1">Status</label>
-                    <select id="filter-status-id" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-700 focus:ring-2 focus:ring-fuchsia-500 outline-none shadow-sm cursor-pointer">
-                        <option value="">All Statuses</option>
-                        <option value="Available">Available / In Stock</option>
-                        <option value="Low">Low Stock</option>
-                        <option value="Depleted">Depleted</option>
-                        <option value="Expired">Expired</option>
-                    </select>
+            <!-- Stats Row -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 relative z-10">
+                <div class="glass-card rounded-2xl p-5 flex items-center gap-4 hover:border-indigo-200 transition-colors">
+                    <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100"><i data-lucide="flask-round" class="w-6 h-6"></i></div>
+                    <div>
+                        <h4 class="text-2xl font-bold text-slate-800" id="stat-total">-</h4>
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mt-0.5">Total Experiments</p>
+                    </div>
                 </div>
-                <div class="flex-[3] min-w-[200px] relative">
-                    <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5 ml-1">Omni-Search</label>
-                    <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 bottom-2.5"></i>
-                    <input type="text" id="filter-general-text" placeholder="Search by ID, Name, Lot Number, Manufacturer..." class="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-700 focus:ring-2 focus:ring-fuchsia-500 outline-none shadow-sm">
+                <div class="glass-card rounded-2xl p-5 flex items-center gap-4 hover:border-emerald-200 transition-colors">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100"><i data-lucide="play-circle" class="w-6 h-6"></i></div>
+                    <div>
+                        <h4 class="text-2xl font-bold text-slate-800" id="stat-active">-</h4>
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mt-0.5">In Progress</p>
+                    </div>
+                </div>
+                <div class="glass-card rounded-2xl p-5 flex items-center gap-4 hover:border-amber-200 transition-colors">
+                    <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100"><i data-lucide="calendar-clock" class="w-6 h-6"></i></div>
+                    <div>
+                        <h4 class="text-2xl font-bold text-slate-800" id="stat-planned">-</h4>
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mt-0.5">Planned</p>
+                    </div>
+                </div>
+                <div class="glass-card rounded-2xl p-5 flex items-center gap-4 hover:border-sky-200 transition-colors">
+                    <div class="w-12 h-12 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100"><i data-lucide="check-circle-2" class="w-6 h-6"></i></div>
+                    <div>
+                        <h4 class="text-2xl font-bold text-slate-800" id="stat-completed">-</h4>
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mt-0.5">Completed</p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Main Content Layout (Grid) -->
-            <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 flex-1 min-h-[400px]">
+            <!-- Main Data Grid -->
+            <div class="glass-card rounded-2xl overflow-hidden relative z-10 p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex items-center gap-3">
+                        <h3 class="font-bold text-slate-800 text-lg">Experiment Directory</h3>
+                        <div class="text-[11px] text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100 font-medium flex items-center gap-1.5 ml-2">
+                            <i data-lucide="info" class="w-3.5 h-3.5 text-indigo-400"></i> Double-click any cell to edit inline
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="relative">
+                            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
+                            <input type="text" oninput="gridApi.setQuickFilter(this.value)" placeholder="Search experiments..." class="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-64 shadow-sm">
+                        </div>
+                        <button onclick="gridApi.exportDataAsCsv()" class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-sm font-medium shadow-sm flex items-center gap-2 transition-colors">
+                            <i data-lucide="download" class="w-4 h-4"></i> Export
+                        </button>
+                    </div>
+                </div>
                 
-                <!-- Table View -->
-                <div class="xl:col-span-2 glass-card rounded-2xl flex flex-col overflow-hidden relative border border-slate-200 shadow-sm bg-white">
-                    
-                    <!-- Table Toolbar -->
-                    <div class="px-5 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                        <span class="text-sm font-semibold text-slate-700 flex items-center gap-2" id="current-table-title">
-                            <i data-lucide="list" class="w-4 h-4 text-fuchsia-500"></i> Records List
-                        </span>
-                        <div class="flex items-center gap-3">
-                            <span id="selected-count" class="text-xs font-medium text-slate-500 bg-white px-2 py-1 rounded border border-slate-200">0 selected</span>
-                            <button id="bulk-delete-btn" class="px-3 py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded-lg text-xs font-semibold shadow-sm flex items-center gap-1.5 transition-all opacity-50 cursor-not-allowed" disabled>
-                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Delete
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Table Container -->
-                    <div class="flex-1 overflow-auto relative">
-                        <div id="table-loading" class="loading-overlay active">
-                            <div class="flex flex-col items-center gap-2 text-fuchsia-600">
-                                <i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i>
-                                <span class="text-xs font-semibold tracking-wider uppercase">Loading...</span>
-                            </div>
-                        </div>
-                        <table class="min-w-full text-left border-collapse">
-                            <thead class="bg-slate-50 sticky top-0 z-10 shadow-sm ring-1 ring-slate-200">
-                                <tr id="table-headers">
-                                    <!-- Headers injected via JS -->
-                                </tr>
-                            </thead>
-                            <tbody id="dynamic-table-body" class="divide-y divide-slate-100 text-sm">
-                                <!-- Data injected via JS -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Right Details Pane -->
-                <div id="record-details-container" class="xl:col-span-1 glass-card rounded-2xl flex flex-col overflow-hidden border border-slate-200 shadow-sm bg-white">
-                    <!-- Placeholder when nothing is selected -->
-                    <div class="flex-1 p-8 flex flex-col items-center justify-center text-center">
-                        <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100 shadow-sm">
-                            <i data-lucide="mouse-pointer-click" class="w-8 h-8 text-fuchsia-300"></i>
-                        </div>
-                        <h3 class="text-lg font-bold text-slate-800 mb-1">Item Details</h3>
-                        <p class="text-sm text-slate-500 max-w-xs">Select a row from the table to view stock levels, expiry dates, and storage locations.</p>
-                    </div>
-                </div>
-
+                <div id="experimentsGrid" class="ag-theme-alpine w-full h-[500px]"></div>
             </div>
         </div>
-
-        <div id="modal-container"></div>
     </div>
 
+    <!-- === MODALS === -->
+
+    <!-- New Experiment Modal -->
+    <div id="newExperimentModal" class="modal hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+        <div class="modal-content bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2"><i data-lucide="flask-round" class="w-5 h-5 text-indigo-500"></i> Register New Experiment</h3>
+                <button type="button" onclick="closeModal('newExperimentModal')" class="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            
+            <form onsubmit="handleNewExperiment(event)" id="newExperimentForm" class="p-6 space-y-6">
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Experiment ID</label>
+                        <input type="text" name="experiment_id" id="formExpId" placeholder="e.g. EXP-2025-01" class="form-input font-mono" required>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Title / Name</label>
+                        <input type="text" name="name" placeholder="Assay Title" class="form-input" required>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Associated Project</label>
+                        <select name="project_id" id="formProjectId" class="form-input bg-white cursor-pointer" required>
+                            <option value="">-- Select Project --</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Status</label>
+                        <select name="status_id" class="form-input bg-white cursor-pointer" required>
+                            <option value="Planned" selected>Planned</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Completed">Completed</option>
+                            <option value="On Hold">On Hold</option>
+                            <option value="Cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Start Date</label>
+                        <input type="date" name="start_date" class="form-input">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Target End Date</label>
+                        <input type="date" name="end_date" class="form-input">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Description & Objectives</label>
+                    <textarea name="description" rows="3" placeholder="Brief outline of the experiment..." class="form-input resize-none"></textarea>
+                </div>
+
+                <div class="pt-2 border-t border-slate-100 flex justify-end gap-3">
+                    <button type="button" onclick="closeModal('newExperimentModal')" class="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
+                    <button type="submit" id="btnExpSubmit" class="px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 rounded-xl shadow-md transition-all flex items-center gap-2">
+                        <i data-lucide="check" class="w-4 h-4"></i> Create Experiment
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Scripts -->
     <script>
-        // --- Configuration & Endpoints ---
+        // --- API Config ---
         const getApiBase = () => window.location.pathname.includes('/mylims') ? '/mylims/api' : '/api';
-        const API_BASE_URL = getApiBase(); 
+        const API_PREFIX = getApiBase();
         
-        // Define expected table mappings strictly matching the existing SQL structure
-        const TABLE_DEFINITIONS = [
-            { id: 'reagents', label: 'Reagents & Inventory', icon: 'test-tube', pk: 'reagent_id', schema: 'lims' }
-        ];
-
-        let currentTableDef = TABLE_DEFINITIONS[0];
+        let gridApi = null;
         
-        let masterCache = {}; 
-        let currentTableData = []; 
-        let currentTableSchema = []; 
-        let sortColumn = currentTableDef.pk; 
-        let sortDirection = 'desc';
-        let currentFilters = { 'status_id': '', 'general_text': '' };
-        let selectedRows = new Set();
+        // V5.1 Fallback Tracking
+        let currentSchema = 'lims';
+        let currentTable = 'experiments';
+        let primaryKeyCol = 'experiment_id'; // Standard fallback
 
-        // Columns to consistently skip or render specifically
-        const SYSTEM_COLUMNS = ['search_vector', 'attachment_link'];
-
-        // --- Auth & Init ---
-        document.addEventListener('DOMContentLoaded', () => {
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
             const token = sessionStorage.getItem('token');
-            if (!token) { window.location.href = 'login.html'; return; }
+            if (!token) window.location.href = 'login.html';
 
             const user = JSON.parse(sessionStorage.getItem('user'));
-            if (user && user.person_id) document.getElementById('userNameDisplay').innerText = user.person_id;
-            
-            document.getElementById('logout-button').addEventListener('click', () => { 
-                sessionStorage.clear(); 
-                window.location.href = 'login.html'; 
+            if(user) document.getElementById('userNameDisplay').innerText = user.person_id;
+
+            document.getElementById('logout-button').addEventListener('click', () => {
+                sessionStorage.clear();
+                window.location.href = 'login.html';
             });
             
-            renderTabs();
-            initializePage();
+            try {
+                initGrid();
+                await loadDropdowns();
+                // Data loading is triggered by the grid's onGridReady event
+            } catch (error) {
+                console.error("Initialization error:", error);
+            }
         });
 
-        // --- Core Utils & API ---
+        // --- Core API Fetch ---
         async function apiFetch(endpoint, options = {}) {
             const token = sessionStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
-
-            const isFormData = options.body instanceof FormData;
-            if (!isFormData && options.body && typeof options.body === 'object') {
+            const headers = { 'Authorization': `Bearer ${token}`, ...options.headers };
+            
+            if(options.body && !(options.body instanceof FormData)) {
                 headers['Content-Type'] = 'application/json';
                 options.body = JSON.stringify(options.body);
             }
-            options.headers = { ...headers, ...options.headers };
-
+            
             try {
-                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
-                
-                if (!response.ok) { 
-                    const errText = await response.text();
-                    try { const errJson = JSON.parse(errText); throw new Error(errJson.detail || errJson.error || `Error ${response.status}`); } 
-                    catch (e) { throw new Error(`Error ${response.status}: ${errText}`); }
+                const res = await fetch(`${API_PREFIX}/${endpoint}`, { ...options, headers });
+                if(!res.ok) {
+                    const errObj = await res.json().catch(() => ({ detail: `HTTP Error ${res.status}` }));
+                    throw new Error(errObj.detail || errObj.error || `HTTP Error ${res.status}`);
                 }
-                if (response.status === 204 || response.headers.get('content-length') === '0') return { success: true };
-                return response.json();
-            } catch (error) { 
-                console.error(`API Error on ${endpoint}:`, error); 
-                return { error: error.message }; 
+                if(res.status === 204) return true;
+                return await res.json();
+            } catch(e) {
+                console.error(`[apiFetch] Failed on ${endpoint}:`, e);
+                return { error: e.message }; 
             }
         }
 
-        function showToast(msg, type = 'info') {
-            const c = document.getElementById('toastContainer');
-            const d = document.createElement('div');
-            
-            const bgClass = type === 'error' ? 'bg-red-50' : (type === 'success' ? 'bg-emerald-50' : 'bg-blue-50');
-            const borderClass = type === 'error' ? 'border-red-200' : (type === 'success' ? 'border-emerald-200' : 'border-blue-200');
-            const textClass = type === 'error' ? 'text-red-800' : (type === 'success' ? 'text-emerald-800' : 'text-blue-800');
-            const iconColor = type === 'error' ? 'text-red-500' : (type === 'success' ? 'text-emerald-500' : 'text-blue-500');
-            const iconType = type === 'error' ? 'alert-octagon' : (type === 'success' ? 'check-circle-2' : 'info');
-            
-            d.className = `px-4 py-3 rounded-xl shadow-lg border ${borderClass} ${bgClass} ${textClass} text-sm font-semibold flex items-center gap-3 transform transition-all duration-300 translate-y-0`;
-            d.innerHTML = `<i data-lucide="${iconType}" class="w-5 h-5 ${iconColor}"></i> ${msg}`;
-            c.appendChild(d);
-            lucide.createIcons();
-            setTimeout(() => { 
-                d.classList.add('opacity-0', 'translate-y-4'); 
-                setTimeout(() => d.remove(), 300); 
-            }, 3500);
-        }
+        // --- Dependencies ---
+        async function loadDropdowns() {
+            // Smartly search for the projects table
+            let prjs = null;
+            const projectCandidates = [
+                'table/lims/projects',
+                'table/core/projects',
+                'table/lims/project',
+                'table/core/project'
+            ];
 
-        function showLoading(show) {
-            const el = document.getElementById('table-loading');
-            if(el) el.classList.toggle('active', show);
-        }
-
-        async function getReferenceData(tableName, schema = 'reference', filters = {}) {
-            const cacheKey = `${schema}.${tableName}.${JSON.stringify(filters)}`;
-            if (masterCache[cacheKey]) return masterCache[cacheKey];
-            
-            let endpoint = `table/${schema}/${tableName}`;
-            const queryParams = new URLSearchParams(filters).toString();
-            if (queryParams) endpoint += `?${queryParams}`;
-
-            const data = await apiFetch(endpoint);
-            if(data && !data.error) masterCache[cacheKey] = data;
-            return data;
-        }
-
-        async function getTableSchema(schema, table) {
-            const cacheKey = `schema.${schema}.${table}`;
-            if (masterCache[cacheKey]) return masterCache[cacheKey];
-            const schemaData = await apiFetch(`table/${schema}/${table}/schema`);
-            if (schemaData && !schemaData.error) masterCache[cacheKey] = schemaData;
-            return schemaData;
-        }
-
-        // --- Formatting Utils ---
-        function formatColumnName(columnName) {
-            return columnName.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
-        }
-        const formatDateForInput = (dateString) => {
-            if (!dateString) return '';
-            try { const date = new Date(dateString); return isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0]; } 
-            catch (e) { return ''; }
-        };
-        const formatDate = (dateString) => {
-            if (!dateString) return 'N/A';
-            try { const date = new Date(dateString); return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString('en-CA'); } 
-            catch (e) { return 'N/A'; }
-        };
-
-        // --- CSV Utils ---
-        function unparseCSV(data) {
-            if (!Array.isArray(data) || data.length === 0) return '';
-            return data.map(row => row.map(field => {
-                if (field === null || field === undefined) return '';
-                let sf = String(field);
-                if (sf.includes(',') || sf.includes('"') || sf.includes('\n')) return '"' + sf.replace(/"/g, '""') + '"';
-                return sf;
-            }).join(',')).join('\n');
-        }
-
-        function parseCSVToJSON(csvText) {
-            const lines = csvText.split(/\r\n|\n/);
-            const headers = lines[0].split(',').map(h => h.trim());
-            const records = [];
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (line === "") continue;
-                const data = line.split(',').map(item => item.trim());
-                const record = {};
-                for (let j = 0; j < headers.length; j++) {
-                    let value = data[j] || '';
-                    if (value.startsWith('"') && value.endsWith('"')) value = value.substring(1, value.length - 1);
-                    record[headers[j]] = value;
+            for (let path of projectCandidates) {
+                const data = await apiFetch(`${path}?limit=500`);
+                if (data && !data.error && Array.isArray(data)) {
+                    prjs = data;
+                    break;
                 }
-                records.push(record);
             }
-            return records;
+
+            const select = document.getElementById('formProjectId');
+            if(prjs && Array.isArray(prjs)) {
+                prjs.forEach(p => {
+                    const id = p.project_id || p.id || p.project_name;
+                    const name = p.name || p.acronym || id;
+                    if(id) select.add(new Option(`${id} - ${name}`, id));
+                });
+            } else {
+                select.add(new Option(`-- No projects found --`, ""));
+            }
         }
 
-        // --- UI Dynamic Rendering & Navigation ---
-        function renderTabs() {
-            const container = document.getElementById('table-tabs-container');
-            container.innerHTML = TABLE_DEFINITIONS.map(tab => `
-                <button onclick="switchTable('${tab.id}')" 
-                    class="nav-tab whitespace-nowrap px-4 py-2 rounded-xl text-sm font-semibold border ${currentTableDef.id === tab.id ? 'active' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300 shadow-sm'} flex items-center gap-2">
-                    <i data-lucide="${tab.icon}" class="w-4 h-4"></i> ${tab.label}
-                </button>
-            `).join('');
-            lucide.createIcons();
-            document.getElementById('add-btn-text').innerText = `New ${currentTableDef.label.replace(/s$/, '')}`;
-            document.getElementById('current-table-title').innerHTML = `<i data-lucide="${currentTableDef.icon}" class="w-4 h-4 text-fuchsia-500"></i> ${currentTableDef.label} List`;
-            lucide.createIcons();
-        }
-
-        function switchTable(tableId) {
-            currentTableDef = TABLE_DEFINITIONS.find(t => t.id === tableId);
-            sortColumn = currentTableDef.pk; // Default sort to PK
-            sortDirection = 'desc';
-            selectedRows.clear();
-            document.getElementById('filter-general-text').value = '';
-            currentFilters = { 'status_id': '', 'general_text': '' };
-            renderTabs();
-            loadAndRenderTable();
-        }
-
-        // --- Filters & Sorting ---
-        function handleSortClick(e) {
-            const column = e.currentTarget.dataset.column;
-            if (sortColumn === column) { sortDirection = sortDirection === 'asc' ? 'desc' : 'asc'; } 
-            else { sortColumn = column; sortDirection = 'asc'; }
-            loadAndRenderTable();
-        }
-
-        function handleFilterChange(e) {
-            const filterKey = e.target.id.replace('filter-', '');
-            currentFilters[filterKey] = e.target.type === 'text' ? e.target.value.toLowerCase() : e.target.value;
-            
-            // Re-apply client side filter
-            const filteredData = applyClientSideFiltering(currentTableDataRaw);
-            renderTable(filteredData, currentTableSchema);
-        }
-
-        document.getElementById('filter-status-id').onchange = handleFilterChange;
-        document.getElementById('filter-general-text').oninput = handleFilterChange;
-
-        function buildFilterQueryString() {
-            const params = new URLSearchParams();
-            params.append('sort_by', sortColumn);
-            params.append('sort_order', sortDirection);
-            return params.toString();
-        }
-
-        let currentTableDataRaw = []; // keep a raw copy for client-side text filtering
-
-        function applyClientSideFiltering(data) {
-             let filtered = data;
-             
-             // Custom Status Filter for Inventory (Dynamic mapping)
-             if (currentFilters.status_id) {
-                 const statusTarget = currentFilters.status_id.toLowerCase();
-                 filtered = filtered.filter(row => {
-                     // Check explicit status column if exists
-                     if (row.status && String(row.status).toLowerCase() === statusTarget) return true;
-                     if (row.status_id && String(row.status_id).toLowerCase() === statusTarget) return true;
-                     
-                     // Derived status logic for inventory
-                     const qty = row.quantity !== undefined ? parseFloat(row.quantity) : 1;
-                     const isDepleted = qty <= 0;
-                     const isExpired = row.expiry_date && new Date(row.expiry_date) < new Date();
-                     
-                     if (statusTarget === 'depleted') return isDepleted;
-                     if (statusTarget === 'expired') return isExpired && !isDepleted;
-                     if (statusTarget === 'available') return !isDepleted && !isExpired;
-                     if (statusTarget === 'low') return !isDepleted && !isExpired && qty > 0 && qty <= 5; // Generic threshold
-                     
-                     return false;
-                 });
-             }
-
-             if (currentFilters.general_text) {
-                 const t = currentFilters.general_text;
-                 filtered = filtered.filter(row => {
-                     return Object.values(row).some(val => String(val || '').toLowerCase().includes(t));
-                 });
-             }
-             return filtered;
-        }
-
-        // --- Table Rendering ---
-        function renderTable(dataToDisplay, schemaInfo) {
-            const tableHeaders = document.getElementById('table-headers');
-            const tableBody = document.getElementById('dynamic-table-body');
-            
-            const pkCol = currentTableDef.pk;
-            const displayColumns = schemaInfo
-                .filter(col => !SYSTEM_COLUMNS.includes(col.column_name))
-                .sort((a, b) => {
-                    // Smart ordering for Inventory: ID, Name, Lot, Expiry, Qty, Storage
-                    const order = [pkCol, 'name', 'catalog_num', 'lot_number', 'expiry_date', 'quantity', 'storage_id', 'status'];
-                    let aIndex = order.findIndex(o => a.column_name.includes(o));
-                    let bIndex = order.findIndex(o => b.column_name.includes(o));
-                    return (aIndex === -1 ? 100 : aIndex) - (bIndex === -1 ? 100 : bIndex);
-                })
-                .slice(0, 8) 
-                .map(col => ({ id: col.column_name, label: formatColumnName(col.column_name) }));
-            
-            const finalColumns = [ { id: 'checkbox', label: '' }, ...displayColumns ];
-
-            tableHeaders.innerHTML = finalColumns.map(col => `
-                <th class="px-4 py-3 font-bold text-slate-500 uppercase tracking-wider text-[11px] whitespace-nowrap">
-                    ${col.id === 'checkbox' ? `<input type="checkbox" id="select-all-checkbox" class="rounded border-slate-300 text-fuchsia-600 focus:ring-fuchsia-500 cursor-pointer">` : `
-                    <div class="sortable-header group" data-column="${col.id}">
-                        <span>${col.label}</span>
-                        <i data-lucide="${sortColumn === col.id ? (sortDirection === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="w-3.5 h-3.5 ${sortColumn===col.id ? 'text-fuchsia-500' : 'text-slate-300 opacity-0 group-hover:opacity-100'} transition-all"></i>
-                    </div>`}
-                </th>
-            `).join('');
-
-            const totalCols = finalColumns.length;
-            
-            tableBody.innerHTML = dataToDisplay.map(row => {
-                const pkValue = row[pkCol];
-                const isSelected = selectedRows.has(pkValue);
-                
-                const rowCells = finalColumns.map(col => {
-                    if (col.id === 'checkbox') return `<td class="px-4 py-3 w-10"><input type="checkbox" class="row-select-checkbox rounded border-slate-300 text-fuchsia-600 focus:ring-fuchsia-500 cursor-pointer" data-pk-value="${pkValue}" ${isSelected ? 'checked' : ''}></td>`;
-                    
-                    let value = row[col.id];
-                    if (value === null || value === undefined || value === '') return `<td class="px-4 py-3 whitespace-nowrap text-sm text-slate-300">-</td>`;
-                    
-                    let cellContent = value;
-                    if (col.id.includes('date') || col.id.includes('created_at')) {
-                        const dateObj = new Date(value);
-                        cellContent = `<span class="font-medium text-slate-600">${formatDate(value)}</span>`;
-                        // Highlight expired dates
-                        if (col.id === 'expiry_date' && dateObj < new Date()) {
-                            cellContent = `<span class="text-red-600 font-bold flex items-center gap-1"><i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> ${formatDate(value)}</span>`;
+        // --- AG Grid ---
+        function initGrid() {
+            try {
+                const gridDiv = document.querySelector('#experimentsGrid');
+                const gridOptions = {
+                    columnDefs: [
+                        { field: "experiment_id", headerName: "ID", pinned: 'left', lockPosition: true, filter: true, width: 140 },
+                        { field: "name", headerName: "Experiment Name", flex: 1, editable: true, filter: true },
+                        { field: "project_id", headerName: "Project", filter: true, editable: true, width: 130 },
+                        { 
+                            field: "status_id", 
+                            headerName: "Status", 
+                            editable: true, 
+                            filter: true,
+                            width: 130,
+                            cellEditor: 'agSelectCellEditor',
+                            cellEditorParams: {
+                                values: ['Planned', 'In Progress', 'Completed', 'On Hold', 'Cancelled']
+                            },
+                            cellStyle: params => {
+                                if(params.value === 'Completed') return { color: '#059669', fontWeight: 'bold' };
+                                if(params.value === 'In Progress') return { color: '#2563eb', fontWeight: 'bold' };
+                                if(params.value === 'Planned') return { color: '#d97706', fontWeight: 'bold' };
+                                return null;
+                            }
+                        },
+                        { field: "start_date", headerName: "Start Date", filter: 'agDateColumnFilter', editable: true, width: 130 },
+                        { field: "end_date", headerName: "End Date", filter: 'agDateColumnFilter', editable: true, width: 130 },
+                        { field: "description", headerName: "Description", editable: true, flex: 1, tooltipField: "description" }
+                    ],
+                    defaultColDef: { resizable: true, sortable: true, minWidth: 100 },
+                    rowSelection: 'multiple',
+                    animateRows: true,
+                    enableBrowserTooltips: true,
+                    overlayLoadingTemplate: '<span class="ag-overlay-loading-center">Scanning database for experiments...</span>',
+                    overlayNoRowsTemplate: '<span class="text-slate-500">No experiments found or table is empty.</span>',
+                    onGridReady: (params) => { 
+                        gridApi = params.api; 
+                        loadGridData(); 
+                    },
+                    onCellValueChanged: async (params) => {
+                        if(params.oldValue !== params.newValue) {
+                            const payload = {};
+                            payload[params.colDef.field] = params.newValue;
+                            
+                            // Use dynamically resolved PK
+                            const pkValue = params.data[primaryKeyCol];
+                            
+                            const res = await apiFetch(`table/${currentSchema}/${currentTable}?${primaryKeyCol}=${pkValue}`, {
+                                method: 'PUT', body: payload
+                            });
+                            
+                            if (res && res.error) {
+                                showToast(res.error, "error");
+                                // Revert cell
+                                params.node.setDataValue(params.colDef.field, params.oldValue);
+                            } else { 
+                                showToast("Experiment updated", "success"); 
+                                updateDashboardStats(); // Refresh stats
+                            }
                         }
                     }
-                    else if (col.id === 'quantity' || col.id.includes('stock')) {
-                        if (parseFloat(value) <= 0) cellContent = `<span class="px-2 py-0.5 rounded text-[11px] font-bold bg-red-100 text-red-700">Depleted (${value})</span>`;
-                        else if (parseFloat(value) <= 5) cellContent = `<span class="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-700">Low (${value})</span>`;
-                        else cellContent = `<span class="font-semibold text-emerald-600">${value}</span>`;
-                    }
-                    else if (col.id === 'storage_id') {
-                         cellContent = `<span class="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-100"><i data-lucide="archive" class="w-3 h-3"></i>${value}</span>`;
-                    }
-                    else if (col.id === pkCol) cellContent = `<span class="font-mono text-xs font-semibold text-slate-700">${value}</span>`;
-                    
-                    return `<td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600">${cellContent}</td>`;
-                }).join('');
-
-                return `<tr class="cursor-pointer dynamic-table-row ${isSelected ? 'table-row-selected' : ''}" data-pk-value='${pkValue}'>${rowCells}</tr>`;
-            }).join('') || `<tr><td colspan="${totalCols}" class="text-center py-8 text-slate-500 text-sm">No items match the current filters.</td></tr>`;
-            
-            lucide.createIcons();
-            addSelectionListeners();
-            
-            document.querySelectorAll('.sortable-header').forEach(header => {
-                 header.removeEventListener('click', handleSortClick);
-                 header.addEventListener('click', handleSortClick)
-            });
-
-            document.querySelectorAll('.dynamic-table-row').forEach(row => row.addEventListener('click', (e) => {
-                if (e.target.closest('input[type="checkbox"]')) return;
-                document.querySelectorAll('.dynamic-table-row').forEach(r => r.classList.remove('table-row-selected'));
-                row.classList.add('table-row-selected');
-                const pk = row.dataset.pkValue;
-                const record = currentTableData.find(r => r[pkCol] == pk);
-                renderRecordDetails(record);
-            }));
-            
-            if(dataToDisplay.length > 0 && !document.querySelector('.table-row-selected')) {
-                 renderRecordDetails(dataToDisplay[0]);
-                 const firstRow = document.querySelector(`.dynamic-table-row[data-pk-value='${dataToDisplay[0][pkCol]}']`);
-                 if(firstRow) firstRow.classList.add('table-row-selected');
-            } else if (dataToDisplay.length === 0) renderRecordDetails(null);
-        }
-
-        // --- Selection & Bulk Actions ---
-        function addSelectionListeners() {
-            const allCheckbox = document.getElementById('select-all-checkbox');
-            const rowCheckboxes = document.querySelectorAll('.row-select-checkbox');
-            const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
-            const selectedCountDisplay = document.getElementById('selected-count');
-
-            if (!allCheckbox) return;
-
-            const updateBulkButtonState = () => {
-                const count = selectedRows.size;
-                bulkDeleteBtn.disabled = count === 0;
-                selectedCountDisplay.textContent = `${count} selected`;
-                if(count === 0) {
-                    bulkDeleteBtn.classList.add('opacity-50', 'cursor-not-allowed', 'border-slate-200', 'text-slate-400');
-                    bulkDeleteBtn.classList.remove('border-red-200', 'text-red-600', 'hover:bg-red-50');
-                } else {
-                    bulkDeleteBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'border-slate-200', 'text-slate-400');
-                    bulkDeleteBtn.classList.add('border-red-200', 'text-red-600', 'hover:bg-red-50');
-                }
-            };
-
-            allCheckbox.onclick = () => {
-                if (allCheckbox.checked) document.querySelectorAll('.dynamic-table-row').forEach(row => selectedRows.add(row.dataset.pkValue));
-                else selectedRows.clear();
-                
-                document.querySelectorAll('.dynamic-table-row').forEach(row => {
-                    const cb = row.querySelector('.row-select-checkbox');
-                    if(allCheckbox.checked) { row.classList.add('table-row-selected'); cb.checked = true; } 
-                    else { row.classList.remove('table-row-selected'); cb.checked = false; }
-                });
-                updateBulkButtonState();
-            };
-
-            rowCheckboxes.forEach(cb => {
-                cb.onclick = (e) => {
-                    const pk = e.target.dataset.pkValue;
-                    const row = e.target.closest('tr');
-                    if (e.target.checked) { selectedRows.add(pk); row.classList.add('table-row-selected'); } 
-                    else { selectedRows.delete(pk); row.classList.remove('table-row-selected'); }
-                    updateBulkButtonState();
                 };
-            });
-            
-            bulkDeleteBtn.onclick = bulkDeleteSelected;
-            updateBulkButtonState();
-        }
-        
-        async function bulkDeleteSelected() {
-            if (selectedRows.size === 0) return;
-            if (!confirm(`Permanently delete ${selectedRows.size} ${currentTableDef.label.toLowerCase()}?`)) return;
-
-            showLoading(true);
-            const deleteIds = Array.from(selectedRows);
-            let success = 0, failed = 0;
-
-            for (const id of deleteIds) {
-                 const result = await apiFetch(`table/${currentTableDef.schema}/${currentTableDef.id}?${currentTableDef.pk}=${id}`, { method: 'DELETE' });
-                 if (result && !result.error) success++; else failed++;
-            }
-
-            showLoading(false);
-            if (success > 0) {
-                showToast(`Deleted ${success} items. ${failed > 0 ? `(${failed} failed)` : ''}`, 'success');
-                selectedRows.clear();
-                loadAndRenderTable();
-            } else showToast(`Deletion failed.`, 'error');
-        }
-
-        // --- Details Pane (Inventory Focused) ---
-        function renderRecordDetails(record) {
-            const container = document.getElementById('record-details-container');
-            if (!record) {
-                container.innerHTML = `
-                    <div class="flex-1 p-8 flex flex-col items-center justify-center text-center">
-                        <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100 shadow-sm">
-                            <i data-lucide="mouse-pointer-click" class="w-8 h-8 text-fuchsia-300"></i>
-                        </div>
-                        <h3 class="text-lg font-bold text-slate-800 mb-1">Item Details</h3>
-                        <p class="text-sm text-slate-500 max-w-xs">Select a row from the table to view stock levels, expiry dates, and storage locations.</p>
-                    </div>`;
-                lucide.createIcons();
-                return;
-            }
-
-            const pkCol = currentTableDef.pk;
-            const pkVal = record[pkCol];
-            
-            // Smart Inventory Logic
-            const qty = record.quantity !== undefined ? parseFloat(record.quantity) : null;
-            const isDepleted = qty !== null && qty <= 0;
-            const isLow = qty !== null && qty > 0 && qty <= 5;
-            
-            let isExpired = false;
-            let daysUntilExpiry = null;
-            if (record.expiry_date) {
-                const expDate = new Date(record.expiry_date);
-                const now = new Date();
-                daysUntilExpiry = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
-                isExpired = daysUntilExpiry < 0;
-            }
-
-            let statusBadge = '';
-            if (isDepleted) statusBadge = `<span class="bg-red-100 text-red-700 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider border border-red-200"><i data-lucide="x-circle" class="w-3.5 h-3.5 inline mr-1"></i>Depleted</span>`;
-            else if (isExpired) statusBadge = `<span class="bg-red-100 text-red-700 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider border border-red-200"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 inline mr-1"></i>Expired</span>`;
-            else if (isLow) statusBadge = `<span class="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider border border-amber-200"><i data-lucide="alert-circle" class="w-3.5 h-3.5 inline mr-1"></i>Low Stock</span>`;
-            else statusBadge = `<span class="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider border border-emerald-200"><i data-lucide="check-circle" class="w-3.5 h-3.5 inline mr-1"></i>Available</span>`;
-
-            const renderRow = (key) => {
-                let value = record[key];
-                if (value === null || value === undefined || value === '') return '';
-                if (key.includes('date') || key.includes('created')) value = formatDate(value);
-                return `
-                    <div class="flex justify-between py-2 border-b border-slate-100 last:border-0 items-center">
-                        <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">${formatColumnName(key)}</span>
-                        <span class="text-sm font-medium text-slate-800 text-right break-all max-w-[60%]">${value}</span>
-                    </div>`;
-            };
-
-            // Categorize columns
-            const coreCols = currentTableSchema.filter(c => !SYSTEM_COLUMNS.includes(c.column_name) && c.column_name !== pkCol && !c.column_name.includes('storage') && c.column_name !== 'notes').map(c => c.column_name);
-
-            container.innerHTML = `
-                <div class="flex flex-col h-full bg-slate-50/30">
-                    <div class="p-6 border-b border-slate-200 bg-white">
-                        <div class="flex justify-between items-start mb-2">
-                            <h2 class="text-xl font-extrabold text-slate-900 tracking-tight font-mono truncate mr-2" title="${pkVal}">${pkVal}</h2>
-                            <button onclick="showCreateEditModal('${pkVal}')" class="p-1.5 text-slate-400 hover:text-fuchsia-600 hover:bg-fuchsia-50 rounded-lg transition-colors border border-transparent hover:border-fuchsia-100 shrink-0" title="Edit">
-                                <i data-lucide="edit" class="w-4 h-4"></i>
-                            </button>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            ${statusBadge}
-                            ${record.storage_id ? `<a href="storage.html" class="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-sky-600 bg-sky-50 px-2 py-1 rounded-md border border-sky-200 hover:bg-sky-100 transition"><i data-lucide="archive" class="w-3 h-3"></i>${record.storage_id}</a>` : ''}
-                        </div>
-                    </div>
-
-                    <div class="flex-1 overflow-y-auto p-6 space-y-4">
-                        
-                        <!-- Inventory Health Card -->
-                        ${(qty !== null || record.expiry_date) ? `
-                        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm grid grid-cols-2 gap-4">
-                            ${qty !== null ? `
-                            <div>
-                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Current Quantity</p>
-                                <p class="text-2xl font-black ${isDepleted ? 'text-red-500' : isLow ? 'text-amber-500' : 'text-emerald-500'}">${qty}</p>
-                            </div>` : ''}
-                            
-                            ${record.expiry_date ? `
-                            <div>
-                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Expiry Status</p>
-                                <p class="text-sm font-bold ${isExpired ? 'text-red-500' : daysUntilExpiry < 30 ? 'text-amber-500' : 'text-emerald-500'}">
-                                    ${isExpired ? 'Expired ' + Math.abs(daysUntilExpiry) + ' days ago' : 'Expires in ' + daysUntilExpiry + ' days'}
-                                </p>
-                                <p class="text-xs text-slate-500 font-medium">${formatDate(record.expiry_date)}</p>
-                            </div>` : ''}
-                        </div>` : ''}
-
-                        <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                            <button class="w-full px-4 py-3 bg-slate-50 flex justify-between items-center text-sm font-bold text-slate-700 transition hover:bg-slate-100" onclick="this.nextElementSibling.classList.toggle('open'); this.querySelector('.chevron').classList.toggle('rotate-180')">
-                                <span class="flex items-center gap-2"><i data-lucide="info" class="w-4 h-4 text-fuchsia-500"></i> Item Properties</span>
-                                <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 chevron transition-transform"></i>
-                            </button>
-                            <div class="accordion-content open px-4 bg-white">
-                                ${coreCols.map(c => renderRow(c)).join('')}
-                            </div>
-                        </div>
-
-                        ${record.notes ? `
-                        <div class="bg-yellow-50 border border-yellow-100 rounded-xl p-4 shadow-sm">
-                            <h4 class="text-[10px] font-bold text-yellow-800 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><i data-lucide="sticky-note" class="w-3.5 h-3.5"></i> Notes</h4>
-                            <p class="text-sm text-yellow-900">${record.notes}</p>
-                        </div>` : ''}
-                    </div>
-                </div>
-            `;
-            lucide.createIcons();
-        }
-
-        // --- Modals & Dynamic Forms ---
-        function showModal(content) {
-            const container = document.getElementById('modal-container');
-            container.innerHTML = content;
-            const modal = container.querySelector('.modal-overlay');
-            const inner = container.querySelector('.modal-content');
-            
-            setTimeout(() => {
-                modal.classList.remove('opacity-0');
-                inner.classList.remove('opacity-0', 'scale-95', 'translate-y-4');
-            }, 10);
-
-            const closeModal = () => {
-                modal.classList.add('opacity-0');
-                inner.classList.add('opacity-0', 'scale-95', 'translate-y-4');
-                setTimeout(() => container.innerHTML = '', 300);
-            };
-            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-            container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
-            lucide.createIcons();
-            return { closeModal };
-        }
-
-        async function buildReferenceOptions(columnName, selectedValue) {
-            let opts = `<option value="">Select...</option>`;
-            let data = [];
-            
-            if (columnName === 'storage_id') {
-                data = masterCache['lims.storage'] || await getReferenceData('storage', 'lims');
-                opts += data.map(s => `<option value="${s.storage_id}" ${selectedValue === s.storage_id ? 'selected' : ''}>${s.storage_id} (${s.freezer || 'Room'})</option>`).join('');
-            } else if (columnName === 'status_id' || columnName === 'status') {
-                data = masterCache['reference.status'] || await getReferenceData('status', 'reference');
-                if (!data.error && data.length > 0) {
-                    opts += data.map(s => `<option value="${s.status_id}" ${selectedValue === s.status_id ? 'selected' : ''}>${s.status_id}</option>`).join('');
-                } else {
-                    // Fallback for inventory specifically
-                    const fb = ['Available', 'Low', 'Depleted', 'Expired'];
-                    opts += fb.map(s => `<option value="${s}" ${selectedValue === s ? 'selected' : ''}>${s}</option>`).join('');
+                
+                if (window.agGrid && agGrid.createGrid) {
+                    agGrid.createGrid(gridDiv, gridOptions);
+                } else if (window.agGrid && agGrid.Grid) {
+                    new agGrid.Grid(gridDiv, gridOptions);
                 }
-            } else if (columnName.includes('type_id')) {
-                data = masterCache['reference.reagents_type'] || await getReferenceData('reagents_type', 'reference');
-                if (!data.error && data.length > 0) {
-                    opts += data.map(t => `<option value="${t.reagent_type_id}" ${selectedValue === t.reagent_type_id ? 'selected' : ''}>${t.reagent_type_id}</option>`).join('');
+            } catch(e) {
+                console.warn("AG Grid failed to initialize:", e);
+            }
+        }
+
+        async function loadGridData() {
+            if (!gridApi) return;
+            gridApi.showLoadingOverlay();
+            
+            let data = null;
+            let success = false;
+
+            // List of schemas/tables to sweep in your new V5.1 setup
+            const candidates = [
+                { s: 'lims', t: 'experiments' },
+                { s: 'core', t: 'experiments' },
+                { s: 'lims', t: 'experiment' },
+                { s: 'core', t: 'experiment' }
+            ];
+
+            // Sweep through possible table locations
+            for (let cand of candidates) {
+                let temp = await apiFetch(`table/${cand.s}/${cand.t}?limit=1000`);
+                if (temp && !temp.error && Array.isArray(temp)) {
+                    data = temp;
+                    currentSchema = cand.s;
+                    currentTable = cand.t;
+                    success = true;
+                    break;
                 }
             }
-            return opts;
-        }
 
-        async function showCreateEditModal(recordId = null) {
-            const isEditing = recordId !== null;
-            const pkCol = currentTableDef.pk;
-            const record = isEditing ? currentTableData.find(r => r[pkCol] == recordId) : null;
-            if (isEditing && !record) return showToast("Record not found", "error");
+            // Remove full page loading regardless
+            document.getElementById('loadingOverlay').classList.remove('active');
 
-            showLoading(true);
-
-            // Dynamically generate form fields based on schema
-            let formFieldsHTML = '';
-            const skippableCols = [...SYSTEM_COLUMNS, 'created_at', 'created_by', 'updated_at', pkCol];
-            
-            for (const col of currentTableSchema) {
-                if (skippableCols.includes(col.column_name)) continue;
-                
-                const val = record ? record[col.column_name] : '';
-                const isRequired = col.is_nullable === 'NO' ? 'required' : '';
-                const reqAsterisk = isRequired ? '<span class="text-red-500">*</span>' : '';
-                const label = `<label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">${formatColumnName(col.column_name)} ${reqAsterisk}</label>`;
-                
-                let inputHTML = '';
-                
-                if (col.column_name.endsWith('_id') || col.column_name === 'status') {
-                    const opts = await buildReferenceOptions(col.column_name, val);
-                    if (opts.length > 35) { // Meaning we actually got options back
-                        inputHTML = `<select name="${col.column_name}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-fuchsia-500 outline-none transition">${opts}</select>`;
-                    } else {
-                        inputHTML = `<input type="text" name="${col.column_name}" value="${val || ''}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-fuchsia-500 outline-none transition">`;
-                    }
-                } else if (col.data_type === 'date' || col.data_type.includes('timestamp')) {
-                    inputHTML = `<input type="date" name="${col.column_name}" value="${formatDateForInput(val)}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-fuchsia-500 outline-none transition">`;
-                } else if (col.data_type === 'integer' || col.data_type === 'numeric' || col.data_type === 'double precision') {
-                    inputHTML = `<input type="number" step="any" name="${col.column_name}" value="${val || ''}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-fuchsia-500 outline-none transition">`;
-                } else if (col.column_name === 'notes') {
-                    inputHTML = `<textarea name="${col.column_name}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-fuchsia-500 outline-none transition h-20 resize-none">${val || ''}</textarea>`;
-                } else {
-                    inputHTML = `<input type="text" name="${col.column_name}" value="${val || ''}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-fuchsia-500 outline-none transition">`;
-                }
-
-                formFieldsHTML += `<div>${label}${inputHTML}</div>`;
-            }
-            
-            showLoading(false);
-
-            const modalHTML = `
-                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center opacity-0 transition-opacity duration-300">
-                    <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col transform opacity-0 scale-95 translate-y-4 transition-all duration-300 border border-slate-200">
-                        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
-                            <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                <i data-lucide="${isEditing?'edit':'plus-circle'}" class="w-5 h-5 text-fuchsia-500"></i> 
-                                ${isEditing ? 'Edit' : 'New'} ${currentTableDef.label}
-                            </h2>
-                            <button id="close-modal-btn" class="text-slate-400 hover:text-slate-700 bg-white hover:bg-slate-100 p-1.5 rounded-lg border border-transparent hover:border-slate-200 transition-all"><i data-lucide="x" class="w-4 h-4"></i></button>
-                        </div>
-                        
-                        <div class="p-6 overflow-y-auto flex-1">
-                            <form id="record-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                ${isEditing ? `<input type="hidden" name="${pkCol}" value="${recordId}">` : ''}
-                                ${formFieldsHTML}
-                            </form>
-                        </div>
-                        
-                        <div class="px-6 py-4 bg-slate-50/80 border-t border-slate-100 rounded-b-2xl flex justify-end">
-                            <button form="record-form" type="submit" class="px-6 py-2.5 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-xl text-sm font-semibold shadow-md transition-all flex items-center gap-2">
-                                <i data-lucide="save" class="w-4 h-4"></i> ${isEditing ? 'Save Changes' : 'Save Item'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            const { closeModal } = showModal(modalHTML);
-
-            document.getElementById('record-form').onsubmit = async (e) => {
-                e.preventDefault();
-                const fd = new FormData(e.target);
-                const payload = Object.fromEntries(fd.entries());
-                
-                Object.keys(payload).forEach(k => { if(payload[k]==='') payload[k] = null; });
-
-                showLoading(true);
-                const method = isEditing ? 'PUT' : 'POST';
-                const endpoint = isEditing ? `${currentTableDef.schema}/${currentTableDef.id}?${pkCol}=${payload[pkCol]}` : `${currentTableDef.schema}/${currentTableDef.id}`;
-                
-                const result = await apiFetch(`table/${endpoint}`, { method, body: payload });
-                showLoading(false);
-
-                if (result && !result.error) {
-                    showToast(`Item ${isEditing ? 'updated' : 'added'} successfully!`, 'success');
-                    closeModal();
-                    loadAndRenderTable();
-                } else showToast(`Failed: ${result?.error}`, 'error');
-            };
-        }
-
-        // --- Bulk Upload CSV ---
-        function downloadCsvTemplate() {
-            const skippableCols = [...SYSTEM_COLUMNS, 'created_at', 'created_by', 'updated_at', currentTableDef.pk];
-            const headers = currentTableSchema.filter(c => !skippableCols.includes(c.column_name)).map(c => c.column_name);
-            const csv = unparseCSV([headers]);
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `${currentTableDef.id}_template.csv`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        async function showBulkUploadModal() {
-            const modalHTML = `
-                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center opacity-0 transition-opacity duration-300">
-                    <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col transform opacity-0 scale-95 translate-y-4 transition-all duration-300 border border-slate-200">
-                        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
-                            <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                <i data-lucide="upload-cloud" class="w-5 h-5 text-fuchsia-500"></i> Bulk Upload CSV
-                            </h2>
-                            <button id="close-modal-btn" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg transition-all"><i data-lucide="x" class="w-4 h-4"></i></button>
-                        </div>
-                        
-                        <div class="p-6">
-                            <div class="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center bg-slate-50 hover:bg-slate-100 transition-colors relative">
-                                <input type="file" id="csv-file-input" accept=".csv" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
-                                <i data-lucide="file-spreadsheet" class="w-10 h-10 text-slate-400 mx-auto mb-3"></i>
-                                <p class="text-sm font-semibold text-slate-700">Click to select CSV file</p>
-                                <p class="text-xs text-slate-500 mt-1" id="file-name-display">Targeting: ${currentTableDef.id}</p>
-                            </div>
-                        </div>
-                        
-                        <div class="px-6 py-4 bg-slate-50/80 border-t border-slate-100 rounded-b-2xl flex justify-end">
-                            <button id="upload-csv-btn" class="px-6 py-2.5 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-xl text-sm font-semibold shadow-md transition-all flex items-center gap-2">
-                                <i data-lucide="upload" class="w-4 h-4"></i> Process Upload
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            const { closeModal } = showModal(modalHTML);
-
-            document.getElementById('csv-file-input').addEventListener('change', (e) => {
-                const f = e.target.files[0];
-                if(f) document.getElementById('file-name-display').innerText = f.name;
-            });
-
-            document.getElementById('upload-csv-btn').addEventListener('click', async () => {
-                const file = document.getElementById('csv-file-input').files[0];
-                if (!file) return showToast("Select a file first", "error");
-
-                showLoading(true);
-                try {
-                    const txt = await new Promise((res, rej) => {
-                        const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = e => rej(e); r.readAsText(file);
-                    });
+            if(success) {
+                // Dynamically detect primary key from first row
+                if(data.length > 0) {
+                    const keys = Object.keys(data[0]);
+                    if(keys.includes('experiment_id')) primaryKeyCol = 'experiment_id';
+                    else if(keys.includes('id')) primaryKeyCol = 'id';
+                    else primaryKeyCol = keys[0]; // fallback to first column
                     
-                    let records = parseCSVToJSON(txt);
-                    records = records.map(r => {
-                        const nr = {}; for(let k in r) nr[k] = r[k] === '' ? null : r[k]; return nr;
-                    });
-
-                    if (!records.length) throw new Error("No data found");
-
-                    const res = await apiFetch(`table/${currentTableDef.schema}/${currentTableDef.id}/batch_upload`, { method: 'POST', body: records });
-                    showLoading(false);
-                    if (res && res.success) {
-                        showToast(`Uploaded ${res.count || records.length} items to ${currentTableDef.id}!`, "success");
-                        loadAndRenderTable();
-                        closeModal();
-                    } else throw new Error(res?.error || "Unknown error");
-                } catch (err) {
-                    showLoading(false);
-                    showToast(`Upload failed: ${err.message}`, "error");
+                    // Update AG Grid column definition to match true PK if needed
+                    const colDefs = gridApi.getColumnDefs();
+                    colDefs[0].field = primaryKeyCol;
+                    gridApi.setColumnDefs(colDefs);
                 }
-            });
+
+                gridApi.setRowData(data);
+                gridApi.hideOverlay();
+                updateDashboardStats(data);
+            } else {
+                // FORCE grid loading overlay to turn off if it failed to find a table
+                gridApi.hideOverlay();
+                gridApi.setRowData([]); 
+                gridApi.showNoRowsOverlay();
+                showToast("Failed to find Experiments table in database.", "error");
+                updateDashboardStats([]); // zero out stats
+            }
         }
 
-        // --- Core Init Flow ---
-        async function loadAndRenderTable() {
-            showLoading(true);
-            const queryStr = buildFilterQueryString();
+        function updateDashboardStats(dataArray = null) {
+            // If data is not provided, extract it directly from the Grid
+            if(!dataArray && gridApi) {
+                dataArray = [];
+                gridApi.forEachNode(node => dataArray.push(node.data));
+            }
+            
+            if(!dataArray) return;
+
+            const total = dataArray.length;
+            const active = dataArray.filter(d => d.status_id === 'In Progress' || d.status_id === 'Active').length;
+            const planned = dataArray.filter(d => d.status_id === 'Planned').length;
+            const completed = dataArray.filter(d => d.status_id === 'Completed').length;
+
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-active').innerText = active;
+            document.getElementById('stat-planned').innerText = planned;
+            document.getElementById('stat-completed').innerText = completed;
+            
+            document.getElementById('loadingOverlay').classList.remove('active');
+        }
+
+        // --- Actions ---
+        async function handleNewExperiment(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnExpSubmit');
+            const orig = btn.innerHTML;
+            btn.innerHTML = 'Creating...'; btn.disabled = true;
+
+            const fd = new FormData(e.target);
+            const data = Object.fromEntries(fd.entries());
+            
+            // Clean empty strings for DB compatibility
+            Object.keys(data).forEach(k => { if (data[k] === "") delete data[k]; });
+            
+            // Ensure dynamically discovered PK is used
+            const payload = { ...data };
+            if(data.experiment_id && primaryKeyCol !== 'experiment_id') {
+                payload[primaryKeyCol] = data.experiment_id;
+                delete payload.experiment_id;
+            }
 
             try {
-                const schema = await getTableSchema(currentTableDef.schema, currentTableDef.id);
-                const filteredData = await apiFetch(`table/${currentTableDef.schema}/${currentTableDef.id}?${queryStr}`);
+                const res = await apiFetch(`table/${currentSchema}/${currentTable}`, { method: 'POST', body: payload });
                 
-                if (filteredData.error || schema.error) throw new Error("This table might not exist in the database. Please check TABLE_DEFINITIONS.");
+                if (res && res.error) throw new Error(res.error);
 
-                currentTableSchema = schema;
-                currentTableDataRaw = filteredData;
-                currentTableData = applyClientSideFiltering(filteredData);
+                showToast("Experiment registered successfully!", "success");
+                closeModal('newExperimentModal');
+                e.target.reset();
                 
-                renderTable(currentTableData, schema);
-
-            } catch (err) {
+                // Refresh table
+                loadGridData();
+            } catch(err) {
                 showToast(err.message, "error");
-                document.getElementById('dynamic-table-body').innerHTML = `<tr><td colspan="10" class="text-center py-8 text-red-500 text-sm"><i data-lucide="database" class="w-8 h-8 mx-auto mb-2 opacity-50"></i> Table '${currentTableDef.schema}.${currentTableDef.id}' missing.<br><span class="text-xs text-slate-500">Edit the TABLE_DEFINITIONS array in the code to match your DB schema.</span></td></tr>`;
-                lucide.createIcons();
             } finally {
-                showLoading(false);
+                btn.innerHTML = orig; btn.disabled = false;
             }
         }
 
-        async function initializePage() {
-            showLoading(true);
-            // Preload critical core references that might appear in inventory
-            await Promise.all([
-                getReferenceData('storage', 'lims')
-            ]);
+        // --- Modals & Utils ---
+        window.openModal = (id) => { 
+            document.getElementById(id).classList.remove('hidden'); 
             
-            document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal());
-            document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal);
-            document.getElementById('download-template-general-btn').addEventListener('click', downloadCsvTemplate);
+            // Auto-generate an ID hint
+            if(id === 'newExperimentModal') {
+                const dateStr = dayjs().format('YYYY-MM');
+                const randomSuffix = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+                document.getElementById('formExpId').value = `EXP-${dateStr}-${randomSuffix}`;
+            }
+        };
+        
+        window.closeModal = (id) => { document.getElementById(id).classList.add('hidden'); };
+
+        function showToast(msg, type='success') {
+            const c = document.getElementById('toastContainer');
+            const d = document.createElement('div');
+            const bgClass = type === 'error' ? 'bg-red-50' : 'bg-emerald-50';
+            const borderClass = type === 'error' ? 'border-red-200' : 'border-emerald-200';
+            const textClass = type === 'error' ? 'text-red-800' : 'text-emerald-800';
+            const iconColor = type === 'error' ? 'text-red-500' : 'text-emerald-500';
+            const icon = type === 'error' ? 'alert-octagon' : 'check-circle-2';
             
-            await loadAndRenderTable();
-            showLoading(false);
+            d.className = `px-4 py-3 rounded-xl shadow-lg border ${borderClass} ${bgClass} ${textClass} text-sm font-semibold flex items-center gap-3 transform transition-all duration-300 translate-y-0`;
+            d.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 ${iconColor}"></i> ${msg}`;
+            c.appendChild(d); lucide.createIcons();
+            setTimeout(() => { d.classList.add('opacity-0', 'translate-y-4'); setTimeout(() => d.remove(), 300); }, 3500);
         }
     </script>
 </body>

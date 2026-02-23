@@ -15,6 +15,9 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-grid.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-theme-alpine.css" />
     
+    <!-- SheetJS (Required for Bulk Import) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+
     <!-- Leaflet Map -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -223,7 +226,7 @@
                 <div class="glass-card rounded-2xl p-5 flex items-center gap-4 hover:border-amber-200 transition-colors">
                     <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100"><i data-lucide="alert-triangle" class="w-6 h-6"></i></div>
                     <div>
-                        <h4 class="text-2xl font-bold text-slate-800" id="stat-alerts">-</h4>
+                        <h4 class="text-2xl font-bold text-slate-800" id="stat-alerts">0</h4>
                         <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mt-0.5">Missing Data</p>
                     </div>
                 </div>
@@ -319,7 +322,7 @@
                 <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2"><i data-lucide="file-up" class="w-5 h-5 text-emerald-500"></i> Bulk Import Data</h3>
                 <button onclick="closeModal('importModal')" class="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
-            <form onsubmit="handleImport(event)" class="p-6 space-y-6">
+            <form onsubmit="handleImport(event)" id="importForm" class="p-6 space-y-6">
                 
                 <div>
                     <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">1. Select Target Table</label>
@@ -337,7 +340,7 @@
                         <i data-lucide="cloud-upload" class="w-10 h-10 text-slate-300 mx-auto mb-3 group-hover:text-indigo-400 transition-colors"></i>
                         <p class="text-sm font-semibold text-slate-700 mb-1">Drag Excel (.xlsx) or CSV file here</p>
                         <p class="text-xs text-slate-500">or click to browse</p>
-                        <input type="file" name="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" required accept=".csv, .xlsx, .xls">
+                        <input type="file" id="importFileInput" name="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" required accept=".csv, .xlsx, .xls">
                     </div>
                 </div>
 
@@ -352,7 +355,7 @@
                 <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center gap-3">
                     <i data-lucide="info" class="w-5 h-5 text-slate-400 shrink-0"></i>
                     <p class="text-xs text-slate-600 font-mono" id="importHelpBox">
-                        <strong>Required:</strong> sampling_date, latitude, longitude
+                        <strong>Required columns:</strong> sampling_date, latitude, longitude
                     </p>
                 </div>
 
@@ -474,11 +477,11 @@
                             </div>
                             <div>
                                 <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Depth (m)</label>
-                                <input type="number" class="form-input" name="depth_m">
+                                <input type="number" step="0.1" class="form-input" name="depth_m">
                             </div>
                             <div>
                                 <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Duration (min)</label>
-                                <input type="number" class="form-input" name="operation_duration_min">
+                                <input type="number" step="0.1" class="form-input" name="operation_duration_min">
                             </div>
                         </div>
                     </div>
@@ -519,29 +522,27 @@
             });
             
             try {
-                // Initialize Map & Grid gracefully (will not crash page if library is blocked)
+                // Initialize Map & Grid gracefully
                 initMap();
                 initGrid();
                 
-                // Load all data
+                // Load core data (Grid data is loaded internally inside initGrid when ready)
                 await Promise.all([
                     loadStats(),
                     loadCruises(),
                     loadDropdowns(),
                     loadCatchData(),
-                    loadGridData(),
                     loadMapData()
                 ]);
             } catch (error) {
                 console.error("Initialization failed:", error);
                 showToast("Failed to load some components. Check console.", "error");
             } finally {
-                // Guaranteed to run, removing the loading spinner
                 document.getElementById('loadingOverlay').classList.remove('active');
             }
         });
 
-        // ROBUST API FETCH: Extracts explicit error messages to show the user
+        // ROBUST API FETCH
         async function apiFetch(endpoint, options = {}) {
             const token = sessionStorage.getItem('token');
             const headers = { 'Authorization': `Bearer ${token}`, ...options.headers };
@@ -685,12 +686,16 @@
                     defaultColDef: { resizable: true, sortable: true, minWidth: 100 },
                     rowSelection: 'multiple',
                     animateRows: true,
-                    onGridReady: (params) => { gridApi = params.api; },
+                    onGridReady: (params) => { 
+                        gridApi = params.api; 
+                        // Trigger grid data load ONLY when the grid is confirmed ready to avoid race condition
+                        loadGridData(); 
+                    },
                     onCellValueChanged: async (params) => {
-                        // Auto-save on cell edit
                         if(params.oldValue !== params.newValue) {
                             const payload = {};
                             payload[params.colDef.field] = params.newValue;
+                            // Uses the correct PK URL query syntax for the backend
                             const res = await apiFetch(`table/field/sampling_event?sampling_id=${params.data.sampling_id}`, {
                                 method: 'PUT', body: payload
                             });
@@ -700,7 +705,6 @@
                     }
                 };
                 
-                // Bulletproof init for different AG Grid versions
                 if (window.agGrid && agGrid.createGrid) {
                     agGrid.createGrid(gridDiv, gridOptions);
                 } else if (window.agGrid && agGrid.Grid) {
@@ -712,12 +716,26 @@
         }
 
         async function loadGridData(cruiseId = null) {
+            if (!gridApi) return; // Safety guard
+            
+            // Show spinning overlay while fetching
+            gridApi.showLoadingOverlay();
+            
             let url = 'table/field/sampling_event?limit=1000&sort_by=sampling_date&sort_order=desc';
             if(cruiseId) url += `&cruise_id=${cruiseId}`;
             
-            const data = await apiFetch(url);
-            if(gridApi && data && !data.error && Array.isArray(data)) {
-                gridApi.setRowData(data);
+            try {
+                const data = await apiFetch(url);
+                if(data && !data.error && Array.isArray(data)) {
+                    gridApi.setRowData(data);
+                } else {
+                    // Important: Force clear the loading spinner if an error happens or array is invalid
+                    gridApi.setRowData([]); 
+                    showToast(data?.error || "Failed to load events data.", "error");
+                }
+            } catch (err) {
+                gridApi.setRowData([]); 
+                showToast("Network error loading grid data.", "error");
             }
         }
 
@@ -780,6 +798,8 @@
         }
 
         // --- Action Handlers ---
+        
+        // 1. Bulk Import (Now Functional via SheetJS)
         function updateImportHelp() {
             const type = document.getElementById('importTargetSelect').value;
             const help = document.getElementById('importHelpBox');
@@ -794,13 +814,73 @@
             const btn = document.getElementById('btnImportSubmit');
             const orig = btn.innerHTML;
             btn.innerHTML = 'Processing...'; btn.disabled = true;
-            
-            setTimeout(() => {
-                showToast("File uploaded. To apply changes use Data Editor.", "success");
+
+            const form = e.target;
+            const target = form.importTargetSelect.value;
+            const [schema, table] = target.split('.');
+            const fileInput = document.getElementById('importFileInput');
+            const file = fileInput.files[0];
+            const isUpdate = document.getElementById('updateCheck').checked;
+
+            if (!file) {
+                showToast("Please select a file.", "error");
                 btn.innerHTML = orig; btn.disabled = false;
-                closeModal('importModal');
-            }, 1000);
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                try {
+                    const data = new Uint8Array(event.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: null });
+
+                    if (jsonData.length === 0) {
+                        throw new Error("Spreadsheet is empty or invalid format.");
+                    }
+
+                    const endpoint = `table/${schema}/${table}/${isUpdate ? 'batch_update' : 'batch_upload'}`;
+                    const res = await apiFetch(endpoint, {
+                        method: 'POST',
+                        body: jsonData
+                    });
+
+                    if (res && res.error) throw new Error(res.error);
+
+                    showToast(`Successfully processed ${res.count || jsonData.length} records.`, "success");
+                    closeModal('importModal');
+                    form.reset();
+                    
+                    // Refresh all views to reflect new data
+                    loadStats();
+                    loadGridData();
+                    loadMapData();
+                    loadCatchData();
+
+                } catch (err) {
+                    console.error(err);
+                    showToast(err.message || "Failed to process spreadsheet.", "error");
+                } finally {
+                    btn.innerHTML = orig; btn.disabled = false;
+                }
+            };
+            
+            reader.onerror = () => {
+                showToast("Failed to read file.", "error");
+                btn.innerHTML = orig; btn.disabled = false;
+            };
+            
+            reader.readAsArrayBuffer(file);
         }
+
+        // 2. New Event Creation
+        window.openNewEventModal = () => {
+            document.getElementById('newEventForm').reset();
+            switchModalTab('generalInfo');
+            openModal('newEventModal');
+        };
 
         async function handleNewEvent(e) {
             e.preventDefault();
@@ -811,84 +891,75 @@
             const fd = new FormData(e.target);
             const data = Object.fromEntries(fd.entries());
             
+            // Clean up empty strings to avoid DB type parsing errors
+            Object.keys(data).forEach(k => {
+                if (data[k] === "") delete data[k];
+            });
+            
             // 1. Prepare Base Event
+            // Exclude empty strings
             const evtData = {
-                cruise_id: data.cruise_id,
                 sampling_date: data.sampling_date,
-                project_id: data.project_id,
                 latitude: data.latitude,
                 longitude: data.longitude,
-                region_id: data.region_id,
-                ecosystem_id: data.ecosystem_id,
                 status_id: 'Planned'
             };
+            if (data.cruise_id) evtData.cruise_id = data.cruise_id;
+            if (data.project_id) evtData.project_id = data.project_id;
+            if (data.region_id) evtData.region_id = data.region_id;
+            if (data.ecosystem_id) evtData.ecosystem_id = data.ecosystem_id;
 
             try {
-                // Insert Base Event
+                // Insert Base Event. DB trigger generates the sampling_id. Backend returns it.
                 const evtRes = await apiFetch('table/field/sampling_event', { method: 'POST', body: evtData });
                 
-                // Explicitly check for DB rejection
-                if (evtRes && evtRes.error) {
-                    throw new Error(evtRes.error);
-                }
+                if (evtRes && evtRes.error) throw new Error(evtRes.error);
 
-                if(evtRes && evtRes.sampling_id) {
+                if (evtRes && evtRes.sampling_id) {
                     const newId = evtRes.sampling_id;
                     
-                    // 2. Prepare & Insert Abiotic
+                    // 2. Prepare & Insert Abiotic (Only if data was provided)
                     if(data.temperature_sampling_depth_c || data.salinity || data.oxygen || data.turbidity_ntu) {
-                        await apiFetch('table/field/sampling_abiotic', { 
-                            method: 'POST', 
-                            body: { 
-                                sampling_id: newId, 
-                                temperature_sampling_depth_c: data.temperature_sampling_depth_c,
-                                salinity: data.salinity,
-                                oxygen: data.oxygen,
-                                turbidity_ntu: data.turbidity_ntu
-                            } 
-                        });
+                        const abioticData = { sampling_id: newId };
+                        if (data.temperature_sampling_depth_c) abioticData.temperature_sampling_depth_c = data.temperature_sampling_depth_c;
+                        if (data.salinity) abioticData.salinity = data.salinity;
+                        if (data.oxygen) abioticData.oxygen = data.oxygen;
+                        if (data.turbidity_ntu) abioticData.turbidity_ntu = data.turbidity_ntu;
+
+                        await apiFetch('table/field/sampling_abiotic', { method: 'POST', body: abioticData });
                     }
 
-                    // 3. Prepare & Insert Fishing
-                    if(data.gear_type) {
-                        await apiFetch('table/field/fishing', { 
-                            method: 'POST', 
-                            body: { 
-                                sampling_id: newId, 
-                                latitude: data.latitude,
-                                longitude: data.longitude,
-                                gear_type: data.gear_type,
-                                depth_m: data.depth_macc,
-                                operation_duration_min: data.operation_duration_min
-                            } 
-                        });
+                    // 3. Prepare & Insert Fishing Ops
+                    if(data.gear_type || data.depth_m || data.operation_duration_min) {
+                        const fishingData = { sampling_id: newId, latitude: data.latitude, longitude: data.longitude };
+                        if (data.gear_type) fishingData.gear_type = data.gear_type;
+                        if (data.depth_m) fishingData.depth_m = data.depth_m; // Typo fixed from depth_macc
+                        if (data.operation_duration_min) fishingData.operation_duration_min = data.operation_duration_min;
+                        
+                        await apiFetch('table/field/fishing', { method: 'POST', body: fishingData });
                     }
 
                     showToast("Event Logged Successfully!");
                     closeModal('newEventModal');
                     e.target.reset();
                     
-                    // Refresh data
+                    // Refresh data displays
                     loadStats();
                     loadGridData();
                     loadMapData();
                 } else {
-                    throw new Error("Failed to generate sampling_id");
+                    throw new Error("Failed to retrieve generated sampling_id from server.");
                 }
             } catch(err) {
-                showToast(err.message, "error"); // Shows exact DB error
+                showToast(err.message, "error");
             } finally {
                 btn.innerHTML = orig; btn.disabled = false;
             }
         }
 
         // --- Utils ---
-        window.openModal = (id) => {
-            document.getElementById(id).classList.remove('hidden');
-        };
-        window.closeModal = (id) => {
-            document.getElementById(id).classList.add('hidden');
-        };
+        window.openModal = (id) => { document.getElementById(id).classList.remove('hidden'); };
+        window.closeModal = (id) => { document.getElementById(id).classList.add('hidden'); };
 
         function showToast(msg, type='success') {
             const c = document.getElementById('toastContainer');

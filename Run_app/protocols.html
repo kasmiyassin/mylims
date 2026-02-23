@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protocols & ELN - TIFI LIMS</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Quill Rich Text Editor -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    
+    <!-- Day.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.11.10/dayjs.min.js"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f1f5f9; /* slate-100 */
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.25rem; }
+        
+        /* Glassmorphism */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }
+
+        /* Loading & Modals */
+        .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.7); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+        .loading-overlay.active { opacity: 1; pointer-events: all; }
+        .hidden { display: none !important; }
+        
+        .form-input {
+            width: 100%; padding: 0.625rem 0.875rem; background-color: #f8fafc;
+            border: 1px solid #e2e8f0; border-radius: 0.75rem; font-size: 0.875rem;
+            color: #334155; transition: all 0.2s;
+        }
+        .form-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); background-color: #ffffff; }
+
+        /* Custom Quill Styling to match Tailwind */
+        .ql-toolbar.ql-snow {
+            border-top-left-radius: 0.75rem;
+            border-top-right-radius: 0.75rem;
+            border-color: #e2e8f0;
+            background-color: #f8fafc;
+            padding: 12px;
+            font-family: 'Inter', sans-serif;
+            position: sticky; /* Sticky header for editor */
+            top: 0;
+            z-index: 10;
+        }
+        .ql-container.ql-snow {
+            border-bottom-left-radius: 0.75rem;
+            border-bottom-right-radius: 0.75rem;
+            border-color: #e2e8f0;
+            background-color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.875rem;
+            min-height: 400px;
+        }
+        .ql-editor { padding: 1.5rem; line-height: 1.6; color: #334155; }
+        
+        .protocol-list-item { transition: all 0.2s ease; border-left: 3px solid transparent; }
+        .protocol-list-item:hover { background-color: #f8fafc; }
+        .protocol-list-item.active { background-color: #eef2ff; border-left-color: #4f46e5; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-slate-800 selection:bg-indigo-100 selection:text-indigo-900">
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay active">
+        <div class="relative w-12 h-12">
+            <div class="absolute inset-0 border-4 border-slate-200 rounded-full"></div>
+            <div class="absolute inset-0 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-[120] flex flex-col gap-3"></div>
+
+    <!-- Sidebar -->
+    <div class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex-shrink-0">
+        <div class="p-5 border-b border-slate-100 flex items-center gap-3 shrink-0">
+            <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 p-2 rounded-xl shadow-inner">
+                <i data-lucide="flask-conical" class="w-5 h-5 text-white"></i> 
+            </div>
+            <span class="text-xl font-bold tracking-tight text-slate-800">TIFI LIMS</span>
+        </div>
+        
+        <div class="sidebar-nav-container p-4 space-y-1">
+            <a href="dashboard.html" class="flex items-center px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group mb-2">
+                <i data-lucide="layout-dashboard" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Dashboard
+            </a>
+            
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Core</div>
+            <a href="projects.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="folder-kanban" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Projects
+            </a>
+            <a href="experiments.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="flask-round" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Experiments
+            </a>
+            <a href="protocols.html" class="flex items-center px-3 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-medium shadow-sm border border-indigo-100/50">
+                <i data-lucide="book-text" class="w-4 h-4 mr-3 text-indigo-600"></i> Protocols (ELN)
+            </a>
+
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Field & Assets</div>
+            <a href="sampling.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="map-pin" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Sampling Events
+            </a>
+            <a href="planned_samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="calendar-check" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Planned Samples
+            </a>
+            <a href="samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="beaker" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Samples Registry
+            </a>
+            <a href="storage.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="archive" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Storage
+            </a>
+
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">System</div>
+            <a href="booking.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="calendar-clock" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Booking
+            </a>
+            <a href="tables.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="table-2" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Data Editor
+            </a>
+            <a href="reporting.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="bar-chart-2" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Reporting
+            </a>
+        </div>
+
+        <div class="mt-auto shrink-0 p-4 border-t border-slate-100 bg-slate-50/50">
+             <a href="user_profile.html" class="flex items-center mb-3 px-2 py-1.5 -mx-2 hover:bg-white rounded-xl transition-all group cursor-pointer border border-transparent hover:border-slate-200 hover:shadow-sm" title="View Profile & Settings">
+                <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-100 to-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-sm mr-3 shadow-sm border border-indigo-200/50 group-hover:scale-105 transition-transform">U</div>
+                <div class="overflow-hidden flex-1">
+                    <p class="font-semibold text-sm text-slate-800 truncate group-hover:text-indigo-600 transition-colors" id="userNameDisplay">User</p>
+                    <p class="text-[11px] font-medium text-emerald-600 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
+                    </p>
+                </div>
+                <i data-lucide="settings" class="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+            </a>
+            <button id="logout-button" class="w-full flex items-center justify-center p-2 rounded-xl text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 font-medium transition-colors border border-transparent hover:border-red-100">
+                <i data-lucide="log-out" class="w-4 h-4 mr-2"></i><span>Sign Out</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col h-full relative overflow-hidden">
+        
+        <!-- Header -->
+        <header class="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-5 flex justify-between items-center z-10 shrink-0">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Protocols & ELN</h1>
+                <p class="text-sm text-slate-500 mt-0.5">Electronic Lab Notebook for standardized procedures.</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="createNewProtocol()" class="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-5 py-2 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 border border-indigo-500">
+                    <i data-lucide="plus" class="w-4 h-4"></i> New Protocol
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Workspace Area -->
+        <div class="flex-1 overflow-hidden p-8 relative flex gap-6">
+            <!-- Background decorative blobs -->
+            <div class="absolute top-0 right-0 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none z-0"></div>
+
+            <!-- Left Pane: Protocol List -->
+            <div class="w-1/3 glass-card rounded-2xl flex flex-col relative z-10 border border-slate-200 overflow-hidden shadow-sm h-[calc(100vh-140px)] shrink-0">
+                <div class="p-4 border-b border-slate-100 bg-slate-50 shrink-0">
+                    <div class="relative">
+                        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
+                        <input type="text" id="protocolSearch" oninput="filterProtocols()" placeholder="Search protocols..." class="w-full pl-9 pr-3 py-2 text-sm bg-white border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm">
+                    </div>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto custom-scroll" id="protocolListContainer">
+                    <!-- Protocol items dynamically injected here -->
+                    <div class="py-10 text-center text-slate-400 text-sm">Loading protocols...</div>
+                </div>
+            </div>
+
+            <!-- Right Pane: Active Editor -->
+            <div class="w-2/3 glass-card rounded-2xl flex flex-col relative z-10 border border-slate-200 overflow-hidden shadow-sm h-[calc(100vh-140px)]">
+                
+                <div id="emptyEditorState" class="flex-1 flex flex-col items-center justify-center text-slate-400 bg-slate-50/50">
+                    <i data-lucide="book-open" class="w-16 h-16 mb-4 text-slate-300"></i>
+                    <h2 class="text-xl font-bold text-slate-600">No Protocol Selected</h2>
+                    <p class="text-sm mt-2">Select a protocol from the list or create a new one.</p>
+                </div>
+
+                <div id="activeEditorState" class="hidden flex-1 flex flex-col h-full bg-white relative">
+                    <!-- Editor Header / Metadata -->
+                    <div class="p-6 border-b border-slate-100 bg-slate-50/50 shrink-0 flex justify-between items-start gap-4">
+                        <div class="flex-1 space-y-3">
+                            <input type="text" id="editor-name" placeholder="Protocol Name (e.g., DNA Extraction v2)" class="w-full text-xl font-bold text-slate-800 bg-transparent border-none outline-none focus:ring-0 p-0 placeholder-slate-400" oninput="markUnsaved()">
+                            <div class="flex items-center gap-4 text-xs font-semibold text-slate-500">
+                                <div class="flex items-center gap-1.5">
+                                    <i data-lucide="hash" class="w-3.5 h-3.5"></i>
+                                    <input type="text" id="editor-id" placeholder="ID (Auto-gen)" class="bg-transparent border-none outline-none w-32 font-mono text-indigo-600 p-0" oninput="markUnsaved()">
+                                </div>
+                                <div class="flex items-center gap-1.5 border-l border-slate-300 pl-4">
+                                    <i data-lucide="git-branch" class="w-3.5 h-3.5"></i>
+                                    <input type="number" step="0.1" id="editor-version" placeholder="1.0" class="bg-transparent border-none outline-none w-12 p-0" oninput="markUnsaved()">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex flex-col items-end gap-2 shrink-0">
+                            <button id="btnSaveProtocol" onclick="saveActiveProtocol()" class="px-5 py-2 text-sm font-bold text-white bg-slate-400 rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-not-allowed" disabled>
+                                <i data-lucide="save" class="w-4 h-4"></i> Saved
+                            </button>
+                            <span id="saveStatus" class="text-[10px] text-slate-400 font-medium">Up to date</span>
+                        </div>
+                    </div>
+
+                    <!-- Quill Container -->
+                    <div class="flex-1 overflow-auto flex flex-col p-6 bg-white custom-scroll relative" id="scrollableEditorArea">
+                        <div id="quillEditor" class="flex-1"></div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // --- API Config & Setup ---
+        const getApiBase = () => window.location.pathname.includes('/mylims') ? '/mylims/api' : '/api';
+        const API_PREFIX = getApiBase();
+        
+        let dbCache = {
+            protocols: []
+        };
+        
+        // Use generic primary key resolution 
+        let currentTableName = 'protocols';
+        let currentSchemaName = 'lims';
+        let primaryKeyColumn = 'protocol_id';
+        
+        let quill;
+        let activeProtocolId = null;
+        let isNewProtocol = false;
+        let hasUnsavedChanges = false;
+        let currentUser = 'Unknown';
+
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            const token = sessionStorage.getItem('token');
+            if (!token) window.location.href = 'login.html';
+
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if(user) {
+                currentUser = user.person_id;
+                document.getElementById('userNameDisplay').innerText = currentUser;
+            }
+
+            document.getElementById('logout-button').addEventListener('click', () => {
+                sessionStorage.clear();
+                window.location.href = 'login.html';
+            });
+            
+            initQuill();
+            await loadProtocols();
+        });
+
+        // --- Core API Wrapper ---
+        async function apiFetch(endpoint, options = {}) {
+            const token = sessionStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}`, ...options.headers };
+            
+            if(options.body && typeof options.body === 'object') {
+                headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(options.body);
+            }
+            
+            try {
+                const res = await fetch(`${API_PREFIX}/${endpoint}`, { ...options, headers });
+                if(!res.ok) {
+                    const errObj = await res.json().catch(() => ({ detail: `HTTP Error ${res.status}` }));
+                    throw new Error(errObj.detail || errObj.error || `HTTP Error ${res.status}`);
+                }
+                if(res.status === 204) return true;
+                return await res.json();
+            } catch(e) {
+                console.error(`[apiFetch] Failed on ${endpoint}:`, e);
+                return { error: e.message }; 
+            }
+        }
+
+        // --- Quill Setup & Template Logic Restoration ---
+        function initQuill() {
+            // Configure Quill to use Inter font exactly as requested in original template
+            const Font = Quill.import('formats/font');
+            Font.whitelist = ['Inter', 'serif', 'monospace', 'system']; // Whitelist fonts
+            Quill.register(Font, true);
+
+            quill = new Quill('#quillEditor', {
+                theme: 'snow',
+                placeholder: 'Write down your detailed protocol steps, materials, and notes here...',
+                modules: {
+                    toolbar: [
+                        [{ 'header': [1, 2, 3, false] }],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{ 'color': [] }, { 'background': [] }],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        [{ 'script': 'sub'}, { 'script': 'super' }],
+                        ['blockquote', 'code-block'],
+                        ['link', 'image', 'video'],
+                        ['clean']
+                    ]
+                }
+            });
+
+            quill.root.style.fontFamily = 'Inter, sans-serif'; // Apply default font to editor content
+
+            // Track changes to enable save button
+            quill.on('text-change', function(delta, oldDelta, source) {
+                if (source === 'user') {
+                    markUnsaved();
+                }
+            });
+
+            // --- Logic to prevent page jump on focus (restored from original template) ---
+            const editorElement = quill.root;
+            const toolbarElement = document.querySelector('.ql-toolbar');
+            const scrollableArea = document.getElementById('scrollableEditorArea');
+            let preventScrollOnFocus = false;
+            let lastScrollTop = 0;
+
+            toolbarElement.addEventListener('mousedown', (e) => {
+                e.preventDefault(); // Prevent the editor from losing selection when clicking the toolbar
+                preventScrollOnFocus = true;
+                lastScrollTop = scrollableArea.scrollTop; // Store current scroll position within container
+            });
+
+            editorElement.addEventListener('focus', () => {
+                if (preventScrollOnFocus) {
+                    scrollableArea.scrollTo(0, lastScrollTop); // Restore scroll position
+                    preventScrollOnFocus = false;
+                }
+            });
+        }
+
+        // --- Data Loading ---
+        async function loadProtocols(preserveSelection = false) {
+            showLoading(true);
+            try {
+                // REMOVED: sort_by parameter to avoid the 400 Bad Request error if the column name differs
+                let data = await apiFetch('table/lims/protocols?limit=1000');
+                
+                // FALLBACK: If lims.protocols doesn't exist, try reference.protocol (common V5 schema)
+                if (data && data.error && data.error.includes("400")) {
+                    data = await apiFetch('table/reference/protocol?limit=1000');
+                    if (data && !data.error) {
+                        currentSchemaName = 'reference';
+                        currentTableName = 'protocol';
+                    }
+                }
+                
+                if (data && !data.error && Array.isArray(data)) {
+                    // Dynamically determine the primary key based on the first row 
+                    if (data.length > 0) {
+                        const keys = Object.keys(data[0]);
+                        if (keys.includes('protocol_id')) primaryKeyColumn = 'protocol_id';
+                        else if (keys.includes('id')) primaryKeyColumn = 'id';
+                    }
+
+                    dbCache.protocols = data;
+                    renderProtocolList();
+                    
+                    if(preserveSelection && activeProtocolId) {
+                        selectProtocol(activeProtocolId);
+                    }
+                } else {
+                    showToast("Failed to load protocols. Check database schema.", "error");
+                    document.getElementById('protocolListContainer').innerHTML = `<div class="p-6 text-center text-red-500">Failed to load data.</div>`;
+                }
+            } catch (err) {
+                console.error(err);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // --- UI Rendering ---
+        function renderProtocolList() {
+            const container = document.getElementById('protocolListContainer');
+            const search = document.getElementById('protocolSearch').value.toLowerCase();
+            
+            const filtered = dbCache.protocols.filter(p => {
+                const idVal = p[primaryKeyColumn] || '';
+                const nameVal = p.name || p.protocol_name || '';
+                return idVal.toLowerCase().includes(search) || nameVal.toLowerCase().includes(search);
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="p-10 text-center text-slate-400 font-medium text-sm">No protocols found.</div>`;
+                return;
+            }
+
+            container.innerHTML = filtered.map(p => {
+                const pId = p[primaryKeyColumn];
+                const pName = p.name || p.protocol_name || 'Unnamed Protocol';
+                
+                return `
+                <div class="protocol-list-item cursor-pointer p-4 border-b border-slate-100 ${pId === activeProtocolId ? 'active' : ''}" 
+                     onclick="selectProtocol('${pId}')"
+                     id="item-${pId}">
+                    <div class="flex justify-between items-start mb-1">
+                        <h4 class="font-bold text-slate-800 text-sm truncate pr-2 flex-1" title="${pName}">${pName}</h4>
+                        <span class="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded shrink-0">v${p.version || '1.0'}</span>
+                    </div>
+                    <div class="flex justify-between items-center text-[11px] text-slate-500 font-mono">
+                        <span class="truncate">${pId}</span>
+                        <span>${p.author || ''}</span>
+                    </div>
+                </div>
+            `}).join('');
+            
+            lucide.createIcons();
+        }
+
+        function filterProtocols() {
+            renderProtocolList();
+        }
+
+        // --- Interaction Logic ---
+        function selectProtocol(id) {
+            if (hasUnsavedChanges) {
+                if(!confirm("You have unsaved changes. Discard them?")) return;
+            }
+
+            const protocol = dbCache.protocols.find(p => p[primaryKeyColumn] === id || p[primaryKeyColumn] === parseInt(id));
+            if (!protocol) return;
+
+            activeProtocolId = protocol[primaryKeyColumn];
+            isNewProtocol = false;
+            
+            // UI States
+            document.getElementById('emptyEditorState').classList.add('hidden');
+            document.getElementById('activeEditorState').classList.remove('hidden');
+            
+            // Highlight list
+            document.querySelectorAll('.protocol-list-item').forEach(el => el.classList.remove('active'));
+            const listItem = document.getElementById(`item-${activeProtocolId}`);
+            if(listItem) listItem.classList.add('active');
+
+            // Populate Form
+            document.getElementById('editor-id').value = protocol[primaryKeyColumn];
+            document.getElementById('editor-id').readOnly = true; // Cannot edit ID of existing
+            document.getElementById('editor-id').classList.add('text-slate-400');
+            document.getElementById('editor-id').classList.remove('text-indigo-600');
+            
+            document.getElementById('editor-name').value = protocol.name || protocol.protocol_name || '';
+            document.getElementById('editor-version').value = protocol.version || '1.0';
+            
+            // Load Quill safely
+            quill.root.innerHTML = protocol.description || '';
+            
+            markSaved();
+        }
+
+        function createNewProtocol() {
+            if (hasUnsavedChanges) {
+                if(!confirm("You have unsaved changes. Discard them?")) return;
+            }
+
+            activeProtocolId = null;
+            isNewProtocol = true;
+
+            // UI States
+            document.getElementById('emptyEditorState').classList.add('hidden');
+            document.getElementById('activeEditorState').classList.remove('hidden');
+            document.querySelectorAll('.protocol-list-item').forEach(el => el.classList.remove('active'));
+
+            // Generate Temp ID
+            const dateStr = dayjs().format('YYYYMMDD');
+            const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+            
+            // Populate Form for New
+            document.getElementById('editor-id').value = `PRT-${dateStr}-${randomSuffix}`;
+            document.getElementById('editor-id').readOnly = false; 
+            document.getElementById('editor-id').classList.remove('text-slate-400');
+            document.getElementById('editor-id').classList.add('text-indigo-600');
+            
+            document.getElementById('editor-name').value = '';
+            document.getElementById('editor-version').value = '1.0';
+            quill.root.innerHTML = '<h2>Objective</h2><p><br></p><h2>Materials</h2><ul><li><br></li></ul><h2>Procedure</h2><ol><li><br></li></ol>';
+            
+            markUnsaved();
+        }
+
+        // --- Save & State Management ---
+        function markUnsaved() {
+            hasUnsavedChanges = true;
+            const btn = document.getElementById('btnSaveProtocol');
+            btn.disabled = false;
+            btn.classList.remove('bg-slate-400', 'cursor-not-allowed');
+            btn.classList.add('bg-gradient-to-r', 'from-emerald-500', 'to-emerald-600', 'hover:from-emerald-600', 'hover:to-emerald-700');
+            btn.innerHTML = `<i data-lucide="save" class="w-4 h-4"></i> Save Changes`;
+            document.getElementById('saveStatus').innerText = 'Unsaved changes';
+            document.getElementById('saveStatus').classList.add('text-amber-500');
+            lucide.createIcons();
+        }
+
+        function markSaved() {
+            hasUnsavedChanges = false;
+            const btn = document.getElementById('btnSaveProtocol');
+            btn.disabled = true;
+            btn.classList.add('bg-slate-400', 'cursor-not-allowed');
+            btn.classList.remove('bg-gradient-to-r', 'from-emerald-500', 'to-emerald-600', 'hover:from-emerald-600', 'hover:to-emerald-700');
+            btn.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i> Saved`;
+            document.getElementById('saveStatus').innerText = `Last saved: ${dayjs().format('HH:mm')}`;
+            document.getElementById('saveStatus').classList.remove('text-amber-500');
+            lucide.createIcons();
+        }
+
+        async function saveActiveProtocol() {
+            if (!hasUnsavedChanges) return;
+
+            const inputId = document.getElementById('editor-id').value.trim();
+            const name = document.getElementById('editor-name').value.trim();
+            const version = document.getElementById('editor-version').value.trim() || '1.0';
+            const description = quill.root.innerHTML; // Get rich HTML
+
+            if (!inputId || !name) {
+                showToast("Protocol ID and Name are required.", "error");
+                return;
+            }
+
+            const payload = {
+                name: name,
+                version: parseFloat(version) || 1.0,
+                description: description,
+                author: currentUser 
+            };
+            
+            // Dynamically assign the ID based on the detected primary key column
+            payload[primaryKeyColumn] = inputId;
+
+            const btn = document.getElementById('btnSaveProtocol');
+            btn.innerHTML = `<div class="w-4 h-4 border-2 border-white rounded-full border-t-transparent animate-spin"></div> Saving...`;
+            
+            try {
+                let res;
+                if (isNewProtocol) {
+                    res = await apiFetch(`table/${currentSchemaName}/${currentTableName}`, { method: 'POST', body: payload });
+                } else {
+                    res = await apiFetch(`table/${currentSchemaName}/${currentTableName}?${primaryKeyColumn}=${inputId}`, { method: 'PUT', body: payload });
+                }
+
+                if (res && !res.error) {
+                    showToast("Protocol saved successfully!");
+                    activeProtocolId = inputId;
+                    isNewProtocol = false;
+                    markSaved();
+                    
+                    // Reload list but keep selection
+                    await loadProtocols(true); 
+                } else {
+                    throw new Error(res.error || "Save failed");
+                }
+            } catch (err) {
+                showToast(err.message, "error");
+                markUnsaved(); // Restore save button
+            }
+        }
+
+        // --- Utils ---
+        function showLoading(show) { 
+            document.getElementById('loadingOverlay').classList.toggle('active', !!show); 
+        }
+
+        function showToast(msg, type='success') {
+            const c = document.getElementById('toastContainer');
+            const d = document.createElement('div');
+            const bgClass = type === 'error' ? 'bg-red-50' : 'bg-emerald-50';
+            const borderClass = type === 'error' ? 'border-red-200' : 'border-emerald-200';
+            const textClass = type === 'error' ? 'text-red-800' : 'text-emerald-800';
+            const iconColor = type === 'error' ? 'text-red-500' : 'text-emerald-500';
+            const icon = type === 'error' ? 'alert-octagon' : 'check-circle-2';
+            
+            d.className = `px-4 py-3 rounded-xl shadow-lg border ${borderClass} ${bgClass} ${textClass} text-sm font-semibold flex items-center gap-3 transform transition-all duration-300 translate-y-0`;
+            d.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 ${iconColor}"></i> ${msg}`;
+            c.appendChild(d); lucide.createIcons();
+            setTimeout(() => { d.classList.add('opacity-0', 'translate-y-4'); setTimeout(() => d.remove(), 300); }, 3500);
+        }
+    </script>
+</body>
+</html>

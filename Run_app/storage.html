@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Storage Management - TIFI LIMS</title>
+    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
@@ -14,7 +15,7 @@
     <style>
         body { 
             font-family: 'Inter', sans-serif; 
-            background-color: #f1f5f9; 
+            background-color: #f1f5f9; /* slate-100 */
         }
         
         /* Custom Scrollbar */
@@ -25,7 +26,7 @@
         
         .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.25rem; }
         
-        /* Premium Card / Modal Styles */
+        /* Glassmorphism */
         .glass-card {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
@@ -33,54 +34,70 @@
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
         }
 
-        .modal-overlay { 
-            background-color: rgba(15, 23, 42, 0.4); 
-            backdrop-filter: blur(4px); 
-            z-index: 100; 
-        }
+        /* Tabs */
+        .tab-btn { border-bottom: 2px solid transparent; transition: all 0.2s; color: #64748b; }
+        .tab-btn:hover { color: #334155; }
+        .tab-btn.active { border-bottom-color: #4f46e5; color: #4f46e5; font-weight: 600; background-color: #eef2ff; }
 
-        /* Loading Spinner Overlay */
-        .loading-overlay {
-            position: absolute; inset: 0; background: rgba(255,255,255,0.7);
-            backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center;
-            z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
-        }
+        /* Loading & Modals */
+        .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.7); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
         .loading-overlay.active { opacity: 1; pointer-events: all; }
+        .hidden { display: none !important; }
+        
+        .form-input {
+            width: 100%; padding: 0.625rem 0.875rem; background-color: #f8fafc;
+            border: 1px solid #e2e8f0; border-radius: 0.75rem; font-size: 0.875rem;
+            color: #334155; transition: all 0.2s;
+        }
+        .form-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); background-color: #ffffff; }
 
-        /* Tree Styles */
-        .tree-node-selected { background-color: #eff6ff; border-left: 3px solid #0ea5e9; color: #0369a1; }
-        .tree-node:hover:not(.tree-node-selected) { background-color: #f8fafc; }
+        /* Explorer Hover Effects */
+        .item-card { transition: all 0.2s ease-in-out; }
+        .item-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); border-color: #cbd5e1; }
 
-        /* Grid box */
-        .storage-cell {
-            aspect-ratio: 1;
+        /* Box View Grid */
+        .box-grid { display: grid; gap: 0.25rem; }
+        .box-cell {
+            transition: all 0.2s ease; cursor: pointer; width: 100%; aspect-ratio: 1/1; 
+            min-height: 4rem; display: flex; align-items: center; justify-content: center;
+            font-size: 0.6rem; padding: 0.25rem; border-radius: 0.5rem; position: relative;
             border: 1px solid #e2e8f0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.65rem;
-            font-weight: 600;
-            color: #94a3b8;
-            border-radius: 4px;
-            transition: all 0.2s;
-            cursor: pointer;
-            position: relative;
         }
-        .storage-cell:hover { border-color: #0ea5e9; background-color: #f0f9ff; z-index: 10; }
-        .storage-cell.occupied {
-            background-color: #dbeafe; /* sky-100 */
-            border-color: #7dd3fc; /* sky-300 */
-            color: #0284c7; /* sky-600 */
-            box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.2);
-        }
-        .storage-cell.occupied:hover {
-            background-color: #bae6fd; /* sky-200 */
-        }
+        .box-cell.occupied { color: white; border: none; }
+        .box-cell.empty { background-color: #f8fafc; color: #64748b; border: 2px dashed #cbd5e1; }
+        .box-cell:hover { transform: scale(1.05); z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        
+        .cell-position-label { position: absolute; top: 4px; left: 6px; font-size: 0.55rem; font-weight: bold; opacity: 0.8; }
+        .box-cell.empty .cell-position-label { color: #94a3b8; }
+        
+        .cell-main-info { text-align: center; font-size: 0.7rem; font-weight: 600; line-height: 1.1; word-break: break-all; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-top: 0.5rem;}
+
+        /* Drag & Drop Styles */
+        .draggable-item { cursor: grab; }
+        .draggable-item:active { cursor: grabbing; }
+        .draggable-item.dragging { opacity: 0.5; background-color: #eef2ff; border-color: #a5b4fc; }
+        .box-cell.drag-over { border: 2px solid #4f46e5; background-color: #e0e7ff; }
+
+        /* Dynamic Item Colors */
+        .type-reagent { background: linear-gradient(135deg, #0ea5e9, #4f46e5); }
+        .type-sample { background: linear-gradient(135deg, #10b981, #059669); }
+        .type-dna { background: linear-gradient(135deg, #a855f7, #7e22ce); }
+        .type-rna { background: linear-gradient(135deg, #ec4899, #be185d); }
+        .type-tissue { background: linear-gradient(135deg, #f59e0b, #b45309); }
+        .type-default { background: linear-gradient(135deg, #64748b, #475569); }
     </style>
 </head>
-<body class="flex h-screen overflow-hidden text-slate-800 selection:bg-sky-100 selection:text-sky-900">
+<body class="flex h-screen overflow-hidden text-slate-800 selection:bg-indigo-100 selection:text-indigo-900">
 
-    <!-- Global Toast Container -->
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay active">
+        <div class="relative w-12 h-12">
+            <div class="absolute inset-0 border-4 border-slate-200 rounded-full"></div>
+            <div class="absolute inset-0 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
     <div id="toastContainer" class="fixed bottom-6 right-6 z-[120] flex flex-col gap-3"></div>
 
     <!-- Sidebar -->
@@ -118,10 +135,12 @@
             <a href="samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
                 <i data-lucide="beaker" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Samples Registry
             </a>
-            <a href="storage.html" class="flex items-center px-3 py-2.5 rounded-xl bg-sky-50 text-sky-700 font-medium shadow-sm border border-sky-100/50">
-                <i data-lucide="archive" class="w-4 h-4 mr-3 text-sky-600"></i> Storage
+            <a href="storage.html" class="flex items-center px-3 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-medium shadow-sm border border-indigo-100/50">
+                <i data-lucide="archive" class="w-4 h-4 mr-3 text-indigo-600"></i> Storage
             </a>
-
+            <a href="storage_2.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="archiveRestore" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Storage
+            </a>
             <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">System</div>
             <a href="booking.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
                 <i data-lucide="calendar-clock" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Booking
@@ -143,6 +162,7 @@
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
                     </p>
                 </div>
+                <i data-lucide="settings" class="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"></i>
             </a>
             <button id="logout-button" class="w-full flex items-center justify-center p-2 rounded-xl text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 font-medium transition-colors border border-transparent hover:border-red-100">
                 <i data-lucide="log-out" class="w-4 h-4 mr-2"></i><span>Sign Out</span>
@@ -150,710 +170,880 @@
         </div>
     </div>
 
-    <!-- Main Content Area -->
-    <div class="flex-1 flex flex-col h-full relative overflow-hidden bg-slate-50/50">
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col h-full relative overflow-hidden">
         
         <!-- Header -->
-        <div class="bg-white px-8 py-6 z-10 shrink-0 border-b border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+        <header class="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-5 flex justify-between items-center z-10 shrink-0">
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Storage Management</h1>
-                <p class="text-sm text-slate-500 mt-1">Organize freezers, racks, and box layouts across all lab rooms.</p>
+                <p class="text-sm text-slate-500 mt-0.5">Manage facilities, units, boxes, and specimen locations.</p>
             </div>
-            
-            <div class="flex gap-2 flex-wrap">
-                <button onclick="showCreateRoomModal()" class="px-4 py-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium shadow-sm flex gap-2 items-center transition-all">
-                    <i data-lucide="building" class="w-4 h-4 text-slate-400"></i> Manage Rooms
-                </button>
-                <button onclick="showCreateStorageModal()" class="px-5 py-2 bg-gradient-to-r from-sky-600 to-sky-700 hover:from-sky-700 hover:to-sky-800 text-white rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 border border-sky-500">
+            <div class="flex gap-3">
+                <button onclick="openNewStorageModal()" class="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-5 py-2 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 border border-indigo-500">
                     <i data-lucide="plus" class="w-4 h-4"></i> New Storage Unit
                 </button>
             </div>
-        </div>
+        </header>
 
-        <div class="flex-1 overflow-hidden p-6 relative flex gap-6">
+        <!-- Scrollable Content Area -->
+        <div class="flex-1 overflow-y-auto p-8 relative">
             
-            <!-- Left Pane: Storage Explorer -->
-            <div class="w-1/3 min-w-[300px] glass-card rounded-2xl flex flex-col overflow-hidden border border-slate-200 shadow-sm bg-white">
-                <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
-                    <span class="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                        <i data-lucide="map" class="w-4 h-4 text-sky-500"></i> Location Explorer
-                    </span>
-                    <button onclick="loadStorageData()" class="p-1 text-slate-400 hover:text-sky-600 transition-colors" title="Refresh">
-                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            <!-- Background decorative blobs -->
+            <div class="absolute top-0 right-0 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none z-0"></div>
+
+            <!-- Main Container -->
+            <div class="glass-card rounded-2xl overflow-hidden relative z-10 flex flex-col h-[calc(100vh-140px)]">
+                
+                <!-- Tab Headers -->
+                <div class="bg-slate-50/50 border-b border-slate-200 px-6 pt-4 flex gap-4 shrink-0">
+                    <button onclick="switchTab('explorer')" id="tab-explorer" class="tab-btn active pb-3 px-2 text-sm font-semibold flex items-center gap-2 rounded-t-lg"><i data-lucide="map" class="w-4 h-4"></i> Storage Explorer</button>
+                    <button onclick="switchTab('box-view')" id="tab-box-view" class="tab-btn pb-3 px-2 text-sm font-semibold flex items-center gap-2 rounded-t-lg"><i data-lucide="grid-3x3" class="w-4 h-4"></i> Interactive Box View</button>
+                    <button onclick="switchTab('drag-drop')" id="tab-drag-drop" class="tab-btn pb-3 px-2 text-sm font-semibold flex items-center gap-2 rounded-t-lg"><i data-lucide="move" class="w-4 h-4"></i> Assign Items (Drag & Drop)</button>
+                    <button onclick="switchTab('inventory')" id="tab-inventory" class="tab-btn pb-3 px-2 text-sm font-semibold flex items-center gap-2 rounded-t-lg"><i data-lucide="list" class="w-4 h-4"></i> List View</button>
+                </div>
+
+                <!-- Content Views -->
+                <div class="p-6 bg-white flex-1 overflow-y-auto" id="main-tab-content">
+                    <!-- Dynamic Content Injected Here -->
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- === MODALS === -->
+
+    <!-- New Storage Modal -->
+    <div id="newStorageModal" class="modal hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+        <div class="modal-content bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2"><i data-lucide="box" class="w-5 h-5 text-indigo-500"></i> Register Storage Unit</h3>
+                <button onclick="closeModal('newStorageModal')" class="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            
+            <form id="newStorageForm" class="p-6 space-y-5 overflow-y-auto" onsubmit="handleNewStorage(event)">
+                
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Storage Level / Type</label>
+                    <select id="formStorageType" name="type" class="form-input bg-white cursor-pointer" required onchange="toggleStorageTypeFields()">
+                        <option value="Freezer">Root Unit (Freezer / Fridge / Room Level)</option>
+                        <option value="Box">Sub-Unit (Shelf / Rack / Drawer / Box)</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-1 gap-5">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Unique Storage ID</label>
+                        <input type="text" name="storage_id" required placeholder="e.g. FZ-01 or BX-FZ01-01" class="form-input font-mono text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Display Name</label>
+                        <input type="text" name="name" required placeholder="e.g. -80C Freezer A or Rack 12" class="form-input">
+                    </div>
+                </div>
+
+                <!-- Only show if Main Unit -->
+                <div id="unitFields" class="space-y-5">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Room Location</label>
+                            <select id="formRoomId" name="room_id" class="form-input bg-white cursor-pointer">
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Temperature (°C)</label>
+                            <input type="number" step="0.1" name="temperature_c" class="form-input" placeholder="-80">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Only show if Sub-Unit -->
+                <div id="boxFields" class="space-y-5 hidden">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Parent Storage Unit</label>
+                        <select id="formParentId" name="parent_storage_id" class="form-input bg-white cursor-pointer">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Grid Columns (X) [Optional]</label>
+                            <input type="number" name="box_size_x" value="10" min="1" class="form-input">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Grid Rows (Y) [Optional]</label>
+                            <input type="number" name="box_size_y" value="10" min="1" class="form-input">
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Notes</label>
+                    <textarea name="notes" rows="2" class="form-input resize-none"></textarea>
+                </div>
+
+                <div class="pt-2 flex justify-end gap-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('newStorageModal')" class="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
+                    <button type="submit" id="btnStorageSubmit" class="px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 rounded-xl shadow-md transition-all flex items-center gap-2">
+                        <i data-lucide="check" class="w-4 h-4"></i> Create
                     </button>
                 </div>
-                <div class="p-3 border-b border-slate-100 shrink-0 relative">
-                    <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-6 bottom-5"></i>
-                    <input type="text" id="explorer-search" placeholder="Search rooms or storage units..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:bg-white focus:ring-2 focus:ring-sky-500 outline-none transition">
-                </div>
-                
-                <div class="flex-1 overflow-y-auto p-3" id="storage-tree-container">
-                    <!-- Tree injected via JS -->
-                </div>
-            </div>
-
-            <!-- Right Pane: Box Visualizer & Details -->
-            <div class="flex-1 glass-card rounded-2xl flex flex-col overflow-hidden border border-slate-200 shadow-sm bg-white relative">
-                <div id="viz-loading" class="loading-overlay">
-                    <div class="flex flex-col items-center gap-2 text-sky-600">
-                        <i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i>
-                        <span class="text-xs font-semibold tracking-wider uppercase">Loading Contents...</span>
-                    </div>
-                </div>
-
-                <div id="storage-details-container" class="flex-1 flex flex-col h-full bg-slate-50/30 overflow-hidden">
-                    <!-- Placeholder when nothing selected -->
-                    <div class="flex-1 p-8 flex flex-col items-center justify-center text-center">
-                        <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100 shadow-sm">
-                            <i data-lucide="box" class="w-8 h-8 text-sky-300"></i>
-                        </div>
-                        <h3 class="text-lg font-bold text-slate-800 mb-1">Storage Visualizer</h3>
-                        <p class="text-sm text-slate-500 max-w-xs">Select a storage box from the explorer on the left to view its capacity and contents.</p>
-                    </div>
-                </div>
-            </div>
-
+            </form>
         </div>
+    </div>
 
-        <div id="modal-container"></div>
+    <!-- Item Details Modal -->
+    <div id="itemDetailsModal" class="modal hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+        <div class="modal-content bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2"><i data-lucide="microscope" class="w-5 h-5 text-indigo-500"></i> Item Details</h3>
+                <button onclick="closeModal('itemDetailsModal')" class="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 space-y-4" id="itemDetailsContent">
+                <!-- Dynamically populated -->
+            </div>
+            <div class="p-5 border-t border-slate-100 bg-slate-50 shrink-0 flex justify-between items-center">
+                <button type="button" id="btnUnassignItem" class="px-4 py-2 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors border border-red-200 shadow-sm">Unassign Location</button>
+                <button type="button" onclick="closeModal('itemDetailsModal')" class="px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 bg-white border border-slate-300 rounded-xl transition-colors shadow-sm">Close</button>
+            </div>
+        </div>
     </div>
 
     <script>
-        // --- Configuration & Endpoints ---
+        // --- API Config & Setup ---
         const getApiBase = () => window.location.pathname.includes('/mylims') ? '/mylims/api' : '/api';
-        const API_BASE_URL = getApiBase(); 
+        const API_PREFIX = getApiBase();
         
-        let roomsData = [];
-        let storageData = [];
-        let roomsSchema = [];
-        let storageSchema = [];
-        let currentSelectedStorage = null;
-        let boxContentsCache = [];
+        let dbCache = {
+            locations: [],   // core.locations
+            storage: [],     // lims.storage
+            items: []        // combined bio_assets.samples_root & lims.reagents
+        };
+        
+        let currentTab = 'explorer';
+        let draggedItem = null;
 
-        // Tables to check for contents (Dynamically checked)
-        const CONTENT_TABLES = [
-            { schema: 'bio_assets', table: 'samples_root', idCol: 'sample_id', label: 'Root Sample' },
-            { schema: 'bio_assets', table: 'samples_sub', idCol: 'sub_sample_id', label: 'Sub-Sample' },
-            { schema: 'bio_assets', table: 'tissue', idCol: 'tissue_id', label: 'Tissue' },
-            { schema: 'bio_assets', table: 'otolith', idCol: 'otolith_id', label: 'Otolith' },
-            { schema: 'bio_assets', table: 'eye', idCol: 'eye_id', label: 'Eye' },
-            { schema: 'bio_assets', table: 'dna', idCol: 'dna_id', label: 'DNA' },
-            { schema: 'bio_assets', table: 'rna', idCol: 'rna_id', label: 'RNA' },
-            { schema: 'moleculargenetics', table: 'qubit', idCol: 'qubit_id', label: 'Qubit' },
-            { schema: 'moleculargenetics', table: 'library', idCol: 'library_id', label: 'Library' }
-        ];
+        // V5.1 Specific Data Mappings
+        const getUnitColor = (type) => {
+            const t = (type || '').toLowerCase();
+            if(t.includes('reagent')) return 'type-reagent';
+            if(t.includes('dna')) return 'type-dna';
+            if(t.includes('rna')) return 'type-rna';
+            if(t.includes('tissue')) return 'type-tissue';
+            if(t.includes('fish') || t.includes('sample')) return 'type-sample';
+            return 'type-default';
+        };
 
-        // --- Auth & Init ---
-        document.addEventListener('DOMContentLoaded', () => {
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
             const token = sessionStorage.getItem('token');
-            if (!token) { window.location.href = 'login.html'; return; }
+            if (!token) window.location.href = 'login.html';
 
             const user = JSON.parse(sessionStorage.getItem('user'));
-            if (user && user.person_id) document.getElementById('userNameDisplay').innerText = user.person_id;
-            
-            document.getElementById('logout-button').addEventListener('click', () => { 
-                sessionStorage.clear(); 
-                window.location.href = 'login.html'; 
+            if(user) document.getElementById('userNameDisplay').innerText = user.person_id;
+
+            document.getElementById('logout-button').addEventListener('click', () => {
+                sessionStorage.clear();
+                window.location.href = 'login.html';
             });
             
-            document.getElementById('explorer-search').addEventListener('input', renderStorageTree);
-            
-            loadStorageData();
+            await refreshAllData();
         });
 
-        // --- Core Utils & API ---
+        // --- Data Fetching ---
         async function apiFetch(endpoint, options = {}) {
             const token = sessionStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
-
-            const isFormData = options.body instanceof FormData;
-            if (!isFormData && options.body && typeof options.body === 'object') {
+            const headers = { 'Authorization': `Bearer ${token}`, ...options.headers };
+            
+            if(options.body && typeof options.body === 'object') {
                 headers['Content-Type'] = 'application/json';
                 options.body = JSON.stringify(options.body);
             }
-            options.headers = { ...headers, ...options.headers };
-
+            
             try {
-                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
-                if (!response.ok) { 
-                    const errText = await response.text();
-                    try { const errJson = JSON.parse(errText); throw new Error(errJson.detail || errJson.error || `Error ${response.status}`); } 
-                    catch (e) { throw new Error(`Error ${response.status}: ${errText}`); }
+                const res = await fetch(`${API_PREFIX}/${endpoint}`, { ...options, headers });
+                if(!res.ok) {
+                    const errObj = await res.json().catch(() => ({ detail: `HTTP Error ${res.status}` }));
+                    throw new Error(errObj.detail || errObj.error || `HTTP Error ${res.status}`);
                 }
-                if (response.status === 204 || response.headers.get('content-length') === '0') return { success: true };
-                return response.json();
-            } catch (error) { 
-                console.error(`API Error on ${endpoint}:`, error); 
-                return { error: error.message }; 
+                if(res.status === 204) return true;
+                return await res.json();
+            } catch(e) {
+                console.error(`[apiFetch] Failed on ${endpoint}:`, e);
+                return { error: e.message }; 
             }
         }
 
-        function showToast(msg, type = 'info') {
-            const c = document.getElementById('toastContainer');
-            const d = document.createElement('div');
-            
-            const bgClass = type === 'error' ? 'bg-red-50' : (type === 'success' ? 'bg-emerald-50' : 'bg-blue-50');
-            const borderClass = type === 'error' ? 'border-red-200' : (type === 'success' ? 'border-emerald-200' : 'border-blue-200');
-            const textClass = type === 'error' ? 'text-red-800' : (type === 'success' ? 'text-emerald-800' : 'text-blue-800');
-            const iconColor = type === 'error' ? 'text-red-500' : (type === 'success' ? 'text-emerald-500' : 'text-blue-500');
-            const iconType = type === 'error' ? 'alert-octagon' : (type === 'success' ? 'check-circle-2' : 'info');
-            
-            d.className = `px-4 py-3 rounded-xl shadow-lg border ${borderClass} ${bgClass} ${textClass} text-sm font-semibold flex items-center gap-3 transform transition-all duration-300 translate-y-0`;
-            d.innerHTML = `<i data-lucide="${iconType}" class="w-5 h-5 ${iconColor}"></i> ${msg}`;
-            c.appendChild(d);
-            lucide.createIcons();
-            setTimeout(() => { 
-                d.classList.add('opacity-0', 'translate-y-4'); 
-                setTimeout(() => d.remove(), 300); 
-            }, 3500);
-        }
+        async function refreshAllData() {
+            showLoading(true);
+            try {
+                const [locs, stor, samples, reagents] = await Promise.all([
+                    apiFetch('table/core/locations?limit=500'),
+                    apiFetch('table/lims/storage?limit=1000'),
+                    apiFetch('table/bio_assets/samples_root?limit=5000'),
+                    apiFetch('table/lims/reagents?limit=2000')
+                ]);
 
-        function showLoading(show) {
-            const el = document.getElementById('table-loading');
-            if(el) el.classList.toggle('active', show);
-        }
-
-        function formatColumnName(columnName) {
-            return columnName.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
-        }
-
-        // --- Data Loading & Schema Discovery ---
-        async function loadStorageData() {
-            document.getElementById('storage-tree-container').innerHTML = `<div class="flex justify-center py-8"><i data-lucide="loader-2" class="w-6 h-6 animate-spin text-sky-500"></i></div>`;
-            lucide.createIcons();
-            
-            const [roomsRes, storageRes, rSchema, sSchema] = await Promise.all([
-                apiFetch('table/lims/storage_room'),
-                apiFetch('table/lims/storage'),
-                apiFetch('table/lims/storage_room/schema'),
-                apiFetch('table/lims/storage/schema')
-            ]);
-            
-            if (!roomsRes.error) roomsData = roomsRes;
-            if (!storageRes.error) storageData = storageRes;
-            if (!rSchema.error) roomsSchema = rSchema;
-            if (!sSchema.error) storageSchema = sSchema;
-
-            renderStorageTree();
-            
-            if (currentSelectedStorage) {
-                // Determine primary key name for storage table (fallback to storage_id)
-                const pkCol = storageSchema.find(c => c.column_name.includes('id'))?.column_name || 'storage_id';
-                const stillExists = storageData.find(s => s[pkCol] === currentSelectedStorage[pkCol]);
-                if (stillExists) selectStorage(stillExists);
-                else clearSelection();
-            }
-        }
-
-        // --- Explorer Tree ---
-        function renderStorageTree() {
-            const container = document.getElementById('storage-tree-container');
-            const searchTerm = document.getElementById('explorer-search').value.toLowerCase();
-            
-            const sPK = storageSchema.find(c => c.column_name.includes('id'))?.column_name || 'storage_id';
-            const rPK = roomsSchema.find(c => c.column_name.includes('id'))?.column_name || 'room_id';
-            
-            // Auto-detect which columns make good labels for the tree items (e.g. freezer, box, shelf)
-            const labelCols = storageSchema
-                .filter(c => c.data_type === 'character varying' && !c.column_name.includes('id') && !c.column_name.includes('notes'))
-                .slice(0, 3).map(c => c.column_name);
-
-            // Group storage by room dynamically
-            const grouped = {};
-            roomsData.forEach(r => grouped[r[rPK]] = { room: r, items: [] });
-            
-            storageData.forEach(s => {
-                const sRoomId = s.room_id || s[rPK] || 'UNKNOWN';
-                if (!grouped[sRoomId]) grouped[sRoomId] = { room: { [rPK]: sRoomId }, items: [] };
+                dbCache.locations = (locs && !locs.error) ? locs : [];
+                dbCache.storage = (stor && !stor.error) ? stor : [];
                 
-                // Filter logic over all values
-                const matchStr = Object.values(s).join(' ').toLowerCase();
-                const roomMatchStr = Object.values(grouped[sRoomId].room).join(' ').toLowerCase();
-                if (!searchTerm || matchStr.includes(searchTerm) || roomMatchStr.includes(searchTerm)) {
-                    grouped[sRoomId].items.push(s);
+                // Combine storable items
+                let combined = [];
+                if(samples && !samples.error) {
+                    combined = combined.concat(samples.map(s => ({
+                        id: s.sample_id,
+                        type: s.sample_type_id || 'Sample',
+                        schema: 'bio_assets',
+                        table: 'samples_root',
+                        pk_col: 'sample_id',
+                        storage_id: s.storage_id,
+                        storage_position: s.storage_position,
+                        name: s.external_id || s.sample_id,
+                        full_data: s
+                    })));
                 }
+                if(reagents && !reagents.error) {
+                    combined = combined.concat(reagents.map(r => ({
+                        id: r.reagent_id,
+                        type: 'Reagent',
+                        schema: 'lims',
+                        table: 'reagents',
+                        pk_col: 'reagent_id',
+                        storage_id: r.storage_id,
+                        storage_position: r.storage_position, 
+                        name: r.name,
+                        full_data: r
+                    })));
+                }
+                dbCache.items = combined;
+
+                populateModals();
+                renderCurrentTab();
+            } catch(e) {
+                showToast("Data sync failed. See console.", "error");
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // --- Dynamic Hierarchy Helper ---
+        // Recursively traces a storage ID up to its root room
+        function getStoragePath(storageId) {
+            const path = [];
+            let curr = dbCache.storage.find(s => s.storage_id === storageId);
+            const seen = new Set(); // Prevent infinite loops just in case
+            
+            while (curr && !seen.has(curr.storage_id)) {
+                seen.add(curr.storage_id);
+                path.unshift(curr);
+                
+                if (curr.parent_storage_id) {
+                    curr = dbCache.storage.find(s => s.storage_id === curr.parent_storage_id);
+                } else {
+                    // Root storage, attach the room as the highest level
+                    const room = dbCache.locations.find(r => r.build_id === curr.room_id);
+                    if (room) {
+                        path.unshift({ isRoom: true, id: room.build_id, name: room.name || room.build_id });
+                    }
+                    break;
+                }
+            }
+            return path;
+        }
+
+        // --- UI Navigation ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.classList.remove('active', 'border-indigo-600', 'text-indigo-700', 'bg-indigo-50/50');
+                b.classList.add('border-transparent');
             });
+            const activeTab = document.getElementById(`tab-${tabId}`);
+            activeTab.classList.add('active', 'border-indigo-600', 'text-indigo-700', 'bg-indigo-50/50');
+            activeTab.classList.remove('border-transparent');
+            
+            currentTab = tabId;
+            renderCurrentTab();
+        }
 
+        function renderCurrentTab() {
+            const container = document.getElementById('main-tab-content');
+            container.innerHTML = ''; // Clear
+
+            if(currentTab === 'explorer') renderExplorer(container, null, 'rooms');
+            else if(currentTab === 'box-view') renderBoxView(container);
+            else if(currentTab === 'drag-drop') renderDragDrop(container);
+            else if(currentTab === 'inventory') renderInventory(container);
+            
+            lucide.createIcons();
+        }
+
+        // --- Component: Explorer (Hierarchical) ---
+        function renderExplorer(container, currentId = null, viewType = 'rooms') {
             let html = '';
-            for (const [roomId, group] of Object.entries(grouped)) {
-                if (group.items.length === 0 && searchTerm) continue; 
-                
-                const roomTitle = group.room.room || group.room.name || roomId;
-                
-                html += `
-                    <div class="mb-3">
-                        <div class="flex items-center gap-2 px-2 py-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-                            <i data-lucide="door-open" class="w-4 h-4"></i> ${roomTitle}
-                        </div>
-                        <div class="space-y-1 pl-2 border-l border-slate-100 ml-4">
-                `;
-                
-                group.items.forEach(s => {
-                    const isSelected = currentSelectedStorage && currentSelectedStorage[sPK] === s[sPK];
-                    const subtitle = labelCols.map(c => s[c]).filter(Boolean).join(' → ') || 'No details';
+            
+            // Generate Dynamic Breadcrumbs
+            const breadcrumbs = [];
+            breadcrumbs.push(`<button onclick="renderExplorer(document.getElementById('main-tab-content'), null, 'rooms')" class="hover:text-indigo-600 font-semibold transition-colors flex items-center gap-1"><i data-lucide="building" class="w-4 h-4"></i> Facilities</button>`);
+            
+            if (viewType === 'room_contents') {
+                const room = dbCache.locations.find(r => r.build_id === currentId);
+                if (room) {
+                    breadcrumbs.push(`<i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i><span class="text-slate-800 font-bold">${room.name || room.build_id}</span>`);
+                }
+            } else if (viewType === 'storage_contents') {
+                const path = getStoragePath(currentId);
+                path.forEach((node, index) => {
+                    breadcrumbs.push(`<i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>`);
+                    const isLast = index === path.length - 1;
                     
-                    // Display temp badge if a temperature column exists
-                    const tempCol = storageSchema.find(c => c.column_name.includes('temp'))?.column_name;
-                    const badge = (tempCol && s[tempCol]) ? `<span class="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-mono">${s[tempCol]}</span>` : '';
-                    
+                    if (isLast) {
+                        breadcrumbs.push(`<span class="text-slate-800 font-bold">${node.name || node.id || node.storage_id}</span>`);
+                    } else {
+                        if (node.isRoom) {
+                            breadcrumbs.push(`<button onclick="renderExplorer(document.getElementById('main-tab-content'), '${node.id}', 'room_contents')" class="hover:text-indigo-600 font-semibold transition-colors">${node.name}</button>`);
+                        } else {
+                            breadcrumbs.push(`<button onclick="renderExplorer(document.getElementById('main-tab-content'), '${node.storage_id}', 'storage_contents')" class="hover:text-indigo-600 font-semibold transition-colors">${node.name || node.storage_id}</button>`);
+                        }
+                    }
+                });
+            }
+
+            html += `<div class="flex items-center gap-2 text-sm text-slate-500 mb-6 bg-slate-50 p-3 rounded-xl border border-slate-100 flex-wrap">${breadcrumbs.join('')}</div>`;
+
+            // Content Grid
+            html += `<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">`;
+
+            if (viewType === 'rooms') {
+                dbCache.locations.forEach(r => {
+                    const unitCount = dbCache.storage.filter(s => s.room_id === r.build_id && !s.parent_storage_id).length;
                     html += `
-                        <div onclick='selectStorageById("${s[sPK]}")' 
-                             class="tree-node flex items-center px-3 py-2 rounded-lg cursor-pointer transition-colors border-l-2 border-transparent ${isSelected ? 'tree-node-selected' : 'text-slate-600'}">
-                            <div class="flex-1 overflow-hidden">
-                                <div class="font-semibold text-sm truncate leading-tight">${s[sPK]}</div>
-                                <div class="text-[11px] text-slate-400 truncate mt-0.5 flex gap-1 items-center">
-                                    <i data-lucide="archive" class="w-3 h-3"></i> ${subtitle}
-                                </div>
+                        <div onclick="renderExplorer(document.getElementById('main-tab-content'), '${r.build_id}', 'room_contents')" class="item-card bg-white border border-slate-200 rounded-xl p-6 flex flex-col items-center text-center cursor-pointer group">
+                            <div class="w-14 h-14 rounded-full bg-indigo-50 flex items-center justify-center mb-3 group-hover:bg-indigo-600 transition-colors">
+                                <i data-lucide="building-2" class="w-6 h-6 text-indigo-500 group-hover:text-white transition-colors"></i>
                             </div>
-                            ${badge}
+                            <h3 class="font-bold text-slate-800">${r.name || r.build_id}</h3>
+                            <p class="text-xs text-slate-500 mt-1">${unitCount} Root Units</p>
                         </div>
                     `;
                 });
-                
-                if (group.items.length === 0) {
-                     html += `<div class="px-3 py-2 text-xs text-slate-400 italic">No storage matched</div>`;
-                }
-
-                html += `</div></div>`;
-            }
-
-            container.innerHTML = html || `<div class="text-center py-8 text-sm text-slate-400">No results found</div>`;
-            lucide.createIcons();
-        }
-
-        window.selectStorageById = function(id) {
-            const sPK = storageSchema.find(c => c.column_name.includes('id'))?.column_name || 'storage_id';
-            const storage = storageData.find(s => s[sPK] === id);
-            if (storage) selectStorage(storage);
-        };
-
-        function clearSelection() {
-            currentSelectedStorage = null;
-            document.getElementById('storage-details-container').innerHTML = `
-                <div class="flex-1 p-8 flex flex-col items-center justify-center text-center">
-                    <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100 shadow-sm">
-                        <i data-lucide="box" class="w-8 h-8 text-sky-300"></i>
-                    </div>
-                    <h3 class="text-lg font-bold text-slate-800 mb-1">Storage Visualizer</h3>
-                    <p class="text-sm text-slate-500 max-w-xs">Select a storage box from the explorer on the left to view its capacity and contents.</p>
-                </div>`;
-            lucide.createIcons();
-            renderStorageTree();
-        }
-
-        // --- Dynamic Visualization Logic ---
-        async function selectStorage(storage) {
-            currentSelectedStorage = storage;
-            renderStorageTree(); 
-
-            const container = document.getElementById('storage-details-container');
-            const sPK = storageSchema.find(c => c.column_name.includes('id'))?.column_name || 'storage_id';
-            const rPK = roomsSchema.find(c => c.column_name.includes('id'))?.column_name || 'room_id';
-            const room = roomsData.find(r => r[rPK] === storage[rPK]) || {};
-            
-            // Smartly detect Grid X and Y columns
-            const sizeXCol = storageSchema.find(c => c.column_name.match(/_x$|col|dim_x|width/i))?.column_name;
-            const sizeYCol = storageSchema.find(c => c.column_name.match(/_y$|row|dim_y|height/i))?.column_name;
-            
-            const sizeX = sizeXCol ? parseInt(storage[sizeXCol]) || 0 : 0;
-            const sizeY = sizeYCol ? parseInt(storage[sizeYCol]) || 0 : 0;
-            const hasGrid = sizeX > 0 && sizeY > 0;
-
-            // Generate dynamically typed properties pills
-            const propsHtml = storageSchema.map(col => {
-                if (['created_at', 'updated_at', 'notes', sPK, rPK].includes(col.column_name)) return '';
-                const val = storage[col.column_name];
-                if (val === null || val === undefined || val === '') return '';
-                return `<div class="bg-slate-50 text-slate-800 px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-100">${formatColumnName(col.column_name)}: ${val}</div>`;
-            }).join('');
-
-            container.innerHTML = `
-                <div class="p-6 border-b border-slate-200 bg-white shrink-0">
-                    <div class="flex justify-between items-start mb-4">
-                        <div>
-                            <div class="flex items-center gap-2 mb-1">
-                                <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight font-mono">${storage[sPK]}</h2>
-                                <button onclick="showCreateStorageModal('${storage[sPK]}')" class="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors" title="Edit">
-                                    <i data-lucide="edit" class="w-4 h-4"></i>
-                                </button>
-                                <button onclick="deleteStorage('${storage[sPK]}')" class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
-                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                </button>
-                            </div>
-                            <div class="flex items-center gap-3 text-sm text-slate-500">
-                                <span class="flex items-center gap-1"><i data-lucide="building" class="w-3.5 h-3.5"></i> ${room.room || room.name || storage[rPK] || 'No Room'}</span>
-                            </div>
-                        </div>
-                        <div class="bg-slate-50 px-4 py-2 rounded-xl border border-slate-100 text-right">
-                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Capacity</p>
-                            <p class="text-sm font-semibold text-slate-700">${hasGrid ? `${sizeX} × ${sizeY} (${sizeX*sizeY} slots)` : 'No Grid Defined'}</p>
-                        </div>
-                    </div>
-                    
-                    <div class="flex flex-wrap gap-2">
-                        ${propsHtml}
-                    </div>
-                    ${storage.notes ? `<p class="mt-4 text-sm text-slate-600 italic bg-slate-50 p-3 rounded-lg border border-slate-100">${storage.notes}</p>` : ''}
-                </div>
-                
-                <div class="flex-1 overflow-auto p-6 bg-slate-50/50 flex flex-col items-center justify-start relative" id="box-grid-area">
-                    <!-- Grid injected here -->
-                </div>
-            `;
-            lucide.createIcons();
-
-            if (hasGrid) {
-                const loader = document.getElementById('viz-loading');
-                loader.classList.add('active');
-                
-                boxContentsCache = [];
-                
-                // Fire checks dynamically across all schemas without crashing if tables lack the storage_id
-                const promises = CONTENT_TABLES.map(async (def) => {
-                    const res = await apiFetch(`table/${def.schema}/${def.table}?storage_id=${storage[sPK]}`);
-                    if (res && !res.error && Array.isArray(res)) {
-                        res.forEach(item => {
-                            if (item.storage_position) {
-                                boxContentsCache.push({
-                                    id: item[def.idCol],
-                                    type: def.label,
-                                    position: item.storage_position
-                                });
-                            }
-                        });
-                    }
-                });
-
-                await Promise.all(promises);
-                loader.classList.remove('active');
-                
-                drawGrid(sizeX, sizeY);
-            } else {
-                 document.getElementById('box-grid-area').innerHTML = `
-                    <div class="m-auto text-center">
-                        <i data-lucide="grid-3x3" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
-                        <p class="text-slate-500 font-medium">No grid dimensions detected.</p>
-                        <p class="text-xs text-slate-400 mt-1">Make sure X/Y or Col/Row size fields exist in the DB schema.</p>
-                    </div>
-                 `;
-                 lucide.createIcons();
-            }
-        }
-
-        function parsePositionToIndex(posStr, sizeX, sizeY) {
-            if (!posStr) return null;
-            posStr = String(posStr).trim().toUpperCase();
-            
-            // Numeric case (e.g. "15")
-            if (/^\d+$/.test(posStr)) {
-                const num = parseInt(posStr, 10);
-                if (num >= 1 && num <= sizeX * sizeY) return num - 1; 
-                return null;
-            }
-
-            // Alphanumeric case (e.g. "B3") - Assuming rows are Letters, cols are Numbers
-            const match = posStr.match(/^([A-Z]+)(\d+)$/);
-            if (match) {
-                const letterPart = match[1];
-                const numPart = parseInt(match[2], 10);
-                
-                let rowIdx = 0;
-                for (let i = 0; i < letterPart.length; i++) {
-                    rowIdx = rowIdx * 26 + (letterPart.charCodeAt(i) - 64);
-                }
-                rowIdx -= 1; 
-                
-                const colIdx = numPart - 1;
-
-                if (rowIdx >= 0 && rowIdx < sizeY && colIdx >= 0 && colIdx < sizeX) {
-                    return (rowIdx * sizeX) + colIdx;
-                }
-            }
-            return null;
-        }
-
-        function drawGrid(sizeX, sizeY) {
-            const gridArea = document.getElementById('box-grid-area');
-            const totalCells = sizeX * sizeY;
-            
-            const cellMap = new Map();
-            const unmapped = [];
-
-            boxContentsCache.forEach(item => {
-                const idx = parsePositionToIndex(item.position, sizeX, sizeY);
-                if (idx !== null && idx >= 0 && idx < totalCells) {
-                    if (!cellMap.has(idx)) cellMap.set(idx, []);
-                    cellMap.get(idx).push(item);
+            } else if (viewType === 'room_contents') {
+                const units = dbCache.storage.filter(s => s.room_id === currentId && !s.parent_storage_id);
+                if(units.length === 0) html += `<div class="col-span-full py-10 text-center text-slate-400 font-medium border-2 border-dashed border-slate-200 rounded-xl">No storage units registered in this room.</div>`;
+                html += units.map(u => generateStorageCardHtml(u)).join('');
+            } else if (viewType === 'storage_contents') {
+                const units = dbCache.storage.filter(s => s.parent_storage_id === currentId);
+                if(units.length === 0) {
+                    // Leaf node (Box/Empty Rack)
+                    html += `
+                    <div class="col-span-full py-10 flex flex-col items-center text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-200 shadow-inner">
+                        <i data-lucide="package-open" class="w-12 h-12 text-slate-300 mb-3"></i>
+                        <p class="font-medium mb-4">This unit has no sub-storage assigned.</p>
+                        <button onclick="openInteractiveBox('${currentId}')" class="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-2">
+                            <i data-lucide="grid-3x3" class="w-4 h-4"></i> Open in Interactive Box View
+                        </button>
+                    </div>`;
                 } else {
-                    unmapped.push(item);
+                    html += units.map(u => generateStorageCardHtml(u)).join('');
                 }
-            });
-
-            // Auto-scale to container
-            const maxContainerWidth = gridArea.clientWidth - 48; 
-            const maxContainerHeight = 500; 
+            }
             
-            let cellSize = Math.min(Math.floor(maxContainerWidth / sizeX), Math.floor(maxContainerHeight / sizeY));
-            cellSize = Math.max(40, Math.min(80, cellSize));
+            html += `</div>`;
+            container.innerHTML = html;
+            lucide.createIcons();
+        }
 
-            let gridHtml = `
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 inline-block">
-                    <div style="display: grid; grid-template-columns: repeat(${sizeX}, ${cellSize}px); grid-template-rows: repeat(${sizeY}, ${cellSize}px); gap: 4px;">
-            `;
+        // Generates the correct card style based on whether the unit has children (is a container) or not (is a box)
+        function generateStorageCardHtml(u) {
+            const children = dbCache.storage.filter(s => s.parent_storage_id === u.storage_id);
+            const hasChildren = children.length > 0;
+            const itemsInside = dbCache.items.filter(i => i.storage_id === u.storage_id).length;
 
-            for (let i = 0; i < totalCells; i++) {
-                const row = Math.floor(i / sizeX);
-                const col = i % sizeX;
-                const alphaLabel = String.fromCharCode(65 + row) + (col + 1);
-                
-                const items = cellMap.get(i) || [];
-                const isOccupied = items.length > 0;
-                
-                let tooltip = `Slot: ${alphaLabel} (or ${i+1})\n`;
-                if (isOccupied) {
-                    tooltip += items.map(x => `${x.id} (${x.type})`).join('\n');
-                } else {
-                    tooltip += 'Empty';
-                }
-
-                gridHtml += `
-                    <div class="storage-cell ${isOccupied ? 'occupied' : ''}" title="${tooltip}" onclick="alert('${tooltip}')">
-                        ${isOccupied ? items.length > 1 ? `<span class="bg-sky-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">${items.length}</span>` : `<i data-lucide="test-tube" class="w-4 h-4"></i>` : `<span class="opacity-20">${alphaLabel}</span>`}
+            if (hasChildren) {
+                // It's a Container (e.g. Freezer, Shelf, Rack) -> Click to drill down further
+                return `
+                    <div onclick="renderExplorer(document.getElementById('main-tab-content'), '${u.storage_id}', 'storage_contents')" class="item-card bg-white border border-slate-200 rounded-xl p-6 flex flex-col items-center text-center cursor-pointer group">
+                        <div class="w-14 h-14 rounded-full bg-sky-50 flex items-center justify-center mb-3 group-hover:bg-sky-500 transition-colors">
+                            <i data-lucide="${u.type==='Box'?'archive':'snowflake'}" class="w-6 h-6 text-sky-500 group-hover:text-white transition-colors"></i>
+                        </div>
+                        <h3 class="font-bold text-slate-800">${u.name || u.storage_id}</h3>
+                        <p class="text-[10px] font-mono text-slate-400 mt-0.5">${u.storage_id}</p>
+                        <p class="text-xs font-semibold text-slate-500 mt-2 bg-slate-50 px-2 py-1 rounded-md">${children.length} Sub-Units</p>
                     </div>
                 `;
+            } else {
+                // It's a Leaf Node (e.g. Box) -> Click to open interactive grid
+                const maxCap = (u.box_size_x || 10) * (u.box_size_y || 10);
+                const pct = Math.round((itemsInside / maxCap) * 100);
+                const isFull = itemsInside >= maxCap;
+
+                return `
+                    <div onclick="openInteractiveBox('${u.storage_id}')" class="item-card bg-white border border-slate-200 rounded-xl p-5 cursor-pointer group relative overflow-hidden">
+                        <div class="absolute top-0 left-0 w-full h-1 bg-slate-100"><div class="h-full ${isFull ? 'bg-red-500' : 'bg-emerald-500'}" style="width: ${pct}%"></div></div>
+                        <div class="flex items-start justify-between mt-2">
+                            <div class="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center group-hover:bg-emerald-500 transition-colors shrink-0">
+                                <i data-lucide="grid-3x3" class="w-5 h-5 text-emerald-600 group-hover:text-white transition-colors"></i>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-xs font-bold ${isFull ? 'text-red-500' : 'text-emerald-600'}">${pct}% Full</span>
+                                <p class="text-[10px] text-slate-400">${itemsInside} / ${maxCap} slots</p>
+                            </div>
+                        </div>
+                        <h3 class="font-bold text-slate-800 mt-3 truncate" title="${u.name || u.storage_id}">${u.name || u.storage_id}</h3>
+                        <p class="text-[10px] font-mono text-slate-400 mt-0.5 truncate">${u.storage_id}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function openInteractiveBox(boxId) {
+            switchTab('box-view');
+            setTimeout(() => {
+                const select = document.getElementById('boxSelector');
+                if(select) {
+                    select.value = boxId;
+                    select.dispatchEvent(new Event('change'));
+                }
+            }, 50);
+        }
+
+        // --- Component: Interactive Box View ---
+        function renderBoxView(container) {
+            // A "box" is any storage unit that has NO children in the storage table
+            const boxes = dbCache.storage.filter(s => !dbCache.storage.some(child => child.parent_storage_id === s.storage_id));
+            
+            let html = `
+                <div class="flex gap-4 items-center mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm">
+                    <i data-lucide="search" class="w-5 h-5 text-slate-400 shrink-0"></i>
+                    <select id="boxSelector" class="form-input bg-white cursor-pointer flex-1 font-semibold text-indigo-700 border-none" onchange="drawBoxGrid(this.value)">
+                        <option value="">-- Select a Box to View --</option>
+                        ${boxes.map(b => {
+                            const pathStr = getStoragePath(b.storage_id).map(n => n.name || n.id || n.storage_id).join(' > ');
+                            return `<option value="${b.storage_id}">${pathStr}</option>`;
+                        }).join('')}
+                    </select>
+                </div>
+                <div id="boxGridContainer" class="w-full flex justify-center">
+                    <div class="text-center py-20 text-slate-400 font-medium">Select a box from the dropdown above to load its layout.</div>
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function drawBoxGrid(boxId, isDragDropMode = false) {
+            const container = document.getElementById(isDragDropMode ? 'dd-boxGridContainer' : 'boxGridContainer');
+            if(!boxId || !container) {
+                if(container) container.innerHTML = '<div class="text-center py-20 text-slate-400 font-medium">Select a box to load layout.</div>';
+                return;
+            }
+
+            const box = dbCache.storage.find(s => s.storage_id === boxId);
+            const itemsInBox = dbCache.items.filter(i => i.storage_id === boxId);
+            const itemMap = new Map(itemsInBox.map(i => [i.storage_position, i]));
+
+            const x = box.box_size_x || 10;
+            const y = box.box_size_y || 10;
+            const total = x * y;
+
+            let gridHtml = `<div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm inline-block max-w-full overflow-auto custom-scroll">
+                <div class="flex justify-between items-center mb-4 px-2">
+                    <h4 class="font-bold text-slate-800">${box.name || box.storage_id}</h4>
+                    <span class="text-xs font-semibold bg-slate-100 text-slate-500 px-2 py-1 rounded-md">${itemsInBox.length} / ${total} Items</span>
+                </div>
+                <div class="box-grid" style="grid-template-columns: repeat(${x}, minmax(4rem, 1fr));">`;
+
+            for(let i=1; i<=total; i++) {
+                const row = Math.ceil(i / x);
+                const col = ((i - 1) % x) + 1;
+                const pos = `${convertNumberToAlphabet(col)}_${row}`;
+                
+                const item = itemMap.get(pos);
+                const colorClass = item ? getUnitColor(item.type) : 'empty';
+                
+                if(isDragDropMode) {
+                    gridHtml += `
+                        <div class="box-cell ${item ? 'occupied '+colorClass : 'empty'}" 
+                             data-pos="${pos}" 
+                             ondragover="handleDragOver(event)" 
+                             ondragleave="handleDragLeave(event)" 
+                             ondrop="handleDrop(event, '${boxId}', '${pos}')">
+                             <span class="cell-position-label">${pos}</span>
+                             ${item ? `<div class="cell-main-info text-white" title="${item.name}">${item.name}</div>` : ''}
+                        </div>
+                    `;
+                } else {
+                    gridHtml += `
+                        <div class="box-cell ${item ? 'occupied shadow-md '+colorClass : 'empty'}" 
+                             ${item ? `onclick="openItemDetails('${item.id}', '${item.type}')"` : ''}
+                             title="${item ? `Type: ${item.type}\nID: ${item.id}` : 'Empty Slot'}">
+                             <span class="cell-position-label">${pos}</span>
+                             ${item ? `<div class="cell-main-info">${item.id}</div>` : ''}
+                        </div>
+                    `;
+                }
             }
 
             gridHtml += `</div></div>`;
-
-            if (unmapped.length > 0) {
-                gridHtml += `
-                    <div class="mt-6 w-full max-w-2xl bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm">
-                        <h4 class="text-xs font-bold text-amber-800 uppercase tracking-wider mb-2 flex items-center gap-1.5"><i data-lucide="alert-triangle" class="w-4 h-4"></i> Items with Invalid/Missing Positions</h4>
-                        <div class="flex flex-wrap gap-2">
-                            ${unmapped.map(u => `<span class="px-2 py-1 bg-white border border-amber-100 rounded text-xs text-amber-700 font-mono shadow-sm" title="Stored as: ${u.position || 'NULL'}">${u.id} (${u.type})</span>`).join('')}
-                        </div>
-                    </div>
-                `;
-            }
-
-            gridArea.innerHTML = gridHtml;
-            lucide.createIcons();
+            container.innerHTML = gridHtml;
         }
 
-        window.deleteStorage = async function(id) {
-            if(!confirm(`Delete storage unit ${id}? Make sure it is empty first.`)) return;
-            const sPK = storageSchema.find(c => c.column_name.includes('id'))?.column_name || 'storage_id';
+        // --- Component: Drag & Drop ---
+        function renderDragDrop(container) {
+            const boxes = dbCache.storage.filter(s => !dbCache.storage.some(child => child.parent_storage_id === s.storage_id));
+            const unassigned = dbCache.items.filter(i => !i.storage_id);
+
+            let html = `
+                <div class="grid grid-cols-1 xl:grid-cols-4 gap-6 h-full">
+                    
+                    <!-- Sidebar: Unassigned Items -->
+                    <div class="xl:col-span-1 border border-slate-200 rounded-2xl bg-slate-50 flex flex-col overflow-hidden">
+                        <div class="p-4 border-b border-slate-200 bg-white">
+                            <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                                <i data-lucide="inbox" class="w-4 h-4 text-indigo-500"></i> Unassigned Items
+                            </h3>
+                            <div class="mt-3 relative">
+                                <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5"></i>
+                                <input type="text" id="dd-search" placeholder="Filter items..." oninput="filterUnassigned()" class="w-full pl-9 pr-3 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                        </div>
+                        <div class="flex-1 overflow-y-auto p-3 space-y-2 custom-scroll" id="dd-unassigned-list">
+                            ${unassigned.map(item => `
+                                <div class="draggable-item bg-white border border-slate-200 p-3 rounded-xl shadow-sm flex items-center justify-between"
+                                     draggable="true" 
+                                     ondragstart="handleDragStart(event, '${item.id}')">
+                                     <div class="min-w-0 flex-1">
+                                        <p class="font-bold text-xs text-slate-800 truncate" title="${item.name}">${item.name}</p>
+                                        <p class="text-[10px] text-slate-500 font-mono mt-0.5">${item.id} | ${item.type}</p>
+                                     </div>
+                                     <i data-lucide="grip-vertical" class="w-4 h-4 text-slate-300 shrink-0"></i>
+                                </div>
+                            `).join('')}
+                            ${unassigned.length === 0 ? '<p class="text-center text-xs text-slate-400 mt-10">No items available.</p>' : ''}
+                        </div>
+                    </div>
+
+                    <!-- Main Area: Box Target -->
+                    <div class="xl:col-span-3 flex flex-col">
+                        <div class="flex gap-4 items-center mb-4 bg-white p-3 rounded-xl border border-slate-200 shadow-sm shrink-0">
+                            <i data-lucide="target" class="w-5 h-5 text-indigo-500 shrink-0 ml-1"></i>
+                            <select id="dd-boxSelector" class="form-input bg-slate-50 cursor-pointer flex-1 font-semibold text-slate-700 border-none" onchange="drawBoxGrid(this.value, true)">
+                                <option value="">-- Select Destination Box --</option>
+                                ${boxes.map(b => {
+                                    const pathStr = getStoragePath(b.storage_id).map(n => n.name || n.id || n.storage_id).join(' > ');
+                                    return `<option value="${b.storage_id}">${pathStr}</option>`;
+                                }).join('')}
+                            </select>
+                        </div>
+                        <div id="dd-boxGridContainer" class="flex-1 overflow-auto flex items-start justify-center p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
+                            <div class="text-center mt-20 text-slate-400 font-medium flex flex-col items-center">
+                                <i data-lucide="move" class="w-12 h-12 mb-3 text-slate-300"></i>
+                                Select a box above to drag and drop items.
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function filterUnassigned() {
+            const q = document.getElementById('dd-search').value.toLowerCase();
+            document.querySelectorAll('#dd-unassigned-list .draggable-item').forEach(el => {
+                const text = el.innerText.toLowerCase();
+                el.style.display = text.includes(q) ? 'flex' : 'none';
+            });
+        }
+
+        function handleDragStart(e, itemId) {
+            draggedItem = dbCache.items.find(i => i.id === itemId);
+            e.target.classList.add('dragging');
+            e.dataTransfer.setData('text/plain', itemId);
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            const cell = e.target.closest('.box-cell');
+            if(cell && cell.classList.contains('empty')) {
+                cell.classList.add('drag-over');
+            }
+        }
+
+        function handleDragLeave(e) {
+            const cell = e.target.closest('.box-cell');
+            if(cell) cell.classList.remove('drag-over');
+        }
+
+        async function handleDrop(e, boxId, pos) {
+            e.preventDefault();
+            const cell = e.target.closest('.box-cell');
+            if(cell) cell.classList.remove('drag-over');
+            
+            if(!draggedItem || (cell && cell.classList.contains('occupied'))) {
+                showToast("Invalid drop target", "error");
+                return;
+            }
+
+            const item = draggedItem;
+            draggedItem = null;
             
             showLoading(true);
-            const res = await apiFetch(`table/lims/storage?${sPK}=${id}`, { method: 'DELETE' });
-            showLoading(false);
+            try {
+                const payload = { storage_id: boxId, storage_position: pos };
+                const res = await apiFetch(`table/${item.schema}/${item.table}?${item.pk_col}=${item.id}`, {
+                    method: 'PUT', body: payload
+                });
+
+                if(res && !res.error) {
+                    showToast(`${item.id} assigned to ${pos}`, "success");
+                    await refreshAllData();
+                    // Restore dropdown state
+                    const select = document.getElementById('dd-boxSelector');
+                    if(select) {
+                        select.value = boxId;
+                        drawBoxGrid(boxId, true);
+                    }
+                } else {
+                    throw new Error(res.error || "Assignment failed");
+                }
+            } catch(err) {
+                showToast(err.message, "error");
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // --- Component: Inventory List ---
+        function renderInventory(container) {
+            const items = dbCache.items.filter(i => i.storage_id); // Only assigned
             
-            if (res && !res.error) {
-                showToast('Storage unit deleted.', 'success');
-                clearSelection();
-                loadStorageData();
+            let html = `
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col h-full">
+                    <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                        <div class="relative w-72">
+                            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
+                            <input type="text" id="inv-search" onkeyup="filterInventoryTable()" placeholder="Search assigned items..." class="w-full pl-9 pr-3 py-2 text-sm bg-white border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <span class="text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-200 px-2 py-1 rounded">${items.length} Assigned Items</span>
+                    </div>
+                    <div class="overflow-auto flex-1 custom-scroll">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead class="bg-slate-50 text-slate-500 sticky top-0 z-10 shadow-sm">
+                                <tr>
+                                    <th class="py-3 px-4 font-bold uppercase tracking-wider text-[11px]">ID</th>
+                                    <th class="py-3 px-4 font-bold uppercase tracking-wider text-[11px]">Name / Ext ID</th>
+                                    <th class="py-3 px-4 font-bold uppercase tracking-wider text-[11px]">Type</th>
+                                    <th class="py-3 px-4 font-bold uppercase tracking-wider text-[11px]">Full Path Location</th>
+                                    <th class="py-3 px-4 font-bold uppercase tracking-wider text-[11px]">Pos</th>
+                                    <th class="py-3 px-4 text-right font-bold uppercase tracking-wider text-[11px]">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inv-table-body" class="divide-y divide-slate-100">
+                                ${items.map(i => {
+                                    const box = dbCache.storage.find(s => s.storage_id === i.storage_id);
+                                    const locStr = box ? getStoragePath(box.storage_id).map(n => n.name || n.id || n.storage_id).join(' <span class="text-slate-300 px-1">></span> ') : i.storage_id;
+                                    return `
+                                    <tr class="hover:bg-slate-50/80 transition-colors group">
+                                        <td class="py-3 px-4 font-mono font-medium text-slate-700">${i.id}</td>
+                                        <td class="py-3 px-4 text-slate-600 truncate max-w-[200px]" title="${i.name}">${i.name}</td>
+                                        <td class="py-3 px-4 text-slate-500 text-xs"><span class="bg-slate-100 px-2 py-1 rounded">${i.type}</span></td>
+                                        <td class="py-3 px-4 font-semibold text-indigo-700">${locStr}</td>
+                                        <td class="py-3 px-4 font-mono text-slate-500">${i.storage_position || '-'}</td>
+                                        <td class="py-3 px-4 text-right">
+                                            <button onclick="openItemDetails('${i.id}', '${i.type}')" class="text-indigo-600 hover:text-indigo-800 text-xs font-semibold mr-3 opacity-0 group-hover:opacity-100 transition-opacity">Details</button>
+                                            <button onclick="unassignItem('${i.id}')" class="text-red-500 hover:text-red-700 text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity">Unassign</button>
+                                        </td>
+                                    </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                        ${items.length===0?'<div class="py-10 text-center text-slate-400">No items assigned to storage yet.</div>':''}
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function filterInventoryTable() {
+            const q = document.getElementById('inv-search').value.toLowerCase();
+            const rows = document.getElementById('inv-table-body').getElementsByTagName('tr');
+            for(let r of rows) {
+                const text = r.innerText.toLowerCase();
+                r.style.display = text.includes(q) ? '' : 'none';
+            }
+        }
+
+        // --- Modals & Interactions ---
+        function populateModals() {
+            // New Storage Modal dropdowns
+            const rSel = document.getElementById('formRoomId');
+            if(rSel) {
+                rSel.innerHTML = dbCache.locations.map(r => `<option value="${r.build_id}">${r.name || r.build_id}</option>`).join('');
+            }
+            
+            const pSel = document.getElementById('formParentId');
+            if(pSel) {
+                // Show ALL units to allow unlimited nesting
+                pSel.innerHTML = dbCache.storage.map(u => {
+                    const pathStr = getStoragePath(u.storage_id).map(n => n.name || n.id || n.storage_id).join(' > ');
+                    return `<option value="${u.storage_id}">${pathStr}</option>`;
+                }).join('');
+            }
+        }
+
+        window.openNewStorageModal = () => {
+            document.getElementById('newStorageForm').reset();
+            toggleStorageTypeFields();
+            openModal('newStorageModal');
+        };
+
+        window.toggleStorageTypeFields = () => {
+            const type = document.getElementById('formStorageType').value;
+            if(type === 'Freezer') {
+                document.getElementById('unitFields').classList.remove('hidden');
+                document.getElementById('boxFields').classList.add('hidden');
             } else {
-                showToast(`Failed: ${res?.error}`, 'error');
+                document.getElementById('unitFields').classList.add('hidden');
+                document.getElementById('boxFields').classList.remove('hidden');
             }
         };
 
-        // --- Modals (Schema Driven) ---
-        function showModal(content) {
-            const container = document.getElementById('modal-container');
-            container.innerHTML = content;
-            const modal = container.querySelector('.modal-overlay');
-            const inner = container.querySelector('.modal-content');
-            
-            setTimeout(() => {
-                modal.classList.remove('opacity-0');
-                inner.classList.remove('opacity-0', 'scale-95', 'translate-y-4');
-            }, 10);
+        async function handleNewStorage(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnStorageSubmit');
+            const orig = btn.innerHTML;
+            btn.innerHTML = 'Saving...'; btn.disabled = true;
 
-            const closeModal = () => {
-                modal.classList.add('opacity-0');
-                inner.classList.add('opacity-0', 'scale-95', 'translate-y-4');
-                setTimeout(() => container.innerHTML = '', 300);
+            const fd = new FormData(e.target);
+            const data = Object.fromEntries(fd.entries());
+            
+            const payload = {
+                storage_id: data.storage_id,
+                name: data.name,
+                notes: data.notes || null
             };
-            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-            container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
-            lucide.createIcons();
-            return { closeModal };
-        }
 
-        async function showCreateRoomModal(recordId = null) {
-            const rPK = roomsSchema.find(c => c.column_name.includes('id'))?.column_name || 'room_id';
-            const isEditing = recordId !== null;
-            const record = isEditing ? roomsData.find(r => r[rPK] === recordId) : null;
-            
-            let formFieldsHTML = '';
-            
-            for (const col of roomsSchema) {
-                if (['created_at', 'updated_at', 'created_by', 'search_vector'].includes(col.column_name)) continue;
-                
-                const val = record ? record[col.column_name] : '';
-                const isRequired = col.is_nullable === 'NO' ? 'required' : '';
-                const reqAsterisk = isRequired ? '<span class="text-red-500">*</span>' : '';
-                const label = `<label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">${formatColumnName(col.column_name)} ${reqAsterisk}</label>`;
-                
-                let inputHTML = '';
-                
-                if (col.column_name === rPK) {
-                    inputHTML = `<input type="text" name="${col.column_name}" value="${val || ''}" ${isEditing ? 'readonly' : 'required'} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-sky-500 outline-none transition ${isEditing?'opacity-70 cursor-not-allowed':''}">`;
-                } else if (col.data_type === 'integer' || col.data_type === 'numeric' || col.data_type === 'double precision') {
-                    inputHTML = `<input type="number" step="any" name="${col.column_name}" value="${val !== null && val !== undefined ? val : ''}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-sky-500 outline-none transition">`;
-                } else {
-                    inputHTML = `<input type="text" name="${col.column_name}" value="${val || ''}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-sky-500 outline-none transition">`;
-                }
-
-                formFieldsHTML += `<div>${label}${inputHTML}</div>`;
+            if(data.type === 'Freezer') {
+                payload.type = 'Freezer';
+                payload.room_id = data.room_id;
+                payload.temperature_c = data.temperature_c || null;
+            } else {
+                payload.type = 'Box';
+                payload.parent_storage_id = data.parent_storage_id;
+                payload.box_size_x = data.box_size_x || 10;
+                payload.box_size_y = data.box_size_y || 10;
             }
 
-            const modalHTML = `
-                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center opacity-0 transition-opacity duration-300">
-                    <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col transform opacity-0 scale-95 translate-y-4 transition-all duration-300 border border-slate-200">
-                        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
-                            <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                <i data-lucide="building" class="w-5 h-5 text-sky-500"></i> ${isEditing ? 'Edit' : 'New'} Storage Room
-                            </h2>
-                            <button id="close-modal-btn" class="text-slate-400 hover:text-slate-700 bg-white hover:bg-slate-100 p-1.5 rounded-lg border border-transparent hover:border-slate-200 transition-all"><i data-lucide="x" class="w-4 h-4"></i></button>
-                        </div>
-                        
-                        <div class="p-6 overflow-y-auto max-h-[70vh]">
-                            <form id="room-form" class="space-y-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                ${formFieldsHTML}
-                            </form>
-                        </div>
-                        
-                        <div class="px-6 py-4 bg-slate-50/80 border-t border-slate-100 rounded-b-2xl flex justify-end">
-                            <button form="room-form" type="submit" class="px-6 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-sm font-semibold shadow-md transition-all flex items-center gap-2">
-                                <i data-lucide="save" class="w-4 h-4"></i> ${isEditing ? 'Save Changes' : 'Create Room'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            const { closeModal } = showModal(modalHTML);
-
-            document.getElementById('room-form').onsubmit = async (e) => {
-                e.preventDefault();
-                const fd = new FormData(e.target);
-                const payload = Object.fromEntries(fd.entries());
-                
-                Object.keys(payload).forEach(k => { if(payload[k]==='') payload[k] = null; });
-                roomsSchema.forEach(col => {
-                    if (payload[col.column_name] !== null && payload[col.column_name] !== undefined) {
-                        if (col.data_type === 'integer') payload[col.column_name] = parseInt(payload[col.column_name]);
-                        else if (col.data_type === 'numeric' || col.data_type === 'double precision') payload[col.column_name] = parseFloat(payload[col.column_name]);
-                    }
-                });
-
-                showLoading(true);
-                const method = isEditing ? 'PUT' : 'POST';
-                const endpoint = isEditing ? `lims/storage_room?${rPK}=${payload[rPK]}` : `lims/storage_room`;
-                
-                const res = await apiFetch(`table/${endpoint}`, { method, body: payload });
-                showLoading(false);
-
-                if (res && !res.error) {
-                    showToast(`Room ${isEditing ? 'updated' : 'created'} successfully!`, 'success');
-                    closeModal();
-                    loadStorageData(); 
-                } else showToast(`Failed: ${res?.error}`, 'error');
-            };
+            try {
+                const res = await apiFetch('table/lims/storage', { method: 'POST', body: payload });
+                if(res && !res.error) {
+                    showToast("Storage Unit Created", "success");
+                    closeModal('newStorageModal');
+                    await refreshAllData();
+                } else {
+                    throw new Error(res.error || "Creation failed");
+                }
+            } catch(err) {
+                showToast(err.message, "error");
+            } finally {
+                btn.innerHTML = orig; btn.disabled = false;
+            }
         }
 
-        async function showCreateStorageModal(recordId = null) {
-            const sPK = storageSchema.find(c => c.column_name.includes('id'))?.column_name || 'storage_id';
-            const rPK = roomsSchema.find(c => c.column_name.includes('id'))?.column_name || 'room_id';
-            const isEditing = recordId !== null;
-            const record = isEditing ? storageData.find(s => s[sPK] === recordId) : null;
-            
-            let formFieldsHTML = '';
-            
-            for (const col of storageSchema) {
-                if (['created_at', 'updated_at', 'created_by', 'search_vector'].includes(col.column_name)) continue;
-                
-                const val = record ? record[col.column_name] : '';
-                const isRequired = col.is_nullable === 'NO' ? 'required' : '';
-                const reqAsterisk = isRequired ? '<span class="text-red-500">*</span>' : '';
-                const label = `<label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">${formatColumnName(col.column_name)} ${reqAsterisk}</label>`;
-                
-                let inputHTML = '';
-                
-                if (col.column_name === 'room_id' || col.column_name === rPK) {
-                    const roomOpts = `<option value="">Select a Room...</option>` + roomsData.map(r => `<option value="${r[rPK]}" ${val === r[rPK] ? 'selected' : ''}>${r.room || r.name || r[rPK]}</option>`).join('');
-                    inputHTML = `<select name="${col.column_name}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-sky-500 outline-none transition">${roomOpts}</select>`;
-                } else if (col.column_name === sPK) {
-                    inputHTML = `<input type="text" name="${col.column_name}" value="${val || ''}" ${isEditing ? 'readonly' : 'required'} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-sky-500 outline-none transition ${isEditing?'opacity-70 cursor-not-allowed':''}">`;
-                } else if (col.data_type === 'date' || col.data_type.includes('timestamp')) {
-                    inputHTML = `<input type="date" name="${col.column_name}" value="${formatDateForInput(val)}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-sky-500 outline-none transition">`;
-                } else if (col.data_type === 'integer' || col.data_type === 'numeric' || col.data_type === 'double precision') {
-                    inputHTML = `<input type="number" step="any" name="${col.column_name}" value="${val !== null && val !== undefined ? val : ''}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-sky-500 outline-none transition">`;
-                } else if (col.column_name === 'notes') {
-                    inputHTML = `<textarea name="${col.column_name}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-sky-500 outline-none transition h-20 resize-none">${val || ''}</textarea>`;
-                } else {
-                    inputHTML = `<input type="text" name="${col.column_name}" value="${val || ''}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-sky-500 outline-none transition">`;
-                }
+        window.openItemDetails = (itemId, itemType) => {
+            const item = dbCache.items.find(i => i.id === itemId);
+            if(!item) return;
 
-                formFieldsHTML += `<div>${label}${inputHTML}</div>`;
-            }
-
-            const modalHTML = `
-                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center opacity-0 transition-opacity duration-300">
-                    <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col transform opacity-0 scale-95 translate-y-4 transition-all duration-300 border border-slate-200">
-                        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl shrink-0">
-                            <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                <i data-lucide="${isEditing?'edit':'plus-circle'}" class="w-5 h-5 text-sky-500"></i> 
-                                ${isEditing ? 'Edit Storage Unit' : 'New Storage Unit'}
-                            </h2>
-                            <button id="close-modal-btn" class="text-slate-400 hover:text-slate-700 bg-white hover:bg-slate-100 p-1.5 rounded-lg border border-transparent hover:border-slate-200 transition-all"><i data-lucide="x" class="w-4 h-4"></i></button>
-                        </div>
-                        
-                        <div class="p-6 overflow-y-auto flex-1">
-                            <form id="storage-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                ${formFieldsHTML}
-                            </form>
-                        </div>
-                        
-                        <div class="px-6 py-4 bg-slate-50/80 border-t border-slate-100 rounded-b-2xl flex justify-end">
-                            <button form="storage-form" type="submit" class="px-6 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-sm font-semibold shadow-md transition-all flex items-center gap-2">
-                                <i data-lucide="save" class="w-4 h-4"></i> ${isEditing ? 'Save Changes' : 'Create Storage'}
-                            </button>
-                        </div>
+            const content = document.getElementById('itemDetailsContent');
+            content.innerHTML = `
+                <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
+                    <p class="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-1">${item.type}</p>
+                    <p class="text-lg font-bold text-slate-800 font-mono">${item.id}</p>
+                    <p class="text-sm text-slate-600 mt-1">${item.name}</p>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Location</p>
+                        <p class="text-sm font-semibold text-slate-700">${item.storage_id || 'Unassigned'}</p>
+                    </div>
+                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Position</p>
+                        <p class="text-sm font-semibold text-slate-700">${item.storage_position || 'Unassigned'}</p>
                     </div>
                 </div>
+                <div class="text-xs text-slate-500 pt-2 border-t border-slate-100">
+                    <span class="font-bold">Source Table:</span> ${item.schema}.${item.table}
+                </div>
             `;
-            const { closeModal } = showModal(modalHTML);
+            
+            const btn = document.getElementById('btnUnassignItem');
+            if(item.storage_id) {
+                btn.style.display = 'block';
+                btn.onclick = () => { unassignItem(item.id); closeModal('itemDetailsModal'); };
+            } else {
+                btn.style.display = 'none';
+            }
 
-            document.getElementById('storage-form').onsubmit = async (e) => {
-                e.preventDefault();
-                const fd = new FormData(e.target);
-                const payload = Object.fromEntries(fd.entries());
-                
-                Object.keys(payload).forEach(k => { if(payload[k]==='') payload[k] = null; });
-                
-                // Smart payload typing based on fetched schema
-                storageSchema.forEach(col => {
-                    if (payload[col.column_name] !== null && payload[col.column_name] !== undefined) {
-                        if (col.data_type === 'integer') payload[col.column_name] = parseInt(payload[col.column_name]);
-                        else if (col.data_type === 'numeric' || col.data_type === 'double precision') payload[col.column_name] = parseFloat(payload[col.column_name]);
-                    }
+            openModal('itemDetailsModal');
+        };
+
+        window.unassignItem = async (itemId) => {
+            const item = dbCache.items.find(i => i.id === itemId);
+            if(!item) return;
+
+            if(!confirm(`Remove ${itemId} from its storage location?`)) return;
+
+            showLoading(true);
+            try {
+                const payload = { storage_id: null, storage_position: null };
+                const res = await apiFetch(`table/${item.schema}/${item.table}?${item.pk_col}=${item.id}`, {
+                    method: 'PUT', body: payload
                 });
 
-                showLoading(true);
-                const method = isEditing ? 'PUT' : 'POST';
-                const endpoint = isEditing ? `lims/storage?${sPK}=${payload[sPK]}` : `lims/storage`;
-                
-                const res = await apiFetch(`table/${endpoint}`, { method, body: payload });
+                if(res && !res.error) {
+                    showToast("Item unassigned", "success");
+                    await refreshAllData();
+                } else {
+                    throw new Error(res.error || "Update failed");
+                }
+            } catch(err) {
+                showToast(err.message, "error");
+            } finally {
                 showLoading(false);
+            }
+        };
 
-                if (res && !res.error) {
-                    showToast(`Storage ${isEditing ? 'updated' : 'created'} successfully!`, 'success');
-                    closeModal();
-                    loadStorageData(); 
-                } else showToast(`Failed: ${res?.error}`, 'error');
-            };
+        // --- Utils ---
+        window.openModal = (id) => { document.getElementById(id).classList.remove('hidden'); };
+        window.closeModal = (id) => { document.getElementById(id).classList.add('hidden'); };
+        function showLoading(show) { document.getElementById('loadingOverlay').classList.toggle('active', !!show); }
+
+        function showToast(msg, type='success') {
+            const c = document.getElementById('toastContainer');
+            const d = document.createElement('div');
+            const bgClass = type === 'error' ? 'bg-red-50' : 'bg-emerald-50';
+            const borderClass = type === 'error' ? 'border-red-200' : 'border-emerald-200';
+            const textClass = type === 'error' ? 'text-red-800' : 'text-emerald-800';
+            const iconColor = type === 'error' ? 'text-red-500' : 'text-emerald-500';
+            const icon = type === 'error' ? 'alert-octagon' : 'check-circle-2';
+            
+            d.className = `px-4 py-3 rounded-xl shadow-lg border ${borderClass} ${bgClass} ${textClass} text-sm font-semibold flex items-center gap-3 transform transition-all duration-300 translate-y-0`;
+            d.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 ${iconColor}"></i> ${msg}`;
+            c.appendChild(d); lucide.createIcons();
+            setTimeout(() => { d.classList.add('opacity-0', 'translate-y-4'); setTimeout(() => d.remove(), 300); }, 3500);
+        }
+
+        function convertNumberToAlphabet(num) {
+            let result = '';
+            while (num > 0) {
+                let remainder = (num - 1) % 26;
+                result = String.fromCharCode(65 + remainder) + result;
+                num = Math.floor((num - 1) / 26);
+            }
+            return result;
         }
     </script>
 </body>
