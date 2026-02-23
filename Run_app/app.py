@@ -15,6 +15,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+import shutil
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, date, time
+from typing import List, Optional, Dict, Any
+from fastapi import FastAPI, HTTPException, Depends, Request, UploadFile, File, Query
+
 # ==============================================================================
 # 1. CONFIGURATION & LOGGING
 # ==============================================================================
@@ -38,6 +44,49 @@ SECRET_KEY = "super-secret-key-change-this-in-production"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480 
 UPLOAD_DIR = "upload"
+
+
+# ==============================================================================
+# 2. FASTAPI APP & DATABASE LIFESPAN
+# ==============================================================================
+
+async def init_db(conn):
+    """
+    Configure asyncpg to automatically parse string times from the frontend
+    into Python time objects that PostgreSQL requires.
+    """
+    def time_encoder(value):
+        if isinstance(value, time):
+            return value
+        if isinstance(value, str):
+            try:
+                if len(value) == 8:
+                    return datetime.strptime(value, "%H:%M:%S").time()
+                elif len(value) >= 5:
+                    return datetime.strptime(value[:5], "%H:%M").time()
+            except ValueError:
+                pass
+        return value
+
+    await conn.set_type_codec(
+        'time',
+        encoder=time_encoder,
+        decoder=lambda x: x,
+        schema='pg_catalog',
+        format='text'
+    )
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Attach the init_db function to the main connection pool so it applies everywhere
+    app.state.pool = await asyncpg.create_pool(**DB_CONFIG, init=init_db)
+    app.state.auth_pool = await asyncpg.create_pool(**AUTH_DB_CONFIG)
+    yield
+    await app.state.pool.close()
+    await app.state.auth_pool.close()
+
+app = FastAPI(lifespan=lifespan)
+
 
 # ==============================================================================
 # 2. LIFESPAN MANAGER

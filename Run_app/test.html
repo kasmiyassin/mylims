@@ -3,24 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sample Reservations - TIFI LIMS</title>
+    <title>Inventory & Reagents - TIFI LIMS</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- AG Grid -->
-    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-grid.css" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-theme-alpine.css" />
-    <!-- Day.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.11.10/dayjs.min.js"></script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <style>
         body { 
             font-family: 'Inter', sans-serif; 
-            background-color: #f1f5f9; /* slate-100 */
+            background-color: #f1f5f9; 
         }
         
         /* Custom Scrollbar */
@@ -31,7 +25,7 @@
         
         .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.25rem; }
         
-        /* Glassmorphism */
+        /* Premium Card / Modal Styles */
         .glass-card {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
@@ -39,57 +33,58 @@
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
         }
 
-        /* AG Grid Override */
-        .ag-theme-alpine {
-            --ag-header-background-color: #f8fafc;
-            --ag-header-foreground-color: #475569;
-            --ag-border-color: #e2e8f0;
-            --ag-row-hover-color: #f1f5f9;
-            --ag-selected-row-background-color: #eef2ff;
-            --ag-font-family: 'Inter', sans-serif;
-            --ag-font-size: 13px;
-            border-radius: 1rem;
-            overflow: hidden;
+        .modal-overlay { 
+            background-color: rgba(15, 23, 42, 0.4); 
+            backdrop-filter: blur(4px); 
+            z-index: 100; 
         }
 
-        /* Reservation Basket Item */
-        .basket-item {
-            transition: all 0.2s ease;
-            border-left: 4px solid #f97316; /* orange-500 */
+        /* Table specific styles */
+        .table-row-selected { 
+            background-color: #fdf4ff !important; /* fuchsia-50 */
+            border-left: 3px solid #d946ef; /* fuchsia-500 */
         }
-        .basket-item:hover {
-            transform: translateX(4px);
-            background-color: #fff7ed;
-        }
-
-        /* Loading Overlay */
-        .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.7); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
-        .loading-overlay.active { opacity: 1; pointer-events: all; }
+        .dynamic-table-row { border-left: 3px solid transparent; transition: all 0.15s ease; }
+        .dynamic-table-row:hover { background-color: #f8fafc; }
         
-        .form-input {
-            width: 100%; padding: 0.625rem 0.875rem; background-color: #f8fafc;
-            border: 1px solid #e2e8f0; border-radius: 0.75rem; font-size: 0.875rem;
-            color: #334155; transition: all 0.2s;
-        }
-        .form-input:focus { outline: none; border-color: #f97316; box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1); background-color: #ffffff; }
+        .sortable-header { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; }
+        .sortable-header:hover { color: #1e293b; }
 
-        .hidden { display: none !important; }
+        /* Accordion transition */
+        .accordion-content { 
+            max-height: 0; 
+            overflow: hidden; 
+            transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease; 
+        }
+        .accordion-content.open { 
+            max-height: 800px; 
+            padding-top: 0.5rem;
+            padding-bottom: 1rem;
+        }
+
+        /* Loading Spinner Overlay */
+        .loading-overlay {
+            position: absolute; inset: 0; background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center;
+            z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        .loading-overlay.active { opacity: 1; pointer-events: all; }
+
+        /* Tabs */
+        .nav-tab {
+            transition: all 0.2s ease;
+        }
+        .nav-tab.active {
+            background-color: #d946ef; /* fuchsia-500 */
+            color: white;
+            border-color: #c026d3; /* fuchsia-600 */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
     </style>
 </head>
-<body class="flex h-screen overflow-hidden text-slate-800 selection:bg-orange-100 selection:text-orange-900">
+<body class="flex h-screen overflow-hidden text-slate-800 selection:bg-fuchsia-100 selection:text-fuchsia-900">
 
-    <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="loading-overlay active">
-        <div class="bg-white/90 px-6 py-5 rounded-2xl shadow-2xl flex items-center gap-4 border border-slate-200/50">
-            <div class="relative w-6 h-6">
-                <div class="absolute inset-0 border-2 border-slate-200 rounded-full"></div>
-                <div class="absolute inset-0 border-2 border-orange-500 rounded-full border-t-transparent animate-spin"></div>
-            </div>
-            <p id="loadingText" class="text-slate-700 font-semibold tracking-wide">Syncing reservations...</p>
-        </div>
-    </div>
-
-    <!-- Toast Container -->
+    <!-- Global Toast Container -->
     <div id="toastContainer" class="fixed bottom-6 right-6 z-[120] flex flex-col gap-3"></div>
 
     <!-- Sidebar -->
@@ -121,14 +116,19 @@
             <a href="sampling.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
                 <i data-lucide="map-pin" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Sampling Events
             </a>
-            <a href="planned_samples.html" class="flex items-center px-3 py-2.5 rounded-xl bg-orange-50 text-orange-700 font-medium shadow-sm border border-orange-100/50">
-                <i data-lucide="calendar-check" class="w-4 h-4 mr-3 text-orange-600"></i> Planned Samples
+            <a href="planned_samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="calendar-check" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Planned Samples
             </a>
             <a href="samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
                 <i data-lucide="beaker" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Samples Registry
             </a>
             <a href="storage.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
-                <i data-lucide="archive" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Storage
+                <i data-lucide="archive" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-sky-500 transition-colors"></i> Storage Explorer
+            </a>
+
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Inventory</div>
+            <a href="storage_reagents.html" class="flex items-center px-3 py-2.5 rounded-xl bg-fuchsia-50 text-fuchsia-700 font-medium shadow-sm border border-fuchsia-100/50">
+                <i data-lucide="test-tubes" class="w-4 h-4 mr-3 text-fuchsia-600"></i> Reagents & Stock
             </a>
 
             <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">System</div>
@@ -152,7 +152,6 @@
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
                     </p>
                 </div>
-                <i data-lucide="settings" class="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"></i>
             </a>
             <button id="logout-button" class="w-full flex items-center justify-center p-2 rounded-xl text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 font-medium transition-colors border border-transparent hover:border-red-100">
                 <i data-lucide="log-out" class="w-4 h-4 mr-2"></i><span>Sign Out</span>
@@ -160,380 +159,893 @@
         </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="flex-1 flex flex-col h-full relative overflow-hidden">
+    <!-- Main Content Area -->
+    <div class="flex-1 flex flex-col h-full relative overflow-hidden bg-slate-50/50">
         
         <!-- Header -->
-        <header class="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-5 flex justify-between items-center z-10 shrink-0 shadow-sm">
+        <div class="bg-white px-8 py-6 z-10 shrink-0 border-b border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
             <div>
-                <h1 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
-                    Sample Reservations
-                </h1>
-                <p class="text-sm text-slate-500 mt-0.5">Plan future collection campaigns or book from existing inventory.</p>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Inventory & Reagents</h1>
+                <p class="text-sm text-slate-500 mt-1">Manage lab reagents, chemicals, and inventory.</p>
             </div>
-            <div class="flex gap-3 items-center">
-                <button onclick="openModal('importModal')" class="flex items-center px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl hover:border-orange-300 hover:text-orange-600 shadow-sm font-semibold transition-all text-sm">
-                    <i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i> Bulk Import
+            
+            <div class="flex gap-2 flex-wrap">
+                <button id="download-template-general-btn" class="px-4 py-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium shadow-sm flex gap-2 items-center transition-all">
+                    <i data-lucide="download" class="w-4 h-4 text-slate-400"></i> Template
+                </button>
+                <button id="bulk-csv-upload-btn" class="px-4 py-2 bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200 hover:bg-fuchsia-100 rounded-xl text-sm font-medium shadow-sm flex gap-2 items-center transition-all">
+                    <i data-lucide="upload" class="w-4 h-4"></i> Bulk Upload
+                </button>
+                <button id="add-single-entry-btn" class="px-5 py-2 bg-gradient-to-r from-fuchsia-600 to-fuchsia-700 hover:from-fuchsia-700 hover:to-fuchsia-800 text-white rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 border border-fuchsia-500">
+                    <i data-lucide="plus" class="w-4 h-4"></i> <span id="add-btn-text">New Item</span>
                 </button>
             </div>
-        </header>
+        </div>
 
-        <div class="flex-1 overflow-hidden flex relative">
-            <!-- Left Side: Tools & Active List -->
-            <div class="flex-1 overflow-y-auto p-8 space-y-8 relative">
-                <!-- Background decorative blobs -->
-                <div class="absolute top-0 right-0 w-96 h-96 bg-orange-100/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none z-0"></div>
+        <div class="flex-1 overflow-auto p-6 relative flex flex-col">
+            
+            <!-- Dynamic Category Tabs -->
+            <div class="flex gap-2 mb-6 overflow-x-auto pb-1 shrink-0 hide-scrollbar" id="table-tabs-container">
+                <!-- Tabs injected via JS -->
+            </div>
 
-                <!-- Planning Tools -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                    <!-- Tool 1: Plan New -->
-                    <div class="glass-card rounded-2xl p-6 border-t-4 border-t-indigo-500">
-                        <div class="flex justify-between items-center mb-5">
-                            <h3 class="font-bold text-slate-800 flex items-center gap-2"><i data-lucide="plus-circle" class="w-5 h-5 text-indigo-500"></i> Plan New Collection</h3>
-                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded">Pre-allocation</span>
-                        </div>
-                        <form id="planForm" class="space-y-4" onsubmit="addPlanToBasket(event)">
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Project</label>
-                                    <select id="planProject" class="form-input bg-white cursor-pointer" required></select>
-                                </div>
-                                <div>
-                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Sample Type</label>
-                                    <select id="planType" class="form-input bg-white cursor-pointer" required></select>
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Quantity</label>
-                                    <input type="number" id="planQty" class="form-input" value="10" min="1" required>
-                                </div>
-                                <div class="flex items-end">
-                                    <button type="submit" class="w-full py-2.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-xl font-bold text-sm transition-all border border-indigo-200">Add to Basket</button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-
-                    <!-- Tool 2: Book Existing -->
-                    <div class="glass-card rounded-2xl p-6 border-t-4 border-t-emerald-500">
-                        <div class="flex justify-between items-center mb-5">
-                            <h3 class="font-bold text-slate-800 flex items-center gap-2"><i data-lucide="search" class="w-5 h-5 text-emerald-500"></i> Book Existing Inventory</h3>
-                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded">Direct Link</span>
-                        </div>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Scan / Enter Sample ID</label>
-                                <div class="flex gap-2">
-                                    <input type="text" id="searchExisting" class="form-input" placeholder="e.g. F25MG_001">
-                                    <button onclick="addExistingToBasket()" class="px-5 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-xl font-bold text-sm transition-all border border-emerald-200 shrink-0">Book</button>
-                                </div>
-                            </div>
-                            <p class="text-[10px] text-slate-400 italic">This links an existing sample in `bio_assets.samples_root` to this reservation batch.</p>
-                        </div>
-                    </div>
+            <!-- Filters Card -->
+            <div class="glass-card rounded-2xl p-4 mb-6 shrink-0 flex flex-wrap gap-4 items-end">
+                <div class="flex-1 min-w-[150px]">
+                    <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5 ml-1">Status</label>
+                    <select id="filter-status-id" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-700 focus:ring-2 focus:ring-fuchsia-500 outline-none shadow-sm cursor-pointer">
+                        <option value="">All Statuses</option>
+                        <option value="Available">Available / In Stock</option>
+                        <option value="Low">Low Stock</option>
+                        <option value="Depleted">Depleted</option>
+                        <option value="Expired">Expired</option>
+                    </select>
                 </div>
-
-                <!-- Active Log Grid -->
-                <div class="glass-card rounded-2xl overflow-hidden relative z-10 border border-slate-200">
-                    <div class="p-5 border-b border-slate-200 bg-white flex justify-between items-center">
-                        <h3 class="font-bold text-slate-800 flex items-center gap-2 text-lg">
-                            <i data-lucide="list-checks" class="w-5 h-5 text-indigo-500"></i> Active Reservation Log
-                        </h3>
-                        <div class="relative w-64">
-                            <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
-                            <input type="text" id="gridSearch" oninput="gridApi.setQuickFilter(this.value)" placeholder="Search log..." class="pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm w-full focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
-                        </div>
-                    </div>
-                    <div id="reservationGrid" class="ag-theme-alpine w-full h-[500px]"></div>
+                <div class="flex-[3] min-w-[200px] relative">
+                    <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5 ml-1">Omni-Search</label>
+                    <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 bottom-2.5"></i>
+                    <input type="text" id="filter-general-text" placeholder="Search by ID, Name, Lot Number, Manufacturer..." class="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-700 focus:ring-2 focus:ring-fuchsia-500 outline-none shadow-sm">
                 </div>
             </div>
 
-            <!-- Right Side: Basket (Floating Panel style) -->
-            <div class="w-96 bg-white border-l border-slate-200 flex flex-col shrink-0 z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.02)]">
-                <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                    <h3 class="font-bold text-slate-800 flex items-center gap-2"><i data-lucide="shopping-basket" class="w-5 h-5 text-orange-500"></i> Reservation Basket</h3>
-                    <span id="basketCount" class="bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">0</span>
-                </div>
+            <!-- Main Content Layout (Grid) -->
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 flex-1 min-h-[400px]">
                 
-                <div class="flex-1 overflow-y-auto p-4 space-y-3" id="basketContainer">
-                    <div id="basketEmptyState" class="flex flex-col items-center justify-center h-40 text-slate-400 text-center px-6">
-                        <i data-lucide="arrow-left-circle" class="w-10 h-10 mb-2 opacity-20"></i>
-                        <p class="text-xs font-medium">Your basket is empty. Add items from the tools on the left.</p>
+                <!-- Table View -->
+                <div class="xl:col-span-2 glass-card rounded-2xl flex flex-col overflow-hidden relative border border-slate-200 shadow-sm bg-white">
+                    
+                    <!-- Table Toolbar -->
+                    <div class="px-5 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                        <span class="text-sm font-semibold text-slate-700 flex items-center gap-2" id="current-table-title">
+                            <i data-lucide="list" class="w-4 h-4 text-fuchsia-500"></i> Records List
+                        </span>
+                        <div class="flex items-center gap-3">
+                            <span id="selected-count" class="text-xs font-medium text-slate-500 bg-white px-2 py-1 rounded border border-slate-200">0 selected</span>
+                            <button id="bulk-delete-btn" class="px-3 py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded-lg text-xs font-semibold shadow-sm flex items-center gap-1.5 transition-all opacity-50 cursor-not-allowed" disabled>
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Table Container -->
+                    <div class="flex-1 overflow-auto relative">
+                        <div id="table-loading" class="loading-overlay active">
+                            <div class="flex flex-col items-center gap-2 text-fuchsia-600">
+                                <i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i>
+                                <span class="text-xs font-semibold tracking-wider uppercase">Loading...</span>
+                            </div>
+                        </div>
+                        <table class="min-w-full text-left border-collapse">
+                            <thead class="bg-slate-50 sticky top-0 z-10 shadow-sm ring-1 ring-slate-200">
+                                <tr id="table-headers">
+                                    <!-- Headers injected via JS -->
+                                </tr>
+                            </thead>
+                            <tbody id="dynamic-table-body" class="divide-y divide-slate-100 text-sm">
+                                <!-- Data injected via JS -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
-                <div class="p-6 border-t border-slate-100 space-y-4 bg-white">
-                    <div>
-                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Planned Date *</label>
-                        <input type="date" id="finalDate" class="form-input" required>
+                <!-- Right Details Pane -->
+                <div id="record-details-container" class="xl:col-span-1 glass-card rounded-2xl flex flex-col overflow-hidden border border-slate-200 shadow-sm bg-white">
+                    <!-- Placeholder when nothing is selected -->
+                    <div class="flex-1 p-8 flex flex-col items-center justify-center text-center">
+                        <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100 shadow-sm">
+                            <i data-lucide="mouse-pointer-click" class="w-8 h-8 text-fuchsia-300"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-slate-800 mb-1">Item Details</h3>
+                        <p class="text-sm text-slate-500 max-w-xs">Select a row from the table to view stock levels, expiry dates, and storage locations.</p>
                     </div>
-                    <div>
-                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Batch Notes / Purpose</label>
-                        <textarea id="finalNotes" class="form-input resize-none" rows="2" placeholder="e.g. Weser Campaign Jan 2026"></textarea>
-                    </div>
-                    <button onclick="commitReservationBatch()" id="btnCommit" class="w-full py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-2xl font-bold shadow-lg shadow-orange-500/20 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:grayscale">
-                        <i data-lucide="check-circle" class="w-5 h-5"></i> Generate & Reserve
-                    </button>
                 </div>
+
             </div>
         </div>
+
+        <div id="modal-container"></div>
     </div>
 
-    <!-- Import Modal -->
-    <div id="importModal" class="modal hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-        <div class="modal-content bg-white w-full max-md rounded-3xl shadow-2xl overflow-hidden p-7 animate-in fade-in zoom-in duration-200">
-            <div class="flex justify-between items-center mb-6">
-                <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2"><i data-lucide="file-up" class="text-emerald-500 w-6 h-6"></i> Bulk Import Reservations</h3>
-                <button onclick="closeModal('importModal')" class="text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
-            <div class="space-y-5">
-                <div class="bg-indigo-50 p-4 rounded-2xl text-xs text-indigo-700 border border-indigo-100 leading-relaxed">
-                    <strong>Format:</strong> Excel (.xlsx) or CSV. Required columns: <code>sample_type_id</code>, <code>project_id</code>, <code>planned_date</code>.
-                </div>
-                <div class="border-2 border-dashed border-slate-200 rounded-2xl p-8 text-center bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 transition-all cursor-pointer relative group">
-                    <i data-lucide="upload-cloud" class="w-10 h-10 text-slate-300 mx-auto mb-2 group-hover:text-emerald-500 transition-colors"></i>
-                    <p class="text-sm font-semibold text-slate-700">Choose File</p>
-                    <input type="file" class="absolute inset-0 opacity-0 cursor-pointer">
-                </div>
-                <div class="flex justify-end gap-3 pt-2">
-                    <button onclick="closeModal('importModal')" class="px-5 py-2.5 text-sm font-semibold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
-                    <button class="px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-sm shadow-md hover:bg-emerald-700 transition-all">Upload</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Scripts -->
     <script>
+        // --- Configuration & Endpoints ---
         const getApiBase = () => window.location.pathname.includes('/mylims') ? '/mylims/api' : '/api';
-        const API = getApiBase();
+        const API_BASE_URL = getApiBase(); 
         
-        let gridApi = null;
-        let basketItems = [];
+        // Define expected table mappings strictly matching the existing SQL structure
+        const TABLE_DEFINITIONS = [
+            { id: 'reagents', label: 'Reagents & Inventory', icon: 'test-tube', pk: 'reagent_id', schema: 'lims' }
+        ];
 
-        document.addEventListener('DOMContentLoaded', async () => {
+        let currentTableDef = TABLE_DEFINITIONS[0];
+        
+        let masterCache = {}; 
+        let currentTableData = []; 
+        let currentTableSchema = []; 
+        let sortColumn = currentTableDef.pk; 
+        let sortDirection = 'desc';
+        let currentFilters = { 'status_id': '', 'general_text': '' };
+        let selectedRows = new Set();
+
+        // Columns to consistently skip or render specifically
+        const SYSTEM_COLUMNS = ['search_vector', 'attachment_link'];
+
+        // --- Auth & Init ---
+        document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
             const token = sessionStorage.getItem('token');
-            if (!token) window.location.href = 'login.html';
+            if (!token) { window.location.href = 'login.html'; return; }
 
             const user = JSON.parse(sessionStorage.getItem('user'));
-            if(user) document.getElementById('userNameDisplay').innerText = user.person_id;
-
-            try {
-                // Initialize Grid First
-                initGrid();
-                
-                // Then Load Data
-                await Promise.all([
-                    loadDropdowns(),
-                    loadGridData()
-                ]);
-            } catch (err) {
-                console.error("Init Error:", err);
-            } finally {
-                // Hide global loading spinner
-                document.getElementById('loadingOverlay').classList.remove('active');
-            }
+            if (user && user.person_id) document.getElementById('userNameDisplay').innerText = user.person_id;
+            
+            document.getElementById('logout-button').addEventListener('click', () => { 
+                sessionStorage.clear(); 
+                window.location.href = 'login.html'; 
+            });
+            
+            renderTabs();
+            initializePage();
         });
 
+        // --- Core Utils & API ---
         async function apiFetch(endpoint, options = {}) {
             const token = sessionStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}`, ...options.headers };
-            if(options.body && !(options.body instanceof FormData)) {
+            const headers = { 'Authorization': `Bearer ${token}` };
+
+            const isFormData = options.body instanceof FormData;
+            if (!isFormData && options.body && typeof options.body === 'object') {
                 headers['Content-Type'] = 'application/json';
                 options.body = JSON.stringify(options.body);
             }
+            options.headers = { ...headers, ...options.headers };
+
             try {
-                const res = await fetch(`${API}/${endpoint}`, { ...options, headers });
-                if(!res.ok) {
-                    const errObj = await res.json().catch(() => ({ detail: `HTTP Error ${res.status}` }));
-                    throw new Error(errObj.detail || errObj.error || `HTTP Error ${res.status}`);
+                const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+                
+                if (!response.ok) { 
+                    const errText = await response.text();
+                    try { const errJson = JSON.parse(errText); throw new Error(errJson.detail || errJson.error || `Error ${response.status}`); } 
+                    catch (e) { throw new Error(`Error ${response.status}: ${errText}`); }
                 }
-                return await res.json();
-            } catch(e) {
-                console.error(e);
-                return { error: e.message };
+                if (response.status === 204 || response.headers.get('content-length') === '0') return { success: true };
+                return response.json();
+            } catch (error) { 
+                console.error(`API Error on ${endpoint}:`, error); 
+                return { error: error.message }; 
             }
         }
 
-        async function loadDropdowns() {
-            const prjs = await apiFetch('table/lims/projects?limit=500');
-            const pSel = document.getElementById('planProject');
-            if(prjs && !prjs.error && Array.isArray(prjs)) prjs.forEach(p => pSel.add(new Option(p.acronym, p.project_id)));
-
-            const types = await apiFetch('table/reference/sample_type?limit=100');
-            const tSel = document.getElementById('planType');
-            if(types && !types.error && Array.isArray(types)) types.forEach(t => tSel.add(new Option(t.sample_type_id, t.sample_type_id)));
+        function showToast(msg, type = 'info') {
+            const c = document.getElementById('toastContainer');
+            const d = document.createElement('div');
+            
+            const bgClass = type === 'error' ? 'bg-red-50' : (type === 'success' ? 'bg-emerald-50' : 'bg-blue-50');
+            const borderClass = type === 'error' ? 'border-red-200' : (type === 'success' ? 'border-emerald-200' : 'border-blue-200');
+            const textClass = type === 'error' ? 'text-red-800' : (type === 'success' ? 'text-emerald-800' : 'text-blue-800');
+            const iconColor = type === 'error' ? 'text-red-500' : (type === 'success' ? 'text-emerald-500' : 'text-blue-500');
+            const iconType = type === 'error' ? 'alert-octagon' : (type === 'success' ? 'check-circle-2' : 'info');
+            
+            d.className = `px-4 py-3 rounded-xl shadow-lg border ${borderClass} ${bgClass} ${textClass} text-sm font-semibold flex items-center gap-3 transform transition-all duration-300 translate-y-0`;
+            d.innerHTML = `<i data-lucide="${iconType}" class="w-5 h-5 ${iconColor}"></i> ${msg}`;
+            c.appendChild(d);
+            lucide.createIcons();
+            setTimeout(() => { 
+                d.classList.add('opacity-0', 'translate-y-4'); 
+                setTimeout(() => d.remove(), 300); 
+            }, 3500);
         }
 
-        async function loadGridData() {
-            const data = await apiFetch('table/bio_assets/samples_reservation?limit=1000&sort_by=planned_date&sort_order=desc');
-            // If data is valid and grid is ready, set row data
-            if(gridApi) {
-                gridApi.setRowData(Array.isArray(data) ? data : []);
-            }
+        function showLoading(show) {
+            const el = document.getElementById('table-loading');
+            if(el) el.classList.toggle('active', show);
         }
 
-        function initGrid() {
-            const gridDiv = document.querySelector('#reservationGrid');
-            const gridOptions = {
-                columnDefs: [
-                    { field: "reservation_sample_id", headerName: "Reservation ID", pinned: 'left', width: 180 },
-                    { field: "sample_type_id", headerName: "Type", width: 120 },
-                    { field: "project_id", headerName: "Project", width: 130 },
-                    { field: "planned_date", headerName: "Date", filter: 'agDateColumnFilter', width: 130 },
-                    { field: "status_id", headerName: "Status", width: 120, 
-                      cellRenderer: params => {
-                          const val = params.value || 'Planned';
-                          let colorClass = 'text-indigo-600 bg-indigo-50 border-indigo-200';
-                          if (val === 'Active') colorClass = 'text-emerald-600 bg-emerald-50 border-emerald-200';
-                          if (val === 'Overdue') colorClass = 'text-red-600 bg-red-50 border-red-200';
-                          return `<span class="px-2.5 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider ${colorClass}">${val}</span>`;
-                      }
-                    },
-                    { field: "actual_sample_id", headerName: "Sample Link", width: 160 },
-                    { field: "notes", headerName: "Notes", flex: 1, editable: true }
-                ],
-                defaultColDef: { resizable: true, sortable: true, filter: true },
-                animateRows: true,
-                onGridReady: (params) => { 
-                    gridApi = params.api; 
-                    // If grid initializes after data is fetched, this will catch up
-                    loadGridData(); 
+        async function getReferenceData(tableName, schema = 'reference', filters = {}) {
+            const cacheKey = `${schema}.${tableName}.${JSON.stringify(filters)}`;
+            if (masterCache[cacheKey]) return masterCache[cacheKey];
+            
+            let endpoint = `table/${schema}/${tableName}`;
+            const queryParams = new URLSearchParams(filters).toString();
+            if (queryParams) endpoint += `?${queryParams}`;
+
+            const data = await apiFetch(endpoint);
+            if(data && !data.error) masterCache[cacheKey] = data;
+            return data;
+        }
+
+        async function getTableSchema(schema, table) {
+            const cacheKey = `schema.${schema}.${table}`;
+            if (masterCache[cacheKey]) return masterCache[cacheKey];
+            const schemaData = await apiFetch(`table/${schema}/${table}/schema`);
+            if (schemaData && !schemaData.error) masterCache[cacheKey] = schemaData;
+            return schemaData;
+        }
+
+        // --- Formatting Utils ---
+        function formatColumnName(columnName) {
+            return columnName.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+        }
+        const formatDateForInput = (dateString) => {
+            if (!dateString) return '';
+            try { const date = new Date(dateString); return isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0]; } 
+            catch (e) { return ''; }
+        };
+        const formatDate = (dateString) => {
+            if (!dateString) return 'N/A';
+            try { const date = new Date(dateString); return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString('en-CA'); } 
+            catch (e) { return 'N/A'; }
+        };
+
+        // --- CSV Utils ---
+        function unparseCSV(data) {
+            if (!Array.isArray(data) || data.length === 0) return '';
+            return data.map(row => row.map(field => {
+                if (field === null || field === undefined) return '';
+                let sf = String(field);
+                if (sf.includes(',') || sf.includes('"') || sf.includes('\n')) return '"' + sf.replace(/"/g, '""') + '"';
+                return sf;
+            }).join(',')).join('\n');
+        }
+
+        function parseCSVToJSON(csvText) {
+            const lines = csvText.split(/\r\n|\n/);
+            const headers = lines[0].split(',').map(h => h.trim());
+            const records = [];
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line === "") continue;
+                const data = line.split(',').map(item => item.trim());
+                const record = {};
+                for (let j = 0; j < headers.length; j++) {
+                    let value = data[j] || '';
+                    if (value.startsWith('"') && value.endsWith('"')) value = value.substring(1, value.length - 1);
+                    record[headers[j]] = value;
                 }
-            };
-            
-            // Check for modern agGrid initialization
-            if (window.agGrid && agGrid.createGrid) {
-                agGrid.createGrid(gridDiv, gridOptions);
-            } else if (window.agGrid && agGrid.Grid) {
-                new agGrid.Grid(gridDiv, gridOptions);
+                records.push(record);
             }
+            return records;
         }
 
-        // --- Basket Logic ---
-
-        function addPlanToBasket(e) {
-            e.preventDefault();
-            const proj = document.getElementById('planProject').value;
-            const type = document.getElementById('planType').value;
-            const qty = parseInt(document.getElementById('planQty').value);
-
-            for(let i=0; i<qty; i++) {
-                basketItems.push({
-                    mode: 'new',
-                    project_id: proj,
-                    sample_type_id: type,
-                    display: `New: ${type} (${proj})`
-                });
-            }
-            renderBasket();
-            showToast(`Added ${qty} items to basket`);
-        }
-
-        function addExistingToBasket() {
-            const id = document.getElementById('searchExisting').value.trim();
-            if(!id) return;
-            
-            basketItems.push({
-                mode: 'book',
-                actual_sample_id: id,
-                display: `Link: ${id}`
-            });
-            document.getElementById('searchExisting').value = '';
-            renderBasket();
-            showToast(`Linked ${id} to batch`);
-        }
-
-        function renderBasket() {
-            const container = document.getElementById('basketContainer');
-            const emptyState = document.getElementById('basketEmptyState');
-            const countLabel = document.getElementById('basketCount');
-            const btn = document.getElementById('btnCommit');
-
-            container.innerHTML = '';
-            countLabel.innerText = basketItems.length;
-            btn.disabled = basketItems.length === 0;
-
-            if(basketItems.length === 0) {
-                container.appendChild(emptyState);
-                return;
-            }
-
-            basketItems.forEach((item, idx) => {
-                const div = document.createElement('div');
-                div.className = "basket-item bg-white border border-slate-200 rounded-xl p-3 flex justify-between items-center shadow-sm";
-                div.innerHTML = `
-                    <div>
-                        <div class="text-xs font-bold text-slate-800">${item.display}</div>
-                        <div class="text-[10px] text-slate-400 font-medium uppercase tracking-tighter">${item.mode === 'new' ? 'Generator Active' : 'Registry Link'}</div>
-                    </div>
-                    <button onclick="removeFromBasket(${idx})" class="text-slate-300 hover:text-red-500 transition-colors"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
-                `;
-                container.appendChild(div);
-            });
+        // --- UI Dynamic Rendering & Navigation ---
+        function renderTabs() {
+            const container = document.getElementById('table-tabs-container');
+            container.innerHTML = TABLE_DEFINITIONS.map(tab => `
+                <button onclick="switchTable('${tab.id}')" 
+                    class="nav-tab whitespace-nowrap px-4 py-2 rounded-xl text-sm font-semibold border ${currentTableDef.id === tab.id ? 'active' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300 shadow-sm'} flex items-center gap-2">
+                    <i data-lucide="${tab.icon}" class="w-4 h-4"></i> ${tab.label}
+                </button>
+            `).join('');
+            lucide.createIcons();
+            document.getElementById('add-btn-text').innerText = `New ${currentTableDef.label.replace(/s$/, '')}`;
+            document.getElementById('current-table-title').innerHTML = `<i data-lucide="${currentTableDef.icon}" class="w-4 h-4 text-fuchsia-500"></i> ${currentTableDef.label} List`;
             lucide.createIcons();
         }
 
-        function removeFromBasket(index) {
-            basketItems.splice(index, 1);
-            renderBasket();
+        function switchTable(tableId) {
+            currentTableDef = TABLE_DEFINITIONS.find(t => t.id === tableId);
+            sortColumn = currentTableDef.pk; // Default sort to PK
+            sortDirection = 'desc';
+            selectedRows.clear();
+            document.getElementById('filter-general-text').value = '';
+            currentFilters = { 'status_id': '', 'general_text': '' };
+            renderTabs();
+            loadAndRenderTable();
         }
 
-        async function commitReservationBatch() {
-            const date = document.getElementById('finalDate').value;
-            if(!date) return showToast("Please select a planned date", "error");
+        // --- Filters & Sorting ---
+        function handleSortClick(e) {
+            const column = e.currentTarget.dataset.column;
+            if (sortColumn === column) { sortDirection = sortDirection === 'asc' ? 'desc' : 'asc'; } 
+            else { sortColumn = column; sortDirection = 'asc'; }
+            loadAndRenderTable();
+        }
 
-            const btn = document.getElementById('btnCommit');
-            const orig = btn.innerHTML;
-            btn.innerHTML = '<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Saving...';
-            btn.disabled = true;
+        function handleFilterChange(e) {
+            const filterKey = e.target.id.replace('filter-', '');
+            currentFilters[filterKey] = e.target.type === 'text' ? e.target.value.toLowerCase() : e.target.value;
+            
+            // Re-apply client side filter
+            const filteredData = applyClientSideFiltering(currentTableDataRaw);
+            renderTable(filteredData, currentTableSchema);
+        }
 
-            const payload = basketItems.map(item => ({
-                project_id: item.project_id || null,
-                sample_type_id: item.sample_type_id || null,
-                actual_sample_id: item.actual_sample_id || null,
-                planned_date: date,
-                notes: document.getElementById('finalNotes').value,
-                status_id: 'Planned'
+        document.getElementById('filter-status-id').onchange = handleFilterChange;
+        document.getElementById('filter-general-text').oninput = handleFilterChange;
+
+        function buildFilterQueryString() {
+            const params = new URLSearchParams();
+            params.append('sort_by', sortColumn);
+            params.append('sort_order', sortDirection);
+            return params.toString();
+        }
+
+        let currentTableDataRaw = []; // keep a raw copy for client-side text filtering
+
+        function applyClientSideFiltering(data) {
+             let filtered = data;
+             
+             // Custom Status Filter for Inventory (Dynamic mapping)
+             if (currentFilters.status_id) {
+                 const statusTarget = currentFilters.status_id.toLowerCase();
+                 filtered = filtered.filter(row => {
+                     // Check explicit status column if exists
+                     if (row.status && String(row.status).toLowerCase() === statusTarget) return true;
+                     if (row.status_id && String(row.status_id).toLowerCase() === statusTarget) return true;
+                     
+                     // Derived status logic for inventory
+                     const qty = row.quantity !== undefined ? parseFloat(row.quantity) : 1;
+                     const isDepleted = qty <= 0;
+                     const isExpired = row.expiry_date && new Date(row.expiry_date) < new Date();
+                     
+                     if (statusTarget === 'depleted') return isDepleted;
+                     if (statusTarget === 'expired') return isExpired && !isDepleted;
+                     if (statusTarget === 'available') return !isDepleted && !isExpired;
+                     if (statusTarget === 'low') return !isDepleted && !isExpired && qty > 0 && qty <= 5; // Generic threshold
+                     
+                     return false;
+                 });
+             }
+
+             if (currentFilters.general_text) {
+                 const t = currentFilters.general_text;
+                 filtered = filtered.filter(row => {
+                     return Object.values(row).some(val => String(val || '').toLowerCase().includes(t));
+                 });
+             }
+             return filtered;
+        }
+
+        // --- Table Rendering ---
+        function renderTable(dataToDisplay, schemaInfo) {
+            const tableHeaders = document.getElementById('table-headers');
+            const tableBody = document.getElementById('dynamic-table-body');
+            
+            const pkCol = currentTableDef.pk;
+            const displayColumns = schemaInfo
+                .filter(col => !SYSTEM_COLUMNS.includes(col.column_name))
+                .sort((a, b) => {
+                    // Smart ordering for Inventory: ID, Name, Lot, Expiry, Qty, Storage
+                    const order = [pkCol, 'name', 'catalog_num', 'lot_number', 'expiry_date', 'quantity', 'storage_id', 'status'];
+                    let aIndex = order.findIndex(o => a.column_name.includes(o));
+                    let bIndex = order.findIndex(o => b.column_name.includes(o));
+                    return (aIndex === -1 ? 100 : aIndex) - (bIndex === -1 ? 100 : bIndex);
+                })
+                .slice(0, 8) 
+                .map(col => ({ id: col.column_name, label: formatColumnName(col.column_name) }));
+            
+            const finalColumns = [ { id: 'checkbox', label: '' }, ...displayColumns ];
+
+            tableHeaders.innerHTML = finalColumns.map(col => `
+                <th class="px-4 py-3 font-bold text-slate-500 uppercase tracking-wider text-[11px] whitespace-nowrap">
+                    ${col.id === 'checkbox' ? `<input type="checkbox" id="select-all-checkbox" class="rounded border-slate-300 text-fuchsia-600 focus:ring-fuchsia-500 cursor-pointer">` : `
+                    <div class="sortable-header group" data-column="${col.id}">
+                        <span>${col.label}</span>
+                        <i data-lucide="${sortColumn === col.id ? (sortDirection === 'asc' ? 'chevron-up' : 'chevron-down') : 'chevrons-up-down'}" class="w-3.5 h-3.5 ${sortColumn===col.id ? 'text-fuchsia-500' : 'text-slate-300 opacity-0 group-hover:opacity-100'} transition-all"></i>
+                    </div>`}
+                </th>
+            `).join('');
+
+            const totalCols = finalColumns.length;
+            
+            tableBody.innerHTML = dataToDisplay.map(row => {
+                const pkValue = row[pkCol];
+                const isSelected = selectedRows.has(pkValue);
+                
+                const rowCells = finalColumns.map(col => {
+                    if (col.id === 'checkbox') return `<td class="px-4 py-3 w-10"><input type="checkbox" class="row-select-checkbox rounded border-slate-300 text-fuchsia-600 focus:ring-fuchsia-500 cursor-pointer" data-pk-value="${pkValue}" ${isSelected ? 'checked' : ''}></td>`;
+                    
+                    let value = row[col.id];
+                    if (value === null || value === undefined || value === '') return `<td class="px-4 py-3 whitespace-nowrap text-sm text-slate-300">-</td>`;
+                    
+                    let cellContent = value;
+                    if (col.id.includes('date') || col.id.includes('created_at')) {
+                        const dateObj = new Date(value);
+                        cellContent = `<span class="font-medium text-slate-600">${formatDate(value)}</span>`;
+                        // Highlight expired dates
+                        if (col.id === 'expiry_date' && dateObj < new Date()) {
+                            cellContent = `<span class="text-red-600 font-bold flex items-center gap-1"><i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> ${formatDate(value)}</span>`;
+                        }
+                    }
+                    else if (col.id === 'quantity' || col.id.includes('stock')) {
+                        if (parseFloat(value) <= 0) cellContent = `<span class="px-2 py-0.5 rounded text-[11px] font-bold bg-red-100 text-red-700">Depleted (${value})</span>`;
+                        else if (parseFloat(value) <= 5) cellContent = `<span class="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-700">Low (${value})</span>`;
+                        else cellContent = `<span class="font-semibold text-emerald-600">${value}</span>`;
+                    }
+                    else if (col.id === 'storage_id') {
+                         cellContent = `<span class="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-100"><i data-lucide="archive" class="w-3 h-3"></i>${value}</span>`;
+                    }
+                    else if (col.id === pkCol) cellContent = `<span class="font-mono text-xs font-semibold text-slate-700">${value}</span>`;
+                    
+                    return `<td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600">${cellContent}</td>`;
+                }).join('');
+
+                return `<tr class="cursor-pointer dynamic-table-row ${isSelected ? 'table-row-selected' : ''}" data-pk-value='${pkValue}'>${rowCells}</tr>`;
+            }).join('') || `<tr><td colspan="${totalCols}" class="text-center py-8 text-slate-500 text-sm">No items match the current filters.</td></tr>`;
+            
+            lucide.createIcons();
+            addSelectionListeners();
+            
+            document.querySelectorAll('.sortable-header').forEach(header => {
+                 header.removeEventListener('click', handleSortClick);
+                 header.addEventListener('click', handleSortClick)
+            });
+
+            document.querySelectorAll('.dynamic-table-row').forEach(row => row.addEventListener('click', (e) => {
+                if (e.target.closest('input[type="checkbox"]')) return;
+                document.querySelectorAll('.dynamic-table-row').forEach(r => r.classList.remove('table-row-selected'));
+                row.classList.add('table-row-selected');
+                const pk = row.dataset.pkValue;
+                const record = currentTableData.find(r => r[pkCol] == pk);
+                renderRecordDetails(record);
             }));
+            
+            if(dataToDisplay.length > 0 && !document.querySelector('.table-row-selected')) {
+                 renderRecordDetails(dataToDisplay[0]);
+                 const firstRow = document.querySelector(`.dynamic-table-row[data-pk-value='${dataToDisplay[0][pkCol]}']`);
+                 if(firstRow) firstRow.classList.add('table-row-selected');
+            } else if (dataToDisplay.length === 0) renderRecordDetails(null);
+        }
+
+        // --- Selection & Bulk Actions ---
+        function addSelectionListeners() {
+            const allCheckbox = document.getElementById('select-all-checkbox');
+            const rowCheckboxes = document.querySelectorAll('.row-select-checkbox');
+            const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+            const selectedCountDisplay = document.getElementById('selected-count');
+
+            if (!allCheckbox) return;
+
+            const updateBulkButtonState = () => {
+                const count = selectedRows.size;
+                bulkDeleteBtn.disabled = count === 0;
+                selectedCountDisplay.textContent = `${count} selected`;
+                if(count === 0) {
+                    bulkDeleteBtn.classList.add('opacity-50', 'cursor-not-allowed', 'border-slate-200', 'text-slate-400');
+                    bulkDeleteBtn.classList.remove('border-red-200', 'text-red-600', 'hover:bg-red-50');
+                } else {
+                    bulkDeleteBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'border-slate-200', 'text-slate-400');
+                    bulkDeleteBtn.classList.add('border-red-200', 'text-red-600', 'hover:bg-red-50');
+                }
+            };
+
+            allCheckbox.onclick = () => {
+                if (allCheckbox.checked) document.querySelectorAll('.dynamic-table-row').forEach(row => selectedRows.add(row.dataset.pkValue));
+                else selectedRows.clear();
+                
+                document.querySelectorAll('.dynamic-table-row').forEach(row => {
+                    const cb = row.querySelector('.row-select-checkbox');
+                    if(allCheckbox.checked) { row.classList.add('table-row-selected'); cb.checked = true; } 
+                    else { row.classList.remove('table-row-selected'); cb.checked = false; }
+                });
+                updateBulkButtonState();
+            };
+
+            rowCheckboxes.forEach(cb => {
+                cb.onclick = (e) => {
+                    const pk = e.target.dataset.pkValue;
+                    const row = e.target.closest('tr');
+                    if (e.target.checked) { selectedRows.add(pk); row.classList.add('table-row-selected'); } 
+                    else { selectedRows.delete(pk); row.classList.remove('table-row-selected'); }
+                    updateBulkButtonState();
+                };
+            });
+            
+            bulkDeleteBtn.onclick = bulkDeleteSelected;
+            updateBulkButtonState();
+        }
+        
+        async function bulkDeleteSelected() {
+            if (selectedRows.size === 0) return;
+            if (!confirm(`Permanently delete ${selectedRows.size} ${currentTableDef.label.toLowerCase()}?`)) return;
+
+            showLoading(true);
+            const deleteIds = Array.from(selectedRows);
+            let success = 0, failed = 0;
+
+            for (const id of deleteIds) {
+                 const result = await apiFetch(`table/${currentTableDef.schema}/${currentTableDef.id}?${currentTableDef.pk}=${id}`, { method: 'DELETE' });
+                 if (result && !result.error) success++; else failed++;
+            }
+
+            showLoading(false);
+            if (success > 0) {
+                showToast(`Deleted ${success} items. ${failed > 0 ? `(${failed} failed)` : ''}`, 'success');
+                selectedRows.clear();
+                loadAndRenderTable();
+            } else showToast(`Deletion failed.`, 'error');
+        }
+
+        // --- Details Pane (Inventory Focused) ---
+        function renderRecordDetails(record) {
+            const container = document.getElementById('record-details-container');
+            if (!record) {
+                container.innerHTML = `
+                    <div class="flex-1 p-8 flex flex-col items-center justify-center text-center">
+                        <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100 shadow-sm">
+                            <i data-lucide="mouse-pointer-click" class="w-8 h-8 text-fuchsia-300"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-slate-800 mb-1">Item Details</h3>
+                        <p class="text-sm text-slate-500 max-w-xs">Select a row from the table to view stock levels, expiry dates, and storage locations.</p>
+                    </div>`;
+                lucide.createIcons();
+                return;
+            }
+
+            const pkCol = currentTableDef.pk;
+            const pkVal = record[pkCol];
+            
+            // Smart Inventory Logic
+            const qty = record.quantity !== undefined ? parseFloat(record.quantity) : null;
+            const isDepleted = qty !== null && qty <= 0;
+            const isLow = qty !== null && qty > 0 && qty <= 5;
+            
+            let isExpired = false;
+            let daysUntilExpiry = null;
+            if (record.expiry_date) {
+                const expDate = new Date(record.expiry_date);
+                const now = new Date();
+                daysUntilExpiry = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
+                isExpired = daysUntilExpiry < 0;
+            }
+
+            let statusBadge = '';
+            if (isDepleted) statusBadge = `<span class="bg-red-100 text-red-700 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider border border-red-200"><i data-lucide="x-circle" class="w-3.5 h-3.5 inline mr-1"></i>Depleted</span>`;
+            else if (isExpired) statusBadge = `<span class="bg-red-100 text-red-700 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider border border-red-200"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 inline mr-1"></i>Expired</span>`;
+            else if (isLow) statusBadge = `<span class="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider border border-amber-200"><i data-lucide="alert-circle" class="w-3.5 h-3.5 inline mr-1"></i>Low Stock</span>`;
+            else statusBadge = `<span class="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider border border-emerald-200"><i data-lucide="check-circle" class="w-3.5 h-3.5 inline mr-1"></i>Available</span>`;
+
+            const renderRow = (key) => {
+                let value = record[key];
+                if (value === null || value === undefined || value === '') return '';
+                if (key.includes('date') || key.includes('created')) value = formatDate(value);
+                return `
+                    <div class="flex justify-between py-2 border-b border-slate-100 last:border-0 items-center">
+                        <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">${formatColumnName(key)}</span>
+                        <span class="text-sm font-medium text-slate-800 text-right break-all max-w-[60%]">${value}</span>
+                    </div>`;
+            };
+
+            // Categorize columns
+            const coreCols = currentTableSchema.filter(c => !SYSTEM_COLUMNS.includes(c.column_name) && c.column_name !== pkCol && !c.column_name.includes('storage') && c.column_name !== 'notes').map(c => c.column_name);
+
+            container.innerHTML = `
+                <div class="flex flex-col h-full bg-slate-50/30">
+                    <div class="p-6 border-b border-slate-200 bg-white">
+                        <div class="flex justify-between items-start mb-2">
+                            <h2 class="text-xl font-extrabold text-slate-900 tracking-tight font-mono truncate mr-2" title="${pkVal}">${pkVal}</h2>
+                            <button onclick="showCreateEditModal('${pkVal}')" class="p-1.5 text-slate-400 hover:text-fuchsia-600 hover:bg-fuchsia-50 rounded-lg transition-colors border border-transparent hover:border-fuchsia-100 shrink-0" title="Edit">
+                                <i data-lucide="edit" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            ${statusBadge}
+                            ${record.storage_id ? `<a href="storage.html" class="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-sky-600 bg-sky-50 px-2 py-1 rounded-md border border-sky-200 hover:bg-sky-100 transition"><i data-lucide="archive" class="w-3 h-3"></i>${record.storage_id}</a>` : ''}
+                        </div>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto p-6 space-y-4">
+                        
+                        <!-- Inventory Health Card -->
+                        ${(qty !== null || record.expiry_date) ? `
+                        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm grid grid-cols-2 gap-4">
+                            ${qty !== null ? `
+                            <div>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Current Quantity</p>
+                                <p class="text-2xl font-black ${isDepleted ? 'text-red-500' : isLow ? 'text-amber-500' : 'text-emerald-500'}">${qty}</p>
+                            </div>` : ''}
+                            
+                            ${record.expiry_date ? `
+                            <div>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Expiry Status</p>
+                                <p class="text-sm font-bold ${isExpired ? 'text-red-500' : daysUntilExpiry < 30 ? 'text-amber-500' : 'text-emerald-500'}">
+                                    ${isExpired ? 'Expired ' + Math.abs(daysUntilExpiry) + ' days ago' : 'Expires in ' + daysUntilExpiry + ' days'}
+                                </p>
+                                <p class="text-xs text-slate-500 font-medium">${formatDate(record.expiry_date)}</p>
+                            </div>` : ''}
+                        </div>` : ''}
+
+                        <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                            <button class="w-full px-4 py-3 bg-slate-50 flex justify-between items-center text-sm font-bold text-slate-700 transition hover:bg-slate-100" onclick="this.nextElementSibling.classList.toggle('open'); this.querySelector('.chevron').classList.toggle('rotate-180')">
+                                <span class="flex items-center gap-2"><i data-lucide="info" class="w-4 h-4 text-fuchsia-500"></i> Item Properties</span>
+                                <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 chevron transition-transform"></i>
+                            </button>
+                            <div class="accordion-content open px-4 bg-white">
+                                ${coreCols.map(c => renderRow(c)).join('')}
+                            </div>
+                        </div>
+
+                        ${record.notes ? `
+                        <div class="bg-yellow-50 border border-yellow-100 rounded-xl p-4 shadow-sm">
+                            <h4 class="text-[10px] font-bold text-yellow-800 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><i data-lucide="sticky-note" class="w-3.5 h-3.5"></i> Notes</h4>
+                            <p class="text-sm text-yellow-900">${record.notes}</p>
+                        </div>` : ''}
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        // --- Modals & Dynamic Forms ---
+        function showModal(content) {
+            const container = document.getElementById('modal-container');
+            container.innerHTML = content;
+            const modal = container.querySelector('.modal-overlay');
+            const inner = container.querySelector('.modal-content');
+            
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                inner.classList.remove('opacity-0', 'scale-95', 'translate-y-4');
+            }, 10);
+
+            const closeModal = () => {
+                modal.classList.add('opacity-0');
+                inner.classList.add('opacity-0', 'scale-95', 'translate-y-4');
+                setTimeout(() => container.innerHTML = '', 300);
+            };
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+            container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+            lucide.createIcons();
+            return { closeModal };
+        }
+
+        async function buildReferenceOptions(columnName, selectedValue) {
+            let opts = `<option value="">Select...</option>`;
+            let data = [];
+            
+            if (columnName === 'storage_id') {
+                data = masterCache['lims.storage'] || await getReferenceData('storage', 'lims');
+                opts += data.map(s => `<option value="${s.storage_id}" ${selectedValue === s.storage_id ? 'selected' : ''}>${s.storage_id} (${s.freezer || 'Room'})</option>`).join('');
+            } else if (columnName === 'status_id' || columnName === 'status') {
+                data = masterCache['reference.status'] || await getReferenceData('status', 'reference');
+                if (!data.error && data.length > 0) {
+                    opts += data.map(s => `<option value="${s.status_id}" ${selectedValue === s.status_id ? 'selected' : ''}>${s.status_id}</option>`).join('');
+                } else {
+                    // Fallback for inventory specifically
+                    const fb = ['Available', 'Low', 'Depleted', 'Expired'];
+                    opts += fb.map(s => `<option value="${s}" ${selectedValue === s ? 'selected' : ''}>${s}</option>`).join('');
+                }
+            } else if (columnName.includes('type_id')) {
+                data = masterCache['reference.reagents_type'] || await getReferenceData('reagents_type', 'reference');
+                if (!data.error && data.length > 0) {
+                    opts += data.map(t => `<option value="${t.reagent_type_id}" ${selectedValue === t.reagent_type_id ? 'selected' : ''}>${t.reagent_type_id}</option>`).join('');
+                }
+            }
+            return opts;
+        }
+
+        async function showCreateEditModal(recordId = null) {
+            const isEditing = recordId !== null;
+            const pkCol = currentTableDef.pk;
+            const record = isEditing ? currentTableData.find(r => r[pkCol] == recordId) : null;
+            if (isEditing && !record) return showToast("Record not found", "error");
+
+            showLoading(true);
+
+            // Dynamically generate form fields based on schema
+            let formFieldsHTML = '';
+            const skippableCols = [...SYSTEM_COLUMNS, 'created_at', 'created_by', 'updated_at', pkCol];
+            
+            for (const col of currentTableSchema) {
+                if (skippableCols.includes(col.column_name)) continue;
+                
+                const val = record ? record[col.column_name] : '';
+                const isRequired = col.is_nullable === 'NO' ? 'required' : '';
+                const reqAsterisk = isRequired ? '<span class="text-red-500">*</span>' : '';
+                const label = `<label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">${formatColumnName(col.column_name)} ${reqAsterisk}</label>`;
+                
+                let inputHTML = '';
+                
+                if (col.column_name.endsWith('_id') || col.column_name === 'status') {
+                    const opts = await buildReferenceOptions(col.column_name, val);
+                    if (opts.length > 35) { // Meaning we actually got options back
+                        inputHTML = `<select name="${col.column_name}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-fuchsia-500 outline-none transition">${opts}</select>`;
+                    } else {
+                        inputHTML = `<input type="text" name="${col.column_name}" value="${val || ''}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-fuchsia-500 outline-none transition">`;
+                    }
+                } else if (col.data_type === 'date' || col.data_type.includes('timestamp')) {
+                    inputHTML = `<input type="date" name="${col.column_name}" value="${formatDateForInput(val)}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-fuchsia-500 outline-none transition">`;
+                } else if (col.data_type === 'integer' || col.data_type === 'numeric' || col.data_type === 'double precision') {
+                    inputHTML = `<input type="number" step="any" name="${col.column_name}" value="${val || ''}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-fuchsia-500 outline-none transition">`;
+                } else if (col.column_name === 'notes') {
+                    inputHTML = `<textarea name="${col.column_name}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-fuchsia-500 outline-none transition h-20 resize-none">${val || ''}</textarea>`;
+                } else {
+                    inputHTML = `<input type="text" name="${col.column_name}" value="${val || ''}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-fuchsia-500 outline-none transition">`;
+                }
+
+                formFieldsHTML += `<div>${label}${inputHTML}</div>`;
+            }
+            
+            showLoading(false);
+
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center opacity-0 transition-opacity duration-300">
+                    <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col transform opacity-0 scale-95 translate-y-4 transition-all duration-300 border border-slate-200">
+                        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
+                            <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <i data-lucide="${isEditing?'edit':'plus-circle'}" class="w-5 h-5 text-fuchsia-500"></i> 
+                                ${isEditing ? 'Edit' : 'New'} ${currentTableDef.label}
+                            </h2>
+                            <button id="close-modal-btn" class="text-slate-400 hover:text-slate-700 bg-white hover:bg-slate-100 p-1.5 rounded-lg border border-transparent hover:border-slate-200 transition-all"><i data-lucide="x" class="w-4 h-4"></i></button>
+                        </div>
+                        
+                        <div class="p-6 overflow-y-auto flex-1">
+                            <form id="record-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                ${isEditing ? `<input type="hidden" name="${pkCol}" value="${recordId}">` : ''}
+                                ${formFieldsHTML}
+                            </form>
+                        </div>
+                        
+                        <div class="px-6 py-4 bg-slate-50/80 border-t border-slate-100 rounded-b-2xl flex justify-end">
+                            <button form="record-form" type="submit" class="px-6 py-2.5 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-xl text-sm font-semibold shadow-md transition-all flex items-center gap-2">
+                                <i data-lucide="save" class="w-4 h-4"></i> ${isEditing ? 'Save Changes' : 'Save Item'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+
+            document.getElementById('record-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const fd = new FormData(e.target);
+                const payload = Object.fromEntries(fd.entries());
+                
+                Object.keys(payload).forEach(k => { if(payload[k]==='') payload[k] = null; });
+
+                showLoading(true);
+                const method = isEditing ? 'PUT' : 'POST';
+                const endpoint = isEditing ? `${currentTableDef.schema}/${currentTableDef.id}?${pkCol}=${payload[pkCol]}` : `${currentTableDef.schema}/${currentTableDef.id}`;
+                
+                const result = await apiFetch(`table/${endpoint}`, { method, body: payload });
+                showLoading(false);
+
+                if (result && !result.error) {
+                    showToast(`Item ${isEditing ? 'updated' : 'added'} successfully!`, 'success');
+                    closeModal();
+                    loadAndRenderTable();
+                } else showToast(`Failed: ${result?.error}`, 'error');
+            };
+        }
+
+        // --- Bulk Upload CSV ---
+        function downloadCsvTemplate() {
+            const skippableCols = [...SYSTEM_COLUMNS, 'created_at', 'created_by', 'updated_at', currentTableDef.pk];
+            const headers = currentTableSchema.filter(c => !skippableCols.includes(c.column_name)).map(c => c.column_name);
+            const csv = unparseCSV([headers]);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${currentTableDef.id}_template.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        async function showBulkUploadModal() {
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center opacity-0 transition-opacity duration-300">
+                    <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col transform opacity-0 scale-95 translate-y-4 transition-all duration-300 border border-slate-200">
+                        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
+                            <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <i data-lucide="upload-cloud" class="w-5 h-5 text-fuchsia-500"></i> Bulk Upload CSV
+                            </h2>
+                            <button id="close-modal-btn" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg transition-all"><i data-lucide="x" class="w-4 h-4"></i></button>
+                        </div>
+                        
+                        <div class="p-6">
+                            <div class="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center bg-slate-50 hover:bg-slate-100 transition-colors relative">
+                                <input type="file" id="csv-file-input" accept=".csv" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                                <i data-lucide="file-spreadsheet" class="w-10 h-10 text-slate-400 mx-auto mb-3"></i>
+                                <p class="text-sm font-semibold text-slate-700">Click to select CSV file</p>
+                                <p class="text-xs text-slate-500 mt-1" id="file-name-display">Targeting: ${currentTableDef.id}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="px-6 py-4 bg-slate-50/80 border-t border-slate-100 rounded-b-2xl flex justify-end">
+                            <button id="upload-csv-btn" class="px-6 py-2.5 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-xl text-sm font-semibold shadow-md transition-all flex items-center gap-2">
+                                <i data-lucide="upload" class="w-4 h-4"></i> Process Upload
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+
+            document.getElementById('csv-file-input').addEventListener('change', (e) => {
+                const f = e.target.files[0];
+                if(f) document.getElementById('file-name-display').innerText = f.name;
+            });
+
+            document.getElementById('upload-csv-btn').addEventListener('click', async () => {
+                const file = document.getElementById('csv-file-input').files[0];
+                if (!file) return showToast("Select a file first", "error");
+
+                showLoading(true);
+                try {
+                    const txt = await new Promise((res, rej) => {
+                        const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = e => rej(e); r.readAsText(file);
+                    });
+                    
+                    let records = parseCSVToJSON(txt);
+                    records = records.map(r => {
+                        const nr = {}; for(let k in r) nr[k] = r[k] === '' ? null : r[k]; return nr;
+                    });
+
+                    if (!records.length) throw new Error("No data found");
+
+                    const res = await apiFetch(`table/${currentTableDef.schema}/${currentTableDef.id}/batch_upload`, { method: 'POST', body: records });
+                    showLoading(false);
+                    if (res && res.success) {
+                        showToast(`Uploaded ${res.count || records.length} items to ${currentTableDef.id}!`, "success");
+                        loadAndRenderTable();
+                        closeModal();
+                    } else throw new Error(res?.error || "Unknown error");
+                } catch (err) {
+                    showLoading(false);
+                    showToast(`Upload failed: ${err.message}`, "error");
+                }
+            });
+        }
+
+        // --- Core Init Flow ---
+        async function loadAndRenderTable() {
+            showLoading(true);
+            const queryStr = buildFilterQueryString();
 
             try {
-                // Batch Upload to bio_assets.samples_reservation
-                const res = await apiFetch('table/bio_assets/samples_reservation/batch_upload', {
-                    method: 'POST', body: payload
-                });
+                const schema = await getTableSchema(currentTableDef.schema, currentTableDef.id);
+                const filteredData = await apiFetch(`table/${currentTableDef.schema}/${currentTableDef.id}?${queryStr}`);
+                
+                if (filteredData.error || schema.error) throw new Error("This table might not exist in the database. Please check TABLE_DEFINITIONS.");
 
-                if(res && !res.error) {
-                    showToast(`Batch Generated: ${res.count} items reserved.`, "success");
-                    basketItems = [];
-                    document.getElementById('finalNotes').value = '';
-                    renderBasket();
-                    loadGridData();
-                } else {
-                    throw new Error(res.error || "Batch processing failed");
-                }
+                currentTableSchema = schema;
+                currentTableDataRaw = filteredData;
+                currentTableData = applyClientSideFiltering(filteredData);
+                
+                renderTable(currentTableData, schema);
+
             } catch (err) {
                 showToast(err.message, "error");
+                document.getElementById('dynamic-table-body').innerHTML = `<tr><td colspan="10" class="text-center py-8 text-red-500 text-sm"><i data-lucide="database" class="w-8 h-8 mx-auto mb-2 opacity-50"></i> Table '${currentTableDef.schema}.${currentTableDef.id}' missing.<br><span class="text-xs text-slate-500">Edit the TABLE_DEFINITIONS array in the code to match your DB schema.</span></td></tr>`;
+                lucide.createIcons();
             } finally {
-                btn.innerHTML = orig;
-                btn.disabled = false;
+                showLoading(false);
             }
         }
 
-        // --- UI Utils ---
-        window.openModal = (id) => document.getElementById(id).classList.remove('hidden');
-        window.closeModal = (id) => document.getElementById(id).classList.add('hidden');
-
-        function showToast(msg, type='success') {
-            const c = document.getElementById('toastContainer');
-            const d = document.createElement('div');
-            const isErr = type === 'error';
-            d.className = `px-4 py-3 rounded-2xl shadow-xl border flex items-center gap-3 transform transition-all duration-300 translate-y-0 ${isErr ? 'bg-red-50 border-red-200 text-red-800' : 'bg-white border-slate-200 text-slate-800'}`;
-            d.innerHTML = `<i data-lucide="${isErr ? 'alert-octagon' : 'check-circle'}" class="w-5 h-5 ${isErr ? 'text-red-500' : 'text-emerald-500'}"></i> <span class="text-sm font-semibold">${msg}</span>`;
-            c.appendChild(d); lucide.createIcons();
-            setTimeout(() => { d.classList.add('opacity-0', 'translate-y-4'); setTimeout(() => d.remove(), 300); }, 3500);
+        async function initializePage() {
+            showLoading(true);
+            // Preload critical core references that might appear in inventory
+            await Promise.all([
+                getReferenceData('storage', 'lims')
+            ]);
+            
+            document.getElementById('add-single-entry-btn').addEventListener('click', () => showCreateEditModal());
+            document.getElementById('bulk-csv-upload-btn').addEventListener('click', showBulkUploadModal);
+            document.getElementById('download-template-general-btn').addEventListener('click', downloadCsvTemplate);
+            
+            await loadAndRenderTable();
+            showLoading(false);
         }
     </script>
 </body>

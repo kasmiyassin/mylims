@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Data Editor - TIFI LIMS</title>
+    <title>Tables Editor - TIFI LIMS</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
@@ -108,6 +108,9 @@
     </div>
     <div id="toastContainer" class="fixed bottom-6 right-6 z-[120] flex flex-col gap-3"></div>
 
+    <!-- Master Datalist for Searchable Tables -->
+    <datalist id="tablesList"></datalist>
+
     <!-- Sidebar -->
     <div class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex-shrink-0">
         <div class="p-5 border-b border-slate-100 flex items-center gap-3 shrink-0">
@@ -155,7 +158,7 @@
                 <i data-lucide="table" class="w-4 h-4 mr-3 text-indigo-600"></i> Data Editor
             </a>
             <a href="tables_sub.html" class="flex items-center px-3 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-medium shadow-sm border border-indigo-100/50">
-                <i data-lucide="table-2" class="w-4 h-4 mr-3 text-indigo-600"></i> Tables_2
+                <i data-lucide="table-2" class="w-4 h-4 mr-3 text-indigo-600"></i> Tables
             </a>
             <a href="reporting.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
                 <i data-lucide="bar-chart-2" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Reporting
@@ -179,131 +182,164 @@
         </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="flex-1 flex flex-col h-full bg-slate-50 relative overflow-hidden">
+    <!-- Main Content Area -->
+    <div class="flex-1 flex flex-col h-full relative overflow-hidden">
         
-        <!-- Controls Header -->
-        <div class="bg-white border-b border-slate-200 px-6 py-4 flex flex-col gap-4 shadow-sm z-10 shrink-0">
-            
-            <!-- Top Row: Table Selection -->
-            <div class="flex items-start gap-4 flex-wrap" id="tableSelectors">
-                <div class="flex flex-col gap-1.5 w-64">
-                    <label class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Primary Table</label>
-                    <div class="relative">
-                        <select id="primaryTable" class="w-full p-2.5 pl-3 pr-10 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm appearance-none cursor-pointer hover:border-indigo-400 transition"></select>
-                        <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none"></i>
-                    </div>
-                </div>
-
-                <div class="pt-8 text-slate-300"><i data-lucide="arrow-right" class="w-5 h-5"></i></div>
-                <div id="secondaryTablesContainer" class="flex gap-4 flex-wrap"></div>
-
-                <div class="pt-6">
-                    <button onclick="addJoinTable()" class="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg border border-slate-300 transition shadow-sm" title="Join another table">
-                        <i data-lucide="plus" class="w-4 h-4"></i>
-                    </button>
+        <!-- Header & Query Builder -->
+        <div class="bg-white px-8 py-6 z-10 shrink-0 border-b border-slate-200">
+            <div class="flex justify-between items-end mb-4">
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Tables</h1>
+                    <p class="text-sm text-slate-500 mt-1">Configure your data sources and join rules to begin editing.</p>
                 </div>
             </div>
 
-            <!-- Action Bar -->
-            <div class="flex flex-col lg:flex-row justify-between items-center pt-3 border-t border-slate-100 gap-3">
-                
-                <!-- Left: Load & Filter -->
-                <div class="flex items-center gap-3 w-full lg:w-auto">
-                    <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg p-1">
-                        <label class="text-xs font-bold text-slate-500 uppercase px-2">Join On:</label>
-                        <input type="text" id="commonColumn" value="sample_id" class="p-1.5 border border-slate-300 rounded text-sm w-32 focus:ring-indigo-500 outline-none" placeholder="col name">
-                    </div>
+            <!-- Query Builder Card -->
+            <div class="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+                <div class="flex items-start gap-4 flex-wrap" id="tableSelectors">
                     
-                    <button onclick="loadData()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold shadow-sm transition flex items-center gap-2">
-                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Load Data
-                    </button>
-                    
-                    <div class="h-8 w-px bg-slate-200 mx-2 hidden lg:block"></div>
-
-                    <!-- Quick Filter -->
-                    <div class="relative group">
-                        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
-                        <input type="text" id="quickFilter" oninput="onQuickFilterChanged()" placeholder="Quick filter..." 
-                            class="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm w-48 focus:w-64 transition-all focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm">
-                    </div>
-                </div>
-
-                <!-- Right: Edits & Export -->
-                <div class="flex gap-2 w-full lg:w-auto justify-end items-center">
-                    <div class="flex bg-white border border-slate-300 rounded-lg p-1 shadow-sm">
-                        <button onclick="addNewRow()" class="px-3 py-1.5 hover:bg-slate-50 text-slate-700 rounded text-sm font-medium flex gap-2 items-center" title="Add Empty Row">
-                            <i data-lucide="plus" class="w-3.5 h-3.5 text-emerald-600"></i> New
-                        </button>
-                        <div class="w-px bg-slate-200 my-1"></div>
-                        <button onclick="duplicateRow()" class="px-3 py-1.5 hover:bg-slate-50 text-slate-700 rounded text-sm font-medium flex gap-2 items-center" title="Duplicate Selected Row">
-                            <i data-lucide="copy" class="w-3.5 h-3.5 text-blue-600"></i> Duplicate
-                        </button>
-                        <div class="w-px bg-slate-200 my-1"></div>
-                        <button onclick="deleteSelectedRows()" class="px-3 py-1.5 hover:bg-red-50 text-red-600 rounded text-sm font-medium flex gap-2 items-center" title="Delete Selected Rows">
-                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Delete
-                        </button>
-                    </div>
-
-                    <button onclick="toggleColumnPicker()" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-medium shadow-sm flex gap-2 items-center">
-                        <i data-lucide="columns" class="w-4 h-4"></i> Columns
-                    </button>
-
-                    <!-- Dropdown structure adjusted to fix gap-hiding issue -->
-                    <div class="relative group z-[60]">
-                        <button class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-medium shadow-sm flex gap-2 items-center">
-                            <i data-lucide="download" class="w-4 h-4"></i> Export
-                        </button>
-                        <!-- pt-2 acts as a transparent bridge so the mouse hover doesn't break -->
-                        <div class="absolute right-0 top-full pt-1.5 w-40 hidden group-hover:block transition-all">
-                            <div class="bg-white border border-slate-200 rounded-xl shadow-xl p-1">
-                                <button onclick="exportData('xlsx')" class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-indigo-50 rounded-lg flex items-center gap-2">
-                                    <i data-lucide="file-spreadsheet" class="w-4 h-4 text-green-600"></i> Excel (.xlsx)
-                                </button>
-                                <button onclick="exportData('csv')" class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-indigo-50 rounded-lg flex items-center gap-2">
-                                    <i data-lucide="file-text" class="w-4 h-4 text-blue-600"></i> CSV (.csv)
-                                </button>
-                            </div>
+                    <!-- Primary Table (Searchable) -->
+                    <div class="flex flex-col gap-2 w-64 shrink-0">
+                        <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="database" class="w-3.5 h-3.5 text-indigo-500"></i> Primary Table
+                        </label>
+                        <div class="relative group">
+                            <input type="text" id="primaryTable" list="tablesList" class="w-full pl-3 pr-10 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none shadow-sm transition-all" placeholder="Search tables...">
+                            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none group-hover:text-indigo-500 transition-colors"></i>
                         </div>
                     </div>
 
-                    <button onclick="saveData()" class="ml-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold shadow-sm flex gap-2 items-center transition">
-                        <i data-lucide="save" class="w-4 h-4"></i> Save
+                    <!-- Join Condition -->
+                    <div class="flex flex-col gap-2 w-40 shrink-0">
+                        <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="link-2" class="w-3.5 h-3.5 text-emerald-500"></i> Join On Key
+                        </label>
+                        <input type="text" id="commonColumn" value="sample_id" class="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none shadow-sm" placeholder="e.g. sample_id">
+                    </div>
+
+                    <!-- Visual Connector -->
+                    <div class="pt-8 text-slate-300 hidden md:block">
+                        <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                    </div>
+
+                    <!-- Secondary Tables Wrapper -->
+                    <div id="secondaryTablesContainer" class="flex gap-4 flex-wrap"></div>
+
+                    <!-- Add Join Button -->
+                    <div class="pt-7 shrink-0">
+                        <button onclick="addJoinTable()" class="h-[42px] px-4 bg-white hover:bg-slate-50 text-slate-600 rounded-xl border border-slate-300 border-dashed hover:border-solid hover:border-indigo-300 hover:text-indigo-600 transition-all shadow-sm flex items-center gap-2 text-sm font-medium">
+                            <i data-lucide="plus" class="w-4 h-4"></i> Join Table
+                        </button>
+                    </div>
+
+                    <!-- Spacer -->
+                    <div class="flex-1 min-w-[20px]"></div>
+
+                    <!-- Action: Load Data -->
+                    <div class="pt-7 shrink-0">
+                        <button onclick="loadData()" class="h-[42px] px-6 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 border border-indigo-500">
+                            <i data-lucide="play" class="w-4 h-4 fill-current"></i> Run Query
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Table Toolbar -->
+        <div class="bg-white/60 backdrop-blur-md px-8 py-3 border-b border-slate-200 flex justify-between items-center z-10 shrink-0">
+            <!-- Left: Search -->
+            <div class="relative group w-72">
+                <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5"></i>
+                <input type="text" id="quickFilter" oninput="onQuickFilterChanged()" placeholder="Search in records..." 
+                    class="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 hover:border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none shadow-sm transition-all">
+            </div>
+
+            <!-- Right: Actions -->
+            <div class="flex items-center gap-3">
+                <!-- Segmented Control for Row Actions -->
+                <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/60 shadow-inner">
+                    <button onclick="addNewRow()" class="px-3.5 py-1.5 hover:bg-white text-slate-600 hover:text-emerald-600 rounded-lg text-sm font-medium flex gap-2 items-center transition-all hover:shadow-sm" title="Add Empty Row">
+                        <i data-lucide="plus-circle" class="w-4 h-4"></i> New
+                    </button>
+                    <div class="w-px h-4 bg-slate-200 mx-1"></div>
+                    <button onclick="duplicateRow()" class="px-3.5 py-1.5 hover:bg-white text-slate-600 hover:text-blue-600 rounded-lg text-sm font-medium flex gap-2 items-center transition-all hover:shadow-sm" title="Duplicate Selected Row">
+                        <i data-lucide="copy" class="w-4 h-4"></i> Duplicate
+                    </button>
+                    <div class="w-px h-4 bg-slate-200 mx-1"></div>
+                    <button onclick="deleteSelectedRows()" class="px-3.5 py-1.5 hover:bg-white text-slate-600 hover:text-red-600 rounded-lg text-sm font-medium flex gap-2 items-center transition-all hover:shadow-sm" title="Delete Selected Rows">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i> Delete
                     </button>
                 </div>
+
+                <div class="w-px h-6 bg-slate-200 mx-1"></div>
+
+                <!-- View & Export -->
+                <button onclick="toggleColumnPicker()" class="px-4 py-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium shadow-sm flex gap-2 items-center transition-all">
+                    <i data-lucide="columns" class="w-4 h-4 text-slate-400"></i> Columns
+                </button>
+
+                <div class="relative group z-[60]">
+                    <button class="px-4 py-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium shadow-sm flex gap-2 items-center transition-all">
+                        <i data-lucide="download" class="w-4 h-4 text-slate-400"></i> Export
+                    </button>
+                    <div class="absolute right-0 top-full pt-1.5 w-44 hidden group-hover:block transition-all">
+                        <div class="bg-white border border-slate-200 rounded-xl shadow-xl p-1.5">
+                            <button onclick="exportData('xlsx')" class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 rounded-lg flex items-center gap-2.5 transition-colors">
+                                <i data-lucide="file-spreadsheet" class="w-4 h-4 text-emerald-500"></i> Excel (.xlsx)
+                            </button>
+                            <button onclick="exportData('csv')" class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 rounded-lg flex items-center gap-2.5 transition-colors mt-0.5">
+                                <i data-lucide="file-text" class="w-4 h-4 text-sky-500"></i> CSV (.csv)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Primary Action: Save -->
+                <button onclick="saveData()" class="ml-2 px-6 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 border border-emerald-500">
+                    <i data-lucide="save" class="w-4 h-4"></i> Commit Changes
+                </button>
             </div>
         </div>
 
         <!-- Grid Area -->
-        <div class="flex-1 p-0 overflow-hidden relative">
-            <div id="myGrid" class="ag-theme-alpine h-full w-full border-none"></div>
+        <div class="flex-1 p-6 pt-4 overflow-hidden relative">
+            <div id="myGrid" class="ag-theme-alpine h-full w-full"></div>
             
-            <!-- No Data Placeholder -->
-            <div id="noDataMessage" class="hidden absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-slate-50">
-                <i data-lucide="database" class="w-12 h-12 mb-3 text-slate-300"></i>
-                <p class="text-sm font-medium">Select a table and click Load to begin</p>
+            <!-- No Data Placeholder (Beautiful Empty State) -->
+            <div id="noDataMessage" class="hidden absolute inset-6 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center bg-white/50 backdrop-blur-sm z-0">
+                <div class="bg-indigo-50 p-4 rounded-full mb-4">
+                    <i data-lucide="database" class="w-10 h-10 text-indigo-400"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-800 mb-1">Ready to explore data</h3>
+                <p class="text-sm text-slate-500 text-center max-w-sm">Select a primary table from the configuration above, add joins if necessary, and click <span class="font-semibold text-indigo-600">Run Query</span> to populate the grid.</p>
             </div>
         </div>
 
         <!-- Column Picker Slide-over -->
-        <div id="columnSidebar" class="absolute top-0 right-0 h-full w-80 bg-white shadow-2xl border-l border-slate-200 z-40 transform translate-x-full slide-over flex flex-col">
-            <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-                <span class="font-bold text-slate-800 flex items-center gap-2">
-                    <i data-lucide="layout" class="w-4 h-4 text-indigo-600"></i> Column Visibility
+        <div id="columnSidebar" class="absolute top-0 right-0 h-full w-80 bg-white/95 backdrop-blur-md shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border-l border-slate-200 z-50 transform translate-x-full slide-over flex flex-col">
+            <div class="p-5 border-b border-slate-200/60 flex justify-between items-center bg-white">
+                <span class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                    <i data-lucide="layout" class="w-5 h-5 text-indigo-500"></i> Show/Hide Columns
                 </span>
-                <button onclick="toggleColumnPicker()" class="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-200 rounded transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+                <button onclick="toggleColumnPicker()" class="text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-1.5 rounded-lg transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
             </div>
             
-            <div class="flex-1 overflow-y-auto p-4 space-y-6" id="columnToggleList">
+            <div class="flex-1 overflow-y-auto p-5 space-y-6" id="columnToggleList">
                 <!-- Columns injected here -->
             </div>
+            
             <!-- Bottom Action -->
-            <div class="p-4 border-t border-slate-200 bg-slate-50">
-                <button onclick="toggleColumnPicker()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium text-sm transition shadow-sm">
+            <div class="p-5 border-t border-slate-200/60 bg-slate-50/50">
+                <button onclick="toggleColumnPicker()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-medium text-sm transition-all shadow-md">
                     Done
                 </button>
             </div>
         </div>
+        
+        <!-- Backdrop for Sidebar (Optional, but nice) -->
+        <div id="sidebarBackdrop" onclick="toggleColumnPicker()" class="absolute inset-0 bg-slate-900/10 backdrop-blur-sm z-40 hidden transition-opacity opacity-0"></div>
     </div>
 
     <script>
@@ -316,23 +352,39 @@
             init(params) {
                 this.eInput = document.createElement('input');
                 this.eInput.type = 'date';
-                this.eInput.className = 'ag-input-field-input ag-text-field-input';
+                this.eInput.className = 'ag-input-field-input ag-text-field-input !rounded-md !border-slate-300 focus:!ring-2 focus:!ring-indigo-500 outline-none px-2';
                 this.eInput.style.width = '100%';
                 this.eInput.style.height = '100%';
                 // Set initial value if exists
                 if (params.value) {
-                    // Try to format to YYYY-MM-DD
                     const d = new Date(params.value);
                     if (!isNaN(d.getTime())) {
                         this.eInput.value = d.toISOString().split('T')[0];
                     } else {
-                        this.eInput.value = params.value; // Fallback
+                        this.eInput.value = params.value; 
                     }
                 }
             }
             getGui() { return this.eInput; }
             afterGuiAttached() { this.eInput.focus(); }
-            getValue() { return this.eInput.value; } // Returns YYYY-MM-DD
+            getValue() { return this.eInput.value; }
+        }
+
+        // --- Custom Time Editor Component ---
+        class TimeEditor {
+            init(params) {
+                this.eInput = document.createElement('input');
+                this.eInput.type = 'time';
+                this.eInput.step = '1'; // Allows capturing seconds
+                this.eInput.className = 'ag-input-field-input ag-text-field-input !rounded-md !border-slate-300 focus:!ring-2 focus:!ring-indigo-500 outline-none px-2';
+                this.eInput.style.width = '100%';
+                this.eInput.style.height = '100%';
+                // Set initial value if exists
+                this.eInput.value = params.value || '';
+            }
+            getGui() { return this.eInput; }
+            afterGuiAttached() { this.eInput.focus(); }
+            getValue() { return this.eInput.value; }
         }
 
         // --- State ---
@@ -347,6 +399,17 @@
             const token = sessionStorage.getItem('token');
             if(!token) window.location.href = 'login.html';
 
+            const userStr = sessionStorage.getItem('user');
+            if(userStr) {
+                const user = JSON.parse(userStr);
+                if(user && user.person_id) document.getElementById('userNameDisplay').innerText = user.person_id;
+            }
+
+            document.getElementById('logout-button').addEventListener('click', () => {
+                sessionStorage.clear();
+                window.location.href = 'login.html';
+            });
+
             // Show placeholder
             document.getElementById('noDataMessage').classList.remove('hidden');
 
@@ -354,36 +417,40 @@
                 const res = await fetch(`${API}/table_names_for_forms`, { headers: { 'Authorization': `Bearer ${token}` } });
                 if (!res.ok) throw new Error("Connection failed");
                 availableTables = await res.json();
-                populateSelect('primaryTable');
+                
+                // Populate the datalist for searchable inputs
+                const dataList = document.getElementById('tablesList');
+                availableTables.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t;
+                    dataList.appendChild(opt);
+                });
             } catch(e) {
                 showToast("Failed to connect to backend", "error");
             }
         });
-
-        function populateSelect(id) {
-            const sel = document.getElementById(id);
-            sel.innerHTML = '<option value="" disabled selected>Select Table...</option>';
-            availableTables.forEach(t => sel.add(new Option(t, t)));
-        }
 
         function addJoinTable() {
             secondaryTableCount++;
             const id = `secTable_${secondaryTableCount}`;
             const container = document.getElementById('secondaryTablesContainer');
             const div = document.createElement('div');
-            div.className = "flex flex-col gap-1.5 w-64 relative group";
+            div.className = "flex flex-col gap-2 w-64 relative group shrink-0";
             div.innerHTML = `
                 <div class="flex justify-between items-center">
-                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Join Table ${secondaryTableCount}</label>
-                    <button onclick="this.closest('.group').remove()" class="text-xs text-red-400 hover:text-red-600 flex items-center gap-1"><i data-lucide="x" class="w-3 h-3"></i> Remove</button>
+                    <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <i data-lucide="table" class="w-3.5 h-3.5 text-sky-500"></i> Join Table ${secondaryTableCount}
+                    </label>
+                    <button onclick="this.closest('.group').remove()" class="text-xs text-slate-400 hover:text-red-500 flex items-center gap-1 transition-colors bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-200 hover:border-red-200">
+                        <i data-lucide="x" class="w-3 h-3"></i> Remove
+                    </button>
                 </div>
                 <div class="relative">
-                    <select id="${id}" class="sec-select w-full p-2.5 pl-3 pr-10 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm appearance-none cursor-pointer"></select>
-                    <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none"></i>
+                    <input type="text" id="${id}" list="tablesList" class="sec-select w-full pl-3 pr-10 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none shadow-sm transition-all" placeholder="Search tables...">
+                    <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none"></i>
                 </div>
             `;
             container.appendChild(div);
-            populateSelect(id);
             lucide.createIcons();
         }
 
@@ -391,7 +458,7 @@
         async function loadData() {
             const pTable = document.getElementById('primaryTable').value;
             const joinCol = document.getElementById('commonColumn').value;
-            if(!pTable) return showToast("Select a primary table", "error");
+            if(!pTable) return showToast("Select a primary table first", "error");
 
             const tables = [{ id: 'PRIMARY', name: pTable }];
             document.querySelectorAll('.sec-select').forEach((sel, idx) => {
@@ -405,6 +472,8 @@
             try {
                 const promises = tables.map(async (t) => {
                     const [sch, tbl] = t.name.split('.');
+                    if (!sch || !tbl) throw new Error(`Invalid table name: ${t.name}`);
+                    
                     const [meta, data] = await Promise.all([
                         apiFetch(`/table/${sch}/${tbl}/schema`),
                         apiFetch(`/table/${sch}/${tbl}?limit=1000`)
@@ -457,16 +526,17 @@
                 // Primary Columns
                 colDefs.push({
                     headerName: pSchema.name.toUpperCase(),
-                    headerClass: 'bg-indigo-50 text-indigo-700 font-bold border-r border-indigo-100',
+                    headerClass: 'bg-indigo-50/50 text-indigo-800 font-bold tracking-wide border-r border-indigo-100',
                     children: pSchema.cols.map(c => createColDef(c, 'PRIMARY', null))
                 });
 
                 // Joined Columns
-                secResults.forEach(res => {
+                secResults.forEach((res, index) => {
                     const sSchema = activeSchemas[res.id];
+                    const colorClass = index % 2 === 0 ? 'bg-sky-50/50 text-sky-800 border-sky-100' : 'bg-emerald-50/50 text-emerald-800 border-emerald-100';
                     colDefs.push({
                         headerName: sSchema.name.toUpperCase(),
-                        headerClass: 'bg-emerald-50 text-emerald-700 font-bold border-r border-emerald-100',
+                        headerClass: `${colorClass} font-bold tracking-wide border-r`,
                         children: sSchema.cols
                             .filter(c => c.column_name !== joinCol)
                             .map(c => createColDef(c, res.id, joinCol))
@@ -475,11 +545,12 @@
 
                 initGrid(colDefs, gridRows);
                 updateColumnPicker(colDefs);
-                showToast(`Loaded ${gridRows.length} rows`);
+                showToast(`Loaded ${gridRows.length} rows successfully`, "success");
 
             } catch(e) {
                 console.error(e);
                 showToast(e.message, "error");
+                document.getElementById('noDataMessage').classList.remove('hidden');
             } finally {
                 showLoading(false);
             }
@@ -494,9 +565,8 @@
                 field: field,
                 headerName: colMeta.column_name,
                 
-                // FIXED: PKs are editable ONLY on new rows
                 editable: (params) => {
-                    if (isPK) return !!params.node.data._new; // Only editable if it's a new row
+                    if (isPK) return !!params.node.data._new;
                     return true;
                 },
                 
@@ -511,11 +581,13 @@
                 }
             };
 
-            // Enhanced Data Types
-            if (colMeta.data_type.includes('date') || colMeta.data_type.includes('time')) {
+            if (colMeta.data_type === 'time' || colMeta.data_type === 'time without time zone' || colMeta.data_type === 'time with time zone') {
+                def.cellEditor = TimeEditor;
+                def.valueFormatter = (params) => params.value ? String(params.value) : '';
+            } else if (colMeta.data_type.includes('date') || colMeta.data_type.includes('timestamp')) {
                 def.cellEditor = DateEditor;
                 def.valueFormatter = (params) => {
-                    if (params.value) return params.value.split('T')[0]; // Simple format for display
+                    if (params.value) return params.value.split('T')[0]; 
                     return '';
                 };
             } else if (colMeta.data_type.includes('int') || colMeta.data_type.includes('numeric')) {
@@ -523,16 +595,14 @@
                 def.type = 'numericColumn';
             }
 
-            // PRIMARY KEY ENFORCEMENT
             if (isPK) {
                 def.pinned = 'left';
-                def.lockPosition = true; // Cannot move PK column
-                def.lockVisible = true; // Cannot hide PK column
-                def.checkboxSelection = true; // Selection handle
+                def.lockPosition = true; 
+                def.lockVisible = true; 
+                def.checkboxSelection = true; 
                 def.headerCheckboxSelection = true;
-                def.width = 150;
+                def.width = 160;
                 
-                // For new rows, show prompt if empty
                 def.valueFormatter = params => {
                     if (params.data._new && (params.value === null || params.value === undefined)) {
                         return '(Auto/Enter)';
@@ -553,21 +623,28 @@
                 rowData: rowData,
                 defaultColDef: { 
                     resizable: true, 
-                    minWidth: 100, 
+                    minWidth: 120, 
                     flex: 1,
                     menuTabs: ['filterMenuTab', 'generalMenuTab']
+                    // Removed 'cellStyle: { display: 'flex' }' to allow AG Grid native text truncation (ellipsis)
                 },
                 rowSelection: 'multiple',
                 enableCellTextSelection: true,
-                suppressDragLeaveHidesColumns: true, // Prevent accidental hiding
+                suppressDragLeaveHidesColumns: true, 
                 animateRows: true,
+                rowHeight: 44, // Slightly taller rows for better readability
+                headerHeight: 48,
                 onGridReady: p => {
                     gridApi = p.api;
                     eGridDiv.addEventListener('paste', handleGridPaste);
                 },
                 onCellValueChanged: p => p.node.data._modified = true
             };
-            agGrid.createGrid(eGridDiv, gridOptions);
+            if (window.agGrid && agGrid.createGrid) {
+                agGrid.createGrid(eGridDiv, gridOptions);
+            } else if (window.agGrid && agGrid.Grid) {
+                new agGrid.Grid(eGridDiv, gridOptions);
+            }
         }
 
         // --- Features ---
@@ -577,18 +654,16 @@
             gridApi.setQuickFilter(document.getElementById('quickFilter').value);
         }
 
-        // Smart Duplicate Row
         function duplicateRow() {
             if(!gridApi) return;
             const selected = gridApi.getSelectedNodes();
-            if(selected.length === 0) return showToast("Select rows to duplicate", "info");
+            if(selected.length === 0) return showToast("Select rows to duplicate", "error");
 
             const newItems = selected.map(node => {
                 const newData = { ...node.data };
                 newData._new = true;
                 delete newData._modified;
                 
-                // Clear Primary Keys so DB generates new ones
                 activeSchemas['PRIMARY'].pks.forEach(pk => {
                     newData[pk] = null;
                     delete newData[`__PK_PRIMARY_${pk}`];
@@ -597,44 +672,40 @@
             });
 
             gridApi.applyTransaction({ add: newItems });
-            showToast(`Duplicated ${newItems.length} rows. PKs cleared for auto-generation.`);
+            showToast(`Duplicated ${newItems.length} rows. Primary keys cleared.`, "success");
         }
 
         function addNewRow() {
             if(!gridApi) return;
             const newItem = { _new: true };
-            // Initialize PKs to null for visual clarity
             activeSchemas['PRIMARY'].pks.forEach(pk => newItem[pk] = null);
             gridApi.applyTransaction({ add: [newItem], addIndex: 0 });
-            // Scroll to top
             gridApi.ensureIndexVisible(0);
         }
 
         async function deleteSelectedRows() {
             if(!gridApi) return;
             const selectedData = gridApi.getSelectedRows();
-            if(selectedData.length === 0) return showToast("No rows selected for deletion", "info");
+            if(selectedData.length === 0) return showToast("No rows selected for deletion", "error");
             
-            if(!confirm(`Are you sure you want to delete ${selectedData.length} records? This cannot be undone.`)) return;
+            if(!confirm(`Delete ${selectedData.length} record(s)? This action cannot be undone.`)) return;
 
             showLoading(true);
             let successCount = 0;
             let failCount = 0;
 
             const pSchema = activeSchemas['PRIMARY'];
-            const primaryName = pSchema.name; // "schema.table"
+            const primaryName = pSchema.name; 
             const [schema, table] = primaryName.split('.');
 
             try {
                 for (const row of selectedData) {
-                    // New rows (not saved yet) can just be removed from grid
                     if (row._new) {
                         gridApi.applyTransaction({ remove: [row] });
                         successCount++;
                         continue;
                     }
 
-                    // Construct Query Params for PKs
                     const params = new URLSearchParams();
                     let missingPk = false;
                     
@@ -645,7 +716,6 @@
                     });
 
                     if (missingPk) {
-                        console.warn("Skipping row with missing PKs", row);
                         failCount++;
                         continue;
                     }
@@ -655,13 +725,12 @@
                         gridApi.applyTransaction({ remove: [row] });
                         successCount++;
                     } catch (e) {
-                        console.error(e);
                         failCount++;
                     }
                 }
                 
                 if (successCount > 0) showToast(`Deleted ${successCount} records.`, "success");
-                if (failCount > 0) showToast(`Failed to delete ${failCount} records. Check console.`, "error");
+                if (failCount > 0) showToast(`Failed to delete ${failCount} records.`, "error");
 
             } catch (e) {
                 showToast("Error during deletion process", "error");
@@ -673,10 +742,16 @@
         // --- Side Panel ---
         function toggleColumnPicker() {
             const el = document.getElementById('columnSidebar');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            
             if (el.classList.contains('translate-x-full')) {
                 el.classList.remove('translate-x-full');
+                backdrop.classList.remove('hidden');
+                setTimeout(() => backdrop.classList.remove('opacity-0'), 10);
             } else {
                 el.classList.add('translate-x-full');
+                backdrop.classList.add('opacity-0');
+                setTimeout(() => backdrop.classList.add('hidden'), 300);
             }
         }
 
@@ -686,34 +761,28 @@
 
             colDefs.forEach(group => {
                 const groupDiv = document.createElement('div');
-                groupDiv.className = "mb-4";
+                groupDiv.className = "mb-6 bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden";
                 
-                // Group Header with Controls
                 const headerRow = document.createElement('div');
-                headerRow.className = "flex justify-between items-center mb-2 border-b border-slate-100 pb-1";
+                headerRow.className = "flex justify-between items-center px-4 py-2.5 bg-slate-50 border-b border-slate-100";
 
                 const title = document.createElement('h4');
-                title.className = "text-xs font-bold text-slate-500 uppercase tracking-wider";
+                title.className = "text-xs font-bold text-slate-600 uppercase tracking-wider";
                 title.innerText = group.headerName;
 
-                // Controls Container
                 const controls = document.createElement('div');
-                controls.className = "flex gap-2";
+                controls.className = "flex gap-1";
 
-                // "All" Button
                 const btnAll = document.createElement('button');
-                btnAll.className = "text-[10px] font-semibold text-indigo-600 hover:bg-indigo-50 px-1.5 py-0.5 rounded transition";
+                btnAll.className = "text-[10px] font-semibold text-indigo-600 hover:bg-indigo-100 px-2 py-1 rounded transition";
                 btnAll.innerText = "All";
                 
-                // "None" Button
                 const btnNone = document.createElement('button');
-                btnNone.className = "text-[10px] font-semibold text-slate-400 hover:bg-slate-100 hover:text-slate-600 px-1.5 py-0.5 rounded transition";
+                btnNone.className = "text-[10px] font-semibold text-slate-500 hover:bg-slate-200 px-2 py-1 rounded transition";
                 btnNone.innerText = "None";
 
-                // Field Collection
                 const groupFields = group.children.map(c => c.field);
 
-                // Attach Handlers
                 btnAll.onclick = () => toggleGroupCols(groupFields, true);
                 btnNone.onclick = () => toggleGroupCols(groupFields, false);
 
@@ -724,49 +793,44 @@
                 headerRow.appendChild(controls);
                 groupDiv.appendChild(headerRow);
 
+                const itemsContainer = document.createElement('div');
+                itemsContainer.className = "p-2 flex flex-col gap-0.5";
+
                 group.children.forEach(col => {
                     const isLocked = col.lockVisible;
                     
-                    const div = document.createElement('div');
-                    div.className = "flex items-center gap-3 p-1.5 hover:bg-slate-50 rounded transition";
+                    const div = document.createElement('label');
+                    div.className = "flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg transition cursor-pointer select-none group";
                     
-                    // Create Checkbox Programmatically
                     const checkbox = document.createElement('input');
                     checkbox.type = 'checkbox';
-                    // Safe ID for syncing
                     checkbox.id = `cb_col_${col.field.replace(/[^a-zA-Z0-9]/g, '_')}`;
-                    checkbox.className = `rounded text-indigo-600 focus:ring-indigo-500 ${isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`;
-                    checkbox.checked = true; // Initially all columns are visible
+                    checkbox.className = `w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 ${isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`;
+                    checkbox.checked = true; 
                     if (isLocked) checkbox.disabled = true;
 
-                    // Attach Event Listener
                     checkbox.addEventListener('change', (e) => {
                         toggleCol(col.field, e.target.checked);
                     });
 
-                    // Create Label
-                    const label = document.createElement('span'); 
-                    label.className = "text-sm text-slate-700 truncate cursor-pointer select-none flex-1 flex items-center justify-between";
-                    label.innerText = col.headerName;
+                    const labelText = document.createElement('span'); 
+                    labelText.className = "text-sm text-slate-700 truncate flex-1 group-hover:text-slate-900";
+                    labelText.innerText = col.headerName;
 
-                    if (!isLocked) {
-                        label.onclick = (e) => {
-                            checkbox.checked = !checkbox.checked;
-                            toggleCol(col.field, checkbox.checked);
-                        };
-                    }
+                    div.appendChild(checkbox);
+                    div.appendChild(labelText);
 
                     if (isLocked) {
                         const icon = document.createElement('i');
                         icon.setAttribute('data-lucide', 'lock');
-                        icon.className = "w-3 h-3 text-slate-400 ml-2";
-                        label.appendChild(icon);
+                        icon.className = "w-3.5 h-3.5 text-slate-400";
+                        div.appendChild(icon);
                     }
 
-                    div.appendChild(checkbox);
-                    div.appendChild(label);
-                    groupDiv.appendChild(div);
+                    itemsContainer.appendChild(div);
                 });
+                
+                groupDiv.appendChild(itemsContainer);
                 list.appendChild(groupDiv);
             });
             lucide.createIcons();
@@ -774,17 +838,11 @@
 
         function toggleGroupCols(fields, visible) {
             if(!gridApi) return;
-            
-            // Filter out locked columns (PKs)
             const colsToToggle = fields.filter(f => {
                 const col = gridApi.getColumn(f);
                 return col && !col.getColDef().lockVisible;
             });
-
-            // Batch update visibility for performance
             gridApi.setColumnsVisible(colsToToggle, visible);
-
-            // Sync Checkboxes UI
             colsToToggle.forEach(f => {
                 const safeId = `cb_col_${f.replace(/[^a-zA-Z0-9]/g, '_')}`;
                 const cb = document.getElementById(safeId);
@@ -792,21 +850,8 @@
             });
         }
 
-        // FIXED: AG Grid API expects an array for visibility toggles
         function toggleCol(field, visible) {
-            if (gridApi) {
-                gridApi.setColumnsVisible([field], visible);
-            }
-        }
-
-        function setAllColumns(visible) {
-            const allCols = gridApi.getColumns();
-            // Don't hide locked columns (PKs)
-            const colsToChange = allCols.filter(c => !c.getColDef().lockVisible);
-            gridApi.setColumnsVisible(colsToChange, visible);
-            
-            // Sync all checkboxes
-            document.querySelectorAll('#columnToggleList input:not(:disabled)').forEach(cb => cb.checked = visible);
+            if (gridApi) gridApi.setColumnsVisible([field], visible);
         }
 
         // --- Paste Handler ---
@@ -866,7 +911,7 @@
 
             if (itemsToUpdate.length > 0) gridApi.applyTransaction({ update: itemsToUpdate });
             if (itemsToAdd.length > 0) gridApi.applyTransaction({ add: itemsToAdd });
-            showToast(`Pasted: ${itemsToUpdate.length} updated, ${itemsToAdd.length} new rows`, "success");
+            showToast(`Pasted: ${itemsToUpdate.length} updated, ${itemsToAdd.length} new`, "success");
         }
 
         // --- Save Logic ---
@@ -903,16 +948,13 @@
 
                     if(!hasData && !row._new) return;
 
-                    // If row is new, all active data belongs to inserts
                     if(row._new) {
-                        // Filter out empty keys for insert, allowing DB defaults (sequences) to trigger
                         const cleanRecord = {};
                         Object.keys(record).forEach(k => {
                             if (record[k] !== null && record[k] !== undefined && record[k] !== '') {
                                 cleanRecord[k] = record[k];
                             }
                         });
-                        // Only insert if we have actual data beyond just the join key
                         if (Object.keys(cleanRecord).length > (tableId !== 'PRIMARY' ? 1 : 0)) {
                             payloads[tableId].inserts.push(cleanRecord);
                         }
@@ -938,8 +980,8 @@
                         updates += p.updates.length;
                     }
                 }
-                showToast(`Saved: ${inserts} added, ${updates} updated`, "success");
-                loadData(); // Reload to get generated IDs
+                showToast(`Saved successfully: ${inserts} added, ${updates} updated`, "success");
+                loadData(); 
             } catch(e) {
                 showToast(e.message, "error");
             } finally {
@@ -949,12 +991,11 @@
 
         // --- Export Logic ---
         function exportData(format = 'xlsx') {
-            if (!gridApi) return showToast("No data to export", "info");
+            if (!gridApi) return showToast("No data to export", "error");
             
             const colDefs = gridApi.getColumnDefs();
             const colsToExport = [];
             
-            // Flatten column structure
             colDefs.forEach(group => {
                 if (group.children) {
                     group.children.forEach(col => {
@@ -969,26 +1010,20 @@
             const selectedNodes = gridApi.getSelectedNodes();
             
             if (selectedNodes.length > 0) {
-                // User has selected rows, export only the selected ones
                 selectedNodes.forEach(node => {
                     const row = {};
-                    colsToExport.forEach(col => {
-                        row[col.header] = node.data[col.field];
-                    });
+                    colsToExport.forEach(col => { row[col.header] = node.data[col.field]; });
                     rowData.push(row);
                 });
             } else {
-                // No rows selected, export all currently visible (filtered/sorted) rows
                 gridApi.forEachNodeAfterFilterAndSort(node => {
                     const row = {};
-                    colsToExport.forEach(col => {
-                        row[col.header] = node.data[col.field];
-                    });
+                    colsToExport.forEach(col => { row[col.header] = node.data[col.field]; });
                     rowData.push(row);
                 });
             }
 
-            if (rowData.length === 0) return showToast("No rows to export", "info");
+            if (rowData.length === 0) return showToast("No rows to export", "error");
 
             const ws = XLSX.utils.json_to_sheet(rowData);
             const wb = XLSX.utils.book_new();
@@ -1020,11 +1055,20 @@
         function showToast(msg, type='success') {
             const c = document.getElementById('toastContainer');
             const d = document.createElement('div');
-            d.className = `px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium flex items-center gap-2 transform transition-all duration-300 translate-y-0 ${type==='error'?'bg-red-500':'bg-emerald-600'}`;
-            d.innerHTML = `<i data-lucide="${type==='error'?'alert-circle':'check-circle-2'}" class="w-4 h-4"></i> ${msg}`;
+            
+            const bgClass = type === 'error' ? 'bg-red-50' : 'bg-emerald-50';
+            const borderClass = type === 'error' ? 'border-red-200' : 'border-emerald-200';
+            const textClass = type === 'error' ? 'text-red-800' : 'text-emerald-800';
+            const iconColor = type === 'error' ? 'text-red-500' : 'text-emerald-500';
+            
+            d.className = `px-4 py-3 rounded-xl shadow-lg border ${borderClass} ${bgClass} ${textClass} text-sm font-semibold flex items-center gap-3 transform transition-all duration-300 translate-y-0`;
+            d.innerHTML = `<i data-lucide="${type==='error'?'alert-octagon':'check-circle-2'}" class="w-5 h-5 ${iconColor}"></i> ${msg}`;
             c.appendChild(d);
             lucide.createIcons();
-            setTimeout(() => { d.classList.add('opacity-0', 'translate-y-2'); setTimeout(() => d.remove(), 300); }, 3000);
+            setTimeout(() => { 
+                d.classList.add('opacity-0', 'translate-y-4'); 
+                setTimeout(() => d.remove(), 300); 
+            }, 3500);
         }
     </script>
 </body>
