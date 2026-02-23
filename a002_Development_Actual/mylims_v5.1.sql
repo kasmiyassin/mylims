@@ -493,7 +493,7 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."samples_reservation" (
     "other_info" text,
     "notes" text,
     "attachment_link" text,
-    "actual_sample_id" text
+    "sample_id" text
 );
 
 CREATE TABLE IF NOT EXISTS "bio_assets"."samples_root" (
@@ -543,12 +543,16 @@ CREATE TABLE IF NOT EXISTS "bio_assets"."sediments" (
 CREATE TABLE IF NOT EXISTS "bio_assets"."water" (
     "sample_id" text PRIMARY KEY REFERENCES "bio_assets"."samples_root"("sample_id"),
     "external_id" text,
-    "volume_filtered_ml" numeric,
     "filter_type" text,
     "pore_size_um" numeric,
-    "depth_m" numeric,
     "sampling_method" text,
     "conservation" text,
+    "speed" text,
+    "start_time" time,
+    "end_time" time,
+    "duration" time,
+    "volume_filtered_ml" numeric,
+    "depth_m" numeric,
     "notes" text,
     "attachment_link" text
 );
