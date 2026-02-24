@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Experiments - TIFI LIMS</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f1f5f9; 
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.25rem; }
+        
+        /* Premium Card / Modal Styles */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }
+
+        .modal-overlay { 
+            background-color: rgba(15, 23, 42, 0.4); 
+            backdrop-filter: blur(4px); 
+            z-index: 100; 
+        }
+
+        .loading-overlay {
+            position: absolute; inset: 0; background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center;
+            z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        .loading-overlay.active { opacity: 1; pointer-events: all; }
+
+        /* Accordion Styles for Details */
+        .accordion-item { border-bottom: 1px solid #e2e8f0; }
+        .accordion-header { width: 100%; text-align: left; padding: 0.85rem 1rem; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background 0.2s; }
+        .accordion-header:hover { background-color: #f8fafc; }
+        .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; background-color: #ffffff; }
+        .accordion-content.open { max-height: 2000px; padding-bottom: 1rem; }
+
+        .table-row-selected { background-color: #eff6ff !important; border-left: 4px solid #3b82f6; }
+        
+        .tab-active { color: #2563eb; border-bottom: 2px solid #2563eb; }
+        
+        .badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-slate-800 selection:bg-indigo-100 selection:text-indigo-900">
+
+    <!-- Global Toast Container -->
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-[120] flex flex-col gap-3"></div>
+
+    <!-- Sidebar (Shared System-wide) -->
+    <div class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex-shrink-0">
+        <div class="p-5 border-b border-slate-100 flex items-center gap-3 shrink-0">
+            <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 p-2 rounded-xl shadow-inner">
+                <i data-lucide="flask-conical" class="w-5 h-5 text-white"></i> 
+            </div>
+            <span class="text-xl font-bold tracking-tight text-slate-800">TIFI LIMS</span>
+        </div>
+        
+        <div class="sidebar-nav-container p-4 space-y-1">
+            <a href="dashboard.html" class="flex items-center px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group mb-2">
+                <i data-lucide="layout-dashboard" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Dashboard
+            </a>
+            
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Core</div>
+            <a href="projects.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="folder-kanban" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Projects
+            </a>
+            <a href="experiments.html" class="flex items-center px-3 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-medium shadow-sm border border-indigo-100/50">
+                <i data-lucide="flask-round" class="w-4 h-4 mr-3 text-indigo-600"></i> Experiments
+            </a>
+            <a href="protocols.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="book-text" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Protocols (ELN)
+            </a>
+
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Field & Assets</div>
+            <a href="sampling.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="map-pin" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Sampling Events
+            </a>
+            <a href="planned_samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="calendar-check" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Planned Samples
+            </a>
+            <a href="samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="beaker" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Samples Registry
+            </a>
+            <a href="storage_2.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="archive" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Storage
+            </a>
+
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">System</div>
+            <a href="booking.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="calendar-clock" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Booking
+            </a>
+            <a href="tables.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="table-2" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Data Editor
+            </a>
+            <a href="reporting.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="bar-chart-2" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Reporting
+            </a>
+        </div>
+
+        <div class="mt-auto shrink-0 p-4 border-t border-slate-100 bg-slate-50/50">
+             <a href="user_profile.html" class="flex items-center mb-3 px-2 py-1.5 -mx-2 hover:bg-white rounded-xl transition-all group cursor-pointer border border-transparent hover:border-slate-200 hover:shadow-sm" title="View Profile & Settings">
+                <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-100 to-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-sm mr-3 shadow-sm border border-indigo-200/50 group-hover:scale-105 transition-transform">U</div>
+                <div class="overflow-hidden flex-1">
+                    <p class="font-semibold text-sm text-slate-800 truncate group-hover:text-indigo-600 transition-colors" id="userNameDisplay">User</p>
+                    <p class="text-[11px] font-medium text-emerald-600 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
+                    </p>
+                </div>
+            </a>
+            <button id="logout-button" class="w-full flex items-center justify-center p-2 rounded-xl text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 font-medium transition-colors border border-transparent hover:border-red-100">
+                <i data-lucide="log-out" class="w-4 h-4 mr-2"></i><span>Sign Out</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="flex-1 flex flex-col h-full relative overflow-hidden bg-slate-50/50">
+        
+        <!-- Header -->
+        <div class="bg-white px-8 py-6 z-10 shrink-0 border-b border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Experiments Management</h1>
+                <p class="text-sm text-slate-500 mt-1">Registry for extractions, PCRs, sequencing, and lab workflows.</p>
+            </div>
+            
+            <div class="flex gap-2">
+                <button onclick="downloadCSVTemplate()" class="px-4 py-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium shadow-sm flex gap-2 items-center transition-all">
+                    <i data-lucide="download" class="w-4 h-4 text-slate-400"></i> Template
+                </button>
+                <button onclick="showBulkUploadModal()" class="px-4 py-2 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium shadow-sm flex gap-2 items-center transition-all">
+                    <i data-lucide="upload" class="w-4 h-4 text-slate-400"></i> Bulk Upload
+                </button>
+                <button onclick="showCreateEditModal()" class="px-5 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 border border-indigo-500">
+                    <i data-lucide="plus" class="w-4 h-4"></i> New Record
+                </button>
+            </div>
+        </div>
+
+        <!-- Filters & Navigation Tabs -->
+        <div class="bg-white px-8 py-2 border-b border-slate-200 shrink-0 flex items-center gap-6">
+            <div class="flex items-center gap-4 py-2 overflow-x-auto">
+                <button onclick="changeTable('lims.experiments')" id="tab-main" class="text-sm font-bold px-1 py-2 tab-active transition-all whitespace-nowrap">Main Experiments</button>
+                <div class="h-4 w-px bg-slate-200"></div>
+                <select id="sub-table-select" onchange="changeTable(this.value)" class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
+                    <option value="lims.experiments">Browse Related Tables...</option>
+                    <optgroup label="Molecular Labs">
+                        <option value="moleculargenetics.nucleic_acid">Extractions</option>
+                        <option value="moleculargenetics.pcr">PCR Logs</option>
+                        <option value="moleculargenetics.qpcr">qPCR Results</option>
+                        <option value="moleculargenetics.gelelectrophoresis">Gels</option>
+                        <option value="moleculargenetics.library">Libraries</option>
+                        <option value="moleculargenetics.sequencing">Sequencing Runs</option>
+                    </optgroup>
+                    <optgroup label="Biology & ELN">
+                        <option value="biologyfish.dissection">Dissections</option>
+                        <option value="biologyfish.otoliths">Otoliths</option>
+                        <option value="biologyfish.tag_mark">Tags & Marks</option>
+                        <option value="eln.protocols_run">Protocol Runs</option>
+                    </optgroup>
+                </select>
+            </div>
+            <div class="ml-auto flex items-center gap-3 relative w-64">
+                <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
+                <input type="text" id="table-search" placeholder="Search current view..." onkeyup="applyFilters()" class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition">
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-hidden p-6 relative flex gap-6">
+            <!-- Left Pane: Records List -->
+            <div class="w-1/2 min-w-[450px] glass-card rounded-2xl flex flex-col overflow-hidden border border-slate-200 shadow-sm bg-white relative">
+                <div id="table-loading" class="loading-overlay">
+                    <div class="flex flex-col items-center gap-2 text-indigo-500">
+                        <i data-lucide="loader-2" class="w-8 h-8 animate-spin"></i>
+                        <span class="text-[10px] font-bold uppercase tracking-wider">Syncing Laboratory Data...</span>
+                    </div>
+                </div>
+                <div class="flex-1 overflow-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-slate-50/80 sticky top-0 z-10">
+                            <tr id="table-headers" class="border-b border-slate-200">
+                                <!-- Dynamic Headers -->
+                            </tr>
+                        </thead>
+                        <tbody id="table-body" class="divide-y divide-slate-100">
+                            <!-- Dynamic Rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Right Pane: Comprehensive Inspector -->
+            <div class="flex-1 glass-card rounded-2xl flex flex-col overflow-hidden border border-slate-200 shadow-sm bg-white relative">
+                <div id="details-container" class="flex-1 overflow-y-auto">
+                    <div class="p-12 flex flex-col items-center justify-center text-center h-full text-slate-400">
+                        <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 border border-slate-100 shadow-sm">
+                            <i data-lucide="flask-round" class="w-10 h-10 text-indigo-200"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-slate-800 mb-2">Experiment Inspector</h3>
+                        <p class="text-sm max-w-xs">Select a record from the list to view comprehensive lineage, results, and linked samples across all schemas.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="modal-container"></div>
+    </div>
+
+    <script>
+        // --- Configuration & API ---
+        const getApiBase = () => window.location.pathname.includes('/mylims') ? '/mylims/api' : '/api';
+        const API_URL = getApiBase();
+        
+        let currentTableName = 'lims.experiments';
+        let currentSchema = [];
+        let fullData = [];
+        let selectedRecordPK = null;
+
+        // Dynamic lookup mapping for the inspector
+        const INSPECTOR_RELATIONS = [
+            { schema: 'lims', table: 'experiments_projects', title: 'Linked Projects', icon: 'folder-kanban' },
+            { schema: 'lims', table: 'experiments_samples', title: 'Processed Samples', icon: 'beaker' },
+            { schema: 'moleculargenetics', table: 'nucleic_acid', title: 'Extractions', icon: 'test-tube' },
+            { schema: 'moleculargenetics', table: 'pcr', title: 'PCR Workflows', icon: 'dna' },
+            { schema: 'moleculargenetics', table: 'qpcr', title: 'qPCR Metrics', icon: 'activity' },
+            { schema: 'moleculargenetics', table: 'gelelectrophoresis', title: 'Gel Runs', icon: 'image' },
+            { schema: 'moleculargenetics', table: 'library', title: 'NGS Libraries', icon: 'book' },
+            { schema: 'biologyfish', table: 'dissection', title: 'Specimen Dissections', icon: 'scissors' },
+            { schema: 'biologyfish', table: 'otoliths', title: 'Otolith Analysis', icon: 'target' },
+            { schema: 'biologyfish', table: 'tag_mark', title: 'Tags & Markings', icon: 'tag' },
+            { schema: 'eln', table: 'protocols_run', title: 'ELN Protocol Runs', icon: 'book-open' }
+        ];
+
+        // --- Core Utils ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            const token = sessionStorage.getItem('token');
+            if (!token) { window.location.href = 'login.html'; return; }
+
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if (user && user.person_id) document.getElementById('userNameDisplay').innerText = user.person_id;
+            
+            document.getElementById('logout-button').addEventListener('click', () => { 
+                sessionStorage.clear(); window.location.href = 'login.html'; 
+            });
+
+            loadData();
+        });
+
+        async function apiFetch(endpoint, options = {}) {
+            const token = sessionStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}` };
+            if (options.body && !(options.body instanceof FormData)) {
+                headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(options.body);
+            }
+            options.headers = { ...headers, ...options.headers };
+            try {
+                const response = await fetch(`${API_URL}/${endpoint}`, options);
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || err.error || "API error");
+                }
+                if (response.status === 204) return { success: true };
+                return response.json();
+            } catch (error) {
+                console.error(`Fetch error [${endpoint}]:`, error);
+                return { error: error.message };
+            }
+        }
+
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const div = document.createElement('div');
+            const icons = { success: 'check-circle-2', error: 'alert-octagon', info: 'info' };
+            const bgs = { success: 'bg-emerald-50 text-emerald-800 border-emerald-200', error: 'bg-red-50 text-red-800 border-red-200', info: 'bg-indigo-50 text-indigo-800 border-indigo-200' };
+            div.className = `px-4 py-3 rounded-xl shadow-lg border flex items-center gap-3 transition-all duration-300 ${bgs[type] || bgs.info}`;
+            div.innerHTML = `<i data-lucide="${icons[type]}" class="w-5 h-5"></i> <span class="text-sm font-semibold">${msg}</span>`;
+            container.appendChild(div);
+            lucide.createIcons();
+            setTimeout(() => { div.classList.add('opacity-0'); setTimeout(() => div.remove(), 500); }, 3500);
+        }
+
+        // --- View Logic ---
+        async function changeTable(tableName) {
+            currentTableName = tableName;
+            const isMain = tableName === 'lims.experiments';
+            document.getElementById('tab-main').className = isMain ? 'text-sm font-bold px-1 py-2 tab-active transition-all' : 'text-sm font-medium px-1 py-2 text-slate-400 hover:text-slate-600 transition-all';
+            selectedRecordPK = null;
+            loadData();
+        }
+
+        async function loadData() {
+            const [schema, table] = currentTableName.split('.');
+            const endpointPath = `${schema}/${table}`;
+            document.getElementById('table-loading').classList.add('active');
+            
+            const [schemaRes, dataRes] = await Promise.all([
+                apiFetch(`table/${endpointPath}/schema`),
+                apiFetch(`table/${endpointPath}?limit=500`)
+            ]);
+
+            document.getElementById('table-loading').classList.remove('active');
+            
+            if (schemaRes.error || dataRes.error) {
+                showToast("Failed to load table data", "error");
+                return;
+            }
+            currentSchema = schemaRes;
+            fullData = dataRes;
+            renderTable();
+        }
+
+        function renderTable() {
+            const headers = document.getElementById('table-headers');
+            const body = document.getElementById('table-body');
+            const pkCol = currentSchema.find(c => c.is_primary_key)?.column_name || Object.keys(fullData[0] || {})[0];
+            
+            // Pick most informative 4 columns
+            const displayCols = currentSchema.filter(c => 
+                !c.column_name.includes('notes') && 
+                !c.column_name.includes('vector') && 
+                !c.column_name.includes('attachment') &&
+                !c.column_name.includes('json')
+            ).slice(0, 4);
+
+            headers.innerHTML = displayCols.map(c => `
+                <th class="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">${c.column_name.replace(/_/g, ' ')}</th>
+            `).join('') + '<th class="px-4 py-3"></th>';
+
+            if (fullData.length === 0) {
+                body.innerHTML = `<tr><td colspan="100%" class="p-8 text-center text-slate-400 text-xs italic">No records found for ${currentTableName}</td></tr>`;
+                return;
+            }
+
+            body.innerHTML = fullData.map(row => `
+                <tr onclick="selectRecord('${row[pkCol]}')" class="group cursor-pointer hover:bg-slate-50 transition-colors ${selectedRecordPK === row[pkCol] ? 'table-row-selected' : ''}">
+                    ${displayCols.map(c => `
+                        <td class="px-4 py-3 text-sm font-medium text-slate-700 truncate max-w-[160px]">
+                            ${row[c.column_name] || '<span class="text-slate-300 italic">null</span>'}
+                        </td>
+                    `).join('')}
+                    <td class="px-4 py-3 text-right opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onclick="event.stopPropagation(); showCreateEditModal('${row[pkCol]}')" class="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+            
+            lucide.createIcons();
+        }
+
+        // --- Inspector Logic ---
+        async function selectRecord(pk) {
+            selectedRecordPK = pk;
+            renderTable(); 
+            
+            const container = document.getElementById('details-container');
+            const pkCol = currentSchema.find(c => c.is_primary_key)?.column_name || Object.keys(fullData[0])[0];
+            const record = fullData.find(r => r[pkCol] === pk);
+            
+            if (!record) return;
+
+            container.innerHTML = `
+                <div class="p-6 border-b border-slate-200 bg-white sticky top-0 z-20 shadow-sm">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-1">Inspector</p>
+                            <h2 class="text-2xl font-black text-slate-900 tracking-tight">${record.experiment_title || record.name || record.title || record[pkCol]}</h2>
+                            <p class="text-xs text-slate-400 font-mono mt-1">${pkCol}: ${record[pkCol]}</p>
+                        </div>
+                        <div class="flex gap-2">
+                             <button onclick="confirmDelete('${record[pkCol]}')" class="p-2.5 bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200 rounded-xl transition-all shadow-sm">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        ${currentSchema.map(c => {
+                            const val = record[c.column_name];
+                            if (!val || ['search_vector', 'notes', 'attachment_link', pkCol].includes(c.column_name)) return '';
+                            return `<div class="bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-600"><span class="text-slate-400 font-medium">${c.column_name.replace(/_/g, ' ')}:</span> ${val}</div>`;
+                        }).join('')}
+                    </div>
+                </div>
+                
+                <div class="p-6">
+                    <div id="inspector-loading" class="flex flex-col items-center justify-center py-12 gap-2 text-slate-300">
+                        <i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i>
+                        <span class="text-[10px] font-bold uppercase">Mapping cross-schema relations...</span>
+                    </div>
+                    <div id="inspector-content" class="space-y-4"></div>
+                </div>
+            `;
+            lucide.createIcons();
+            loadInspectorRelations(pk);
+        }
+
+        async function loadInspectorRelations(id) {
+            const content = document.getElementById('inspector-content');
+            let html = '';
+
+            for (const rel of INSPECTOR_RELATIONS) {
+                // Fetch linked records by experiment_id filter
+                const data = await apiFetch(`table/${rel.schema}/${rel.table}?experiment_id=${id}`);
+                
+                if (data && !data.error && data.length > 0) {
+                    html += `
+                        <div class="accordion-item bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                            <div class="accordion-header" onclick="this.nextElementSibling.classList.toggle('open');">
+                                <span class="flex items-center gap-3 text-sm font-bold text-slate-700">
+                                    <div class="p-2 bg-slate-50 rounded-lg"><i data-lucide="${rel.icon}" class="w-4 h-4 text-indigo-500"></i></div>
+                                    ${rel.title} <span class="bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full text-[10px] ml-1 shadow-inner">${data.length}</span>
+                                </span>
+                                <i data-lucide="chevron-down" class="w-4 h-4 text-slate-300"></i>
+                            </div>
+                            <div class="accordion-content">
+                                <div class="px-4 pb-4 space-y-2">
+                                    ${data.map(item => {
+                                        const label = item.sample_id || item.protocol_id || item.extraction_id || Object.values(item)[0];
+                                        return `
+                                            <div class="p-3 bg-slate-50/50 border border-slate-100 rounded-xl flex items-center justify-between group transition-all hover:bg-white hover:border-indigo-200">
+                                                <div class="min-w-0">
+                                                    <div class="text-xs font-bold text-slate-800 truncate">${label}</div>
+                                                    <div class="text-[10px] text-slate-400 mt-0.5 font-medium">${Object.keys(item).slice(1, 3).map(k => `${k}: ${item[k]}`).join(' • ')}</div>
+                                                </div>
+                                                <button onclick="changeTable('${rel.schema}.${rel.table}')" class="p-1.5 text-slate-300 hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="external-link" class="w-3 h-3"></i></button>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            const loader = document.getElementById('inspector-loading');
+            if (loader) loader.remove();
+            
+            content.innerHTML = html || `<div class="text-center py-12 text-slate-400 text-sm"><i data-lucide="database-zap" class="w-8 h-8 mx-auto mb-2 opacity-20"></i>No direct links found for this record in other laboratory schemas.</div>`;
+            lucide.createIcons();
+        }
+
+        // --- Modals ---
+        async function showCreateEditModal(pk = null) {
+            const isEditing = pk !== null;
+            const [sch, tbl] = currentTableName.split('.');
+            const record = isEditing ? fullData.find(r => r[currentSchema.find(c => c.is_primary_key).column_name] === pk) : null;
+            
+            let formFields = '';
+            for (const col of currentSchema) {
+                if (['search_vector', 'created_at', 'updated_at', 'created_by'].includes(col.column_name)) continue;
+                
+                const val = record ? record[col.column_name] : '';
+                const isPK = col.is_primary_key;
+                const isReq = col.is_nullable === 'NO' ? 'required' : '';
+                const label = col.column_name.replace(/_/g, ' ').toUpperCase();
+                
+                let input = '';
+                if (isEditing && isPK) {
+                    input = `<input type="text" value="${val}" readonly class="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-500 cursor-not-allowed">`;
+                } else if (col.data_type === 'date') {
+                    input = `<input type="date" name="${col.column_name}" value="${val ? val.split('T')[0] : ''}" ${isReq} class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition">`;
+                } else if (col.data_type === 'jsonb') {
+                     input = `<textarea name="${col.column_name}" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-mono outline-none focus:ring-2 focus:ring-indigo-500 transition h-20">${val ? JSON.stringify(val) : ''}</textarea>`;
+                } else if (col.column_name.includes('notes') || col.column_name.includes('aim') || col.column_name.includes('description')) {
+                    input = `<textarea name="${col.column_name}" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition h-24">${val || ''}</textarea>`;
+                } else {
+                    input = `<input type="text" name="${col.column_name}" value="${val || ''}" ${isReq} class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition">`;
+                }
+                
+                formFields += `<div class="${col.column_name.includes('notes') || col.data_type === 'jsonb' ? 'md:col-span-2' : ''}">
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1.5 ml-1">${label}</label>
+                    ${input}
+                </div>`;
+            }
+
+            const modalHtml = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center opacity-0 transition-opacity duration-300">
+                    <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col transform scale-95 translate-y-4 transition-all duration-300 border border-slate-200">
+                        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center shrink-0">
+                            <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <i data-lucide="${isEditing ? 'edit-3' : 'plus-circle'}" class="w-5 h-5 text-indigo-500"></i>
+                                ${isEditing ? 'Edit' : 'Create'} ${currentTableName.split('.')[1].replace(/_/g, ' ')}
+                            </h2>
+                            <button id="close-modal-btn" class="p-1 text-slate-400 hover:text-slate-700 transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+                        </div>
+                        <form id="record-form" class="p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-5">
+                            ${formFields}
+                        </form>
+                        <div class="px-6 py-4 border-t border-slate-100 bg-slate-50/50 rounded-b-2xl flex justify-end shrink-0">
+                            <button form="record-form" type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-all flex items-center gap-2">
+                                <i data-lucide="save" class="w-4 h-4"></i> ${isEditing ? 'Update Entry' : 'Create Record'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            const container = document.getElementById('modal-container');
+            container.innerHTML = modalHtml;
+            const modal = container.querySelector('.modal-overlay');
+            const inner = container.querySelector('.modal-content');
+            
+            setTimeout(() => { modal.classList.remove('opacity-0'); inner.classList.remove('scale-95', 'translate-y-4'); }, 10);
+            
+            const close = () => {
+                modal.classList.add('opacity-0'); inner.classList.add('scale-95', 'translate-y-4');
+                setTimeout(() => container.innerHTML = '', 300);
+            };
+
+            container.querySelector('#close-modal-btn').onclick = close;
+            lucide.createIcons();
+
+            document.getElementById('record-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const fd = new FormData(e.target);
+                const payload = Object.fromEntries(fd.entries());
+                
+                // Parse JSONB
+                currentSchema.filter(c => c.data_type === 'jsonb').forEach(c => {
+                    if (payload[c.column_name]) {
+                        try { payload[c.column_name] = JSON.parse(payload[c.column_name]); } catch(e) {}
+                    }
+                });
+
+                const method = isEditing ? 'PUT' : 'POST';
+                const pkCol = currentSchema.find(c => c.is_primary_key).column_name;
+                const endpoint = isEditing ? `table/${currentTableName.replace('.', '/')}?${pkCol}=${pk}` : `table/${currentTableName.replace('.', '/')}`;
+                
+                const res = await apiFetch(endpoint, { method, body: payload });
+                if (!res.error) {
+                    showToast(`Record ${isEditing ? 'updated' : 'created'} successfully`, "success");
+                    close();
+                    loadData();
+                } else {
+                    showToast(res.error, "error");
+                }
+            };
+        }
+
+        async function confirmDelete(pk) {
+            const modalHtml = `
+                <div class="modal-overlay fixed inset-0 z-[110] flex items-center justify-center opacity-0 transition-opacity duration-300">
+                    <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 transform scale-95 translate-y-4 transition-all duration-300">
+                        <div class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4 mx-auto">
+                            <i data-lucide="alert-triangle" class="w-6 h-6 text-red-600"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-slate-800 text-center mb-2">Delete Record?</h3>
+                        <p class="text-sm text-slate-500 text-center mb-6">Are you sure you want to delete <strong>${pk}</strong>? This action is permanent.</p>
+                        <div class="flex gap-3">
+                            <button id="cancel-del" class="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition-colors">Cancel</button>
+                            <button id="exec-del" class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            const container = document.getElementById('modal-container');
+            container.innerHTML = modalHtml;
+            lucide.createIcons();
+            
+            const modal = container.querySelector('.modal-overlay');
+            const inner = container.querySelector('.modal-content');
+            setTimeout(() => { modal.classList.remove('opacity-0'); inner.classList.remove('scale-95', 'translate-y-4'); }, 10);
+            
+            const close = () => { container.innerHTML = ''; };
+            
+            document.getElementById('cancel-del').onclick = close;
+            document.getElementById('exec-del').onclick = async () => {
+                const pkCol = currentSchema.find(c => c.is_primary_key).column_name;
+                const res = await apiFetch(`table/${currentTableName.replace('.', '/')}?${pkCol}=${pk}`, { method: 'DELETE' });
+                if (!res.error) {
+                    showToast("Record successfully deleted", "success");
+                    document.getElementById('details-container').innerHTML = ''; 
+                    close();
+                    loadData();
+                } else {
+                    showToast(res.error, "error");
+                }
+            };
+        }
+
+        function applyFilters() {
+            const term = document.getElementById('table-search').value.toLowerCase();
+            const rows = document.querySelectorAll('#table-body tr');
+            rows.forEach(r => {
+                r.style.display = r.innerText.toLowerCase().includes(term) ? '' : 'none';
+            });
+        }
+        
+        function downloadCSVTemplate() {
+            if (currentSchema.length === 0) return;
+            const headers = currentSchema.map(c => c.column_name).join(',');
+            const blob = new Blob([headers], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentTableName.replace('.', '_')}_template.csv`;
+            a.click();
+        }
+
+        async function showBulkUploadModal() {
+             const modalHtml = `
+                <div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center opacity-0 transition-opacity duration-300">
+                    <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 transform scale-95 translate-y-4 transition-all duration-300">
+                        <h2 class="text-xl font-bold mb-4">Bulk Upload CSV</h2>
+                        <p class="text-sm text-slate-500 mb-6 text-center">Select a CSV file matching the schema of <strong>${currentTableName}</strong> to import records in batch.</p>
+                        <input type="file" id="csv-file" accept=".csv" class="w-full border border-slate-200 rounded-xl p-3 text-sm mb-6">
+                        <div class="flex gap-3">
+                            <button id="close-modal-btn" class="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition-colors">Cancel</button>
+                            <button id="upload-btn" class="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors shadow-md">Start Import</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            const container = document.getElementById('modal-container');
+            container.innerHTML = modalHtml;
+            const close = () => { container.innerHTML = ''; };
+            document.getElementById('close-modal-btn').onclick = close;
+            
+            document.getElementById('upload-btn').onclick = async () => {
+                const file = document.getElementById('csv-file').files[0];
+                if (!file) return showToast("Select a file first", "error");
+                
+                const text = await file.text();
+                const lines = text.split('\n');
+                const headers = lines[0].split(',').map(h => h.trim());
+                const rows = lines.slice(1).map(line => {
+                    const values = line.split(',');
+                    const row = {};
+                    headers.forEach((h, i) => row[h] = values[i]?.trim());
+                    return row;
+                }).filter(r => Object.keys(r).length > 0 && Object.values(r).some(v => v));
+
+                const res = await apiFetch(`table/${currentTableName.replace('.', '/')}/batch_upload`, {
+                    method: 'POST',
+                    body: rows
+                });
+
+                if (!res.error) {
+                    showToast(`Batch import complete: ${res.count || rows.length} records processed`, "success");
+                    close();
+                    loadData();
+                } else {
+                    showToast(res.error, "error");
+                }
+            };
+            
+            const modal = container.querySelector('.modal-overlay');
+            const inner = container.querySelector('.modal-content');
+            setTimeout(() => { modal.classList.remove('opacity-0'); inner.classList.remove('scale-95', 'translate-y-4'); }, 10);
+        }
+    </script>
+</body>
+</html>

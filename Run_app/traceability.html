@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traceability & Audit Suite - TIFI LIMS</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-grid.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-theme-alpine.css" />
+    
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script src="https://unpkg.com/vis-timeline/standalone/umd/vis-timeline-graph2d.min.js"></script>
+    <link href="https://unpkg.com/vis-timeline/styles/vis-timeline-graph2d.min.css" rel="stylesheet" type="text/css" />
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #4f46e5; /* Indigo 600 */
+            --primary-hover: #4338ca; /* Indigo 700 */
+            --bg-body: #f8fafc; /* Slate 50 */
+            --bg-surface: #ffffff;
+            --text-main: #1e293b; /* Slate 800 */
+            --text-muted: #64748b; /* Slate 500 */
+            --border: #e2e8f0; /* Slate 200 */
+        }
+
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg-body); color: var(--text-main); height: 100vh; overflow: hidden; }
+
+        /* --- Layout & Scrollbars --- */
+        .app-container { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
+        .sidebar { width: 280px; flex-shrink: 0; background: white; border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 20; }
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        .scroll-area { overflow-y: auto; height: 100%; scroll-behavior: smooth; }
+        
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* --- Components --- */
+        .card { background: white; border: 1px solid var(--border); border-radius: 0.75rem; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); transition: box-shadow 0.2s; }
+        .card:hover { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        
+        .tab-btn { position: relative; transition: all 0.2s; }
+        .tab-btn.active { color: var(--primary); font-weight: 600; }
+        .tab-btn.active::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px; background-color: var(--primary); }
+
+        /* --- AG Grid Customization --- */
+        .ag-theme-alpine { 
+            --ag-font-size: 11px; 
+            --ag-header-height: 32px; 
+            --ag-row-height: 32px; 
+            --ag-border-color: #e2e8f0;
+            --ag-header-background-color: #f8fafc;
+            --ag-header-foreground-color: #475569;
+            --ag-row-hover-color: #f1f5f9;
+            --ag-selected-row-background-color: #e0e7ff;
+        }
+        .ag-header-cell-label { font-weight: 600; }
+
+        /* --- Vis.js Network Customization --- */
+        #network-container { background-color: #f8fafc; border-radius: 0.5rem; border: 1px solid var(--border); }
+        
+        /* --- QC Badges --- */
+        .badge { padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.025em; }
+        .badge-pass { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .badge-warn { background-color: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
+        .badge-fail { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        
+        /* --- Loading Overlays --- */
+        .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.8); backdrop-filter: blur(2px); z-index: 50; display: flex; align-items: center; justify-content: center; }
+        .spinner { width: 24px; height: 24px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* --- Print / PDF Styles --- */
+        @media print {
+            .no-print { display: none !important; }
+            .card { box-shadow: none !important; border: 1px solid #ddd !important; break-inside: avoid; }
+            body { background: white; height: auto; overflow: visible; }
+            .scroll-area { overflow: visible; height: auto; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    
+    <aside class="sidebar no-print">
+        <div class="p-5 border-b border-slate-100 flex items-center gap-3 bg-white">
+            <div class="bg-indigo-600 p-2 rounded-xl shadow-sm">
+                <i data-lucide="flask-conical" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-slate-800 text-lg leading-tight">TIFI LIMS</h1>
+                <p class="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Audit & Compliance</p>
+            </div>
+        </div>
+
+        <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+            <a href="dashboard.html" class="flex items-center px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-all group">
+                <i data-lucide="layout-dashboard" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500"></i> Dashboard
+            </a>
+            <a href="projects.html" class="flex items-center px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-all group">
+                <i data-lucide="folder-kanban" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500"></i> Projects
+            </a>
+            <a href="experiments.html" class="flex items-center px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-all group">
+                <i data-lucide="flask-round" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500"></i> Experiments
+            </a>
+            
+            <div class="my-4 border-t border-slate-100"></div>
+            <div class="px-3 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Traceability Tools</div>
+            
+            <a href="#" onclick="setMode('trace')" id="nav-trace" class="flex items-center px-3 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-semibold shadow-sm transition-all">
+                <i data-lucide="git-merge" class="w-4 h-4 mr-3 text-indigo-600"></i> Deep Trace
+            </a>
+            <a href="#" onclick="setMode('audit')" id="nav-audit" class="flex items-center px-3 py-2.5 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-all group">
+                <i data-lucide="file-check-2" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500"></i> QC Audit
+            </a>
+        </nav>
+
+        <div class="p-4 border-t border-slate-100 bg-slate-50">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs" id="user-avatar">U</div>
+                <div class="overflow-hidden">
+                    <p class="text-xs font-bold text-slate-700 truncate" id="user-name">User</p>
+                    <p class="text-[10px] text-slate-400 truncate">Analyst</p>
+                </div>
+                <button id="logout-btn" class="ml-auto text-slate-400 hover:text-red-500"><i data-lucide="log-out" class="w-4 h-4"></i></button>
+            </div>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        
+        <header class="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center z-10 no-print">
+            <div class="flex items-center gap-6 flex-1">
+                <div class="relative max-w-lg w-full">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i data-lucide="search" class="w-4 h-4 text-slate-400"></i>
+                    </div>
+                    <input type="text" id="global-search" 
+                           class="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg leading-5 bg-slate-50 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition duration-150 sm:text-sm" 
+                           placeholder="Search Experiment ID (e.g., EXP25_DNA_01) or Sample ID...">
+                </div>
+                <button onclick="executeSearch()" class="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm">
+                    Load Data
+                </button>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <button onclick="generateReport()" class="flex items-center gap-2 text-slate-600 hover:text-indigo-600 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-100 px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm">
+                    <i data-lucide="file-down" class="w-4 h-4"></i> Generate Report
+                </button>
+            </div>
+        </header>
+
+        <div id="workspace" class="scroll-area p-8 relative">
+            
+            <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-center p-8 bg-slate-50 z-0">
+                <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm mb-6 border border-slate-100">
+                    <i data-lucide="search-code" class="w-10 h-10 text-slate-300"></i>
+                </div>
+                <h2 class="text-xl font-bold text-slate-800 mb-2">Ready to Audit</h2>
+                <p class="text-slate-500 max-w-md">Enter an Experiment ID or Sample Barcode above to trace lineage, verify QC metrics, and audit protocol execution.</p>
+            </div>
+
+            <div id="dashboard-content" class="space-y-6 hidden relative z-10">
+                
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div class="card p-5 border-l-4 border-indigo-500">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">Experiment</p>
+                        <h3 class="text-lg font-bold text-slate-800 truncate" id="kpi-exp-id">-</h3>
+                        <p class="text-xs text-slate-500 mt-1" id="kpi-project">-</p>
+                    </div>
+                    <div class="card p-5 border-l-4 border-blue-500">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">Total Samples</p>
+                        <div class="flex items-end gap-2">
+                            <h3 class="text-2xl font-bold text-slate-800" id="kpi-sample-count">0</h3>
+                            <span class="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded font-medium mb-1">processed</span>
+                        </div>
+                    </div>
+                    <div class="card p-5 border-l-4 border-emerald-500">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">QC Pass Rate</p>
+                        <div class="flex items-end gap-2">
+                            <h3 class="text-2xl font-bold text-slate-800" id="kpi-qc-rate">0%</h3>
+                            <span class="text-xs text-slate-400 mb-1">of checks passed</span>
+                        </div>
+                    </div>
+                    <div class="card p-5 border-l-4 border-purple-500">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">Execution Time</p>
+                        <div class="flex items-end gap-2">
+                            <h3 class="text-lg font-bold text-slate-800" id="kpi-duration">-</h3>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mt-1" id="kpi-dates">-</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-12 gap-6">
+                    
+                    <div class="col-span-12 lg:col-span-4 flex flex-col gap-6">
+                        <div class="card p-0 flex flex-col h-[500px]">
+                            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-lg">
+                                <h3 class="font-bold text-slate-700 text-sm flex items-center gap-2">
+                                    <i data-lucide="list-checks" class="w-4 h-4 text-indigo-500"></i> Protocol Execution
+                                </h3>
+                                <span class="badge badge-pass" id="protocol-status-badge">Completed</span>
+                            </div>
+                            <div class="flex-1 overflow-y-auto p-4 space-y-4" id="protocol-steps-list">
+                                </div>
+                        </div>
+                    </div>
+
+                    <div class="col-span-12 lg:col-span-8">
+                        <div class="card flex flex-col h-[500px]">
+                            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-lg">
+                                <h3 class="font-bold text-slate-700 text-sm flex items-center gap-2">
+                                    <i data-lucide="share-2" class="w-4 h-4 text-indigo-500"></i> Sample Lineage & Traceability
+                                </h3>
+                                <div class="flex gap-3 text-xs">
+                                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-blue-500"></span> Exp</span>
+                                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Sample</span>
+                                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-purple-500"></span> Result</span>
+                                </div>
+                            </div>
+                            <div id="network-container" class="flex-1 w-full bg-slate-50 relative"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="border-b border-slate-200">
+                        <nav class="flex -mb-px px-4" aria-label="Tabs" id="result-tabs">
+                            </nav>
+                    </div>
+                    <div class="p-0">
+                        <div class="p-3 border-b border-slate-100 bg-slate-50 flex gap-3 items-center justify-between">
+                            <div class="flex gap-2">
+                                <button onclick="gridApi.exportDataAsCsv()" class="text-xs font-medium text-slate-600 hover:text-indigo-600 bg-white border border-slate-200 px-3 py-1.5 rounded shadow-sm">Export CSV</button>
+                                <button onclick="toggleQCFilter()" class="text-xs font-medium text-slate-600 hover:text-indigo-600 bg-white border border-slate-200 px-3 py-1.5 rounded shadow-sm flex items-center gap-1">
+                                    <i data-lucide="filter" class="w-3 h-3"></i> Show Failures Only
+                                </button>
+                            </div>
+                            <span class="text-xs text-slate-400 italic" id="table-record-count">0 records</span>
+                        </div>
+                        <div id="result-grid" class="ag-theme-alpine w-full h-[400px]"></div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pb-10 page-break-avoid">
+                    <div class="card p-5">
+                        <h4 class="text-sm font-bold text-slate-700 mb-4">QC Distribution</h4>
+                        <div class="h-64"><canvas id="chart-qc"></canvas></div>
+                    </div>
+                    <div class="card p-5">
+                        <h4 class="text-sm font-bold text-slate-700 mb-4">Results Over Time</h4>
+                        <div class="h-64"><canvas id="chart-timeline"></canvas></div>
+                    </div>
+                </div>
+
+            </div> </div>
+    </main>
+</div>
+
+<script>
+    /**
+     * TIFI LIMS TRACEABILITY ENGINE
+     * Version: 2.0 (Deep Audit)
+     * Handles recursive fetching, graph construction, and QC analysis.
+     */
+
+    // --- Configuration ---
+    const API_BASE = window.location.pathname.includes('/mylims') ? '/mylims/api' : '/api';
+    
+    // Result Table Mappings (Extensible)
+    // Defines where to look for data and how to judge quality
+    const RESULT_TABLES = [
+        { 
+            id: 'dna', title: 'DNA Extraction', schema: 'moleculargenetics', table: 'nucleic_acid', 
+            icon: 'dna', 
+            qc: (row) => {
+                // Example QC Logic: Purity ratios
+                const r = parseFloat(row.a260_280);
+                if (!r) return { status: 'warn', msg: 'No Data' };
+                if (r >= 1.8 && r <= 2.0) return { status: 'pass', msg: 'Optimal' };
+                if (r >= 1.6 && r <= 2.2) return { status: 'warn', msg: 'Suboptimal' };
+                return { status: 'fail', msg: 'Contaminated' };
+            }
+        },
+        { 
+            id: 'pcr', title: 'PCR', schema: 'moleculargenetics', table: 'pcr', 
+            icon: 'thermometer', 
+            qc: (row) => ({ status: 'pass', msg: 'Completed' }) // Basic check
+        },
+        { 
+            id: 'qpcr', title: 'qPCR', schema: 'moleculargenetics', table: 'qpcr', 
+            icon: 'activity', 
+            qc: (row) => {
+                const ct = parseFloat(row.ct_value);
+                if(!ct) return { status: 'fail', msg: 'No Ct' };
+                return ct < 35 ? { status: 'pass', msg: 'Detected' } : { status: 'warn', msg: 'Late/Neg' };
+            }
+        },
+        {
+            id: 'seq', title: 'Sequencing', schema: 'moleculargenetics', table: 'sequencing_libraries',
+            icon: 'binary',
+            qc: (row) => ({ status: 'pass', msg: 'Queued' })
+        },
+        {
+            id: 'dissection', title: 'Dissections', schema: 'biologyfish', table: 'dissection',
+            icon: 'scissors',
+            qc: (row) => row.weight_g ? { status: 'pass', msg: 'Weighed' } : { status: 'warn', msg: 'No Weight' }
+        }
+    ];
+
+    // --- State Management ---
+    const state = {
+        experiment: null,
+        protocol: null,
+        protocolRun: null,
+        results: {}, // Map: tableId -> Array of rows
+        samples: [],
+        graphData: { nodes: [], edges: [] },
+        qcStats: { pass: 0, warn: 0, fail: 0, total: 0 },
+        currentTab: 'dna'
+    };
+
+    let gridApi = null;
+    let network = null;
+    let charts = {};
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+        checkSession();
+        
+        // Auto-load if param exists
+        const params = new URLSearchParams(window.location.search);
+        const expId = params.get('experiment_id');
+        if(expId) {
+            document.getElementById('global-search').value = expId;
+            executeSearch();
+        }
+    });
+
+    function checkSession() {
+        const u = sessionStorage.getItem('user');
+        if(u) {
+            const user = JSON.parse(u);
+            document.getElementById('user-name').innerText = user.full_name || user.person_id;
+            document.getElementById('user-avatar').innerText = (user.full_name || user.person_id).charAt(0).toUpperCase();
+        }
+    }
+
+    // --- Core Logic: Search & Fetch ---
+    async function executeSearch() {
+        const term = document.getElementById('global-search').value.trim();
+        if(!term) return;
+
+        showLoading(true);
+        resetState();
+
+        try {
+            // 1. Identify Target: Is it Experiment or Sample?
+            // Strategy: Try Experiment first.
+            let expData = await fetchAPI(`table/lims/experiments?experiment_id=${term}`);
+            
+            if(expData.length === 0) {
+                // Not found? Try fetching sample to find its experiment
+                const sampleData = await fetchAPI(`table/bio_assets/samples_root?sample_id=${term}`);
+                if(sampleData.length > 0 && sampleData[0].experiment_id) {
+                    // Redirect search to the parent experiment
+                    document.getElementById('global-search').value = sampleData[0].experiment_id;
+                    await executeSearch(); // Recurse
+                    return;
+                } else {
+                    showToast("No experiment or sample found with that ID.", "error");
+                    showLoading(false);
+                    return;
+                }
+            }
+            
+            state.experiment = expData[0];
+            
+            // 2. Parallel Fetching for Deep Traceability
+            const promises = [
+                fetchAPI(`table/lims/projects?project_id=${state.experiment.project_id}`), // Project Info
+                fetchAPI(`table/eln/protocols_run?experiment_id=${state.experiment.experiment_id}`), // ELN Logs
+                fetchAPI(`table/bio_assets/samples_root?experiment_id=${state.experiment.experiment_id}`), // Samples
+            ];
+
+            // Add result table fetches
+            RESULT_TABLES.forEach(def => {
+                promises.push(fetchAPI(`table/${def.schema}/${def.table}?experiment_id=${state.experiment.experiment_id}`)
+                    .then(rows => ({ id: def.id, rows: rows }))
+                );
+            });
+
+            const responses = await Promise.all(promises);
+
+            // 3. Process Responses
+            const project = responses[0][0] || {};
+            state.protocolRun = responses[1][0] || null; // Assume most recent
+            state.samples = responses[2];
+            
+            // Process Results
+            for(let i=3; i<responses.length; i++) {
+                const res = responses[i];
+                state.results[res.id] = res.rows;
+                
+                // Calculate QC immediately
+                const def = RESULT_TABLES.find(d => d.id === res.id);
+                res.rows.forEach(row => {
+                    const qc = def.qc(row);
+                    row._qcStatus = qc.status;
+                    row._qcMsg = qc.msg;
+                    state.qcStats[qc.status]++;
+                    state.qcStats.total++;
+                });
+            }
+
+            state.experiment._projectTitle = project.title || state.experiment.project_id;
+
+            // 4. Render UI
+            updateDashboard();
+            buildGraph();
+            renderProtocol();
+            initTabs();
+            renderCharts();
+
+            // Show Content
+            document.getElementById('empty-state').classList.add('hidden');
+            document.getElementById('dashboard-content').classList.remove('hidden');
+
+        } catch (error) {
+            console.error(error);
+            showToast("System Error: " + error.message, "error");
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // --- Rendering: KPI & Dashboard ---
+    function updateDashboard() {
+        // KPIs
+        document.getElementById('kpi-exp-id').innerText = state.experiment.experiment_id;
+        document.getElementById('kpi-project').innerText = state.experiment._projectTitle;
+        document.getElementById('kpi-sample-count').innerText = state.samples.length;
+        
+        const rate = state.qcStats.total > 0 ? Math.round((state.qcStats.pass / state.qcStats.total) * 100) : 0;
+        document.getElementById('kpi-qc-rate').innerText = rate + '%';
+        document.getElementById('kpi-qc-rate').className = `text-2xl font-bold ${rate > 80 ? 'text-emerald-600' : (rate > 50 ? 'text-amber-600' : 'text-red-600')}`;
+
+        // Time Calc
+        if(state.protocolRun && state.protocolRun.data_json) {
+            // ... Logic to parse timestamps from JSON log
+            document.getElementById('protocol-status-badge').innerText = "Logged";
+            document.getElementById('protocol-status-badge').className = "badge badge-pass";
+        } else {
+            document.getElementById('protocol-status-badge').innerText = "Pending";
+            document.getElementById('protocol-status-badge').className = "badge badge-warn";
+        }
+    }
+
+    // --- Rendering: Protocol Steps ---
+    function renderProtocol() {
+        const container = document.getElementById('protocol-steps-list');
+        container.innerHTML = '';
+
+        if(!state.protocolRun || !state.protocolRun.data_json) {
+            container.innerHTML = `<div class="text-center text-slate-400 text-sm py-10">No protocol execution log found.</div>`;
+            return;
+        }
+
+        // Parse JSON log (assuming structure { step_0: { done: true, ts: '...', note: '...' } })
+        const steps = Object.entries(state.protocolRun.data_json).sort((a,b) => {
+            return (a[1].ts || '').localeCompare(b[1].ts || '');
+        });
+
+        steps.forEach(([key, step], idx) => {
+            const dateStr = step.ts ? new Date(step.ts).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : 'No Date';
+            const user = step.user || 'System';
+            const html = `
+                <div class="flex gap-4 relative">
+                    <div class="flex flex-col items-center">
+                        <div class="w-2 h-2 rounded-full ${step.done ? 'bg-indigo-600' : 'bg-slate-300'} z-10"></div>
+                        ${idx < steps.length-1 ? '<div class="w-px bg-slate-200 flex-1 my-1"></div>' : ''}
+                    </div>
+                    <div class="pb-6">
+                        <p class="text-xs text-slate-400 font-mono">${dateStr}</p>
+                        <p class="text-sm font-bold text-slate-700">Step ${idx+1}</p>
+                        ${step.note ? `<p class="text-xs text-slate-500 bg-slate-50 p-2 rounded mt-1 border border-slate-100 italic">"${step.note}"</p>` : ''}
+                        <p class="text-[10px] text-slate-400 mt-1">By: ${user}</p>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
+        });
+    }
+
+    // --- Rendering: Network Graph (Vis.js) ---
+    function buildGraph() {
+        const nodes = [];
+        const edges = [];
+        
+        // 1. Central Node: Experiment
+        nodes.push({ id: 'EXP', label: state.experiment.experiment_id, group: 'exp', shape: 'box', margin: 10, font: {color:'white'} });
+
+        // 2. Samples (Level 1)
+        state.samples.forEach(s => {
+            nodes.push({ id: s.sample_id, label: s.sample_id, group: 'sample', shape: 'ellipse' });
+            edges.push({ from: 'EXP', to: s.sample_id, arrows: 'to' });
+            
+            // Link to Parent (Lineage)
+            if(s.parent_sample_id) {
+                // If parent isn't in current set, add a ghost node
+                if(!nodes.find(n => n.id === s.parent_sample_id)) {
+                    nodes.push({ id: s.parent_sample_id, label: s.parent_sample_id + '\n(Parent)', group: 'parent', shape: 'dot', size: 10 });
+                }
+                edges.push({ from: s.parent_sample_id, to: s.sample_id, arrows: 'to', dashes: true });
+            }
+        });
+
+        // 3. Results (Level 2)
+        RESULT_TABLES.forEach(def => {
+            const rows = state.results[def.id] || [];
+            rows.forEach(r => {
+                if(r.sample_id) {
+                    const resId = `${def.id}_${r.sample_id}`; // Synthetic ID
+                    const qcColor = r._qcStatus === 'fail' ? '#ef4444' : (r._qcStatus === 'warn' ? '#f59e0b' : '#8b5cf6');
+                    
+                    // Avoid duplicates
+                    if(!nodes.find(n=>n.id === resId)) {
+                        nodes.push({ id: resId, label: def.title, group: 'result', color: qcColor, shape: 'dot', size: 8 });
+                        edges.push({ from: r.sample_id, to: resId, color: '#cbd5e1' });
+                    }
+                }
+            });
+        });
+
+        // Vis.js Config
+        const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+        const options = {
+            groups: {
+                exp: { color: { background: '#4f46e5', border: '#4338ca' } },
+                sample: { color: { background: '#10b981', border: '#059669' }, font: {size: 10} },
+                parent: { color: { background: '#94a3b8' } }
+            },
+            layout: { hierarchical: { direction: 'UD', sortMethod: 'directed', levelSeparation: 100 } },
+            physics: { enabled: false }, // Static layout is cleaner for hierarchy
+            interaction: { zoomView: true, dragView: true }
+        };
+
+        const container = document.getElementById('network-container');
+        if(network) network.destroy();
+        network = new vis.Network(container, data, options);
+    }
+
+    // --- Rendering: AG Grid Data Tables ---
+    function initTabs() {
+        const nav = document.getElementById('result-tabs');
+        nav.innerHTML = '';
+        
+        let first = true;
+        RESULT_TABLES.forEach(def => {
+            const rowCount = (state.results[def.id] || []).length;
+            if(rowCount === 0) return; // Skip empty tables
+
+            const btn = document.createElement('button');
+            btn.className = `tab-btn px-4 py-3 text-sm font-medium text-slate-500 hover:text-indigo-600 ${first ? 'active' : ''}`;
+            btn.innerHTML = `<i data-lucide="${def.icon}" class="w-4 h-4 inline mr-2"></i> ${def.title} <span class="ml-2 bg-slate-100 text-slate-600 py-0.5 px-2 rounded-full text-xs">${rowCount}</span>`;
+            btn.onclick = () => loadGrid(def.id, btn);
+            nav.appendChild(btn);
+
+            if(first) {
+                loadGrid(def.id, btn);
+                first = false;
+            }
+        });
+        lucide.createIcons();
+    }
+
+    function loadGrid(tableId, btnEl) {
+        // UI Updates
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        if(btnEl) btnEl.classList.add('active');
+        state.currentTab = tableId;
+
+        const def = RESULT_TABLES.find(d => d.id === tableId);
+        const rowData = state.results[tableId];
+        document.getElementById('table-record-count').innerText = `${rowData.length} records found`;
+
+        // Column Gen
+        const colDefs = [
+            { field: 'sample_id', headerName: 'Sample ID', pinned: 'left', width: 140, filter: 'agTextColumnFilter' },
+            // QC Status Column
+            { 
+                field: '_qcStatus', headerName: 'QC', width: 100,
+                cellRenderer: p => {
+                    const map = { pass: 'badge-pass', warn: 'badge-warn', fail: 'badge-fail' };
+                    return `<span class="badge ${map[p.value] || 'bg-slate-100'}">${p.value.toUpperCase()}</span>`;
+                }
+            }
+        ];
+
+        // Add dynamic columns from data
+        if(rowData.length > 0) {
+            Object.keys(rowData[0]).forEach(k => {
+                if(k !== 'sample_id' && !k.startsWith('_')) {
+                    colDefs.push({ 
+                        field: k, 
+                        headerName: k.replace(/_/g, ' '), 
+                        filter: true, sortable: true, resizable: true 
+                    });
+                }
+            });
+        }
+
+        const gridDiv = document.getElementById('result-grid');
+        gridDiv.innerHTML = ''; // Clear
+        
+        const gridOptions = {
+            rowData: rowData,
+            columnDefs: colDefs,
+            defaultColDef: { flex: 1, minWidth: 100 },
+            pagination: true,
+            paginationPageSize: 10,
+            enableCellTextSelection: true
+        };
+
+        gridApi = agGrid.createGrid(gridDiv, gridOptions);
+    }
+
+    function toggleQCFilter() {
+        if(!gridApi) return;
+        const filterModel = gridApi.getFilterModel();
+        if(filterModel['_qcStatus']) {
+            gridApi.setFilterModel(null); // Clear
+        } else {
+            // Set filter for 'fail' or 'warn'
+            // AG Grid programmatic filter API would go here, or simpler:
+            gridApi.setGridOption('quickFilterText', 'fail'); 
+        }
+    }
+
+    // --- Charts (Chart.js) ---
+    function renderCharts() {
+        // QC Chart
+        const ctxQC = document.getElementById('chart-qc').getContext('2d');
+        if(charts.qc) charts.qc.destroy();
+        charts.qc = new Chart(ctxQC, {
+            type: 'doughnut',
+            data: {
+                labels: ['Pass', 'Warning', 'Fail'],
+                datasets: [{
+                    data: [state.qcStats.pass, state.qcStats.warn, state.qcStats.fail],
+                    backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                    borderWidth: 0
+                }]
+            },
+            options: { cutout: '70%', responsive: true, maintainAspectRatio: false }
+        });
+
+        // Timeline Chart (Results per Day)
+        const timelineData = {};
+        Object.values(state.results).flat().forEach(r => {
+            const d = r.processing_date || r.run_date || r.creation_date;
+            if(d) {
+                const day = d.split('T')[0];
+                timelineData[day] = (timelineData[day] || 0) + 1;
+            }
+        });
+
+        const ctxTime = document.getElementById('chart-timeline').getContext('2d');
+        if(charts.time) charts.time.destroy();
+        charts.time = new Chart(ctxTime, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(timelineData).sort(),
+                datasets: [{
+                    label: 'Results Generated',
+                    data: Object.keys(timelineData).sort().map(k => timelineData[k]),
+                    backgroundColor: '#6366f1',
+                    borderRadius: 4
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        });
+    }
+
+    // --- Report Generation ---
+    async function generateReport() {
+        showLoading(true);
+        const element = document.getElementById('dashboard-content');
+        const opt = {
+            margin: 10,
+            filename: `Audit_Report_${state.experiment.experiment_id}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2 },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        
+        try {
+            await html2pdf().set(opt).from(element).save();
+            showToast("Report downloaded successfully");
+        } catch(e) {
+            showToast("PDF Gen Error: " + e.message, "error");
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // --- Utilities ---
+    async function fetchAPI(endpoint) {
+        const res = await fetch(`${API_BASE}/${endpoint}`, {
+            headers: { 'Authorization': `Bearer ${sessionStorage.getItem('token')}` }
+        });
+        if(!res.ok) throw new Error(`API Error ${res.status}`);
+        return await res.json();
+    }
+
+    function showLoading(active) {
+        if(active) {
+            const overlay = document.createElement('div');
+            overlay.id = 'loader-global';
+            overlay.className = 'loading-overlay fixed inset-0 z-50';
+            overlay.innerHTML = '<div class="spinner"></div>';
+            document.body.appendChild(overlay);
+        } else {
+            const el = document.getElementById('loader-global');
+            if(el) el.remove();
+        }
+    }
+
+    function showToast(msg, type='success') {
+        // Simple console fallback if toast container missing
+        console.log(`[${type.toUpperCase()}] ${msg}`);
+        // In a real app, inject into a toast container
+        const toast = document.createElement('div');
+        toast.className = `fixed bottom-4 right-4 px-4 py-3 rounded shadow-lg text-white text-sm font-bold z-50 animate-bounce ${type==='error'?'bg-red-500':'bg-emerald-600'}`;
+        toast.innerText = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    function resetState() {
+        state.results = {};
+        state.qcStats = { pass: 0, warn: 0, fail: 0, total: 0 };
+        if(network) network.destroy();
+        network = null;
+    }
+
+</script>
+</body>
+</html>

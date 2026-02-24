@@ -1,3 +1,7 @@
+# uvicorn app:app --host 0.0.0.0 --port 5300 --reload --reload-include "*.html" --reload-include "*.js"
+# gunicorn -w 4 -k uvicorn.workers.UvicornWorker app:app --bind 0.0.0.0:5300
+
+
 import os
 import json
 import uuid

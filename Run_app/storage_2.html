@@ -62,20 +62,24 @@
             font-weight: 600;
             color: #94a3b8;
             border-radius: 4px;
-            transition: all 0.2s;
+            transition: all 0.3s ease;
             cursor: pointer;
             position: relative;
+            background-color: #ffffff;
         }
-        .storage-cell:hover { border-color: #0ea5e9; background-color: #f0f9ff; z-index: 10; }
-        .storage-cell.occupied {
-            background-color: #dbeafe; /* sky-100 */
-            border-color: #7dd3fc; /* sky-300 */
-            color: #0284c7; /* sky-600 */
-            box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.2);
-        }
-        .storage-cell.occupied:hover {
-            background-color: #bae6fd; /* sky-200 */
-        }
+        .storage-cell:hover { border-color: #0ea5e9; z-index: 10; transform: scale(1.05); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        
+        /* Color-Coded Cells */
+        .cell-sample { background-color: #ecfdf5; border-color: #6ee7b7; color: #059669; box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.1); }
+        .cell-sample:hover { background-color: #d1fae5; border-color: #10b981; }
+        
+        .cell-reagent { background-color: #f5f3ff; border-color: #c4b5fd; color: #7c3aed; box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.1); }
+        .cell-reagent:hover { background-color: #ede9fe; border-color: #8b5cf6; }
+        
+        .cell-mixed { background-color: #fffbeb; border-color: #fcd34d; color: #d97706; box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.1); }
+        .cell-mixed:hover { background-color: #fef3c7; border-color: #f59e0b; }
+
+        .search-highlight { ring-width: 2px; ring-color: #38bdf8; ring-offset-width: 1px; z-index: 5; opacity: 1 !important; transform: scale(1.05); }
     </style>
 </head>
 <body class="flex h-screen overflow-hidden text-slate-800 selection:bg-sky-100 selection:text-sky-900">
@@ -117,9 +121,6 @@
             </a>
             <a href="samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
                 <i data-lucide="beaker" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Samples Registry
-            </a>
-            <a href="storage.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
-                <i data-lucide="archiveRestore" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-orange-500 transition-colors"></i> Storage
             </a>
             <a href="storage_2.html" class="flex items-center px-3 py-2.5 rounded-xl bg-sky-50 text-sky-700 font-medium shadow-sm border border-sky-100/50">
                 <i data-lucide="archive" class="w-4 h-4 mr-3 text-sky-600"></i> Storage
@@ -232,18 +233,19 @@
         let currentSelectedStorage = null;
         let boxContentsCache = [];
 
-        // Tables to check for contents (Dynamically checked)
+        // Tables to check for contents (Corrected based on actual SQL schema)
         const CONTENT_TABLES = [
-            { schema: 'bio_assets', table: 'samples_root', idCol: 'sample_id', label: 'Root Sample' },
-            { schema: 'bio_assets', table: 'samples_sub', idCol: 'sub_sample_id', label: 'Sub-Sample' },
-            { schema: 'bio_assets', table: 'tissue', idCol: 'tissue_id', label: 'Tissue' },
-            { schema: 'bio_assets', table: 'otolith', idCol: 'otolith_id', label: 'Otolith' },
-            { schema: 'bio_assets', table: 'eye', idCol: 'eye_id', label: 'Eye' },
-            { schema: 'bio_assets', table: 'dna', idCol: 'dna_id', label: 'DNA' },
-            { schema: 'bio_assets', table: 'rna', idCol: 'rna_id', label: 'RNA' },
-            { schema: 'moleculargenetics', table: 'qubit', idCol: 'qubit_id', label: 'Qubit' },
-            { schema: 'moleculargenetics', table: 'library', idCol: 'library_id', label: 'Library' }
+            { schema: 'bio_assets', table: 'samples_root', idCol: 'sample_id', label: 'Sample' },
+            { schema: 'lims', table: 'reagents', idCol: 'reagent_id', label: 'Reagent' }
         ];
+
+        // --- Utils ---
+        function formatDateForInput(dateStr) {
+            if (!dateStr) return '';
+            try {
+                return new Date(dateStr).toISOString().split('T')[0];
+            } catch(e) { return ''; }
+        }
 
         // --- Auth & Init ---
         document.addEventListener('DOMContentLoaded', () => {
@@ -301,7 +303,7 @@
             const iconColor = type === 'error' ? 'text-red-500' : (type === 'success' ? 'text-emerald-500' : 'text-blue-500');
             const iconType = type === 'error' ? 'alert-octagon' : (type === 'success' ? 'check-circle-2' : 'info');
             
-            d.className = `px-4 py-3 rounded-xl shadow-lg border ${borderClass} ${bgClass} ${textClass} text-sm font-semibold flex items-center gap-3 transform transition-all duration-300 translate-y-0`;
+            d.className = `px-4 py-3 rounded-xl shadow-lg border ${borderClass} ${bgClass} ${textClass} text-sm font-semibold flex items-center gap-3 transform transition-all duration-300 translate-y-0 z-[1000]`;
             d.innerHTML = `<i data-lucide="${iconType}" class="w-5 h-5 ${iconColor}"></i> ${msg}`;
             c.appendChild(d);
             lucide.createIcons();
@@ -326,9 +328,9 @@
             lucide.createIcons();
             
             const [roomsRes, storageRes, rSchema, sSchema] = await Promise.all([
-                apiFetch('table/lims/storage_room'),
+                apiFetch('table/core/locations'),
                 apiFetch('table/lims/storage'),
-                apiFetch('table/lims/storage_room/schema'),
+                apiFetch('table/core/locations/schema'),
                 apiFetch('table/lims/storage/schema')
             ]);
             
@@ -340,7 +342,6 @@
             renderStorageTree();
             
             if (currentSelectedStorage) {
-                // Determine primary key name for storage table (fallback to storage_id)
                 const pkCol = storageSchema.find(c => c.column_name.includes('id'))?.column_name || 'storage_id';
                 const stillExists = storageData.find(s => s[pkCol] === currentSelectedStorage[pkCol]);
                 if (stillExists) selectStorage(stillExists);
@@ -354,14 +355,12 @@
             const searchTerm = document.getElementById('explorer-search').value.toLowerCase();
             
             const sPK = storageSchema.find(c => c.column_name.includes('id'))?.column_name || 'storage_id';
-            const rPK = roomsSchema.find(c => c.column_name.includes('id'))?.column_name || 'room_id';
+            const rPK = roomsSchema.find(c => c.column_name.includes('id'))?.column_name || 'build_id';
             
-            // Auto-detect which columns make good labels for the tree items (e.g. freezer, box, shelf)
             const labelCols = storageSchema
                 .filter(c => c.data_type === 'character varying' && !c.column_name.includes('id') && !c.column_name.includes('notes'))
                 .slice(0, 3).map(c => c.column_name);
 
-            // Group storage by room dynamically
             const grouped = {};
             roomsData.forEach(r => grouped[r[rPK]] = { room: r, items: [] });
             
@@ -369,7 +368,6 @@
                 const sRoomId = s.room_id || s[rPK] || 'UNKNOWN';
                 if (!grouped[sRoomId]) grouped[sRoomId] = { room: { [rPK]: sRoomId }, items: [] };
                 
-                // Filter logic over all values
                 const matchStr = Object.values(s).join(' ').toLowerCase();
                 const roomMatchStr = Object.values(grouped[sRoomId].room).join(' ').toLowerCase();
                 if (!searchTerm || matchStr.includes(searchTerm) || roomMatchStr.includes(searchTerm)) {
@@ -381,7 +379,7 @@
             for (const [roomId, group] of Object.entries(grouped)) {
                 if (group.items.length === 0 && searchTerm) continue; 
                 
-                const roomTitle = group.room.room || group.room.name || roomId;
+                const roomTitle = group.room.name || group.room.room || roomId;
                 
                 html += `
                     <div class="mb-3">
@@ -395,7 +393,6 @@
                     const isSelected = currentSelectedStorage && currentSelectedStorage[sPK] === s[sPK];
                     const subtitle = labelCols.map(c => s[c]).filter(Boolean).join(' → ') || 'No details';
                     
-                    // Display temp badge if a temperature column exists
                     const tempCol = storageSchema.find(c => c.column_name.includes('temp'))?.column_name;
                     const badge = (tempCol && s[tempCol]) ? `<span class="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-mono">${s[tempCol]}</span>` : '';
                     
@@ -451,8 +448,8 @@
 
             const container = document.getElementById('storage-details-container');
             const sPK = storageSchema.find(c => c.column_name.includes('id'))?.column_name || 'storage_id';
-            const rPK = roomsSchema.find(c => c.column_name.includes('id'))?.column_name || 'room_id';
-            const room = roomsData.find(r => r[rPK] === storage[rPK]) || {};
+            const rPK = roomsSchema.find(c => c.column_name.includes('id'))?.column_name || 'build_id';
+            const room = roomsData.find(r => r[rPK] === storage.room_id) || {};
             
             // Smartly detect Grid X and Y columns
             const sizeXCol = storageSchema.find(c => c.column_name.match(/_x$|col|dim_x|width/i))?.column_name;
@@ -464,7 +461,7 @@
 
             // Generate dynamically typed properties pills
             const propsHtml = storageSchema.map(col => {
-                if (['created_at', 'updated_at', 'notes', sPK, rPK].includes(col.column_name)) return '';
+                if (['created_at', 'updated_at', 'notes', sPK, rPK, 'room_id'].includes(col.column_name)) return '';
                 const val = storage[col.column_name];
                 if (val === null || val === undefined || val === '') return '';
                 return `<div class="bg-slate-50 text-slate-800 px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-100">${formatColumnName(col.column_name)}: ${val}</div>`;
@@ -479,22 +476,36 @@
                                 <button onclick="showCreateStorageModal('${storage[sPK]}')" class="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors" title="Edit">
                                     <i data-lucide="edit" class="w-4 h-4"></i>
                                 </button>
-                                <button onclick="deleteStorage('${storage[sPK]}')" class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                                <button onclick="confirmDeleteStorage('${storage[sPK]}')" class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
                                     <i data-lucide="trash-2" class="w-4 h-4"></i>
                                 </button>
                             </div>
-                            <div class="flex items-center gap-3 text-sm text-slate-500">
-                                <span class="flex items-center gap-1"><i data-lucide="building" class="w-3.5 h-3.5"></i> ${room.room || room.name || storage[rPK] || 'No Room'}</span>
+                            <div class="flex items-center gap-3 text-sm text-slate-500 mb-2">
+                                <span class="flex items-center gap-1"><i data-lucide="building" class="w-3.5 h-3.5"></i> ${room.name || room.room || storage.room_id || 'No Room'}</span>
                             </div>
+                            <div id="box-stats-display"></div>
                         </div>
-                        <div class="bg-slate-50 px-4 py-2 rounded-xl border border-slate-100 text-right">
-                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Capacity</p>
-                            <p class="text-sm font-semibold text-slate-700">${hasGrid ? `${sizeX} × ${sizeY} (${sizeX*sizeY} slots)` : 'No Grid Defined'}</p>
+                        <div class="flex flex-col items-end gap-2">
+                            <div class="bg-slate-50 px-4 py-2 rounded-xl border border-slate-100 text-right shadow-sm">
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Capacity</p>
+                                <p class="text-sm font-semibold text-slate-700">${hasGrid ? `${sizeX} × ${sizeY} (${sizeX*sizeY} slots)` : 'No Grid Defined'}</p>
+                            </div>
+                            ${hasGrid ? `
+                            <button onclick="exportBoxToCSV()" class="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:text-sky-600 hover:border-sky-300 rounded-lg text-xs font-medium shadow-sm flex gap-1.5 items-center transition-all w-full justify-center">
+                                <i data-lucide="download" class="w-3.5 h-3.5"></i> Export Map
+                            </button>
+                            ` : ''}
                         </div>
                     </div>
                     
-                    <div class="flex flex-wrap gap-2">
-                        ${propsHtml}
+                    <div class="flex items-center justify-between w-full mt-2 pt-4 border-t border-slate-100 gap-4 flex-wrap">
+                        <div class="flex flex-wrap gap-2 flex-1">${propsHtml}</div>
+                        ${hasGrid ? `
+                        <div class="relative max-w-xs w-64 shrink-0">
+                            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
+                            <input type="text" id="box-search" onkeyup="filterBox()" placeholder="Highlight items in box..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 focus:bg-white focus:ring-2 focus:ring-sky-500 outline-none transition shadow-inner">
+                        </div>
+                        ` : ''}
                     </div>
                     ${storage.notes ? `<p class="mt-4 text-sm text-slate-600 italic bg-slate-50 p-3 rounded-lg border border-slate-100">${storage.notes}</p>` : ''}
                 </div>
@@ -511,18 +522,18 @@
                 
                 boxContentsCache = [];
                 
-                // Fire checks dynamically across all schemas without crashing if tables lack the storage_id
                 const promises = CONTENT_TABLES.map(async (def) => {
                     const res = await apiFetch(`table/${def.schema}/${def.table}?storage_id=${storage[sPK]}`);
                     if (res && !res.error && Array.isArray(res)) {
                         res.forEach(item => {
-                            if (item.storage_position) {
-                                boxContentsCache.push({
-                                    id: item[def.idCol],
-                                    type: def.label,
-                                    position: item.storage_position
-                                });
-                            }
+                            boxContentsCache.push({
+                                id: item[def.idCol] || 'Unknown ID',
+                                type: def.label,
+                                position: item.storage_position || null,
+                                schema: def.schema,
+                                table: def.table,
+                                idCol: def.idCol
+                            });
                         });
                     }
                 });
@@ -547,32 +558,43 @@
             if (!posStr) return null;
             posStr = String(posStr).trim().toUpperCase();
             
-            // Numeric case (e.g. "15")
             if (/^\d+$/.test(posStr)) {
                 const num = parseInt(posStr, 10);
                 if (num >= 1 && num <= sizeX * sizeY) return num - 1; 
                 return null;
             }
 
-            // Alphanumeric case (e.g. "B3") - Assuming rows are Letters, cols are Numbers
-            const match = posStr.match(/^([A-Z]+)(\d+)$/);
+            let match = posStr.match(/^([A-Z]+)[-_\s]*(\d+)$/);
+            if (!match) {
+                const revMatch = posStr.match(/^(\d+)[-_\s]*([A-Z]+)$/);
+                if (revMatch) match = [revMatch[0], revMatch[2], revMatch[1]]; 
+            }
+
             if (match) {
                 const letterPart = match[1];
                 const numPart = parseInt(match[2], 10);
                 
-                let rowIdx = 0;
+                let letterIdx = 0;
                 for (let i = 0; i < letterPart.length; i++) {
-                    rowIdx = rowIdx * 26 + (letterPart.charCodeAt(i) - 64);
+                    letterIdx = letterIdx * 26 + (letterPart.charCodeAt(i) - 64);
                 }
-                rowIdx -= 1; 
-                
-                const colIdx = numPart - 1;
+                letterIdx -= 1; 
+                const numIdx = numPart - 1; 
 
-                if (rowIdx >= 0 && rowIdx < sizeY && colIdx >= 0 && colIdx < sizeX) {
-                    return (rowIdx * sizeX) + colIdx;
-                }
+                if (letterIdx >= 0 && letterIdx < sizeY && numIdx >= 0 && numIdx < sizeX) return (letterIdx * sizeX) + numIdx;
+                if (letterIdx >= 0 && letterIdx < sizeX && numIdx >= 0 && numIdx < sizeY) return (numIdx * sizeX) + letterIdx;
             }
-            return null;
+
+            const nums = posStr.match(/\d+/g);
+            if (nums && nums.length >= 2 && posStr.replace(/[\d,x\-\s_rc:]/gi, '').length === 0) {
+                const n1 = parseInt(nums[0], 10) - 1;
+                const n2 = parseInt(nums[1], 10) - 1;
+                
+                if (n1 >= 0 && n1 < sizeY && n2 >= 0 && n2 < sizeX) return (n1 * sizeX) + n2;
+                if (n1 >= 0 && n1 < sizeX && n2 >= 0 && n2 < sizeY) return (n2 * sizeX) + n1;
+            }
+            
+            return null; 
         }
 
         function drawGrid(sizeX, sizeY) {
@@ -592,15 +614,26 @@
                 }
             });
 
-            // Auto-scale to container
+            // Populate Statistics
+            const usedSlots = cellMap.size;
+            const freeSlots = totalCells - usedSlots;
+            const percent = totalCells > 0 ? Math.round((usedSlots / totalCells) * 100) : 0;
+            
+            document.getElementById('box-stats-display').innerHTML = `
+                <div class="flex items-center gap-4 text-xs">
+                    <div class="flex items-center gap-1.5 font-medium text-slate-600"><span class="w-2.5 h-2.5 rounded-full bg-slate-300"></span> ${usedSlots} Used</div>
+                    <div class="flex items-center gap-1.5 font-medium text-slate-600"><span class="w-2.5 h-2.5 rounded-full bg-white border border-slate-300"></span> ${freeSlots} Free</div>
+                    <div class="font-bold ${percent > 90 ? 'text-red-500' : 'text-sky-600'} ml-1 bg-slate-100 px-2 py-0.5 rounded-md">${percent}% Full</div>
+                </div>
+            `;
+
             const maxContainerWidth = gridArea.clientWidth - 48; 
             const maxContainerHeight = 500; 
-            
             let cellSize = Math.min(Math.floor(maxContainerWidth / sizeX), Math.floor(maxContainerHeight / sizeY));
             cellSize = Math.max(40, Math.min(80, cellSize));
 
             let gridHtml = `
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 inline-block">
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 inline-block mb-4">
                     <div style="display: grid; grid-template-columns: repeat(${sizeX}, ${cellSize}px); grid-template-rows: repeat(${sizeY}, ${cellSize}px); gap: 4px;">
             `;
 
@@ -613,27 +646,57 @@
                 const isOccupied = items.length > 0;
                 
                 let tooltip = `Slot: ${alphaLabel} (or ${i+1})\n`;
+                let cellClass = '';
+                let iconHtml = `<span class="opacity-20">${alphaLabel}</span>`;
+
                 if (isOccupied) {
+                    const typeSet = [...new Set(items.map(x => x.type))];
+                    if (typeSet.length > 1) cellClass = 'cell-mixed';
+                    else if (typeSet[0] === 'Sample') cellClass = 'cell-sample';
+                    else if (typeSet[0] === 'Reagent') cellClass = 'cell-reagent';
+                    else cellClass = 'occupied';
+
                     tooltip += items.map(x => `${x.id} (${x.type})`).join('\n');
+                    iconHtml = items.length > 1 
+                        ? `<span class="rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold bg-white/60 shadow-sm">${items.length}</span>` 
+                        : `<i data-lucide="${typeSet[0]==='Reagent'?'flask-round':'test-tube'}" class="w-4 h-4"></i>`;
                 } else {
                     tooltip += 'Empty';
                 }
 
+                const itemsJson = encodeURIComponent(JSON.stringify(items));
+                
                 gridHtml += `
-                    <div class="storage-cell ${isOccupied ? 'occupied' : ''}" title="${tooltip}" onclick="alert('${tooltip}')">
-                        ${isOccupied ? items.length > 1 ? `<span class="bg-sky-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">${items.length}</span>` : `<i data-lucide="test-tube" class="w-4 h-4"></i>` : `<span class="opacity-20">${alphaLabel}</span>`}
+                    <div class="storage-cell ${cellClass}" title="${tooltip.replace(/"/g, '&quot;')}" onclick="showBoxDetails('${alphaLabel}', '${itemsJson}')">
+                        ${iconHtml}
                     </div>
                 `;
             }
 
             gridHtml += `</div></div>`;
+            
+            // Legend
+            gridHtml += `
+                <div class="flex flex-wrap items-center justify-center gap-4 text-xs font-medium text-slate-500 mb-6 bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm">
+                    <span class="flex items-center gap-1.5"><div class="w-3 h-3 rounded-full bg-emerald-100 border border-emerald-300"></div> Sample</span>
+                    <span class="flex items-center gap-1.5"><div class="w-3 h-3 rounded-full bg-purple-100 border border-purple-300"></div> Reagent</span>
+                    <span class="flex items-center gap-1.5"><div class="w-3 h-3 rounded-full bg-amber-100 border border-amber-300"></div> Mixed/Multiple</span>
+                    <span class="flex items-center gap-1.5"><div class="w-3 h-3 rounded bg-white border border-slate-200"></div> Empty</span>
+                </div>
+            `;
 
             if (unmapped.length > 0) {
                 gridHtml += `
-                    <div class="mt-6 w-full max-w-2xl bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm">
-                        <h4 class="text-xs font-bold text-amber-800 uppercase tracking-wider mb-2 flex items-center gap-1.5"><i data-lucide="alert-triangle" class="w-4 h-4"></i> Items with Invalid/Missing Positions</h4>
+                    <div class="w-full max-w-2xl bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm">
+                        <h4 class="text-xs font-bold text-amber-800 uppercase tracking-wider mb-3 flex items-center gap-1.5"><i data-lucide="alert-triangle" class="w-4 h-4"></i> Items with Invalid or Missing Positions</h4>
                         <div class="flex flex-wrap gap-2">
-                            ${unmapped.map(u => `<span class="px-2 py-1 bg-white border border-amber-100 rounded text-xs text-amber-700 font-mono shadow-sm" title="Stored as: ${u.position || 'NULL'}">${u.id} (${u.type})</span>`).join('')}
+                            ${unmapped.map(u => `
+                                <div class="px-3 py-1.5 bg-white border border-amber-200 rounded-lg shadow-sm flex flex-col group relative">
+                                    <span class="font-bold text-slate-700 text-xs pr-6">${u.id} <span class="text-[10px] font-normal text-slate-400">(${u.type})</span></span>
+                                    <span class="text-[10px] font-mono text-amber-600 mt-0.5">${u.position ? `Pos: "${u.position}"` : 'No position assigned'}</span>
+                                    <button onclick="confirmRemoveFromStorage('${u.schema}', '${u.table}', '${u.idCol}', '${u.id}')" class="absolute top-1 right-1 p-1 text-slate-300 hover:text-red-500 transition-colors" title="Unassign from this storage"><i data-lucide="x" class="w-3 h-3"></i></button>
+                                </div>
+                            `).join('')}
                         </div>
                     </div>
                 `;
@@ -641,23 +704,174 @@
 
             gridArea.innerHTML = gridHtml;
             lucide.createIcons();
+            
+            // Re-apply filter if text exists
+            if(document.getElementById('box-search')) filterBox();
         }
 
-        window.deleteStorage = async function(id) {
-            if(!confirm(`Delete storage unit ${id}? Make sure it is empty first.`)) return;
+        // Feature: Filter Box Highlight
+        window.filterBox = function() {
+            const term = document.getElementById('box-search').value.toLowerCase();
+            document.querySelectorAll('.storage-cell').forEach(cell => {
+                if(!term) { 
+                    cell.style.opacity = '1'; 
+                    cell.classList.remove('search-highlight'); 
+                    return; 
+                }
+                const title = cell.getAttribute('title')?.toLowerCase() || '';
+                if(title.includes(term)) {
+                    cell.style.opacity = '1';
+                    cell.classList.add('search-highlight');
+                } else {
+                    cell.style.opacity = '0.2';
+                    cell.classList.remove('search-highlight');
+                }
+            });
+        }
+
+        // Feature: Export to CSV
+        window.exportBoxToCSV = function() {
+            if(!currentSelectedStorage || !boxContentsCache.length) return showToast('Box is empty, nothing to export', 'error');
+            
             const sPK = storageSchema.find(c => c.column_name.includes('id'))?.column_name || 'storage_id';
+            let csv = 'Slot_Label,Item_ID,Item_Type,Raw_Position_String\n';
             
-            showLoading(true);
-            const res = await apiFetch(`table/lims/storage?${sPK}=${id}`, { method: 'DELETE' });
-            showLoading(false);
+            const sizeXCol = storageSchema.find(c => c.column_name.match(/_x$|col|dim_x|width/i))?.column_name;
+            const sizeYCol = storageSchema.find(c => c.column_name.match(/_y$|row|dim_y|height/i))?.column_name;
+            const sizeX = sizeXCol ? parseInt(currentSelectedStorage[sizeXCol]) || 0 : 0;
+            const sizeY = sizeYCol ? parseInt(currentSelectedStorage[sizeYCol]) || 0 : 0;
             
-            if (res && !res.error) {
-                showToast('Storage unit deleted.', 'success');
-                clearSelection();
-                loadStorageData();
+            boxContentsCache.forEach(i => {
+                let slotLabel = 'Unmapped';
+                const idx = parsePositionToIndex(i.position, sizeX, sizeY);
+                if(idx !== null && idx >= 0 && idx < (sizeX*sizeY)) {
+                    const row = Math.floor(idx / sizeX);
+                    const col = idx % sizeX;
+                    slotLabel = String.fromCharCode(65 + row) + (col + 1);
+                }
+                csv += `"${slotLabel}","${i.id}","${i.type}","${i.position || ''}"\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Storage_Box_${currentSelectedStorage[sPK]}_Map.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        window.showBoxDetails = function(slotName, itemsJson) {
+            const items = JSON.parse(decodeURIComponent(itemsJson));
+            let html = `<div class="p-6 bg-white rounded-xl shadow-xl w-80 max-w-full relative">
+                <button onclick="document.getElementById('modal-container').innerHTML=''" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+                <h3 class="font-bold text-lg mb-4 text-slate-800 border-b pb-2 flex items-center gap-2"><i data-lucide="map-pin" class="w-4 h-4 text-sky-500"></i> Slot ${slotName}</h3>`;
+                
+            if (items.length === 0) {
+                html += `<div class="py-6 text-center text-slate-400"><i data-lucide="inbox" class="w-8 h-8 mx-auto mb-2 opacity-50"></i><p class="text-sm font-medium">Empty slot</p></div>`;
             } else {
-                showToast(`Failed: ${res?.error}`, 'error');
+                html += `<ul class="space-y-3 max-h-60 overflow-y-auto pr-2 pb-2">`;
+                items.forEach(i => {
+                    const badgeColor = i.type === 'Sample' ? 'bg-emerald-100 text-emerald-700' : 'bg-purple-100 text-purple-700';
+                    html += `
+                        <li class="p-3 bg-slate-50 rounded-lg border border-slate-100 flex flex-col relative group">
+                            <span class="font-bold text-sky-700 pr-6">${i.id}</span>
+                            <span class="text-[10px] font-bold uppercase tracking-wider mt-1 w-max px-2 py-0.5 rounded ${badgeColor}">${i.type}</span>
+                            <button onclick="confirmRemoveFromStorage('${i.schema}', '${i.table}', '${i.idCol}', '${i.id}')" class="absolute top-2 right-2 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors opacity-0 group-hover:opacity-100" title="Remove from Storage">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </li>`;
+                });
+                html += `</ul>`;
             }
+            html += `</div>`;
+            
+            document.getElementById('modal-container').innerHTML = `
+                <div class="modal-overlay fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm" onclick="this.innerHTML=''">
+                    <div onclick="event.stopPropagation()">
+                        ${html}
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        };
+
+        // Feature: Custom Remove Item Prompt
+        window.confirmRemoveFromStorage = function(schema, table, idCol, id) {
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 z-[110] flex items-center justify-center opacity-0 transition-opacity duration-300">
+                    <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 transform opacity-0 scale-95 translate-y-4 transition-all duration-300 border border-slate-200">
+                        <div class="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-4 mx-auto">
+                            <i data-lucide="package-minus" class="w-6 h-6 text-amber-600"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-slate-800 text-center mb-2">Unassign Item?</h3>
+                        <p class="text-sm text-slate-500 text-center mb-6">Are you sure you want to remove <strong>${id}</strong> from this storage unit?</p>
+                        <div class="flex gap-3">
+                            <button id="cancel-unassign-btn" class="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition-colors">Cancel</button>
+                            <button id="execute-unassign-btn" class="flex-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-medium transition-colors shadow-sm">Remove Item</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+            
+            document.getElementById('cancel-unassign-btn').onclick = closeModal;
+            document.getElementById('execute-unassign-btn').onclick = async () => {
+                closeModal();
+                showLoading(true);
+                
+                // Generic PUT to update only these columns
+                const payload = {};
+                payload[idCol] = id;
+                payload.storage_id = null;
+                payload.storage_position = null;
+                
+                const res = await apiFetch(`table/${schema}/${table}?${idCol}=${id}`, { method: 'PUT', body: payload });
+                showLoading(false);
+                
+                if(res && !res.error) {
+                    showToast(`Item ${id} successfully unassigned.`, 'success');
+                    selectStorage(currentSelectedStorage); // refresh the grid
+                } else {
+                    showToast(res.error || 'Failed to remove item', 'error');
+                }
+            };
+        };
+
+        window.confirmDeleteStorage = function(id) {
+            const modalHTML = `
+                <div class="modal-overlay fixed inset-0 z-[100] flex items-center justify-center opacity-0 transition-opacity duration-300">
+                    <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 transform opacity-0 scale-95 translate-y-4 transition-all duration-300 border border-slate-200">
+                        <div class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4 mx-auto">
+                            <i data-lucide="alert-triangle" class="w-6 h-6 text-red-600"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-slate-800 text-center mb-2">Delete Storage Unit?</h3>
+                        <p class="text-sm text-slate-500 text-center mb-6">Are you sure you want to delete <strong>${id}</strong>? Make sure it is empty first. This action cannot be undone.</p>
+                        <div class="flex gap-3">
+                            <button id="cancel-delete-btn" class="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition-colors">Cancel</button>
+                            <button id="execute-delete-btn" class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors shadow-sm">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            const { closeModal } = showModal(modalHTML);
+            
+            document.getElementById('cancel-delete-btn').onclick = closeModal;
+            document.getElementById('execute-delete-btn').onclick = async () => {
+                closeModal();
+                const sPK = storageSchema.find(c => c.column_name.includes('id'))?.column_name || 'storage_id';
+                showLoading(true);
+                const res = await apiFetch(`table/lims/storage?${sPK}=${id}`, { method: 'DELETE' });
+                showLoading(false);
+                
+                if (res && !res.error) {
+                    showToast('Storage unit deleted.', 'success');
+                    clearSelection();
+                    loadStorageData();
+                } else {
+                    showToast(`Failed: ${res?.error}`, 'error');
+                }
+            };
         };
 
         // --- Modals (Schema Driven) ---
@@ -669,22 +883,25 @@
             
             setTimeout(() => {
                 modal.classList.remove('opacity-0');
-                inner.classList.remove('opacity-0', 'scale-95', 'translate-y-4');
+                if(inner) inner.classList.remove('opacity-0', 'scale-95', 'translate-y-4');
             }, 10);
 
             const closeModal = () => {
                 modal.classList.add('opacity-0');
-                inner.classList.add('opacity-0', 'scale-95', 'translate-y-4');
+                if(inner) inner.classList.add('opacity-0', 'scale-95', 'translate-y-4');
                 setTimeout(() => container.innerHTML = '', 300);
             };
             modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-            container.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+            
+            const closeBtn = container.querySelector('#close-modal-btn');
+            if (closeBtn) closeBtn.addEventListener('click', closeModal);
+            
             lucide.createIcons();
             return { closeModal };
         }
 
         async function showCreateRoomModal(recordId = null) {
-            const rPK = roomsSchema.find(c => c.column_name.includes('id'))?.column_name || 'room_id';
+            const rPK = roomsSchema.find(c => c.column_name.includes('id'))?.column_name || 'build_id';
             const isEditing = recordId !== null;
             const record = isEditing ? roomsData.find(r => r[rPK] === recordId) : null;
             
@@ -752,7 +969,7 @@
 
                 showLoading(true);
                 const method = isEditing ? 'PUT' : 'POST';
-                const endpoint = isEditing ? `lims/storage_room?${rPK}=${payload[rPK]}` : `lims/storage_room`;
+                const endpoint = isEditing ? `core/locations?${rPK}=${payload[rPK]}` : `core/locations`;
                 
                 const res = await apiFetch(`table/${endpoint}`, { method, body: payload });
                 showLoading(false);
@@ -767,7 +984,7 @@
 
         async function showCreateStorageModal(recordId = null) {
             const sPK = storageSchema.find(c => c.column_name.includes('id'))?.column_name || 'storage_id';
-            const rPK = roomsSchema.find(c => c.column_name.includes('id'))?.column_name || 'room_id';
+            const rPK = roomsSchema.find(c => c.column_name.includes('id'))?.column_name || 'build_id';
             const isEditing = recordId !== null;
             const record = isEditing ? storageData.find(s => s[sPK] === recordId) : null;
             
@@ -783,8 +1000,8 @@
                 
                 let inputHTML = '';
                 
-                if (col.column_name === 'room_id' || col.column_name === rPK) {
-                    const roomOpts = `<option value="">Select a Room...</option>` + roomsData.map(r => `<option value="${r[rPK]}" ${val === r[rPK] ? 'selected' : ''}>${r.room || r.name || r[rPK]}</option>`).join('');
+                if (col.column_name === 'room_id') {
+                    const roomOpts = `<option value="">Select a Room...</option>` + roomsData.map(r => `<option value="${r[rPK]}" ${val === r[rPK] ? 'selected' : ''}>${r.name || r.room || r[rPK]}</option>`).join('');
                     inputHTML = `<select name="${col.column_name}" ${isRequired} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-sky-500 outline-none transition">${roomOpts}</select>`;
                 } else if (col.column_name === sPK) {
                     inputHTML = `<input type="text" name="${col.column_name}" value="${val || ''}" ${isEditing ? 'readonly' : 'required'} class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-sky-500 outline-none transition ${isEditing?'opacity-70 cursor-not-allowed':''}">`;
@@ -835,7 +1052,6 @@
                 
                 Object.keys(payload).forEach(k => { if(payload[k]==='') payload[k] = null; });
                 
-                // Smart payload typing based on fetched schema
                 storageSchema.forEach(col => {
                     if (payload[col.column_name] !== null && payload[col.column_name] !== undefined) {
                         if (col.data_type === 'integer') payload[col.column_name] = parseInt(payload[col.column_name]);

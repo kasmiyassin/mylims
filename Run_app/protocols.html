@@ -3,27 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Protocols & ELN - TIFI LIMS</title>
-    
+    <title>Experiments - TIFI LIMS</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <!-- Quill Rich Text Editor -->
-    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
-    
-    <!-- Day.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.11.10/dayjs.min.js"></script>
-    
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <style>
         body { 
             font-family: 'Inter', sans-serif; 
-            background-color: #f1f5f9; /* slate-100 */
+            background-color: #f1f5f9; 
         }
         
         /* Custom Scrollbar */
@@ -34,7 +25,7 @@
         
         .sidebar-nav-container { flex-grow: 1; overflow-y: auto; padding-right: 0.25rem; }
         
-        /* Glassmorphism */
+        /* Premium Card / Modal Styles */
         .glass-card {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
@@ -42,60 +33,46 @@
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
         }
 
-        /* Loading & Modals */
-        .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.7); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
-        .loading-overlay.active { opacity: 1; pointer-events: all; }
-        .hidden { display: none !important; }
-        
-        .form-input {
-            width: 100%; padding: 0.625rem 0.875rem; background-color: #f8fafc;
-            border: 1px solid #e2e8f0; border-radius: 0.75rem; font-size: 0.875rem;
-            color: #334155; transition: all 0.2s;
+        .modal-overlay { 
+            background-color: rgba(15, 23, 42, 0.4); 
+            backdrop-filter: blur(4px); 
+            z-index: 100; 
         }
-        .form-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); background-color: #ffffff; }
 
-        /* Custom Quill Styling to match Tailwind */
-        .ql-toolbar.ql-snow {
-            border-top-left-radius: 0.75rem;
-            border-top-right-radius: 0.75rem;
-            border-color: #e2e8f0;
-            background-color: #f8fafc;
-            padding: 12px;
-            font-family: 'Inter', sans-serif;
-            position: sticky; /* Sticky header for editor */
-            top: 0;
-            z-index: 10;
+        .loading-overlay {
+            position: absolute; inset: 0; background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center;
+            z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
         }
-        .ql-container.ql-snow {
-            border-bottom-left-radius: 0.75rem;
-            border-bottom-right-radius: 0.75rem;
-            border-color: #e2e8f0;
-            background-color: #ffffff;
-            font-family: 'Inter', sans-serif;
-            font-size: 0.875rem;
-            min-height: 400px;
-        }
-        .ql-editor { padding: 1.5rem; line-height: 1.6; color: #334155; }
+        .loading-overlay.active { opacity: 1; pointer-events: all; }
+
+        /* Accordion Styles for Details */
+        .accordion-item { border-bottom: 1px solid #e2e8f0; }
+        .accordion-header { width: 100%; text-align: left; padding: 0.85rem 1rem; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background 0.2s; }
+        .accordion-header:hover { background-color: #f8fafc; }
+        .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; background-color: #ffffff; }
+        .accordion-content.open { max-height: 2000px; padding-bottom: 1rem; }
+
+        .table-row-selected { background-color: #eff6ff !important; border-left: 4px solid #3b82f6; }
         
-        .protocol-list-item { transition: all 0.2s ease; border-left: 3px solid transparent; }
-        .protocol-list-item:hover { background-color: #f8fafc; }
-        .protocol-list-item.active { background-color: #eef2ff; border-left-color: #4f46e5; }
+        .tab-active { color: #2563eb; border-bottom: 2px solid #2563eb; }
+        
+        .badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
     </style>
 </head>
 <body class="flex h-screen overflow-hidden text-slate-800 selection:bg-indigo-100 selection:text-indigo-900">
 
-    <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="loading-overlay active">
-        <div class="relative w-12 h-12">
-            <div class="absolute inset-0 border-4 border-slate-200 rounded-full"></div>
-            <div class="absolute inset-0 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
-        </div>
-    </div>
-
-    <!-- Toast Container -->
+    <!-- Global Toast Container -->
     <div id="toastContainer" class="fixed bottom-6 right-6 z-[120] flex flex-col gap-3"></div>
 
-    <!-- Sidebar -->
+    <!-- Sidebar (Shared System-wide) -->
     <div class="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex-shrink-0">
         <div class="p-5 border-b border-slate-100 flex items-center gap-3 shrink-0">
             <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 p-2 rounded-xl shadow-inner">
@@ -113,11 +90,11 @@
             <a href="projects.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
                 <i data-lucide="folder-kanban" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Projects
             </a>
-            <a href="experiments.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
-                <i data-lucide="flask-round" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Experiments
+            <a href="experiments.html" class="flex items-center px-3 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-medium shadow-sm border border-indigo-100/50">
+                <i data-lucide="flask-round" class="w-4 h-4 mr-3 text-indigo-600"></i> Experiments
             </a>
-            <a href="protocols.html" class="flex items-center px-3 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-medium shadow-sm border border-indigo-100/50">
-                <i data-lucide="book-text" class="w-4 h-4 mr-3 text-indigo-600"></i> Protocols (ELN)
+            <a href="protocols.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+                <i data-lucide="book-text" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-indigo-500 transition-colors"></i> Protocols (ELN)
             </a>
 
             <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2">Field & Assets</div>
@@ -130,7 +107,7 @@
             <a href="samples.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
                 <i data-lucide="beaker" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Samples Registry
             </a>
-            <a href="storage.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
+            <a href="storage_2.html" class="flex items-center px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-all group">
                 <i data-lucide="archive" class="w-4 h-4 mr-3 text-slate-400 group-hover:text-emerald-500 transition-colors"></i> Storage
             </a>
 
@@ -155,7 +132,6 @@
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
                     </p>
                 </div>
-                <i data-lucide="settings" class="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"></i>
             </a>
             <button id="logout-button" class="w-full flex items-center justify-center p-2 rounded-xl text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 font-medium transition-colors border border-transparent hover:border-red-100">
                 <i data-lucide="log-out" class="w-4 h-4 mr-2"></i><span>Sign Out</span>
@@ -163,450 +139,481 @@
         </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="flex-1 flex flex-col h-full relative overflow-hidden">
-        
-        <!-- Header -->
-        <header class="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-5 flex justify-between items-center z-10 shrink-0">
+    <div class="flex-1 flex flex-col h-full overflow-hidden bg-slate-50 relative">
+        <div class="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center shrink-0">
             <div>
-                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Protocols & ELN</h1>
-                <p class="text-sm text-slate-500 mt-0.5">Electronic Lab Notebook for standardized procedures.</p>
+                <h1 class="text-2xl font-bold text-slate-900">Protocols & ELN</h1>
+                <p class="text-sm text-slate-500">Design, execute, and document experimental workflows.</p>
             </div>
-            <div class="flex gap-3">
-                <button onclick="createNewProtocol()" class="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-5 py-2 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 border border-indigo-500">
-                    <i data-lucide="plus" class="w-4 h-4"></i> New Protocol
-                </button>
-            </div>
-        </header>
+            <div id="user-display" class="text-sm font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full"></div>
+        </div>
 
-        <!-- Main Workspace Area -->
-        <div class="flex-1 overflow-hidden p-8 relative flex gap-6">
-            <!-- Background decorative blobs -->
-            <div class="absolute top-0 right-0 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none z-0"></div>
-
-            <!-- Left Pane: Protocol List -->
-            <div class="w-1/3 glass-card rounded-2xl flex flex-col relative z-10 border border-slate-200 overflow-hidden shadow-sm h-[calc(100vh-140px)] shrink-0">
-                <div class="p-4 border-b border-slate-100 bg-slate-50 shrink-0">
-                    <div class="relative">
-                        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
-                        <input type="text" id="protocolSearch" oninput="filterProtocols()" placeholder="Search protocols..." class="w-full pl-9 pr-3 py-2 text-sm bg-white border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm">
+        <div class="flex-1 overflow-y-auto p-8">
+            
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-1 space-y-4 border-r border-slate-100 pr-4">
+                        <label class="block text-sm font-bold text-slate-700">Select Experiment</label>
+                        <input type="text" id="experiment-search" placeholder="Search ID, Title, Project..." class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <select id="experiment-select" class="w-full border border-slate-300 rounded-lg p-2 text-sm h-48 bg-slate-50 outline-none" size="10"></select>
                     </div>
-                </div>
-                
-                <div class="flex-1 overflow-y-auto custom-scroll" id="protocolListContainer">
-                    <!-- Protocol items dynamically injected here -->
-                    <div class="py-10 text-center text-slate-400 text-sm">Loading protocols...</div>
-                </div>
-            </div>
 
-            <!-- Right Pane: Active Editor -->
-            <div class="w-2/3 glass-card rounded-2xl flex flex-col relative z-10 border border-slate-200 overflow-hidden shadow-sm h-[calc(100vh-140px)]">
-                
-                <div id="emptyEditorState" class="flex-1 flex flex-col items-center justify-center text-slate-400 bg-slate-50/50">
-                    <i data-lucide="book-open" class="w-16 h-16 mb-4 text-slate-300"></i>
-                    <h2 class="text-xl font-bold text-slate-600">No Protocol Selected</h2>
-                    <p class="text-sm mt-2">Select a protocol from the list or create a new one.</p>
-                </div>
-
-                <div id="activeEditorState" class="hidden flex-1 flex flex-col h-full bg-white relative">
-                    <!-- Editor Header / Metadata -->
-                    <div class="p-6 border-b border-slate-100 bg-slate-50/50 shrink-0 flex justify-between items-start gap-4">
-                        <div class="flex-1 space-y-3">
-                            <input type="text" id="editor-name" placeholder="Protocol Name (e.g., DNA Extraction v2)" class="w-full text-xl font-bold text-slate-800 bg-transparent border-none outline-none focus:ring-0 p-0 placeholder-slate-400" oninput="markUnsaved()">
-                            <div class="flex items-center gap-4 text-xs font-semibold text-slate-500">
-                                <div class="flex items-center gap-1.5">
-                                    <i data-lucide="hash" class="w-3.5 h-3.5"></i>
-                                    <input type="text" id="editor-id" placeholder="ID (Auto-gen)" class="bg-transparent border-none outline-none w-32 font-mono text-indigo-600 p-0" oninput="markUnsaved()">
-                                </div>
-                                <div class="flex items-center gap-1.5 border-l border-slate-300 pl-4">
-                                    <i data-lucide="git-branch" class="w-3.5 h-3.5"></i>
-                                    <input type="number" step="0.1" id="editor-version" placeholder="1.0" class="bg-transparent border-none outline-none w-12 p-0" oninput="markUnsaved()">
-                                </div>
-                            </div>
+                    <div class="lg:col-span-2">
+                        <div class="flex justify-between items-start mb-4">
+                            <h2 class="text-lg font-bold text-slate-800">Experiment Details</h2>
+                            <span id="protocol-status-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-500">No Experiment Selected</span>
                         </div>
                         
-                        <div class="flex flex-col items-end gap-2 shrink-0">
-                            <button id="btnSaveProtocol" onclick="saveActiveProtocol()" class="px-5 py-2 text-sm font-bold text-white bg-slate-400 rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-not-allowed" disabled>
-                                <i data-lucide="save" class="w-4 h-4"></i> Saved
+                        <div class="grid grid-cols-2 gap-4 text-sm text-slate-600 mb-6 bg-slate-50 p-4 rounded-lg border border-slate-100">
+                            <div><span class="font-semibold text-slate-900 block">Experiment ID:</span> <span id="disp-exp-id">-</span></div>
+                            <div><span class="font-semibold text-slate-900 block">Project:</span> <span id="disp-project">-</span></div>
+                            <div class="col-span-2"><span class="font-semibold text-slate-900 block">Title:</span> <span id="disp-title">-</span></div>
+                            <div class="col-span-2"><span class="font-semibold text-slate-900 block">Aim:</span> <span id="disp-aim">-</span></div>
+                        </div>
+
+                        <div class="flex flex-wrap gap-3">
+                            <button id="btn-edit-protocol" disabled class="disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg flex items-center shadow-sm transition">
+                                <i data-lucide="file-pen" class="w-4 h-4 mr-2"></i> Design Protocol
                             </button>
-                            <span id="saveStatus" class="text-[10px] text-slate-400 font-medium">Up to date</span>
+                            <button id="btn-run-protocol" disabled class="disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 px-4 rounded-lg flex items-center shadow-sm transition">
+                                <i data-lucide="play" class="w-4 h-4 mr-2"></i> Run Protocol
+                            </button>
+                            <div class="h-8 w-px bg-slate-300 mx-1"></div>
+                            <button id="btn-export-pdf" disabled class="disabled:opacity-50 disabled:cursor-not-allowed bg-slate-600 hover:bg-slate-700 text-white font-medium py-2 px-4 rounded-lg flex items-center shadow-sm transition">
+                                <i data-lucide="file-down" class="w-4 h-4 mr-2"></i> Export PDF
+                            </button>
                         </div>
                     </div>
-
-                    <!-- Quill Container -->
-                    <div class="flex-1 overflow-auto flex flex-col p-6 bg-white custom-scroll relative" id="scrollableEditorArea">
-                        <div id="quillEditor" class="flex-1"></div>
-                    </div>
                 </div>
-
             </div>
 
+            <div id="editor-section" class="bg-white rounded-xl shadow-sm border border-slate-200 hidden">
+                <div class="editor-sticky-header p-4 flex justify-between items-center">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">Protocol Designer</h2>
+                        <p class="text-xs text-slate-500">Editing protocol definition for <span id="editor-exp-id" class="font-mono font-bold"></span></p>
+                    </div>
+                    <div class="flex gap-2">
+                         <button onclick="addCheckbox()" class="text-slate-600 hover:bg-slate-100 px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-200"><i data-lucide="check-square" class="w-4 h-4 inline mr-1"></i> Add Step</button>
+                         <button onclick="saveProtocol()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow-sm flex items-center"><i data-lucide="save" class="w-4 h-4 mr-2"></i> Save Changes</button>
+                    </div>
+                </div>
+                
+                <div id="quill-toolbar" class="border-b border-slate-200 bg-slate-50 px-4 py-2"></div>
+                
+                <div class="p-6">
+                    <div id="editor-container"></div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Scripts -->
+    <div id="run-modal" class="fixed inset-0 z-50 hidden bg-black/50 backdrop-blur-sm flex items-center justify-center">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div class="p-6 border-b border-slate-200 flex justify-between items-center">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-900">Execute Protocol</h2>
+                    <p class="text-sm text-slate-500">Running experiment: <span id="run-modal-exp-id" class="font-mono text-slate-900"></span></p>
+                </div>
+                <button onclick="closeRunModal()" class="text-slate-400 hover:text-red-500"><i data-lucide="x" class="w-6 h-6"></i></button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-6 bg-slate-50">
+                <div id="run-steps-container" class="space-y-3">
+                    </div>
+            </div>
+
+            <div class="p-6 border-t border-slate-200 bg-white rounded-b-2xl flex justify-between items-center">
+                <p class="text-xs text-slate-500">Run ID: <span id="run-id-display">New</span></p>
+                <button onclick="saveRun()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-6 rounded-xl flex items-center shadow-md hover:shadow-lg transition-all">
+                    <i data-lucide="save" class="w-4 h-4 mr-2"></i> Save Execution Log
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="fixed bottom-6 right-6 flex flex-col gap-3 z-50"></div>
+
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
     <script>
-        // --- API Config & Setup ---
-        const getApiBase = () => window.location.pathname.includes('/mylims') ? '/mylims/api' : '/api';
-        const API_PREFIX = getApiBase();
+        const API = window.location.pathname.includes('/mylims') ? '/mylims/api' : '/api';
         
-        let dbCache = {
-            protocols: []
-        };
-        
-        // Use generic primary key resolution 
-        let currentTableName = 'protocols';
-        let currentSchemaName = 'lims';
-        let primaryKeyColumn = 'protocol_id';
-        
+        // --- State ---
         let quill;
-        let activeProtocolId = null;
-        let isNewProtocol = false;
-        let hasUnsavedChanges = false;
-        let currentUser = 'Unknown';
+        let experiments = [];
+        let projects = [];
+        let currentExp = null;
+        let currentProtocol = null; // From 'eln.protocols'
+        let currentRun = null;      // From 'eln.protocols_run'
+        let currentUser = null;
 
         // --- Init ---
         document.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
-            const token = sessionStorage.getItem('token');
-            if (!token) window.location.href = 'login.html';
-
-            const user = JSON.parse(sessionStorage.getItem('user'));
-            if(user) {
-                currentUser = user.person_id;
-                document.getElementById('userNameDisplay').innerText = currentUser;
-            }
-
-            document.getElementById('logout-button').addEventListener('click', () => {
-                sessionStorage.clear();
-                window.location.href = 'login.html';
-            });
-            
+            checkAuth();
             initQuill();
-            await loadProtocols();
+            await fetchData();
+            addEventListeners();
         });
 
-        // --- Core API Wrapper ---
-        async function apiFetch(endpoint, options = {}) {
-            const token = sessionStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}`, ...options.headers };
-            
-            if(options.body && typeof options.body === 'object') {
-                headers['Content-Type'] = 'application/json';
-                options.body = JSON.stringify(options.body);
-            }
-            
+        function checkAuth() {
+            const u = sessionStorage.getItem('user');
+            if(!u) window.location.href = 'login.html';
+            currentUser = JSON.parse(u);
+            document.getElementById('user-display').innerText = currentUser.full_name || currentUser.person_id;
+        }
+
+        async function fetchData() {
             try {
-                const res = await fetch(`${API_PREFIX}/${endpoint}`, { ...options, headers });
-                if(!res.ok) {
-                    const errObj = await res.json().catch(() => ({ detail: `HTTP Error ${res.status}` }));
-                    throw new Error(errObj.detail || errObj.error || `HTTP Error ${res.status}`);
-                }
-                if(res.status === 204) return true;
-                return await res.json();
+                // Fetch basic data needed for the list
+                const [expRes, prjRes, linkRes] = await Promise.all([
+                    fetch(`${API}/table/lims/experiments`),
+                    fetch(`${API}/table/lims/projects`),
+                    fetch(`${API}/table/lims/experiments_projects`)
+                ]);
+
+                if(!expRes.ok) throw new Error("Failed to load experiments");
+                
+                const rawExp = await expRes.json();
+                const rawPrj = await prjRes.json();
+                const rawLinks = await linkRes.json();
+
+                // Map projects for easier lookup
+                const prjMap = rawPrj.reduce((acc, p) => { acc[p.project_id] = p; return acc; }, {});
+                
+                // Enhance experiments with project titles
+                experiments = rawExp.map(e => {
+                    const links = rawLinks.filter(l => l.experiment_id === e.experiment_id);
+                    const pTitles = links.map(l => prjMap[l.project_id]?.title || l.project_id).join(', ');
+                    return { ...e, project_display: pTitles || 'No Project' };
+                });
+
+                renderExperimentList();
+
             } catch(e) {
-                console.error(`[apiFetch] Failed on ${endpoint}:`, e);
-                return { error: e.message }; 
+                showToast("Error loading data: " + e.message, 'error');
             }
         }
 
-        // --- Quill Setup & Template Logic Restoration ---
-        function initQuill() {
-            // Configure Quill to use Inter font exactly as requested in original template
-            const Font = Quill.import('formats/font');
-            Font.whitelist = ['Inter', 'serif', 'monospace', 'system']; // Whitelist fonts
-            Quill.register(Font, true);
+        function renderExperimentList() {
+            const term = document.getElementById('experiment-search').value.toLowerCase();
+            const list = document.getElementById('experiment-select');
+            list.innerHTML = '';
 
-            quill = new Quill('#quillEditor', {
-                theme: 'snow',
-                placeholder: 'Write down your detailed protocol steps, materials, and notes here...',
-                modules: {
-                    toolbar: [
-                        [{ 'header': [1, 2, 3, false] }],
-                        ['bold', 'italic', 'underline', 'strike'],
-                        [{ 'color': [] }, { 'background': [] }],
-                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                        [{ 'script': 'sub'}, { 'script': 'super' }],
-                        ['blockquote', 'code-block'],
-                        ['link', 'image', 'video'],
-                        ['clean']
-                    ]
-                }
-            });
+            const filtered = experiments.filter(e => 
+                (e.experiment_id?.toLowerCase().includes(term)) || 
+                (e.title?.toLowerCase().includes(term)) ||
+                (e.project_display?.toLowerCase().includes(term))
+            );
 
-            quill.root.style.fontFamily = 'Inter, sans-serif'; // Apply default font to editor content
-
-            // Track changes to enable save button
-            quill.on('text-change', function(delta, oldDelta, source) {
-                if (source === 'user') {
-                    markUnsaved();
-                }
-            });
-
-            // --- Logic to prevent page jump on focus (restored from original template) ---
-            const editorElement = quill.root;
-            const toolbarElement = document.querySelector('.ql-toolbar');
-            const scrollableArea = document.getElementById('scrollableEditorArea');
-            let preventScrollOnFocus = false;
-            let lastScrollTop = 0;
-
-            toolbarElement.addEventListener('mousedown', (e) => {
-                e.preventDefault(); // Prevent the editor from losing selection when clicking the toolbar
-                preventScrollOnFocus = true;
-                lastScrollTop = scrollableArea.scrollTop; // Store current scroll position within container
-            });
-
-            editorElement.addEventListener('focus', () => {
-                if (preventScrollOnFocus) {
-                    scrollableArea.scrollTo(0, lastScrollTop); // Restore scroll position
-                    preventScrollOnFocus = false;
-                }
+            filtered.forEach(e => {
+                const opt = document.createElement('option');
+                opt.value = e.experiment_id;
+                opt.innerText = `${e.experiment_id} - ${e.title || 'Untitled'} (${e.project_display})`;
+                list.appendChild(opt);
             });
         }
 
-        // --- Data Loading ---
-        async function loadProtocols(preserveSelection = false) {
-            showLoading(true);
+        async function selectExperiment(expId) {
+            currentExp = experiments.find(e => e.experiment_id === expId);
+            if(!currentExp) return;
+
+            // UI Update
+            document.getElementById('disp-exp-id').innerText = currentExp.experiment_id;
+            document.getElementById('disp-project').innerText = currentExp.project_display;
+            document.getElementById('disp-title').innerText = currentExp.title || '-';
+            document.getElementById('disp-aim').innerText = currentExp.aim || '-';
+            document.getElementById('editor-exp-id').innerText = currentExp.experiment_id;
+
+            // Reset State
+            currentProtocol = null;
+            currentRun = null;
+            document.getElementById('protocol-status-badge').className = "px-3 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-700";
+            document.getElementById('protocol-status-badge').innerText = "Checking...";
+
+            // Load Protocol & Run Data
             try {
-                // REMOVED: sort_by parameter to avoid the 400 Bad Request error if the column name differs
-                let data = await apiFetch('table/lims/protocols?limit=1000');
-                
-                // FALLBACK: If lims.protocols doesn't exist, try reference.protocol (common V5 schema)
-                if (data && data.error && data.error.includes("400")) {
-                    data = await apiFetch('table/reference/protocol?limit=1000');
-                    if (data && !data.error) {
-                        currentSchemaName = 'reference';
-                        currentTableName = 'protocol';
-                    }
-                }
-                
-                if (data && !data.error && Array.isArray(data)) {
-                    // Dynamically determine the primary key based on the first row 
-                    if (data.length > 0) {
-                        const keys = Object.keys(data[0]);
-                        if (keys.includes('protocol_id')) primaryKeyColumn = 'protocol_id';
-                        else if (keys.includes('id')) primaryKeyColumn = 'id';
-                    }
+                // 1. Check if protocol definition exists (eln.protocols)
+                const pRes = await fetch(`${API}/table/eln/protocols?experiment_id=${expId}`);
+                const pData = await pRes.json();
+                if(pData.length > 0) currentProtocol = pData[0];
 
-                    dbCache.protocols = data;
-                    renderProtocolList();
-                    
-                    if(preserveSelection && activeProtocolId) {
-                        selectProtocol(activeProtocolId);
-                    }
+                // 2. Check if run log exists (eln.protocols_run)
+                // We assume one active run per experiment for simplicity, or grab the latest
+                const rRes = await fetch(`${API}/table/eln/protocols_run?experiment_id=${expId}`);
+                const rData = await rRes.json();
+                if(rData.length > 0) currentRun = rData[rData.length - 1]; // Get latest
+
+                updateActionButtons();
+            } catch(e) {
+                console.error(e);
+                showToast("Failed to load protocol details", 'error');
+            }
+        }
+
+        function updateActionButtons() {
+            const btnEdit = document.getElementById('btn-edit-protocol');
+            const btnRun = document.getElementById('btn-run-protocol');
+            const btnPdf = document.getElementById('btn-export-pdf');
+            const statusBadge = document.getElementById('protocol-status-badge');
+
+            btnEdit.disabled = false; // Always allow editing/creating
+
+            if(currentProtocol) {
+                statusBadge.innerText = "Protocol Defined";
+                statusBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700";
+                btnRun.disabled = false;
+                btnPdf.disabled = false;
+                
+                // Load content into editor (silent load)
+                if(currentProtocol.content_json && currentProtocol.content_json.html) {
+                    quill.root.innerHTML = currentProtocol.content_json.html;
                 } else {
-                    showToast("Failed to load protocols. Check database schema.", "error");
-                    document.getElementById('protocolListContainer').innerHTML = `<div class="p-6 text-center text-red-500">Failed to load data.</div>`;
+                    quill.setText('');
                 }
-            } catch (err) {
-                console.error(err);
-            } finally {
-                showLoading(false);
+            } else {
+                statusBadge.innerText = "No Protocol";
+                statusBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-500";
+                btnRun.disabled = true;
+                btnPdf.disabled = true;
+                quill.setText('');
+                // Default template
+                quill.clipboard.dangerouslyPasteHTML('<h2>1. Materials</h2><p><br></p><h2>2. Procedure</h2><div class="ql-custom-checkbox-item"><span class="ql-custom-checkbox"></span><span class="ql-custom-checkbox-text">Step 1</span></div>');
             }
+
+            if(currentRun) {
+                statusBadge.innerText = "Run In Progress/Done";
+                statusBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700";
+            }
+            
+            // Show editor
+            document.getElementById('editor-section').classList.remove('hidden');
         }
 
-        // --- UI Rendering ---
-        function renderProtocolList() {
-            const container = document.getElementById('protocolListContainer');
-            const search = document.getElementById('protocolSearch').value.toLowerCase();
-            
-            const filtered = dbCache.protocols.filter(p => {
-                const idVal = p[primaryKeyColumn] || '';
-                const nameVal = p.name || p.protocol_name || '';
-                return idVal.toLowerCase().includes(search) || nameVal.toLowerCase().includes(search);
+        // --- Editor Logic ---
+        function initQuill() {
+            // Custom Checkbox Blot
+            const BlockEmbed = Quill.import('blots/block/embed');
+            class CheckboxBlot extends BlockEmbed {
+                static blotName = 'checkbox';
+                static tagName = 'div';
+                static className = 'ql-custom-checkbox-item';
+                static create(value) {
+                    const node = super.create(value);
+                    node.innerHTML = `<span class="ql-custom-checkbox" contenteditable="false">&#9744;</span><span class="ql-custom-checkbox-text" contenteditable="true">${value.text || ''}</span>`;
+                    return node;
+                }
+                static value(node) { return { text: node.querySelector('.ql-custom-checkbox-text').innerText }; }
+            }
+            Quill.register(CheckboxBlot);
+
+            quill = new Quill('#editor-container', {
+                theme: 'snow',
+                modules: {
+                    toolbar: { container: [
+                        [{ 'header': [1, 2, 3, false] }],
+                        ['bold', 'italic', 'underline'],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        ['clean']
+                    ]}
+                }
             });
+            
+            // Move toolbar to custom div
+            document.getElementById('quill-toolbar').appendChild(quill.getModule('toolbar').container);
+        }
 
-            if (filtered.length === 0) {
-                container.innerHTML = `<div class="p-10 text-center text-slate-400 font-medium text-sm">No protocols found.</div>`;
-                return;
+        function addCheckbox() {
+            const range = quill.getSelection(true);
+            quill.insertEmbed(range.index, 'checkbox', { text: 'New step' }, Quill.sources.USER);
+            quill.setSelection(range.index + 1);
+        }
+
+        async function saveProtocol() {
+            if(!currentExp) return;
+            const html = quill.root.innerHTML;
+            const payload = {
+                experiment_id: currentExp.experiment_id,
+                title: `Protocol for ${currentExp.experiment_id}`,
+                author_id: currentUser.person_id,
+                content_json: { html: html },
+                version: "1.0",
+                notes: "Saved via TIFI LIMS Web"
+            };
+
+            try {
+                if(currentProtocol) {
+                    // Update: PUT using PK
+                    await fetch(`${API}/table/eln/protocols`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify([{ ...payload, protocol_id: currentProtocol.protocol_id }])
+                    });
+                } else {
+                    // Create: POST
+                    await fetch(`${API}/table/eln/protocols`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify([payload])
+                    });
+                }
+                showToast("Protocol saved successfully!");
+                selectExperiment(currentExp.experiment_id); // Refresh
+            } catch(e) {
+                showToast("Save failed: " + e.message, 'error');
             }
+        }
 
-            container.innerHTML = filtered.map(p => {
-                const pId = p[primaryKeyColumn];
-                const pName = p.name || p.protocol_name || 'Unnamed Protocol';
-                
-                return `
-                <div class="protocol-list-item cursor-pointer p-4 border-b border-slate-100 ${pId === activeProtocolId ? 'active' : ''}" 
-                     onclick="selectProtocol('${pId}')"
-                     id="item-${pId}">
-                    <div class="flex justify-between items-start mb-1">
-                        <h4 class="font-bold text-slate-800 text-sm truncate pr-2 flex-1" title="${pName}">${pName}</h4>
-                        <span class="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded shrink-0">v${p.version || '1.0'}</span>
+        // --- Execution Logic (Run Modal) ---
+        function openRunModal() {
+            document.getElementById('run-modal').classList.remove('hidden');
+            document.getElementById('run-modal-exp-id').innerText = currentExp.experiment_id;
+            document.getElementById('run-id-display').innerText = currentRun ? currentRun.run_id : "New Run";
+            
+            const container = document.getElementById('run-steps-container');
+            container.innerHTML = '';
+
+            // 1. Get steps from Protocol Definition
+            // We parse the HTML from content_json to find check boxes
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = currentProtocol.content_json.html;
+            const steps = Array.from(tempDiv.querySelectorAll('.ql-custom-checkbox-item'));
+
+            // 2. Get existing statuses if Run exists
+            const existingData = currentRun && currentRun.data_json ? currentRun.data_json : {};
+
+            steps.forEach((step, idx) => {
+                const text = step.querySelector('.ql-custom-checkbox-text').innerText;
+                const stepKey = `step_${idx}`;
+                const isDone = existingData[stepKey]?.done || false;
+                const note = existingData[stepKey]?.note || '';
+
+                const div = document.createElement('div');
+                div.className = `p-4 rounded-xl border transition-all ${isDone ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200'}`;
+                div.innerHTML = `
+                    <div class="flex items-start gap-3">
+                        <input type="checkbox" id="${stepKey}" class="mt-1 w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" ${isDone ? 'checked' : ''} onchange="toggleStep(this)">
+                        <div class="flex-1">
+                            <label for="${stepKey}" class="font-medium text-slate-800 cursor-pointer block">${text}</label>
+                            <input type="text" id="${stepKey}_note" value="${note}" placeholder="Add observation..." class="mt-2 w-full text-xs border-b border-transparent hover:border-slate-300 focus:border-indigo-300 outline-none bg-transparent transition-colors">
+                        </div>
                     </div>
-                    <div class="flex justify-between items-center text-[11px] text-slate-500 font-mono">
-                        <span class="truncate">${pId}</span>
-                        <span>${p.author || ''}</span>
-                    </div>
-                </div>
-            `}).join('');
-            
-            lucide.createIcons();
+                `;
+                container.appendChild(div);
+            });
         }
 
-        function filterProtocols() {
-            renderProtocolList();
-        }
-
-        // --- Interaction Logic ---
-        function selectProtocol(id) {
-            if (hasUnsavedChanges) {
-                if(!confirm("You have unsaved changes. Discard them?")) return;
+        function toggleStep(checkbox) {
+            const div = checkbox.closest('div').parentElement;
+            if(checkbox.checked) {
+                div.classList.remove('bg-white', 'border-slate-200');
+                div.classList.add('bg-emerald-50', 'border-emerald-200');
+            } else {
+                div.classList.add('bg-white', 'border-slate-200');
+                div.classList.remove('bg-emerald-50', 'border-emerald-200');
             }
-
-            const protocol = dbCache.protocols.find(p => p[primaryKeyColumn] === id || p[primaryKeyColumn] === parseInt(id));
-            if (!protocol) return;
-
-            activeProtocolId = protocol[primaryKeyColumn];
-            isNewProtocol = false;
-            
-            // UI States
-            document.getElementById('emptyEditorState').classList.add('hidden');
-            document.getElementById('activeEditorState').classList.remove('hidden');
-            
-            // Highlight list
-            document.querySelectorAll('.protocol-list-item').forEach(el => el.classList.remove('active'));
-            const listItem = document.getElementById(`item-${activeProtocolId}`);
-            if(listItem) listItem.classList.add('active');
-
-            // Populate Form
-            document.getElementById('editor-id').value = protocol[primaryKeyColumn];
-            document.getElementById('editor-id').readOnly = true; // Cannot edit ID of existing
-            document.getElementById('editor-id').classList.add('text-slate-400');
-            document.getElementById('editor-id').classList.remove('text-indigo-600');
-            
-            document.getElementById('editor-name').value = protocol.name || protocol.protocol_name || '';
-            document.getElementById('editor-version').value = protocol.version || '1.0';
-            
-            // Load Quill safely
-            quill.root.innerHTML = protocol.description || '';
-            
-            markSaved();
         }
 
-        function createNewProtocol() {
-            if (hasUnsavedChanges) {
-                if(!confirm("You have unsaved changes. Discard them?")) return;
-            }
-
-            activeProtocolId = null;
-            isNewProtocol = true;
-
-            // UI States
-            document.getElementById('emptyEditorState').classList.add('hidden');
-            document.getElementById('activeEditorState').classList.remove('hidden');
-            document.querySelectorAll('.protocol-list-item').forEach(el => el.classList.remove('active'));
-
-            // Generate Temp ID
-            const dateStr = dayjs().format('YYYYMMDD');
-            const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        async function saveRun() {
+            const inputs = document.querySelectorAll('#run-steps-container input[type="checkbox"]');
+            const dataMap = {};
             
-            // Populate Form for New
-            document.getElementById('editor-id').value = `PRT-${dateStr}-${randomSuffix}`;
-            document.getElementById('editor-id').readOnly = false; 
-            document.getElementById('editor-id').classList.remove('text-slate-400');
-            document.getElementById('editor-id').classList.add('text-indigo-600');
-            
-            document.getElementById('editor-name').value = '';
-            document.getElementById('editor-version').value = '1.0';
-            quill.root.innerHTML = '<h2>Objective</h2><p><br></p><h2>Materials</h2><ul><li><br></li></ul><h2>Procedure</h2><ol><li><br></li></ol>';
-            
-            markUnsaved();
-        }
-
-        // --- Save & State Management ---
-        function markUnsaved() {
-            hasUnsavedChanges = true;
-            const btn = document.getElementById('btnSaveProtocol');
-            btn.disabled = false;
-            btn.classList.remove('bg-slate-400', 'cursor-not-allowed');
-            btn.classList.add('bg-gradient-to-r', 'from-emerald-500', 'to-emerald-600', 'hover:from-emerald-600', 'hover:to-emerald-700');
-            btn.innerHTML = `<i data-lucide="save" class="w-4 h-4"></i> Save Changes`;
-            document.getElementById('saveStatus').innerText = 'Unsaved changes';
-            document.getElementById('saveStatus').classList.add('text-amber-500');
-            lucide.createIcons();
-        }
-
-        function markSaved() {
-            hasUnsavedChanges = false;
-            const btn = document.getElementById('btnSaveProtocol');
-            btn.disabled = true;
-            btn.classList.add('bg-slate-400', 'cursor-not-allowed');
-            btn.classList.remove('bg-gradient-to-r', 'from-emerald-500', 'to-emerald-600', 'hover:from-emerald-600', 'hover:to-emerald-700');
-            btn.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i> Saved`;
-            document.getElementById('saveStatus').innerText = `Last saved: ${dayjs().format('HH:mm')}`;
-            document.getElementById('saveStatus').classList.remove('text-amber-500');
-            lucide.createIcons();
-        }
-
-        async function saveActiveProtocol() {
-            if (!hasUnsavedChanges) return;
-
-            const inputId = document.getElementById('editor-id').value.trim();
-            const name = document.getElementById('editor-name').value.trim();
-            const version = document.getElementById('editor-version').value.trim() || '1.0';
-            const description = quill.root.innerHTML; // Get rich HTML
-
-            if (!inputId || !name) {
-                showToast("Protocol ID and Name are required.", "error");
-                return;
-            }
+            inputs.forEach(input => {
+                dataMap[input.id] = {
+                    done: input.checked,
+                    note: document.getElementById(input.id + '_note').value,
+                    user: input.checked ? currentUser.person_id : null,
+                    ts: input.checked ? new Date().toISOString() : null
+                };
+            });
 
             const payload = {
-                name: name,
-                version: parseFloat(version) || 1.0,
-                description: description,
-                author: currentUser 
+                experiment_id: currentExp.experiment_id,
+                protocol_id: currentProtocol.protocol_id,
+                person_id: currentUser.person_id,
+                data_json: dataMap,
+                notes: "Executed via Web Interface"
             };
-            
-            // Dynamically assign the ID based on the detected primary key column
-            payload[primaryKeyColumn] = inputId;
 
-            const btn = document.getElementById('btnSaveProtocol');
-            btn.innerHTML = `<div class="w-4 h-4 border-2 border-white rounded-full border-t-transparent animate-spin"></div> Saving...`;
-            
             try {
-                let res;
-                if (isNewProtocol) {
-                    res = await apiFetch(`table/${currentSchemaName}/${currentTableName}`, { method: 'POST', body: payload });
+                if(currentRun) {
+                    await fetch(`${API}/table/eln/protocols_run`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify([{ ...payload, run_id: currentRun.run_id }])
+                    });
                 } else {
-                    res = await apiFetch(`table/${currentSchemaName}/${currentTableName}?${primaryKeyColumn}=${inputId}`, { method: 'PUT', body: payload });
+                    await fetch(`${API}/table/eln/protocols_run`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify([payload])
+                    });
                 }
-
-                if (res && !res.error) {
-                    showToast("Protocol saved successfully!");
-                    activeProtocolId = inputId;
-                    isNewProtocol = false;
-                    markSaved();
-                    
-                    // Reload list but keep selection
-                    await loadProtocols(true); 
-                } else {
-                    throw new Error(res.error || "Save failed");
-                }
-            } catch (err) {
-                showToast(err.message, "error");
-                markUnsaved(); // Restore save button
+                showToast("Run log saved!");
+                closeRunModal();
+                selectExperiment(currentExp.experiment_id); // Refresh
+            } catch(e) {
+                showToast("Save failed: " + e.message, 'error');
             }
+        }
+
+        // --- Export PDF ---
+        function exportPDF() {
+            if(!currentProtocol) return;
+            
+            const element = document.createElement('div');
+            element.className = 'p-8 bg-white text-slate-900';
+            
+            let html = `<h1 style="font-size: 24px; font-weight: bold; margin-bottom: 10px;">Experiment Protocol</h1>`;
+            html += `<p><strong>Exp ID:</strong> ${currentExp.experiment_id}</p>`;
+            html += `<p><strong>Title:</strong> ${currentExp.title}</p>`;
+            html += `<hr style="margin: 20px 0;">`;
+            
+            // If we have run data, merge it
+            if(currentRun && currentRun.data_json) {
+                 const temp = document.createElement('div');
+                 temp.innerHTML = currentProtocol.content_json.html;
+                 const steps = temp.querySelectorAll('.ql-custom-checkbox-item');
+                 steps.forEach((s, i) => {
+                     const key = `step_${i}`;
+                     const info = currentRun.data_json[key];
+                     if(info && info.done) {
+                         s.style.backgroundColor = '#ecfdf5';
+                         s.style.border = '1px solid #d1fae5';
+                         s.innerHTML += `<div style="font-size: 10px; color: #047857;">Completed by ${info.user}</div>`;
+                         if(info.note) s.innerHTML += `<div style="font-size: 10px; font-style: italic;">Note: ${info.note}</div>`;
+                     }
+                 });
+                 html += temp.innerHTML;
+            } else {
+                 html += currentProtocol.content_json.html;
+            }
+
+            element.innerHTML = html;
+            
+            html2pdf().from(element).save(`${currentExp.experiment_id}_protocol.pdf`);
         }
 
         // --- Utils ---
-        function showLoading(show) { 
-            document.getElementById('loadingOverlay').classList.toggle('active', !!show); 
+        function closeRunModal() { document.getElementById('run-modal').classList.add('hidden'); }
+        
+        function showToast(msg, type='success') {
+            const c = document.getElementById('toast-container');
+            const d = document.createElement('div');
+            const color = type==='error'?'red':'emerald';
+            d.className = `bg-${color}-600 text-white px-4 py-3 rounded-lg shadow-lg text-sm font-medium flex items-center animate-bounce-in`;
+            d.innerHTML = `<i data-lucide="${type==='error'?'alert-circle':'check-circle'}" class="w-4 h-4 mr-2"></i> ${msg}`;
+            c.appendChild(d);
+            lucide.createIcons();
+            setTimeout(() => d.remove(), 3000);
         }
 
-        function showToast(msg, type='success') {
-            const c = document.getElementById('toastContainer');
-            const d = document.createElement('div');
-            const bgClass = type === 'error' ? 'bg-red-50' : 'bg-emerald-50';
-            const borderClass = type === 'error' ? 'border-red-200' : 'border-emerald-200';
-            const textClass = type === 'error' ? 'text-red-800' : 'text-emerald-800';
-            const iconColor = type === 'error' ? 'text-red-500' : 'text-emerald-500';
-            const icon = type === 'error' ? 'alert-octagon' : 'check-circle-2';
-            
-            d.className = `px-4 py-3 rounded-xl shadow-lg border ${borderClass} ${bgClass} ${textClass} text-sm font-semibold flex items-center gap-3 transform transition-all duration-300 translate-y-0`;
-            d.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 ${iconColor}"></i> ${msg}`;
-            c.appendChild(d); lucide.createIcons();
-            setTimeout(() => { d.classList.add('opacity-0', 'translate-y-4'); setTimeout(() => d.remove(), 300); }, 3500);
+        function addEventListeners() {
+            document.getElementById('experiment-search').addEventListener('input', renderExperimentList);
+            document.getElementById('experiment-select').addEventListener('change', (e) => selectExperiment(e.target.value));
+            document.getElementById('btn-run-protocol').addEventListener('click', openRunModal);
+            document.getElementById('btn-export-pdf').addEventListener('click', exportPDF);
+            document.getElementById('logout-button').addEventListener('click', () => { sessionStorage.clear(); window.location.href='login.html'; });
         }
     </script>
 </body>
