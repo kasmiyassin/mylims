@@ -1,6 +1,5 @@
 import os
 import json
-import uuid
 import asyncpg
 import uvicorn
 import jwt
@@ -23,43 +22,33 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("uvicorn.error")
 
-# ENHANCED: Secured with os.getenv (from App 1) while keeping App 2 defaults
 DB_CONFIG = {
-    "dsn": os.getenv("DB_DSN", "postgresql://web_admin:password@0.0.0.0/migfish_db"),
+    "dsn": "postgresql://web_admin:password@0.0.0.0/migfish_db",
     "min_size": 1,
     "max_size": 20
 }
 
 AUTH_DB_CONFIG = {
-    "dsn": os.getenv("AUTH_DB_DSN", "postgresql://auth_user:auth_password@0.0.0.0/musr"),
+    "dsn": "postgresql://auth_user:auth_password@0.0.0.0/musr",
     "min_size": 1,
     "max_size": 5
 }
 
-SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-key-change-this-in-production")
+SECRET_KEY = "super-secret-key-change-this-in-production"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480 
 UPLOAD_DIR = "upload"
+
 
 # ==============================================================================
 # 2. FASTAPI APP & DATABASE LIFESPAN
 # ==============================================================================
 
-# ENHANCED: Added JSON codec initialization from App 1
-async def init_db_connection(conn):
-    """
-    CRITICAL: Teaches PostgreSQL to automatically convert JSON/JSONB columns 
-    to Python dicts/lists so they don't get sent to the frontend as escaped strings.
-    """
-    await conn.set_type_codec('json', encoder=json.dumps, decoder=json.loads, schema='pg_catalog')
-    await conn.set_type_codec('jsonb', encoder=json.dumps, decoder=json.loads, schema='pg_catalog')
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
         logger.info("Initializing Database Pools...")
-        # ENHANCED: Passed init_db_connection to the main db pool
-        app.state.db_pool = await asyncpg.create_pool(**DB_CONFIG, init=init_db_connection)
+        app.state.db_pool = await asyncpg.create_pool(**DB_CONFIG)
         app.state.auth_pool = await asyncpg.create_pool(**AUTH_DB_CONFIG)
         
         # Ensure upload directory exists
@@ -106,7 +95,7 @@ class Token(BaseModel):
 async def get_db_pool(request: Request):
     if not hasattr(request.app.state, 'db_pool') or not request.app.state.db_pool:
         try: 
-            request.app.state.db_pool = await asyncpg.create_pool(**DB_CONFIG, init=init_db_connection)
+            request.app.state.db_pool = await asyncpg.create_pool(**DB_CONFIG)
         except Exception as e: raise HTTPException(500, f"LIMS DB Down: {e}")
     return request.app.state.db_pool
 
@@ -119,34 +108,40 @@ async def get_auth_pool(request: Request):
 def serialize_row(row):
     item = dict(row)
     for k, v in item.items():
+        # Added 'time' support here so it serializes properly back to the frontend
         if isinstance(v, (date, datetime, time)):
             item[k] = v.isoformat()
-        elif isinstance(v, bytes):
+        if isinstance(v, bytes):
             try: item[k] = v.decode('utf-8')
             except: item[k] = "<binary data>"
-        # ENHANCED: Added UUID support from App 1
-        elif isinstance(v, uuid.UUID):
-            item[k] = str(v)
     return item
 
 def parse_value_by_type(val, dtype):
     if val is None: return None
-    if isinstance(val, (list, dict)): return json.dumps(val)
+    
+    # Handle list/dict types (basic JSON support)
+    if isinstance(val, (list, dict)):
+        return json.dumps(val)
 
     if isinstance(val, str):
         val = val.strip()
         if val == "": return None
+        
         dtype = dtype.lower()
         
+        # Explicitly handle time types to native python time objects
         if 'time' in dtype and 'date' not in dtype and 'timestamp' not in dtype:
             try:
-                if len(val) >= 8: return datetime.strptime(val[:8], "%H:%M:%S").time()
-                elif len(val) >= 5: return datetime.strptime(val[:5], "%H:%M").time()
-            except ValueError: pass
+                if len(val) >= 8:
+                    return datetime.strptime(val[:8], "%H:%M:%S").time()
+                elif len(val) >= 5:
+                    return datetime.strptime(val[:5], "%H:%M").time()
+            except ValueError:
+                pass
         elif 'date' in dtype and 'time' not in dtype:
             try: return date.fromisoformat(val)
             except: pass
-        elif 'timestamp' in dtype or 'date' in dtype:
+        elif 'timestamp' in dtype or 'date' in dtype: # timestamp or datetime
             try: return datetime.fromisoformat(val.replace('Z', '+00:00'))
             except: pass
         elif dtype in ('integer', 'smallint', 'bigint', 'serial', 'bigserial'):
@@ -158,10 +153,6 @@ def parse_value_by_type(val, dtype):
         elif dtype == 'boolean':
             if val.lower() in ('true', '1', 't', 'yes'): return True
             if val.lower() in ('false', '0', 'f', 'no'): return False
-        # ENHANCED: Added UUID support from App 1
-        elif 'uuid' in dtype:
-            try: return uuid.UUID(val)
-            except: pass
             
     return val
 
@@ -217,35 +208,6 @@ async def login(creds: LoginRequest, request: Request):
     token = create_access_token(data={"sub": creds.username, "role": "user"})
     return {"access_token": token, "token_type": "bearer", "user_info": {"person_id": creds.username}}
 
-@app.post("/api/auth/change-password")
-async def change_password(payload: ChangePasswordRequest, request: Request, user: dict = Depends(get_current_user)):
-    username = user['user_id']
-    
-    if username == 'kasmi':
-        raise HTTPException(400, "Cannot change password for hardcoded admin account.")
-
-    new_password_bytes = payload.new_password.encode('utf-8')
-    salt = bcrypt.gensalt()
-    hashed_password = bcrypt.hashpw(new_password_bytes, salt).decode('utf-8')
-
-    try:
-        auth_pool = await get_auth_pool(request)
-        async with auth_pool.acquire() as conn:
-            result = await conn.execute(
-                "UPDATE aaa.lg_fi SET pswd_hash = $1 WHERE login = $2",
-                hashed_password, username
-            )
-            
-            if result == "UPDATE 0":
-                raise HTTPException(404, "User not found in authentication database")
-                
-    except HTTPException: raise
-    except Exception as e:
-        logger.error(f"Error updating password for {username}: {e}")
-        raise HTTPException(500, "Failed to update password due to database error")
-        
-    return {"success": True, "message": "Password updated successfully"}
-
 # --- FILE UPLOAD ---
 
 @app.post("/api/upload")
@@ -263,25 +225,6 @@ async def upload_file(file: UploadFile = File(...), user: dict = Depends(get_cur
         return {"filename": os.path.basename(file_location), "url": f"/upload/{os.path.basename(file_location)}"}
     except Exception as e:
         raise HTTPException(500, f"File Upload Failed: {e}")
-
-# ENHANCED: Global Search endpoint from App 1
-@app.get("/api/search")
-async def global_search(q: str, db_pool = Depends(get_db_pool)):
-    try:
-        async with db_pool.acquire() as conn:
-            rows = await conn.fetch("SELECT * FROM dashboard.fn_global_search($1)", q)
-        return [serialize_row(r) for r in rows]
-    except Exception:
-        return [] # Safe fallback if dashboard schema is not yet created
-
-# ENHANCED: ELN & Protocol Shortcuts from App 1
-@app.post("/api/eln/protocols")
-async def save_protocol_shortcut(request: Request, user: dict = Depends(get_current_user), db_pool = Depends(get_db_pool)):
-    return await create_record("lims", "protocols", request, user, db_pool)
-
-@app.get("/api/eln/protocols")
-async def get_protocols_shortcut(request: Request, db_pool = Depends(get_db_pool)):
-    return await get_table_data("lims", "protocols", request, limit=100, db_pool=db_pool)
 
 # --- DASHBOARD STATS ---
 
@@ -363,12 +306,11 @@ async def get_dashboard_chart_data(db_pool = Depends(get_db_pool)):
 @app.get("/api/table_names_for_forms")
 async def list_all_tables(db_pool = Depends(get_db_pool)):
     async with db_pool.acquire() as conn:
-        # ENHANCED: Included 'VIEW's like App 1 so dropdowns show views as well
         rows = await conn.fetch("""
             SELECT table_schema || '.' || table_name as full_name
             FROM information_schema.tables 
-            WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'audit', 'topology')
-            AND table_type IN ('BASE TABLE', 'VIEW')
+            WHERE table_schema NOT IN ('information_schema', 'pg_catalog')
+            AND table_type = 'BASE TABLE'
             ORDER BY table_schema, table_name
         """)
     return [r['full_name'] for r in rows]
@@ -386,13 +328,10 @@ async def get_table_meta(schema: str, table: str, db_pool = Depends(get_db_pool)
             ORDER BY ordinal_position
         """, schema, table)
         
-        # ENHANCED: Upgraded PK query to App 1's version, which is safer for schemas
         pk_rows = await conn.fetch("""
             SELECT a.attname FROM pg_index i
             JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-            JOIN pg_class c ON c.oid = i.indrelid
-            JOIN pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname = $1 AND c.relname = $2 AND i.indisprimary;
+            WHERE i.indrelid = (quote_ident($1) || '.' || quote_ident($2))::regclass AND i.indisprimary;
         """, schema, table)
         pk_cols = [r['attname'] for r in pk_rows]
 
@@ -484,6 +423,7 @@ async def get_table_data(
     
     return [serialize_row(row) for row in rows]
 
+# IMPROVED: Robust Create Record with Validation
 @app.post("/api/table/{schema}/{table}")
 async def create_record(schema: str, table: str, request: Request, user: dict = Depends(get_current_user), db_pool = Depends(get_db_pool)):
     body = await request.json()
@@ -512,9 +452,7 @@ async def create_record(schema: str, table: str, request: Request, user: dict = 
         placeholders = "(" + ", ".join([f"${i+1}" for i in range(len(cols))]) + ")"
         query = f'INSERT INTO "{schema}"."{table}" ({col_str}) VALUES {placeholders} RETURNING *'
         
-        try: await conn.execute(f"SELECT set_config('session.logged_in_person_id', '{user['user_id']}', false)")
-        except: pass
-        
+        await conn.execute(f"SELECT set_config('session.logged_in_person_id', '{user['user_id']}', false)")
         try:
             result = await conn.fetchrow(query, *vals)
             return serialize_row(result)
@@ -522,6 +460,7 @@ async def create_record(schema: str, table: str, request: Request, user: dict = 
             logger.error(f"Insert Error ({schema}.{table}): {e}")
             raise HTTPException(500, f"Database Error: {str(e)}")
 
+# IMPROVED: Robust Update Record
 @app.put("/api/table/{schema}/{table}")
 async def update_record(schema: str, table: str, request: Request, user: dict = Depends(get_current_user), db_pool = Depends(get_db_pool)):
     params = dict(request.query_params)
@@ -555,9 +494,7 @@ async def update_record(schema: str, table: str, request: Request, user: dict = 
             
         query = f'UPDATE "{schema}"."{table}" SET {", ".join(set_items)} WHERE {" AND ".join(where_items)}'
 
-        try: await conn.execute(f"SELECT set_config('session.logged_in_person_id', '{user['user_id']}', false)")
-        except: pass
-        
+        await conn.execute(f"SELECT set_config('session.logged_in_person_id', '{user['user_id']}', false)")
         try:
             await conn.execute(query, *values)
         except Exception as e:
@@ -581,9 +518,7 @@ async def delete_record(schema: str, table: str, request: Request, user: dict = 
     query = f'DELETE FROM "{schema}"."{table}" WHERE {" AND ".join(where_items)}'
     
     async with db_pool.acquire() as conn:
-        try: await conn.execute(f"SELECT set_config('session.logged_in_person_id', '{user['user_id']}', false)")
-        except: pass
-        
+        await conn.execute(f"SELECT set_config('session.logged_in_person_id', '{user['user_id']}', false)")
         try:
             result = await conn.execute(query, *values)
             if result == "DELETE 0": raise HTTPException(404, "Record not found")
@@ -605,7 +540,7 @@ async def batch_upload(schema: str, table: str, payload: List[Dict[str, Any]], u
         col_meta = await conn.fetch("""SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2""", schema, table)
         type_map = {r['column_name']: r['data_type'] for r in col_meta}
         
-        # Validate columns based on the first row
+        # Validate columns based on the first row (assuming uniform payload)
         valid_cols = [k for k in rows[0].keys() if k in type_map]
         if not valid_cols: raise HTTPException(400, "No valid columns in batch payload")
 
@@ -613,10 +548,9 @@ async def batch_upload(schema: str, table: str, payload: List[Dict[str, Any]], u
         placeholders = "(" + ", ".join([f"${i+1}" for i in range(len(valid_cols))]) + ")"
         query = f'INSERT INTO "{schema}"."{table}" ({col_str}) VALUES {placeholders} RETURNING *'
         
-        try: await conn.execute(f"SELECT set_config('session.logged_in_person_id', '{user['user_id']}', false)")
-        except: pass
-        
+        await conn.execute(f"SELECT set_config('session.logged_in_person_id', '{user['user_id']}', false)")
         inserted_rows = []
+        
         async with conn.transaction():
             for r in rows:
                 row_vals = []
@@ -638,16 +572,11 @@ async def batch_upload(schema: str, table: str, payload: List[Dict[str, Any]], u
 async def batch_update(schema: str, table: str, payload: List[Dict[str, Any]], user: dict = Depends(get_current_user), db_pool = Depends(get_db_pool)):
     updated = 0
     async with db_pool.acquire() as conn:
-        try: await conn.execute(f"SELECT set_config('session.logged_in_person_id', '{user['user_id']}', false)")
-        except: pass
-        
-        # ENHANCED: Upgraded PK query
+        await conn.execute(f"SELECT set_config('session.logged_in_person_id', '{user['user_id']}', false)")
         pk_rows = await conn.fetch("""
             SELECT a.attname FROM pg_index i
             JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-            JOIN pg_class c ON c.oid = i.indrelid
-            JOIN pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname = $1 AND c.relname = $2 AND i.indisprimary;
+            WHERE i.indrelid = (quote_ident($1) || '.' || quote_ident($2))::regclass AND i.indisprimary;
         """, schema, table)
         pk_cols = [r['attname'] for r in pk_rows]
         
@@ -685,7 +614,39 @@ async def batch_update(schema: str, table: str, payload: List[Dict[str, Any]], u
                 updated += 1
     return {"status": "success", "count": updated}
 
-# --- MIDDLEWARE & CACHE ---
+@app.post("/api/auth/change-password")
+async def change_password(payload: ChangePasswordRequest, request: Request, user: dict = Depends(get_current_user)):
+    username = user['user_id']
+    
+    # Optional: Prevent changing the hardcoded bypass account
+    if username == 'kasmi':
+        raise HTTPException(400, "Cannot change password for hardcoded admin account.")
+
+    # Hash the new password using bcrypt
+    new_password_bytes = payload.new_password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed_password = bcrypt.hashpw(new_password_bytes, salt).decode('utf-8')
+
+    try:
+        auth_pool = await get_auth_pool(request)
+        async with auth_pool.acquire() as conn:
+            # Update the user's password in the aaa.lg_fi table inside the musr DB
+            result = await conn.execute(
+                "UPDATE aaa.lg_fi SET pswd_hash = $1 WHERE login = $2",
+                hashed_password, username
+            )
+            
+            if result == "UPDATE 0":
+                raise HTTPException(404, "User not found in authentication database")
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating password for {username}: {e}")
+        raise HTTPException(500, "Failed to update password due to database error")
+        
+    return {"success": True, "message": "Password updated successfully"}
+
 
 @app.middleware("http")
 async def disable_caching_middleware(request: Request, call_next):
@@ -699,8 +660,8 @@ async def disable_caching_middleware(request: Request, call_next):
 # ==============================================================================
 # 7. STATIC FILES & RUN
 # ==============================================================================
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-app.mount("/upload", StaticFiles(directory=UPLOAD_DIR), name="upload")
+os.makedirs("upload", exist_ok=True)
+app.mount("/upload", StaticFiles(directory="upload"), name="upload")
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
 
 if __name__ == "__main__":
